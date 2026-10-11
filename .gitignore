@@ -2,3 +2,9 @@ target/
 node_modules/
 *.part
 .DS_Store
+
+# Desktop UI build and test output
+apps/desktop/dist/
+apps/desktop/src-tauri/gen/
+apps/desktop/test-results/
+apps/desktop/playwright-report/
