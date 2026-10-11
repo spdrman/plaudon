@@ -1,40 +1,36 @@
-//! Provider-neutral AI capability and result contracts.
+//! Speech-to-text and text-model capability contracts shared by all AI adapters.
 //!
-//! Spec references: §6.5 (principal traits), §6.6 (versioned inter-module
-//! contracts), §8.3 (capability model), §8.5 (transcript representation),
-//! §8.6/§8.6A (request families and the truthfulness contract).
+//! The contracts here are deliberately provider-neutral: spec 6.3(1) keeps the
+//! core free of any mandatory OpenRouter, Apple or whisper dependency, and
+//! spec 6.6 versions capability payloads independently of the application.
 //!
-//! This crate holds no vendor dependency and no I/O. Engine adapters
-//! (`plaudon-ai-whisper`, `plaudon-ai-openrouter`, `plaudon-ai-apple`) depend
-//! on it; it depends on none of them.
-
-#![forbid(unsafe_code)]
-#![deny(clippy::unwrap_used, clippy::expect_used)]
+//! Two rules are enforced by the types rather than by documentation:
+//!
+//! * Unknown is not supported. Every optional capability is a
+//!   [`plaudon_domain::capability::Tri`] or
+//!   [`plaudon_domain::capability::Known`], and policy only accepts `Yes`.
+//! * A cancelled run yields a typed cancellation error, never a partial
+//!   success.
 
 pub mod capabilities;
-pub mod hallucination;
 pub mod job;
+pub mod policy;
 pub mod stt;
-pub mod transcript;
-pub mod tri;
-pub mod truthfulness;
+pub mod text;
 
 pub use capabilities::{
-    Accelerator, AvailabilityReason, HardwareRequirements, MediaFormat, PricingBasis, PrivacyClass,
-    RequestFamily, SttCapabilities, CAPABILITY_PAYLOAD_VERSION,
+    AvailabilityReason, HardwareRequirements, MediaFormat, PricingBasis, PrivacyClass,
+    RequestFamily, SttCapabilities, TextModelCapabilities,
 };
-pub use hallucination::{detect_hallucinations, HallucinationPolicy, SpeechActivity};
-pub use job::{
-    Cancelled, CancellationToken, JobContext, NullProgressSink, Progress, ProgressSink,
-    RecordingProgressSink,
-};
-pub use stt::{SpeechToText, SttError, SttInput};
-pub use transcript::{
-    AlignmentOrigin, AnnotationKind, ChunkingStrategy, Confidence, NormalizationProfile,
-    SourceTime, TimePrecision, TranscriptAnnotation, TranscriptDraft, TranscriptSegmentDraft,
-    WordAlignment,
-};
-pub use tri::{Known, LimitCheck, Tri};
-pub use truthfulness::{
-    assert_no_claim_inflation, validate_draft, ClaimInflation, TruthfulnessViolation,
-};
+pub use job::{CancellationToken, JobContext, Progress, ProgressSink};
+pub use plaudon_domain::capability::{CapabilityEnvelope, CapabilityStatus, Known, Tri};
+pub use plaudon_domain::transcript::AlignmentOrigin;
+pub use policy::{EngineRejection, EngineSelection, SttRequirements, select_stt_engine};
+pub use stt::{SpeechToText, SttError, SttInput, TranscriptDraft, TranscriptSegmentDraft};
+pub use text::{StructuredRequest, StructuredResponse, TextModel, TextModelError};
+
+/// Cargo package name of this crate, used by the workspace layout conformance test.
+pub const PACKAGE_NAME: &str = "plaudon-ai-contracts";
+
+/// Version of the inter-module contract exposed by this crate (spec 6.6).
+pub const CONTRACT_VERSION: u32 = 1;

@@ -245,6 +245,34 @@ error_codes! {
     Timeout => "TIMEOUT", retryable: true, action: Some(ErrorAction::WaitAndRetry),
         message: "The operation took too long and was stopped.";
 
+    // ---- Application boundary (spec 15.1, 15.2) ----
+    /// A command argument failed Rust-side validation.
+    InvalidArgument => "INVALID_ARGUMENT", retryable: false, action: None,
+        message: "That request was not valid. Check the selection and try again.";
+    /// A policy-changing command was invoked without its required confirmation.
+    ConfirmationRequired => "CONFIRMATION_REQUIRED", retryable: false, action: Some(ErrorAction::OpenSettings),
+        message: "Confirm this change before it can be applied.";
+    /// Retrying would re-dispatch possibly-billed work without a cost acknowledgement.
+    CostAcknowledgementRequired => "COST_ACKNOWLEDGEMENT_REQUIRED", retryable: false, action: Some(ErrorAction::ReviewConsent),
+        message: "This retry may be billed again. Confirm the cost before retrying.";
+    /// The configured spending limit or the provider account balance is exhausted.
+    BudgetExceeded => "BUDGET_EXCEEDED", retryable: false, action: Some(ErrorAction::OpenSettings),
+        message: "The spending limit for cloud processing has been reached.";
+
+    // ---- Security and process boundary (spec 6.3A, 7.3, 16.2A, 16.4) ----
+    /// The operating system credential store is locked.
+    SecretStoreLocked => "SECRET_STORE_LOCKED", retryable: true, action: Some(ErrorAction::OpenPermissionSettings),
+        message: "Your keychain is locked, so the saved credential could not be read. Unlock it and try again.";
+    /// The egress gate refused an outbound connection.
+    EgressDenied => "EGRESS_DENIED", retryable: false, action: Some(ErrorAction::ReviewLocalOnlyMode),
+        message: "The app refused to start a network connection to an unapproved destination.";
+    /// A command was invoked outside the allowlist or from the wrong window.
+    CommandNotAuthorized => "COMMAND_NOT_AUTHORIZED", retryable: false, action: Some(ErrorAction::OpenDiagnostics),
+        message: "That operation is not permitted from this window.";
+    /// A sandboxed decoder or inference helper terminated abnormally.
+    HelperFailed => "HELPER_FAILED", retryable: true, action: Some(ErrorAction::RetryImport),
+        message: "A background helper stopped unexpectedly. The step was not completed and can be retried.";
+
     // ---- Fallback ----
     /// An unmapped internal or vendor failure.
     InternalError => "INTERNAL_ERROR", retryable: false, action: Some(ErrorAction::OpenDiagnostics),
@@ -577,6 +605,14 @@ mod tests {
                 "CONTEXT_TOO_LARGE",
                 "CANCELED",
                 "TIMEOUT",
+                "INVALID_ARGUMENT",
+                "CONFIRMATION_REQUIRED",
+                "COST_ACKNOWLEDGEMENT_REQUIRED",
+                "BUDGET_EXCEEDED",
+                "SECRET_STORE_LOCKED",
+                "EGRESS_DENIED",
+                "COMMAND_NOT_AUTHORIZED",
+                "HELPER_FAILED",
                 "INTERNAL_ERROR",
             ]
         );

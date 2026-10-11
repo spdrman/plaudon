@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.local/schemas/error-envelope.v1.schema.json",
+  "title": "Error envelope v1",
+  "description": "The only error shape the frontend receives (spec 15.4). It never contains signed URLs, credentials, raw request bodies, raw vendor payloads or transcript excerpts.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "code",
+    "message",
+    "retryable",
+    "diagnostic_id"
+  ],
+  "properties": {
+    "code": {
+      "description": "Stable, closed-set error code.",
+      "type": "string",
+      "enum": [
+        "CLI_MISSING",
+        "CLI_UNSUPPORTED",
+        "AUTHENTICATION_REQUIRED",
+        "AUTH_CANCELED",
+        "SOURCE_UNAVAILABLE",
+        "REMOTE_RATE_LIMITED",
+        "LINK_EXPIRED",
+        "ASSET_NOT_FOUND",
+        "MALFORMED_OUTPUT",
+        "DOWNLOAD_INTERRUPTED",
+        "INTEGRITY_FAILED",
+        "RADIO_PERMISSION_DENIED",
+        "DEVICE_BUSY",
+        "DEVICE_DISCONNECTED",
+        "UNSUPPORTED_FIRMWARE",
+        "AUTH_BOOTSTRAP_REQUIRED",
+        "AUTH_REJECTED",
+        "TRANSFER_INCOMPLETE",
+        "UNSUPPORTED_CODEC",
+        "NOT_PRESENT_ON_DEVICE",
+        "DEVICE_POWER_LOW",
+        "UNSUPPORTED_MEDIA",
+        "MEDIA_VALIDATION_FAILED",
+        "STORAGE_UNAVAILABLE",
+        "STORAGE_FULL",
+        "MIGRATION_FAILED",
+        "RECORD_NOT_FOUND",
+        "CONFLICT",
+        "ARCHIVE_PATH_REJECTED",
+        "CROSS_VOLUME_COMMIT",
+        "CONSENT_REQUIRED",
+        "LOCAL_ONLY_MODE",
+        "POLICY_UNRESOLVED",
+        "CAPABILITY_UNVERIFIED",
+        "MODEL_UNAVAILABLE",
+        "OUTCOME_UNKNOWN",
+        "PROVIDER_REJECTED",
+        "SCHEMA_VALIDATION_FAILED",
+        "CONTEXT_TOO_LARGE",
+        "CANCELED",
+        "TIMEOUT",
+        "INVALID_ARGUMENT",
+        "CONFIRMATION_REQUIRED",
+        "COST_ACKNOWLEDGEMENT_REQUIRED",
+        "BUDGET_EXCEEDED",
+        "SECRET_STORE_LOCKED",
+        "EGRESS_DENIED",
+        "COMMAND_NOT_AUTHORIZED",
+        "HELPER_FAILED",
+        "INTERNAL_ERROR"
+      ]
+    },
+    "message": {
+      "description": "Vendor-neutral, user-actionable message generated from the code.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 400
+    },
+    "retryable": {
+      "description": "Whether retrying the identical operation is safe.",
+      "type": "boolean"
+    },
+    "action": {
+      "description": "Suggested UI affordance; omitted when the code has none.",
+      "type": "string",
+      "enum": [
+        "OPEN_PLAUD_CONNECT",
+        "OPEN_CLI_SETUP",
+        "OPEN_SETTINGS",
+        "OPEN_PERMISSION_SETTINGS",
+        "RETRY_IMPORT",
+        "REFRESH_SOURCE_LINK",
+        "REVIEW_CONSENT",
+        "FREE_DISK_SPACE",
+        "REVIEW_LOCAL_ONLY_MODE",
+        "OPEN_DEVICE_DIAGNOSTICS",
+        "CHARGE_DEVICE",
+        "OPEN_DIAGNOSTICS",
+        "CHOOSE_ANOTHER_MODEL",
+        "WAIT_AND_RETRY"
+      ]
+    },
+    "diagnostic_id": {
+      "description": "Identifier of the redacted diagnostics entry.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    }
+  }
+}

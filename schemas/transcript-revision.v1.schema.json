@@ -1,0 +1,283 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.local/schemas/transcript-revision.v1.schema.json",
+  "title": "Transcript revision v1",
+  "description": "An immutable transcript revision (spec 8.5, 8.6A). A revision whose alignment_origin is 'none' carries no segment times at all.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "recording_id",
+    "origin",
+    "input_sha256",
+    "engine",
+    "model",
+    "alignment_origin",
+    "status",
+    "normalization_profile",
+    "chunking_strategy",
+    "created_at",
+    "segments"
+  ],
+  "properties": {
+    "id": {
+      "$ref": "#/$defs/uuid"
+    },
+    "recording_id": {
+      "$ref": "#/$defs/uuid"
+    },
+    "parent_id": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/uuid"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Revision this one was derived from."
+    },
+    "origin": {
+      "type": "string",
+      "enum": [
+        "machine",
+        "human_edit",
+        "derived_alignment",
+        "overlap_reconciliation"
+      ]
+    },
+    "input_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "engine": {
+      "type": "string",
+      "minLength": 1
+    },
+    "model": {
+      "type": "object",
+      "required": [
+        "engine",
+        "model_id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "engine": {
+          "type": "string"
+        },
+        "model_id": {
+          "type": "string"
+        },
+        "model_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "locale": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[A-Za-z]{2,8}(-[A-Za-z0-9]{1,8})*$"
+    },
+    "alignment_origin": {
+      "type": "string",
+      "enum": [
+        "native",
+        "derived",
+        "none"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "complete",
+        "needs_review",
+        "partial"
+      ]
+    },
+    "normalization_profile": {
+      "type": "string"
+    },
+    "chunking_strategy": {
+      "type": "string"
+    },
+    "duration_ms": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "created_at": {
+      "type": "integer",
+      "description": "Milliseconds since the Unix epoch."
+    },
+    "segments": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/segment"
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "alignment_origin": {
+            "const": "none"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "segments": {
+            "items": {
+              "properties": {
+                "start": {
+                  "type": "null"
+                },
+                "end": {
+                  "type": "null"
+                },
+                "words": {
+                  "maxItems": 0
+                }
+              }
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "segments": {
+            "items": {
+              "required": [
+                "start",
+                "end"
+              ],
+              "properties": {
+                "start": {
+                  "type": "integer"
+                },
+                "end": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "segment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "seq_index",
+        "text"
+      ],
+      "properties": {
+        "seq_index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "start": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "end": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "text": {
+          "type": "string"
+        },
+        "confidence": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "engine",
+                "scale",
+                "value"
+              ],
+              "properties": {
+                "engine": {
+                  "type": "string"
+                },
+                "scale": {
+                  "type": "string",
+                  "enum": [
+                    "probability",
+                    "average_log_probability",
+                    "vendor_defined"
+                  ]
+                },
+                "value": {
+                  "type": "number"
+                }
+              }
+            }
+          ]
+        },
+        "speaker_id": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "words": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "text",
+              "start",
+              "end"
+            ],
+            "properties": {
+              "text": {
+                "type": "string"
+              },
+              "start": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "end": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
