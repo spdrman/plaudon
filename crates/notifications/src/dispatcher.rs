@@ -31,18 +31,31 @@ use crate::{DeliveryOutcome, NotificationRequest, NotificationSettings, Notifier
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Gates a [`Notifier`] behind user preferences and OS permission.
-#[derive(Debug)]
 pub struct Dispatcher {
     notifier: Arc<dyn Notifier>,
     settings: RwLock<NotificationSettings>,
     timeout: Duration,
 }
 
+impl std::fmt::Debug for Dispatcher {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // `dyn Notifier` is a platform backend; its identity is not debuggable
+        // and would add nothing to a log line.
+        f.debug_struct("Dispatcher")
+            .field("timeout", &self.timeout)
+            .finish_non_exhaustive()
+    }
+}
+
 impl Dispatcher {
     /// Build a dispatcher over `notifier` with the user's current preferences.
     #[must_use]
     pub fn new(notifier: Arc<dyn Notifier>, settings: NotificationSettings) -> Self {
-        Self { notifier, settings: RwLock::new(settings), timeout: DEFAULT_TIMEOUT }
+        Self {
+            notifier,
+            settings: RwLock::new(settings),
+            timeout: DEFAULT_TIMEOUT,
+        }
     }
 
     /// Override the per-call backend timeout (tests use a short one).
@@ -73,12 +86,14 @@ impl Dispatcher {
     /// [`OsPermission::Unsupported`] rather than failing the caller.
     pub async fn os_permission(&self) -> OsPermission {
         let notifier = Arc::clone(&self.notifier);
-        contain(self.timeout, "permission probe", async move { notifier.permission().await })
-            .await
-            .unwrap_or_else(|detail| {
-                tracing::warn!(detail, "notification permission probe failed");
-                OsPermission::Unsupported
-            })
+        contain(self.timeout, "permission probe", async move {
+            notifier.permission().await
+        })
+        .await
+        .unwrap_or_else(|detail| {
+            tracing::warn!(detail, "notification permission probe failed");
+            OsPermission::Unsupported
+        })
     }
 
     /// Prompt for OS permission, contained the same way as delivery.
@@ -135,9 +150,11 @@ impl Dispatcher {
     async fn deliver(&self, req: &NotificationRequest) -> DeliveryOutcome {
         let notifier = Arc::clone(&self.notifier);
         let payload = req.clone();
-        contain(self.timeout, "delivery", async move { notifier.deliver(&payload).await })
-            .await
-            .unwrap_or_else(DeliveryOutcome::Failed)
+        contain(self.timeout, "delivery", async move {
+            notifier.deliver(&payload).await
+        })
+        .await
+        .unwrap_or_else(DeliveryOutcome::Failed)
     }
 }
 
@@ -175,23 +192,26 @@ mod tests {
 
     fn request(category: NotificationCategory) -> NotificationRequest {
         let context = match category {
-            NotificationCategory::ImportFinished => {
-                NotificationContext::ImportFinished { imported: 2, failed: 0, recording: None }
-            }
+            NotificationCategory::ImportFinished => NotificationContext::ImportFinished {
+                imported: 2,
+                failed: 0,
+                recording: None,
+            },
             NotificationCategory::TranscriptionFinished => {
-                NotificationContext::TranscriptionFinished { recordings: 1, recording: None }
+                NotificationContext::TranscriptionFinished {
+                    recordings: 1,
+                    recording: None,
+                }
             }
             NotificationCategory::RequiresAttention => NotificationContext::RequiresAttention {
                 jobs: 1,
                 reason: AttentionReason::AuthorizationRequired,
                 job: None,
             },
-            NotificationCategory::CloudBudgetExceeded => {
-                NotificationContext::CloudBudgetExceeded {
-                    scope: BudgetScope::Daily,
-                    paused_jobs: 1,
-                }
-            }
+            NotificationCategory::CloudBudgetExceeded => NotificationContext::CloudBudgetExceeded {
+                scope: BudgetScope::Daily,
+                paused_jobs: 1,
+            },
         };
         privacy::build(context, Timestamp::from_millis(1_700_000_000_000))
     }
@@ -214,8 +234,15 @@ mod tests {
                 DeliveryOutcome::SuppressedByPreference
             );
         }
-        assert!(notifier.deliveries().await.is_empty());
-        assert_eq!(notifier.permission_checks().await, 0, "preference gate runs first");
+        assert!(
+            notifier.deliveries().await.is_empty(),
+            "no payload may reach the backend"
+        );
+        assert_eq!(
+            notifier.permission_checks().await,
+            0,
+            "preference gate runs first"
+        );
     }
 
     #[tokio::test]
@@ -227,30 +254,45 @@ mod tests {
         let dispatcher = short(Arc::clone(&notifier), settings);
 
         assert_eq!(
-            dispatcher.notify(&request(NotificationCategory::ImportFinished)).await,
+            dispatcher
+                .notify(&request(NotificationCategory::ImportFinished))
+                .await,
             DeliveryOutcome::SuppressedByPreference
         );
         assert_eq!(
-            dispatcher.notify(&request(NotificationCategory::RequiresAttention)).await,
+            dispatcher
+                .notify(&request(NotificationCategory::RequiresAttention))
+                .await,
             DeliveryOutcome::Delivered
         );
 
         let delivered = notifier.deliveries().await;
         assert_eq!(delivered.len(), 1);
-        assert_eq!(delivered[0].category, NotificationCategory::RequiresAttention);
+        assert_eq!(
+            delivered[0].category,
+            NotificationCategory::RequiresAttention
+        );
     }
 
     #[tokio::test]
     async fn missing_category_entry_counts_as_opted_out() {
         let notifier = RecordingNotifier::granted();
-        let settings = NotificationSettings { enabled: true, categories: Default::default() };
+        let settings = NotificationSettings {
+            enabled: true,
+            categories: std::collections::BTreeMap::new(),
+        };
         let dispatcher = short(Arc::clone(&notifier), settings);
 
         assert_eq!(
-            dispatcher.notify(&request(NotificationCategory::ImportFinished)).await,
+            dispatcher
+                .notify(&request(NotificationCategory::ImportFinished))
+                .await,
             DeliveryOutcome::SuppressedByPreference
         );
-        assert!(notifier.deliveries().await.is_empty());
+        assert!(
+            notifier.deliveries().await.is_empty(),
+            "no payload may reach the backend"
+        );
     }
 
     #[tokio::test]
@@ -259,11 +301,20 @@ mod tests {
         let dispatcher = short(Arc::clone(&notifier), NotificationSettings::uniform(true));
 
         assert_eq!(
-            dispatcher.notify(&request(NotificationCategory::ImportFinished)).await,
+            dispatcher
+                .notify(&request(NotificationCategory::ImportFinished))
+                .await,
             DeliveryOutcome::SuppressedByOsPermission
         );
-        assert!(notifier.deliveries().await.is_empty());
-        assert_eq!(notifier.permission_prompts().await, 0, "a denial is not re-prompted");
+        assert!(
+            notifier.deliveries().await.is_empty(),
+            "a denied OS never sees a payload"
+        );
+        assert_eq!(
+            notifier.permission_prompts().await,
+            0,
+            "a denial is not re-prompted"
+        );
     }
 
     #[tokio::test]
@@ -272,10 +323,15 @@ mod tests {
         let dispatcher = short(Arc::clone(&notifier), NotificationSettings::uniform(true));
 
         assert_eq!(
-            dispatcher.notify(&request(NotificationCategory::ImportFinished)).await,
+            dispatcher
+                .notify(&request(NotificationCategory::ImportFinished))
+                .await,
             DeliveryOutcome::Unsupported
         );
-        assert!(notifier.deliveries().await.is_empty());
+        assert!(
+            notifier.deliveries().await.is_empty(),
+            "an unsupported OS never sees a payload"
+        );
     }
 
     #[tokio::test]
@@ -285,7 +341,9 @@ mod tests {
             .await;
         let dispatcher = short(Arc::clone(&granting), NotificationSettings::uniform(true));
         assert_eq!(
-            dispatcher.notify(&request(NotificationCategory::TranscriptionFinished)).await,
+            dispatcher
+                .notify(&request(NotificationCategory::TranscriptionFinished))
+                .await,
             DeliveryOutcome::Delivered
         );
         assert_eq!(granting.permission_prompts().await, 1);
@@ -295,10 +353,15 @@ mod tests {
             .await;
         let dispatcher = short(Arc::clone(&refusing), NotificationSettings::uniform(true));
         assert_eq!(
-            dispatcher.notify(&request(NotificationCategory::TranscriptionFinished)).await,
+            dispatcher
+                .notify(&request(NotificationCategory::TranscriptionFinished))
+                .await,
             DeliveryOutcome::SuppressedByOsPermission
         );
-        assert!(refusing.deliveries().await.is_empty());
+        assert!(
+            refusing.deliveries().await.is_empty(),
+            "a refused prompt delivers nothing"
+        );
     }
 
     #[tokio::test]
@@ -308,41 +371,58 @@ mod tests {
             .await;
         let dispatcher = short(Arc::clone(&notifier), NotificationSettings::uniform(true));
 
-        let outcome = dispatcher.notify(&request(NotificationCategory::ImportFinished)).await;
-        assert_eq!(outcome, DeliveryOutcome::Failed("Notification Center refused".to_owned()));
+        let outcome = dispatcher
+            .notify(&request(NotificationCategory::ImportFinished))
+            .await;
+        assert_eq!(
+            outcome,
+            DeliveryOutcome::Failed("Notification Center refused".to_owned())
+        );
         assert!(!outcome.delivered());
         assert_eq!(outcome.suppression_reason(), Some("failed"));
     }
 
     #[tokio::test]
     async fn panicking_backend_is_contained() {
-        let notifier = RecordingNotifier::granted().set_behavior(Behavior::Panic).await;
+        let notifier = RecordingNotifier::granted()
+            .set_behavior(Behavior::Panic)
+            .await;
         let dispatcher = short(Arc::clone(&notifier), NotificationSettings::uniform(true));
 
-        let outcome = dispatcher.notify(&request(NotificationCategory::ImportFinished)).await;
+        let outcome = dispatcher
+            .notify(&request(NotificationCategory::ImportFinished))
+            .await;
         assert!(matches!(&outcome, DeliveryOutcome::Failed(detail) if detail.contains("panicked")));
 
         // The dispatcher is still usable afterwards.
         let notifier = RecordingNotifier::granted();
         let dispatcher = short(Arc::clone(&notifier), NotificationSettings::uniform(true));
         assert_eq!(
-            dispatcher.notify(&request(NotificationCategory::ImportFinished)).await,
+            dispatcher
+                .notify(&request(NotificationCategory::ImportFinished))
+                .await,
             DeliveryOutcome::Delivered
         );
     }
 
     #[tokio::test]
     async fn hanging_backend_times_out_instead_of_blocking_the_caller() {
-        let notifier =
-            RecordingNotifier::granted().set_behavior(Behavior::Hang(Duration::from_secs(30))).await;
+        let notifier = RecordingNotifier::granted()
+            .set_behavior(Behavior::Hang(Duration::from_secs(30)))
+            .await;
         let dispatcher = short(Arc::clone(&notifier), NotificationSettings::uniform(true));
 
         let started = std::time::Instant::now();
-        let outcome = dispatcher.notify(&request(NotificationCategory::ImportFinished)).await;
+        let outcome = dispatcher
+            .notify(&request(NotificationCategory::ImportFinished))
+            .await;
         let elapsed = started.elapsed();
 
         assert!(matches!(&outcome, DeliveryOutcome::Failed(detail) if detail.contains("exceeded")));
-        assert!(elapsed < Duration::from_secs(5), "caller waited {elapsed:?}");
+        assert!(
+            elapsed < Duration::from_secs(5),
+            "caller waited {elapsed:?}"
+        );
     }
 
     #[tokio::test]
@@ -350,14 +430,23 @@ mod tests {
         let notifier = RecordingNotifier::granted();
         let dispatcher = short(Arc::clone(&notifier), NotificationSettings::default());
         assert_eq!(
-            dispatcher.notify(&request(NotificationCategory::ImportFinished)).await,
+            dispatcher
+                .notify(&request(NotificationCategory::ImportFinished))
+                .await,
             DeliveryOutcome::SuppressedByPreference
         );
 
-        dispatcher.set_settings(NotificationSettings::uniform(true)).await;
-        assert!(dispatcher.settings().await.allows(NotificationCategory::ImportFinished));
+        dispatcher
+            .set_settings(NotificationSettings::uniform(true))
+            .await;
+        assert!(dispatcher
+            .settings()
+            .await
+            .allows(NotificationCategory::ImportFinished));
         assert_eq!(
-            dispatcher.notify(&request(NotificationCategory::ImportFinished)).await,
+            dispatcher
+                .notify(&request(NotificationCategory::ImportFinished))
+                .await,
             DeliveryOutcome::Delivered
         );
     }
@@ -378,7 +467,10 @@ mod tests {
 
         assert_eq!(dispatcher.notify(&req).await, DeliveryOutcome::Delivered);
         let delivered = notifier.deliveries().await;
-        assert_eq!(delivered[0].target, Some(NotificationTarget::Recording(recording)));
+        assert_eq!(
+            delivered[0].target,
+            Some(NotificationTarget::Recording(recording))
+        );
         assert_eq!(delivered[0].occurred_at, Timestamp::from_millis(99));
     }
 }

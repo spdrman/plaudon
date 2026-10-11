@@ -163,13 +163,20 @@ impl NotificationContext {
     /// Generic body built from counts and fixed phrases only.
     fn body(&self) -> String {
         match *self {
-            Self::ImportFinished { imported, failed, .. } => {
-                let imported_part =
-                    format!("{imported} {} imported", plural(imported, "recording", "recordings"));
+            Self::ImportFinished {
+                imported, failed, ..
+            } => {
+                let imported_part = format!(
+                    "{imported} {} imported",
+                    plural(imported, "recording", "recordings")
+                );
                 if failed == 0 {
                     format!("{imported_part}.")
                 } else {
-                    format!("{imported_part}, {failed} {} failed.", plural(failed, "file", "files"))
+                    format!(
+                        "{imported_part}, {failed} {} failed.",
+                        plural(failed, "file", "files")
+                    )
                 }
             }
             Self::TranscriptionFinished { recordings, .. } => format!(
@@ -243,12 +250,19 @@ mod tests {
                 failed: 0,
                 recording: Some(RecordingId::new()),
             },
-            NotificationContext::ImportFinished { imported: 7, failed: 2, recording: None },
+            NotificationContext::ImportFinished {
+                imported: 7,
+                failed: 2,
+                recording: None,
+            },
             NotificationContext::TranscriptionFinished {
                 recordings: 1,
                 recording: Some(RecordingId::new()),
             },
-            NotificationContext::TranscriptionFinished { recordings: 4, recording: None },
+            NotificationContext::TranscriptionFinished {
+                recordings: 4,
+                recording: None,
+            },
             NotificationContext::RequiresAttention {
                 jobs: 1,
                 reason: AttentionReason::AuthorizationRequired,
@@ -295,7 +309,10 @@ mod tests {
                 request.body
             );
             assert!(
-                request.title.chars().all(|c| c.is_ascii_alphanumeric() || c == ' '),
+                request
+                    .title
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == ' '),
                 "title {:?} is outside the allowlist",
                 request.title
             );
@@ -326,7 +343,10 @@ mod tests {
         );
         assert!(!request.body.contains(&recording.to_string()));
         assert!(!request.title.contains(&recording.to_string()));
-        assert_eq!(request.target, Some(NotificationTarget::Recording(recording)));
+        assert_eq!(
+            request.target,
+            Some(NotificationTarget::Recording(recording))
+        );
     }
 
     #[test]
@@ -342,8 +362,10 @@ mod tests {
         seen_categories.dedup();
         assert_eq!(seen_categories.len(), 4);
 
-        let mut texts: Vec<String> =
-            built.iter().map(|request| format!("{}|{}", request.title, request.body)).collect();
+        let mut texts: Vec<String> = built
+            .iter()
+            .map(|request| format!("{}|{}", request.title, request.body))
+            .collect();
         let total = texts.len();
         texts.sort();
         texts.dedup();
@@ -353,19 +375,30 @@ mod tests {
     #[test]
     fn counts_are_pluralised() {
         let one = build(
-            NotificationContext::ImportFinished { imported: 1, failed: 0, recording: None },
+            NotificationContext::ImportFinished {
+                imported: 1,
+                failed: 0,
+                recording: None,
+            },
             Timestamp::EPOCH,
         );
         assert_eq!(one.body, "1 recording imported.");
 
         let many = build(
-            NotificationContext::ImportFinished { imported: 3, failed: 1, recording: None },
+            NotificationContext::ImportFinished {
+                imported: 3,
+                failed: 1,
+                recording: None,
+            },
             Timestamp::EPOCH,
         );
         assert_eq!(many.body, "3 recordings imported, 1 file failed.");
 
         let zero = build(
-            NotificationContext::TranscriptionFinished { recordings: 0, recording: None },
+            NotificationContext::TranscriptionFinished {
+                recordings: 0,
+                recording: None,
+            },
             Timestamp::EPOCH,
         );
         assert_eq!(zero.body, "0 transcripts ready.");
@@ -409,7 +442,10 @@ mod tests {
     fn occurred_at_is_the_event_time_not_now() {
         let event = Timestamp::from_millis(42);
         let request = build(
-            NotificationContext::TranscriptionFinished { recordings: 1, recording: None },
+            NotificationContext::TranscriptionFinished {
+                recordings: 1,
+                recording: None,
+            },
             event,
         );
         assert_eq!(request.occurred_at, event);

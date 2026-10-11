@@ -142,7 +142,10 @@ mod tests {
 
     fn request() -> NotificationRequest {
         privacy::build(
-            NotificationContext::TranscriptionFinished { recordings: 1, recording: None },
+            NotificationContext::TranscriptionFinished {
+                recordings: 1,
+                recording: None,
+            },
             Timestamp::EPOCH,
         )
     }
@@ -151,7 +154,10 @@ mod tests {
     async fn captures_deliveries_and_counts_probes() {
         let notifier = RecordingNotifier::granted();
         assert_eq!(notifier.permission().await, OsPermission::Granted);
-        assert_eq!(notifier.deliver(&request()).await, DeliveryOutcome::Delivered);
+        assert_eq!(
+            notifier.deliver(&request()).await,
+            DeliveryOutcome::Delivered
+        );
         assert_eq!(notifier.deliveries().await, vec![request()]);
         assert_eq!(notifier.permission_checks().await, 1);
         assert_eq!(notifier.permission_prompts().await, 0);

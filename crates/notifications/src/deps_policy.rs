@@ -66,7 +66,10 @@ pub fn declared_dependencies(manifest: &str) -> Vec<String> {
 
     for raw in manifest.lines() {
         let line = raw.split('#').next().unwrap_or("").trim();
-        if let Some(header) = line.strip_prefix('[').and_then(|rest| rest.strip_suffix(']')) {
+        if let Some(header) = line
+            .strip_prefix('[')
+            .and_then(|rest| rest.strip_suffix(']'))
+        {
             let header = header.trim();
             if let Some(name) = dependency_table_entry(header) {
                 names.push(name);
@@ -140,18 +143,35 @@ mod tests {
     #[test]
     fn this_crate_declares_no_remote_delivery_dependency() {
         let offenders = forbidden_in(MANIFEST);
-        assert!(offenders.is_empty(), "spec 5.5 forbids {offenders:?} in plaudon-notifications");
+        assert!(
+            offenders.is_empty(),
+            "spec 5.5 forbids {offenders:?} in plaudon-notifications"
+        );
     }
 
     #[test]
     fn the_real_manifest_is_parsed_not_silently_empty() {
         let declared = declared_dependencies(MANIFEST);
-        for expected in ["plaudon-domain", "async-trait", "serde", "tokio", "tracing", "regex"] {
-            assert!(declared.iter().any(|name| name == expected), "missing {expected} in {declared:?}");
+        for expected in [
+            "plaudon-domain",
+            "async-trait",
+            "serde",
+            "tokio",
+            "tracing",
+            "regex",
+        ] {
+            assert!(
+                declared.iter().any(|name| name == expected),
+                "missing {expected} in {declared:?}"
+            );
         }
         // Platform tables are parsed on every host, not only the matching one.
-        assert!(declared.iter().any(|name| name == "objc2-user-notifications"));
-        assert!(declared.iter().any(|name| name == "tauri-winrt-notification"));
+        assert!(declared
+            .iter()
+            .any(|name| name == "objc2-user-notifications"));
+        assert!(declared
+            .iter()
+            .any(|name| name == "tauri-winrt-notification"));
     }
 
     #[test]
@@ -182,7 +202,10 @@ web-push = "0.10"
 # reqwest is forbidden here (spec 5.5)
 tokio = { version = "1", features = ["reqwest-like-name"] }
 "#;
-        assert!(forbidden_in(manifest).is_empty());
+        assert!(
+            forbidden_in(manifest).is_empty(),
+            "a comment is not a dependency"
+        );
         assert_eq!(declared_dependencies(manifest), vec!["tokio".to_owned()]);
     }
 
@@ -195,6 +218,9 @@ reqwest = "not a dependency"
 [lints.clippy]
 all = "deny"
 "#;
-        assert!(declared_dependencies(manifest).is_empty());
+        assert!(
+            declared_dependencies(manifest).is_empty(),
+            "only dependency tables are scanned"
+        );
     }
 }
