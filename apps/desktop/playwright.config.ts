@@ -17,9 +17,9 @@ export default defineConfig({
   use: {
     baseURL: "http://127.0.0.1:5273",
     trace: "retain-on-failure",
+    ...devices["Desktop Chrome"],
     // Desktop viewport: the app explicitly does not target narrow screens (§5.6).
     viewport: { width: 1440, height: 900 },
-    ...devices["Desktop Chrome"],
   },
   webServer: {
     command: "npm run dev",

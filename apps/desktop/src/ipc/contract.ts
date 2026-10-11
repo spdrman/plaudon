@@ -141,6 +141,9 @@ export interface Preferences {
   notifications: NotificationSettings;
 }
 
+/** Observed state of an OS permission; `unsupported` means the OS has no such concept. */
+export type OsPermissionState = "granted" | "denied" | "not_requested" | "unsupported";
+
 export interface Capabilities {
   os: { platform: "macos" | "windows" | "linux"; version: string };
   hardware: { arch: string; logical_cores: number; total_memory_bytes: number };
@@ -149,7 +152,7 @@ export interface Capabilities {
   /** Integration statuses keyed by integration id (plaud_cloud, openrouter, …). */
   integrations: Record<string, CapabilityStatus>;
   /** OS permissions the app has actually been granted. */
-  permissions: Record<string, "granted" | "denied" | "not_requested">;
+  permissions: Record<string, OsPermissionState>;
   preferences: Preferences;
   openrouter_key_present: boolean;
 }
@@ -441,7 +444,7 @@ export interface NotificationSettings {
 export interface NotificationSettingsResponse {
   settings: NotificationSettings;
   /** What the OS actually permits right now. */
-  os_permission: "granted" | "denied" | "not_requested" | "unsupported";
+  os_permission: OsPermissionState;
 }
 
 export interface LocalOnlyModeResponse {

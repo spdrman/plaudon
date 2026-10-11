@@ -78,7 +78,7 @@ export const INBOX_WORK_QUERY: LibraryQueryState = createLibraryQuery({
   sortDirection: "desc",
 });
 
-/** Union of the two Inbox branches: no duplicates, newest import first. */
+/** Union of the two Inbox branches, de-duplicated by recording id. */
 export function mergeInboxRows(
   ...branches: ReadonlyArray<readonly RecordingSummary[]>
 ): RecordingSummary[] {
@@ -88,10 +88,43 @@ export function mergeInboxRows(
       if (!byId.has(row.recording_id)) byId.set(row.recording_id, row);
     }
   }
-  return [...byId.values()].sort((a, b) => {
-    if (a.imported_at === b.imported_at) return a.recording_id < b.recording_id ? -1 : 1;
-    return a.imported_at < b.imported_at ? 1 : -1;
+  return [...byId.values()];
+}
+
+/**
+ * Orders a client-side union the same way the backend orders a single query,
+ * so the header's `aria-sort` always describes what is actually displayed.
+ * Unknown values (`null`) sort last in both directions — they are not zero.
+ */
+export function sortRows(
+  rows: readonly RecordingSummary[],
+  sort: { sortField: RecordingSortField; sortDirection: SortDirection },
+): RecordingSummary[] {
+  const factor = sort.sortDirection === "asc" ? 1 : -1;
+  return [...rows].sort((a, b) => {
+    const left = sortKey(a, sort.sortField);
+    const right = sortKey(b, sort.sortField);
+    if (left === null && right === null) return a.recording_id < b.recording_id ? -1 : 1;
+    if (left === null) return 1;
+    if (right === null) return -1;
+    if (left === right) return a.recording_id < b.recording_id ? -1 : 1;
+    return left < right ? -factor : factor;
   });
+}
+
+function sortKey(row: RecordingSummary, field: RecordingSortField): string | number | null {
+  switch (field) {
+    case "title":
+      return row.title.toLowerCase();
+    case "duration_ms":
+      return row.duration_ms;
+    case "recorded_at":
+      return row.recorded_at;
+    case "imported_at":
+      return row.imported_at;
+    default:
+      return null;
+  }
 }
 
 /* ----------------------------------------------------------------- actions */
@@ -333,6 +366,15 @@ export const TRANSCRIPTION_STATUS_OPTIONS: readonly TranscriptionStatus[] = [
   "failed",
   "stale",
 ];
+
+/** Narrows a `<select>` value back to the contract union; "" means no filter. */
+export function parseImportStatus(value: string): ImportStatus | null {
+  return IMPORT_STATUS_OPTIONS.find((status) => status === value) ?? null;
+}
+
+export function parseTranscriptionStatus(value: string): TranscriptionStatus | null {
+  return TRANSCRIPTION_STATUS_OPTIONS.find((status) => status === value) ?? null;
+}
 
 /** Tag choices offered by the toolbar: whatever the loaded rows actually carry. */
 export function tagOptions(rows: readonly RecordingSummary[], selected: readonly string[]): string[] {
