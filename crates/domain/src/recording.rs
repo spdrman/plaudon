@@ -93,7 +93,11 @@ impl Recording {
     /// not change the preference: promoting a higher-fidelity candidate is an
     /// explicit action (spec 6.3B).
     pub fn attach_media(&mut self, candidate: RecordingMedia) -> Result<(), RecordingMediaError> {
-        if self.media_candidates.iter().any(|c| c.media_asset_id == candidate.media_asset_id) {
+        if self
+            .media_candidates
+            .iter()
+            .any(|c| c.media_asset_id == candidate.media_asset_id)
+        {
             return Err(RecordingMediaError::AlreadyAttached);
         }
         if self.preferred_media_asset_id.is_none() {
@@ -108,7 +112,11 @@ impl Recording {
         &mut self,
         media_asset_id: MediaAssetId,
     ) -> Result<(), RecordingMediaError> {
-        if !self.media_candidates.iter().any(|c| c.media_asset_id == media_asset_id) {
+        if !self
+            .media_candidates
+            .iter()
+            .any(|c| c.media_asset_id == media_asset_id)
+        {
             return Err(RecordingMediaError::NotAttached);
         }
         self.preferred_media_asset_id = Some(media_asset_id);
@@ -150,8 +158,15 @@ mod tests {
         );
 
         recording.set_preferred_media(usb.media_asset_id).unwrap();
-        assert_eq!(recording.preferred_media_asset_id(), Some(usb.media_asset_id));
-        assert_eq!(recording.media_candidates().len(), 2, "promotion must not remove a candidate");
+        assert_eq!(
+            recording.preferred_media_asset_id(),
+            Some(usb.media_asset_id)
+        );
+        assert_eq!(
+            recording.media_candidates().len(),
+            2,
+            "promotion must not remove a candidate"
+        );
     }
 
     #[test]
@@ -159,7 +174,10 @@ mod tests {
         let mut recording = Recording::new(RecordingId::new(), "Standup", Timestamp::EPOCH);
         let only = candidate(QualityClass::UserSuppliedFile);
         recording.attach_media(only.clone()).unwrap();
-        assert_eq!(recording.attach_media(only), Err(RecordingMediaError::AlreadyAttached));
+        assert_eq!(
+            recording.attach_media(only),
+            Err(RecordingMediaError::AlreadyAttached)
+        );
     }
 
     #[test]

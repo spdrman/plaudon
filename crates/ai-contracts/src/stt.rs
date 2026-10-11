@@ -8,8 +8,8 @@ use plaudon_domain::ids::SpeakerId;
 use plaudon_domain::locale::LanguageTag;
 use plaudon_domain::media::Sha256Digest;
 use plaudon_domain::model::{EngineId, ModelIdentity};
-use plaudon_domain::transcript::{AlignmentOrigin, Confidence, WordAlignment};
 use plaudon_domain::timerange::SourceTimeMs;
+use plaudon_domain::transcript::{AlignmentOrigin, Confidence, WordAlignment};
 use serde::{Deserialize, Serialize};
 
 use crate::capabilities::{MediaFormat, SttCapabilities};
@@ -151,14 +151,20 @@ mod tests {
 
     #[test]
     fn cancellation_maps_to_the_cancel_error_code() {
-        assert_eq!(AppError::from(SttError::Cancelled).code(), AppErrorCode::Canceled);
+        assert_eq!(
+            AppError::from(SttError::Cancelled).code(),
+            AppErrorCode::Canceled
+        );
     }
 
     #[test]
     fn an_unknown_outcome_maps_to_a_non_retryable_code() {
         let error = AppError::from(SttError::OutcomeUnknown);
         assert_eq!(error.code(), AppErrorCode::OutcomeUnknown);
-        assert!(!error.is_retryable(), "an unknown outcome must never auto-retry");
+        assert!(
+            !error.is_retryable(),
+            "an unknown outcome must never auto-retry"
+        );
     }
 
     #[test]
@@ -175,8 +181,11 @@ mod tests {
             SttError::MalformedOutput,
             SttError::EngineFailure,
         ];
-        let codes: std::collections::BTreeSet<_> =
-            errors.iter().cloned().map(|e| AppError::from(e).code()).collect();
+        let codes: std::collections::BTreeSet<_> = errors
+            .iter()
+            .cloned()
+            .map(|e| AppError::from(e).code())
+            .collect();
         assert_eq!(codes.len(), errors.len());
     }
 }

@@ -62,7 +62,10 @@ mod tests {
 
     #[test]
     fn epoch_formats_as_rfc3339() {
-        assert_eq!(Timestamp::EPOCH.to_rfc3339().unwrap(), "1970-01-01T00:00:00Z");
+        assert_eq!(
+            Timestamp::EPOCH.to_rfc3339().unwrap(),
+            "1970-01-01T00:00:00Z"
+        );
     }
 
     #[test]

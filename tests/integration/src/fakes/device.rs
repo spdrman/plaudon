@@ -41,7 +41,11 @@ impl FakeDevice {
         capabilities: Result<DeviceCapabilities, DeviceError>,
         recordings: Vec<FakeDeviceRecording>,
     ) -> Self {
-        Self { capabilities, recordings, fail_after_chunk: Mutex::new(None) }
+        Self {
+            capabilities,
+            recordings,
+            fail_after_chunk: Mutex::new(None),
+        }
     }
 
     /// Simulate a disconnect after `chunk_count` chunks have been written.
@@ -61,7 +65,11 @@ impl DirectDevice for FakeDevice {
         if !caps.is_selectable() {
             return Err(DeviceError::UnsupportedFirmware);
         }
-        Ok(self.recordings.iter().map(|entry| entry.listing.clone()).collect())
+        Ok(self
+            .recordings
+            .iter()
+            .map(|entry| entry.listing.clone())
+            .collect())
     }
 
     async fn read_to_staging(
@@ -89,13 +97,17 @@ impl DirectDevice for FakeDevice {
             if disconnect_after == Some(index) {
                 return Err(DeviceError::DeviceDisconnected);
             }
-            sink.write_all(chunk).await.map_err(|_| DeviceError::TransferIncomplete)?;
+            sink.write_all(chunk)
+                .await
+                .map_err(|_| DeviceError::TransferIncomplete)?;
             all.extend_from_slice(chunk);
         }
         if cancel.is_cancelled() {
             return Err(DeviceError::Cancelled);
         }
-        sink.flush().await.map_err(|_| DeviceError::TransferIncomplete)?;
+        sink.flush()
+            .await
+            .map_err(|_| DeviceError::TransferIncomplete)?;
 
         Ok(VerifiedTransfer {
             device_recording_id: *id,

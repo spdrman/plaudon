@@ -25,7 +25,12 @@ impl FakeSpeechToText {
         alignment_origin: AlignmentOrigin,
         segments: Vec<TranscriptSegmentDraft>,
     ) -> Self {
-        Self { capabilities, segments, alignment_origin, failure: None }
+        Self {
+            capabilities,
+            segments,
+            alignment_origin,
+            failure: None,
+        }
     }
 
     /// Create an engine that always fails with `error`.
@@ -58,7 +63,9 @@ impl SpeechToText for FakeSpeechToText {
             if ctx.is_cancelled() {
                 return Err(SttError::Cancelled);
             }
-            ctx.report(Progress::fraction((index + 1) as f32 / self.segments.len().max(1) as f32));
+            let done = u16::try_from(index + 1).unwrap_or(u16::MAX);
+            let total = u16::try_from(self.segments.len().max(1)).unwrap_or(u16::MAX);
+            ctx.report(Progress::fraction(f32::from(done) / f32::from(total)));
         }
         if ctx.is_cancelled() {
             return Err(SttError::Cancelled);

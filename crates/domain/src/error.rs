@@ -327,7 +327,11 @@ impl SafeHint {
             Self::RetryAfterSeconds(seconds) => {
                 format!("You can try again in about {seconds} seconds.")
             }
-            Self::LimitExceeded { limit, allowed, observed } => {
+            Self::LimitExceeded {
+                limit,
+                allowed,
+                observed,
+            } => {
                 format!("The {limit} limit is {allowed}; this request needed {observed}.")
             }
             Self::RequiredComponent(component) => format!("Required component: {component}."),
@@ -339,7 +343,11 @@ impl AppError {
     /// Construct an error with internal diagnostic detail.
     #[must_use]
     pub fn new(code: AppErrorCode, detail: impl Into<String>) -> Self {
-        Self { code, detail: detail.into(), hint: None }
+        Self {
+            code,
+            detail: detail.into(),
+            hint: None,
+        }
     }
 
     /// Attach a user-safe hint.
@@ -372,7 +380,10 @@ impl AppError {
     /// The vendor text is kept only as redacted diagnostic detail.
     #[must_use]
     pub fn from_unmapped_vendor(vendor_text: impl AsRef<str>) -> Self {
-        Self::new(AppErrorCode::InternalError, Redactor::default().redact(vendor_text.as_ref()))
+        Self::new(
+            AppErrorCode::InternalError,
+            Redactor::default().redact(vendor_text.as_ref()),
+        )
     }
 
     /// Build the frontend envelope, recording a redacted diagnostics entry.
@@ -454,7 +465,17 @@ impl Redactor {
 
     fn redact_token(token: &str) -> String {
         let lower = token.to_ascii_lowercase();
-        let sensitive_key = ["token", "secret", "key", "password", "signature", "authorization", "cookie", "sig", "credential"];
+        let sensitive_key = [
+            "token",
+            "secret",
+            "key",
+            "password",
+            "signature",
+            "authorization",
+            "cookie",
+            "sig",
+            "credential",
+        ];
         if lower.starts_with("http://")
             || lower.starts_with("https://")
             || lower.starts_with("file://")
@@ -465,7 +486,10 @@ impl Redactor {
         }
         if let Some((key, _)) = token.split_once(['=', ':']) {
             let key_lower = key.to_ascii_lowercase();
-            if sensitive_key.iter().any(|needle| key_lower.contains(needle)) {
+            if sensitive_key
+                .iter()
+                .any(|needle| key_lower.contains(needle))
+            {
                 return format!("{key}={}", Self::PLACEHOLDER);
             }
         }
@@ -483,7 +507,9 @@ impl Redactor {
         if trimmed.len() < 20 {
             return false;
         }
-        let alnum = trimmed.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+        let alnum = trimmed
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
         let has_digit = trimmed.chars().any(|c| c.is_ascii_digit());
         let has_alpha = trimmed.chars().any(|c| c.is_ascii_alphabetic());
         alnum && has_digit && has_alpha
@@ -622,8 +648,12 @@ mod tests {
     fn every_code_maps_to_exactly_one_string_and_one_message() {
         let mut seen = std::collections::BTreeSet::new();
         for code in AppErrorCode::ALL {
-            assert!(seen.insert(code.as_str()), "duplicate code string {}", code.as_str());
-            assert!(!code.canonical_message().is_empty());
+            assert!(
+                seen.insert(code.as_str()),
+                "duplicate code string {}",
+                code.as_str()
+            );
+            assert_ne!(code.canonical_message(), "");
             assert_eq!(
                 code.as_str(),
                 serde_json::to_value(code).unwrap().as_str().unwrap(),
@@ -676,10 +706,16 @@ mod tests {
             "/Users/someone",
             "PLAUD CLI said",
         ] {
-            assert!(!serialized.contains(forbidden), "envelope leaked {forbidden}: {serialized}");
+            assert!(
+                !serialized.contains(forbidden),
+                "envelope leaked {forbidden}: {serialized}"
+            );
         }
         assert_eq!(envelope.code, AppErrorCode::LinkExpired);
-        assert_eq!(envelope.message, AppErrorCode::LinkExpired.canonical_message());
+        assert_eq!(
+            envelope.message,
+            AppErrorCode::LinkExpired.canonical_message()
+        );
     }
 
     #[test]
@@ -690,7 +726,9 @@ mod tests {
         );
         let mut log = DiagnosticLog::new();
         let envelope = error.to_envelope(&mut log, Timestamp::from_millis(42));
-        let record = log.get(envelope.diagnostic_id).expect("diagnostic entry must resolve");
+        let record = log
+            .get(envelope.diagnostic_id)
+            .expect("diagnostic entry must resolve");
 
         assert_eq!(record.code, AppErrorCode::SourceUnavailable);
         assert_eq!(record.recorded_at, Timestamp::from_millis(42));
@@ -705,7 +743,9 @@ mod tests {
             .with_hint(SafeHint::RetryAfterSeconds(30));
         let mut log = DiagnosticLog::new();
         let envelope = error.to_envelope(&mut log, Timestamp::EPOCH);
-        assert!(envelope.message.ends_with("You can try again in about 30 seconds."));
+        assert!(envelope
+            .message
+            .ends_with("You can try again in about 30 seconds."));
         assert!(envelope.retryable);
     }
 

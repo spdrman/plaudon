@@ -10,7 +10,9 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 /// Validation status of an integration cell (spec 6.6).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum CapabilityStatus {
     /// Opt-in diagnostic functionality with incomplete evidence.
@@ -21,6 +23,7 @@ pub enum CapabilityStatus {
     Supported,
     /// Not probed, or probed with an inconclusive result. Also the decoding of
     /// any status string this build does not recognize.
+    #[default]
     #[serde(other)]
     Unknown,
 }
@@ -32,12 +35,6 @@ impl CapabilityStatus {
     #[must_use]
     pub const fn is_selectable(self) -> bool {
         matches!(self, Self::Supported)
-    }
-}
-
-impl Default for CapabilityStatus {
-    fn default() -> Self {
-        Self::Unknown
     }
 }
 
@@ -71,7 +68,9 @@ impl DispatchState {
 }
 
 /// A three-valued capability flag where `Unknown` never satisfies a requirement.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum Tri {
     /// Observed to be available.
@@ -79,6 +78,7 @@ pub enum Tri {
     /// Observed to be unavailable.
     No,
     /// Not observed. Treated as unavailable by every policy decision.
+    #[default]
     #[serde(other)]
     Unknown,
 }
@@ -101,18 +101,16 @@ impl Tri {
     }
 }
 
-impl Default for Tri {
-    fn default() -> Self {
-        Self::Unknown
-    }
-}
-
 /// A value that may not have been observed.
 ///
 /// Serializes as the inner value or `null`; a `null` or absent field decodes to
 /// [`Known::Unknown`] rather than a default value.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[serde(from = "Option<T>", into = "Option<T>", bound = "T: Clone + Serialize + serde::de::DeserializeOwned")]
+#[serde(
+    from = "Option<T>",
+    into = "Option<T>",
+    bound = "T: Clone + Serialize + serde::de::DeserializeOwned"
+)]
 pub enum Known<T> {
     /// The value was observed.
     Known(T),
@@ -135,6 +133,9 @@ impl<T> Known<T> {
     }
 }
 
+// Not derivable: `#[derive(Default)]` on a generic enum would demand
+// `T: Default`, and an unobserved value has no inner default to fall back on.
+#[allow(clippy::derivable_impls)]
 impl<T> Default for Known<T> {
     fn default() -> Self {
         Self::Unknown
@@ -269,7 +270,10 @@ mod tests {
         let json = r#"{"payload_version":1,"status":"supported","payload":3,
             "unknown_fields":{"supports_time_travel":true}}"#;
         let envelope: CapabilityEnvelope<u8> = serde_json::from_str(json).unwrap();
-        assert_eq!(envelope.unknown_fields["supports_time_travel"], serde_json::json!(true));
+        assert_eq!(
+            envelope.unknown_fields["supports_time_travel"],
+            serde_json::json!(true)
+        );
         assert_eq!(envelope.payload, 3);
     }
 

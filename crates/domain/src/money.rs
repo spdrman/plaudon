@@ -81,7 +81,11 @@ impl Money {
     /// Construct an amount.
     #[must_use]
     pub const fn new(scaled_amount: i128, scale: u8, currency: Currency) -> Self {
-        Self { scaled_amount, scale, currency }
+        Self {
+            scaled_amount,
+            scale,
+            currency,
+        }
     }
 
     /// Add two amounts of the same currency and scale.
@@ -90,7 +94,10 @@ impl Money {
         if self.currency != other.currency || self.scale != other.scale {
             return None;
         }
-        Some(Self { scaled_amount: self.scaled_amount.checked_add(other.scaled_amount)?, ..self })
+        Some(Self {
+            scaled_amount: self.scaled_amount.checked_add(other.scaled_amount)?,
+            ..self
+        })
     }
 }
 
@@ -99,7 +106,12 @@ impl fmt::Display for Money {
         let divisor = 10i128.pow(u32::from(self.scale));
         let whole = self.scaled_amount / divisor;
         let frac = (self.scaled_amount % divisor).abs();
-        write!(f, "{whole}.{frac:0width$} {}", self.currency, width = usize::from(self.scale))
+        write!(
+            f,
+            "{whole}.{frac:0width$} {}",
+            self.currency,
+            width = usize::from(self.scale)
+        )
     }
 }
 
@@ -162,6 +174,9 @@ mod tests {
 
     #[test]
     fn money_renders_with_its_declared_scale() {
-        assert_eq!(Money::new(1_234_500, 6, Currency::USD).to_string(), "1.234500 USD");
+        assert_eq!(
+            Money::new(1_234_500, 6, Currency::USD).to_string(),
+            "1.234500 USD"
+        );
     }
 }

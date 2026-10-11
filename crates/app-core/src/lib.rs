@@ -1,11 +1,17 @@
-//! Use cases and policies composed over the domain model (import, deduplication).
+//! Use cases and policies composed over the domain model.
+//!
+//! This crate owns the rules that span persistence and the domain: how an
+//! import deduplicates blobs without merging logical meetings, and how a
+//! repeated import of the same source item stays idempotent.
+
+pub mod dedup;
+pub mod import;
+
+pub use dedup::{BlobDecision, DedupPolicy};
+pub use import::{ImportOutcome, ImportRequest, ImportService};
 
 /// Cargo package name of this crate, used by the workspace layout conformance test.
 pub const PACKAGE_NAME: &str = "plaudon-app-core";
 
 /// Version of the inter-module contract exposed by this crate (spec 6.6).
-///
-/// Capability and contract payloads are versioned independently of the
-/// application release, so consumers can detect an unknown contract instead of
-/// assuming an unavailable feature is present.
 pub const CONTRACT_VERSION: u32 = 1;

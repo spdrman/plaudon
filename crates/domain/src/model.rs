@@ -48,7 +48,11 @@ impl ModelIdentity {
     /// Construct a model identity.
     #[must_use]
     pub fn new(engine: EngineId, model_id: impl Into<String>) -> Self {
-        Self { engine, model_id: model_id.into(), model_version: None }
+        Self {
+            engine,
+            model_id: model_id.into(),
+            model_version: None,
+        }
     }
 
     /// Attach a concrete version.
@@ -81,7 +85,8 @@ mod tests {
 
     #[test]
     fn versioned_identities_render_unambiguously() {
-        let model = ModelIdentity::new(EngineId::new("openrouter"), "vendor/model").with_version("2026-01");
+        let model =
+            ModelIdentity::new(EngineId::new("openrouter"), "vendor/model").with_version("2026-01");
         assert_eq!(model.to_string(), "openrouter/vendor/model@2026-01");
     }
 }

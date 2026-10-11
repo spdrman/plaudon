@@ -70,11 +70,20 @@ impl RecordingSource for FakeSource {
             Some(raw) => raw.parse().map_err(|_| SourceError::MalformedOutput)?,
         };
         let Some(page) = self.pages.get(index) else {
-            return Ok(SourcePage { items: Vec::new(), next_cursor: None });
+            return Ok(SourcePage {
+                items: Vec::new(),
+                next_cursor: None,
+            });
         };
-        let next_cursor =
-            if index + 1 < self.pages.len() { Some((index + 1).to_string()) } else { None };
-        Ok(SourcePage { items: page.iter().map(|entry| entry.item.clone()).collect(), next_cursor })
+        let next_cursor = if index + 1 < self.pages.len() {
+            Some((index + 1).to_string())
+        } else {
+            None
+        };
+        Ok(SourcePage {
+            items: page.iter().map(|entry| entry.item.clone()).collect(),
+            next_cursor,
+        })
     }
 
     async fn acquire(
@@ -91,8 +100,13 @@ impl RecordingSource for FakeSource {
             .flatten()
             .find(|candidate| candidate.item.identity == item.identity)
             .ok_or(SourceError::AssetNotFound)?;
-        tokio::fs::write(target, &entry.bytes).await.map_err(|_| SourceError::DownloadInterrupted)?;
-        self.acquisitions.lock().expect("fake source lock").push(item.display_name.clone());
+        tokio::fs::write(target, &entry.bytes)
+            .await
+            .map_err(|_| SourceError::DownloadInterrupted)?;
+        self.acquisitions
+            .lock()
+            .expect("fake source lock")
+            .push(item.display_name.clone());
         Ok(AcquiredAsset {
             identity: MediaIdentity::of_bytes(&entry.bytes, "pcm_s16le"),
             quality_class: item.quality_class,

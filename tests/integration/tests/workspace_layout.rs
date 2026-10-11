@@ -61,8 +61,10 @@ const REQUIRED_DIRECTORIES: &[&str] = &[
 ];
 
 fn read_toml(path: &Path) -> toml::Value {
-    let text = std::fs::read_to_string(path).unwrap_or_else(|e| panic!("read {path:?}: {e}"));
-    text.parse::<toml::Value>().unwrap_or_else(|e| panic!("parse {path:?}: {e}"))
+    let text =
+        std::fs::read_to_string(path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
+    text.parse::<toml::Value>()
+        .unwrap_or_else(|e| panic!("parse {}: {e}", path.display()))
 }
 
 #[test]
@@ -70,7 +72,10 @@ fn every_spec_6_4_crate_exists_with_the_expected_package_name() {
     let root = repo_root();
     for crate_dir in REQUIRED_CRATES {
         let manifest = root.join("crates").join(crate_dir).join("Cargo.toml");
-        assert!(manifest.is_file(), "missing crate manifest for crates/{crate_dir}");
+        assert!(
+            manifest.is_file(),
+            "missing crate manifest for crates/{crate_dir}"
+        );
         let value = read_toml(&manifest);
         let name = value["package"]["name"].as_str().expect("package name");
         assert_eq!(
@@ -79,7 +84,10 @@ fn every_spec_6_4_crate_exists_with_the_expected_package_name() {
             "crates/{crate_dir} must be named plaudon-{crate_dir}"
         );
         assert!(
-            root.join("crates").join(crate_dir).join("src/lib.rs").is_file(),
+            root.join("crates")
+                .join(crate_dir)
+                .join("src/lib.rs")
+                .is_file(),
             "crates/{crate_dir} must be a library crate"
         );
     }
@@ -89,7 +97,10 @@ fn every_spec_6_4_crate_exists_with_the_expected_package_name() {
 fn every_spec_6_4_directory_exists() {
     let root = repo_root();
     for directory in REQUIRED_DIRECTORIES {
-        assert!(root.join(directory).is_dir(), "missing required directory {directory}");
+        assert!(
+            root.join(directory).is_dir(),
+            "missing required directory {directory}"
+        );
     }
 }
 
@@ -104,7 +115,10 @@ fn the_workspace_member_globs_cover_every_crate_and_test_package() {
         .map(|entry| entry.as_str().expect("member string"))
         .collect();
 
-    assert!(members.contains("crates/*"), "crates/* glob keeps member additions conflict free");
+    assert!(
+        members.contains("crates/*"),
+        "crates/* glob keeps member additions conflict free"
+    );
     assert!(members.contains("tests/integration"));
     assert!(members.contains("tests/chaos"));
     assert_eq!(manifest["workspace"]["resolver"].as_str(), Some("2"));
@@ -112,7 +126,10 @@ fn the_workspace_member_globs_cover_every_crate_and_test_package() {
 
 #[test]
 fn the_lockfile_is_committed() {
-    assert!(repo_root().join("Cargo.lock").is_file(), "Cargo.lock must be committed");
+    assert!(
+        repo_root().join("Cargo.lock").is_file(),
+        "Cargo.lock must be committed"
+    );
 }
 
 #[test]
@@ -126,7 +143,10 @@ fn the_toolchain_is_pinned_with_fmt_and_clippy() {
         .collect();
     assert!(components.contains("rustfmt"));
     assert!(components.contains("clippy"));
-    assert!(manifest["toolchain"]["channel"].as_str().is_some(), "the channel must be pinned");
+    assert!(
+        manifest["toolchain"]["channel"].as_str().is_some(),
+        "the channel must be pinned"
+    );
 }
 
 /// Dependencies the core must never acquire (spec 6.3(1)).
@@ -196,7 +216,10 @@ fn the_core_crates_are_free_of_transitive_vendor_dependencies() {
     let mut manifests: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
     for crate_dir in REQUIRED_CRATES {
         let manifest = read_toml(&root.join("crates").join(crate_dir).join("Cargo.toml"));
-        manifests.insert(format!("plaudon-{crate_dir}"), declared_dependencies(&manifest));
+        manifests.insert(
+            format!("plaudon-{crate_dir}"),
+            declared_dependencies(&manifest),
+        );
     }
 
     for seed in ["plaudon-domain", "plaudon-app-core"] {
@@ -206,7 +229,9 @@ fn the_core_crates_are_free_of_transitive_vendor_dependencies() {
             if !seen.insert(current.clone()) {
                 continue;
             }
-            let Some(dependencies) = manifests.get(&current) else { continue };
+            let Some(dependencies) = manifests.get(&current) else {
+                continue;
+            };
             for dependency in dependencies {
                 assert!(
                     !FORBIDDEN_CORE_DEPENDENCIES.contains(&dependency.as_str()),

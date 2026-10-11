@@ -9,7 +9,9 @@ use serde::{Deserialize, Serialize};
 ///
 /// A model catalog saying "audio capable" does not say which endpoint contract
 /// applies, so this is probed per model and defaults to `Unknown`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum RequestFamily {
     /// A dedicated multipart speech-to-text endpoint.
@@ -19,6 +21,7 @@ pub enum RequestFamily {
     /// Probed and found not to accept audio at all.
     Unsupported,
     /// Not probed, or the probe was inconclusive.
+    #[default]
     #[serde(other)]
     Unknown,
 }
@@ -31,12 +34,6 @@ impl RequestFamily {
     #[must_use]
     pub const fn has_builder(self) -> bool {
         matches!(self, Self::MultipartStt | Self::AudioChat)
-    }
-}
-
-impl Default for RequestFamily {
-    fn default() -> Self {
-        Self::Unknown
     }
 }
 
@@ -53,7 +50,10 @@ impl MediaFormat {
     /// Construct a format pair.
     #[must_use]
     pub fn new(container: impl Into<String>, codec: impl Into<String>) -> Self {
-        Self { container: container.into(), codec: codec.into() }
+        Self {
+            container: container.into(),
+            codec: codec.into(),
+        }
     }
 }
 
@@ -289,7 +289,9 @@ impl SttCapabilities {
     /// Whether the engine declares support for `format`.
     #[must_use]
     pub fn supports_format(&self, format: &MediaFormat) -> bool {
-        self.supported_formats.get().is_some_and(|formats| formats.contains(format))
+        self.supported_formats
+            .get()
+            .is_some_and(|formats| formats.contains(format))
     }
 }
 
@@ -401,8 +403,9 @@ mod tests {
     fn an_unavailable_engine_is_not_selectable_even_when_supported() {
         let mut caps = SttCapabilities::unknown(engine(), model());
         caps.status = CapabilityStatus::Supported;
-        caps.availability_reason =
-            AvailabilityReason::ModelAssetMissing { asset: "ggml-base.en".into() };
+        caps.availability_reason = AvailabilityReason::ModelAssetMissing {
+            asset: "ggml-base.en".into(),
+        };
         assert!(!caps.is_selectable());
     }
 
@@ -433,7 +436,10 @@ mod tests {
         assert!(!caps.supports_locale(&english));
 
         caps.locales = Known::Known(vec![LanguageTag::parse("en-GB").unwrap()]);
-        assert!(caps.supports_locale(&english), "primary language match is sufficient");
+        assert!(
+            caps.supports_locale(&english),
+            "primary language match is sufficient"
+        );
         assert!(!caps.supports_locale(&LanguageTag::parse("ja").unwrap()));
     }
 }

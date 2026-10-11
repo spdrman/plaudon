@@ -25,7 +25,7 @@ pub use capabilities::{
 pub use job::{CancellationToken, JobContext, Progress, ProgressSink};
 pub use plaudon_domain::capability::{CapabilityEnvelope, CapabilityStatus, Known, Tri};
 pub use plaudon_domain::transcript::AlignmentOrigin;
-pub use policy::{EngineRejection, EngineSelection, SttRequirements, select_stt_engine};
+pub use policy::{select_stt_engine, EngineRejection, EngineSelection, SttRequirements};
 pub use stt::{SpeechToText, SttError, SttInput, TranscriptDraft, TranscriptSegmentDraft};
 pub use text::{StructuredRequest, StructuredResponse, TextModel, TextModelError};
 

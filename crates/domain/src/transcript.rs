@@ -75,7 +75,11 @@ impl Confidence {
     /// Construct a confidence value.
     #[must_use]
     pub fn new(engine: EngineId, scale: ConfidenceScale, value: f64) -> Self {
-        Self { engine, scale, value }
+        Self {
+            engine,
+            scale,
+            value,
+        }
     }
 
     /// Order two values only when they share an engine and a scale.
@@ -221,7 +225,9 @@ pub enum TranscriptError {
         seq_index: u32,
     },
     /// A revision with a timed alignment origin had an untimed segment.
-    #[error("segment {seq_index} has no time offset but the revision alignment origin is {origin:?}")]
+    #[error(
+        "segment {seq_index} has no time offset but the revision alignment origin is {origin:?}"
+    )]
     MissingTimes {
         /// Index of the offending segment.
         seq_index: u32,
@@ -364,7 +370,12 @@ impl TranscriptRevision {
         segments: Vec<TranscriptSegment>,
         created_at: Timestamp,
     ) -> Result<Self, TranscriptError> {
-        self.derive(RevisionOrigin::HumanEdit, segments, self.alignment_origin, created_at)
+        self.derive(
+            RevisionOrigin::HumanEdit,
+            segments,
+            self.alignment_origin,
+            created_at,
+        )
     }
 
     /// Produce a child revision with overlapping segments reconciled.
@@ -387,7 +398,12 @@ impl TranscriptRevision {
         segments: Vec<TranscriptSegment>,
         created_at: Timestamp,
     ) -> Result<Self, TranscriptError> {
-        self.derive(RevisionOrigin::DerivedAlignment, segments, AlignmentOrigin::Derived, created_at)
+        self.derive(
+            RevisionOrigin::DerivedAlignment,
+            segments,
+            AlignmentOrigin::Derived,
+            created_at,
+        )
     }
 
     fn derive(
@@ -478,7 +494,11 @@ fn validate_segments(
                     }
                 }
             }
-            _ => return Err(TranscriptError::PartialRange { seq_index: segment.seq_index }),
+            _ => {
+                return Err(TranscriptError::PartialRange {
+                    seq_index: segment.seq_index,
+                })
+            }
         }
     }
     Ok(())
@@ -500,7 +520,8 @@ fn reconcile_overlaps(segments: &[TranscriptSegment]) -> Vec<TranscriptSegment> 
             let adjusted_end = end.get().max(adjusted_start);
             next.start = Some(SourceTimeMs::new(adjusted_start));
             next.end = Some(SourceTimeMs::new(adjusted_end));
-            next.words.retain(|w| w.start.get() >= adjusted_start && w.end.get() <= adjusted_end);
+            next.words
+                .retain(|w| w.start.get() >= adjusted_start && w.end.get() <= adjusted_end);
             previous_end = Some(adjusted_end);
         }
         out.push(next);
@@ -521,7 +542,9 @@ impl TranscriptLineage {
     /// Create an empty lineage.
     #[must_use]
     pub fn new() -> Self {
-        Self { revisions: Vec::new() }
+        Self {
+            revisions: Vec::new(),
+        }
     }
 
     /// Append a revision. Existing revisions are never modified or removed.
@@ -544,7 +567,10 @@ impl TranscriptLineage {
     /// The most recent human-edited revision, if any.
     #[must_use]
     pub fn latest_human_edit(&self) -> Option<&TranscriptRevision> {
-        self.revisions.iter().rev().find(|revision| revision.is_human_edited())
+        self.revisions
+            .iter()
+            .rev()
+            .find(|revision| revision.is_human_edited())
     }
 
     /// Whether a summary produced from `input_revision` is stale.
@@ -552,7 +578,11 @@ impl TranscriptLineage {
     /// A summary is stale once a later revision of the same recording exists.
     #[must_use]
     pub fn is_stale(&self, input_revision: TranscriptRevisionId) -> bool {
-        match self.revisions.iter().position(|revision| revision.id == input_revision) {
+        match self
+            .revisions
+            .iter()
+            .position(|revision| revision.id == input_revision)
+        {
             Some(position) => position + 1 < self.revisions.len(),
             None => false,
         }
@@ -586,12 +616,18 @@ mod tests {
     fn a_text_only_revision_exposes_no_seek_offsets() {
         let revision = TranscriptRevision::try_new(draft(
             AlignmentOrigin::None,
-            vec![TranscriptSegment::text_only(0, "hello"), TranscriptSegment::text_only(1, "world")],
+            vec![
+                TranscriptSegment::text_only(0, "hello"),
+                TranscriptSegment::text_only(1, "world"),
+            ],
         ))
         .unwrap();
         assert!(!revision.permits_seek());
         assert_eq!(revision.seek_offsets(), None);
-        assert!(revision.segments().iter().all(|s| s.start.is_none() && s.end.is_none()));
+        assert!(revision
+            .segments()
+            .iter()
+            .all(|s| s.start.is_none() && s.end.is_none()));
     }
 
     #[test]
@@ -613,7 +649,10 @@ mod tests {
         .unwrap_err();
         assert_eq!(
             err,
-            TranscriptError::MissingTimes { seq_index: 0, origin: AlignmentOrigin::Native }
+            TranscriptError::MissingTimes {
+                seq_index: 0,
+                origin: AlignmentOrigin::Native
+            }
         );
     }
 
@@ -626,17 +665,28 @@ mod tests {
         .unwrap_err();
         assert_eq!(
             inverted,
-            TranscriptError::InvertedRange { seq_index: 0, start_ms: 10, end_ms: 5 }
+            TranscriptError::InvertedRange {
+                seq_index: 0,
+                start_ms: 10,
+                end_ms: 5
+            }
         );
 
         let backwards = TranscriptRevision::try_new(draft(
             AlignmentOrigin::Native,
-            vec![TranscriptSegment::timed(0, 100, 200, "a"), TranscriptSegment::timed(1, 50, 300, "b")],
+            vec![
+                TranscriptSegment::timed(0, 100, 200, "a"),
+                TranscriptSegment::timed(1, 50, 300, "b"),
+            ],
         ))
         .unwrap_err();
         assert_eq!(
             backwards,
-            TranscriptError::NonMonotonicStart { seq_index: 1, start_ms: 50, previous_start_ms: 100 }
+            TranscriptError::NonMonotonicStart {
+                seq_index: 1,
+                start_ms: 50,
+                previous_start_ms: 100
+            }
         );
     }
 
@@ -644,18 +694,28 @@ mod tests {
     fn out_of_order_segment_indices_are_rejected() {
         let err = TranscriptRevision::try_new(draft(
             AlignmentOrigin::None,
-            vec![TranscriptSegment::text_only(0, "a"), TranscriptSegment::text_only(5, "b")],
+            vec![
+                TranscriptSegment::text_only(0, "a"),
+                TranscriptSegment::text_only(5, "b"),
+            ],
         ))
         .unwrap_err();
-        assert_eq!(err, TranscriptError::SegmentOrder { position: 1, seq_index: 5, expected: 1 });
+        assert_eq!(
+            err,
+            TranscriptError::SegmentOrder {
+                position: 1,
+                seq_index: 5,
+                expected: 1
+            }
+        );
     }
 
     #[test]
     fn a_half_specified_range_is_rejected() {
         let mut segment = TranscriptSegment::timed(0, 0, 10, "x");
         segment.end = None;
-        let err = TranscriptRevision::try_new(draft(AlignmentOrigin::Native, vec![segment]))
-            .unwrap_err();
+        let err =
+            TranscriptRevision::try_new(draft(AlignmentOrigin::Native, vec![segment])).unwrap_err();
         assert_eq!(err, TranscriptError::PartialRange { seq_index: 0 });
     }
 
@@ -667,8 +727,8 @@ mod tests {
             start: SourceTimeMs::new(50),
             end: SourceTimeMs::new(150),
         }];
-        let err = TranscriptRevision::try_new(draft(AlignmentOrigin::Native, vec![segment]))
-            .unwrap_err();
+        let err =
+            TranscriptRevision::try_new(draft(AlignmentOrigin::Native, vec![segment])).unwrap_err();
         assert_eq!(err, TranscriptError::WordOutsideSegment { seq_index: 0 });
     }
 
@@ -680,7 +740,10 @@ mod tests {
         ))
         .unwrap();
         let child = parent
-            .edited(vec![TranscriptSegment::timed(0, 0, 10, "the meeting")], Timestamp::from_millis(5))
+            .edited(
+                vec![TranscriptSegment::timed(0, 0, 10, "the meeting")],
+                Timestamp::from_millis(5),
+            )
             .unwrap();
 
         assert_eq!(child.parent_id, Some(parent.id));
@@ -701,10 +764,15 @@ mod tests {
             ],
         ))
         .unwrap();
-        let reconciled = provider.reconciled_overlaps(Timestamp::from_millis(9)).unwrap();
+        let reconciled = provider
+            .reconciled_overlaps(Timestamp::from_millis(9))
+            .unwrap();
 
         assert_eq!(provider.segments()[1].start, Some(SourceTimeMs::new(1_000)));
-        assert_eq!(reconciled.segments()[1].start, Some(SourceTimeMs::new(1_200)));
+        assert_eq!(
+            reconciled.segments()[1].start,
+            Some(SourceTimeMs::new(1_200))
+        );
         assert_eq!(reconciled.origin, RevisionOrigin::OverlapReconciliation);
         assert_eq!(reconciled.parent_id, Some(provider.id));
         assert_eq!(reconciled.segments()[1].text, "second chunk");
@@ -730,14 +798,33 @@ mod tests {
 
     #[test]
     fn confidence_cannot_be_compared_across_engines_or_scales() {
-        let whisper = Confidence::new(EngineId::new("whisper-cpp"), ConfidenceScale::AverageLogProbability, -0.1);
-        let apple = Confidence::new(EngineId::new("apple-speech"), ConfidenceScale::Probability, 0.9);
+        let whisper = Confidence::new(
+            EngineId::new("whisper-cpp"),
+            ConfidenceScale::AverageLogProbability,
+            -0.1,
+        );
+        let apple = Confidence::new(
+            EngineId::new("apple-speech"),
+            ConfidenceScale::Probability,
+            0.9,
+        );
         assert_eq!(whisper.compare_within_engine(&apple), None);
 
-        let worse = Confidence::new(EngineId::new("whisper-cpp"), ConfidenceScale::AverageLogProbability, -0.8);
-        assert_eq!(whisper.compare_within_engine(&worse), Some(std::cmp::Ordering::Greater));
+        let worse = Confidence::new(
+            EngineId::new("whisper-cpp"),
+            ConfidenceScale::AverageLogProbability,
+            -0.8,
+        );
+        assert_eq!(
+            whisper.compare_within_engine(&worse),
+            Some(std::cmp::Ordering::Greater)
+        );
 
-        let other_scale = Confidence::new(EngineId::new("whisper-cpp"), ConfidenceScale::Probability, 0.9);
+        let other_scale = Confidence::new(
+            EngineId::new("whisper-cpp"),
+            ConfidenceScale::Probability,
+            0.9,
+        );
         assert_eq!(whisper.compare_within_engine(&other_scale), None);
     }
 
@@ -749,7 +836,10 @@ mod tests {
         ))
         .unwrap();
         let human = machine
-            .edited(vec![TranscriptSegment::timed(0, 0, 10, "human")], Timestamp::from_millis(2))
+            .edited(
+                vec![TranscriptSegment::timed(0, 0, 10, "human")],
+                Timestamp::from_millis(2),
+            )
             .unwrap();
         let human_id = human.id;
 
@@ -768,7 +858,10 @@ mod tests {
         assert_eq!(lineage.revisions().len(), 3);
         assert_eq!(lineage.get(human_id).unwrap().segments()[0].text, "human");
         assert_eq!(lineage.latest_human_edit().unwrap().id, human_id);
-        assert!(lineage.is_stale(human_id), "a summary built on the edited revision is now stale");
+        assert!(
+            lineage.is_stale(human_id),
+            "a summary built on the edited revision is now stale"
+        );
         assert!(!lineage.is_stale(reprocessed_id));
     }
 }

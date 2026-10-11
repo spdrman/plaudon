@@ -124,7 +124,11 @@ impl SourceIdentityKey {
         account_scope: SourceAccountScope,
         external_id: Option<ExternalRecordingId>,
     ) -> Self {
-        Self { source_kind, account_scope, external_id }
+        Self {
+            source_kind,
+            account_scope,
+            external_id,
+        }
     }
 
     /// Whether this key can be used for idempotent re-import.
@@ -252,7 +256,12 @@ mod tests {
 
     #[test]
     fn remote_state_never_grants_local_deletion() {
-        for state in [RemoteState::Present, RemoteState::Trashed, RemoteState::Absent, RemoteState::Unknown] {
+        for state in [
+            RemoteState::Present,
+            RemoteState::Trashed,
+            RemoteState::Absent,
+            RemoteState::Unknown,
+        ] {
             assert!(!state.grants_local_deletion());
         }
     }
@@ -268,7 +277,11 @@ mod tests {
     #[test]
     fn only_the_cloud_cli_source_uses_the_network() {
         assert!(SourceKind::PlaudCloudCli.uses_network());
-        for kind in [SourceKind::PlaudDeviceBle, SourceKind::PlaudDeviceUsb, SourceKind::LocalFile] {
+        for kind in [
+            SourceKind::PlaudDeviceBle,
+            SourceKind::PlaudDeviceUsb,
+            SourceKind::LocalFile,
+        ] {
             assert!(!kind.uses_network(), "{kind:?} must not use the network");
         }
     }

@@ -103,9 +103,18 @@ mod tests {
     #[test]
     fn malformed_tags_are_rejected() {
         assert_eq!(LanguageTag::parse(""), Err(LanguageTagError::Empty));
-        assert_eq!(LanguageTag::parse("e"), Err(LanguageTagError::InvalidSubtagLength));
-        assert_eq!(LanguageTag::parse("en-"), Err(LanguageTagError::InvalidSubtagLength));
-        assert_eq!(LanguageTag::parse("en_US"), Err(LanguageTagError::InvalidCharacter));
+        assert_eq!(
+            LanguageTag::parse("e"),
+            Err(LanguageTagError::InvalidSubtagLength)
+        );
+        assert_eq!(
+            LanguageTag::parse("en-"),
+            Err(LanguageTagError::InvalidSubtagLength)
+        );
+        assert_eq!(
+            LanguageTag::parse("en_US"),
+            Err(LanguageTagError::InvalidCharacter)
+        );
     }
 
     #[test]
