@@ -1,0 +1,17 @@
+[package]
+name = "plaudon-chaos-tests"
+description = "Crash-injection and interruption suites for durable state transitions."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+
+[dev-dependencies]
+tempfile = { workspace = true }

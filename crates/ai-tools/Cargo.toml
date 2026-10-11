@@ -1,0 +1,13 @@
+[package]
+name = "plaudon-ai-tools"
+description = "Versioned grounded question-answering and learning artifact tools."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]

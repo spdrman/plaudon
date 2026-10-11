@@ -1,0 +1,13 @@
+[package]
+name = "plaudon-source-plaud-cli"
+description = "Versioned adapter for the official PLAUD Cloud CLI. No private API use."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]

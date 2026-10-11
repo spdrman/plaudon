@@ -1,0 +1,13 @@
+[package]
+name = "plaudon-plaud-usb"
+description = "Read-only scan of a genuinely mounted legacy PLAUD Note volume."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
