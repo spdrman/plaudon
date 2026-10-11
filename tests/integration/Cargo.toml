@@ -12,6 +12,8 @@ publish = false
 workspace = true
 
 [dependencies]
+plaudon-ai-whisper = { workspace = true }
+plaudon-audio = { workspace = true }
 async-trait = { workspace = true }
 plaudon-ai-contracts = { workspace = true }
 plaudon-app-core = { workspace = true }

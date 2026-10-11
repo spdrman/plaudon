@@ -2,3 +2,6 @@ target/
 node_modules/
 *.part
 .DS_Store
+
+# Local STT model fixtures are seeded by scripts/fetch-stt-fixtures.sh
+tests/fixtures/stt/models/

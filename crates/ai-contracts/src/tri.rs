@@ -1,145 +1,55 @@
-//! Tri-state capability primitives (spec §8.3).
+//! Limit checking over [`plaudon_domain::capability::Known`] ceilings.
 //!
-//! > Values may be `unknown`; unknown is not equivalent to supported.
-//!
-//! Every capability flag in [`crate::capabilities::SttCapabilities`] is a [`Tri`]
-//! and every capability *limit* is a [`Known`]. Neither type exposes a
-//! "treat unknown as permissive" accessor: the only way to read a flag for a
-//! gating decision is [`Tri::satisfies`], and the only way to read a limit is
-//! [`Known::known`], which forces the caller to handle the unknown arm.
+//! `Tri` and `Known` themselves live in [`plaudon_domain::capability`] so the
+//! workspace has exactly one definition of "unknown is not supported". What
+//! this module adds is the vocabulary engine selection and chunk planning need
+//! when a *ceiling* is involved: an unknown ceiling must fail closed for
+//! gating, while staying distinguishable from an outright breach so the
+//! rejection explanation is honest (§8.3).
 
-use serde::{Deserialize, Serialize};
+use plaudon_domain::capability::Known;
 
-/// A capability flag that may be affirmatively supported, affirmatively
-/// unsupported, or undetermined.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Tri {
-    Yes,
-    No,
+/// Result of checking a requested value against a declared ceiling.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LimitCheck {
+    /// Ceiling is known and the request fits.
+    Within,
+    /// Ceiling is known and the request breaches it.
+    Exceeds,
+    /// Ceiling was never observed.
     Unknown,
 }
 
-impl Tri {
-    /// The *only* way a [`Tri`] may gate behaviour.
-    ///
-    /// `Unknown` never satisfies a requirement (§8.3).
+impl LimitCheck {
+    /// Whether this check permits the operation. Only `Within` does.
     #[inline]
     #[must_use]
     pub const fn satisfies(self) -> bool {
-        matches!(self, Tri::Yes)
+        matches!(self, Self::Within)
     }
 
-    /// True when the capability is affirmatively known to be absent.
-    ///
-    /// Distinct from `!satisfies()`: an `Unknown` flag is neither satisfied nor
-    /// refuted, which matters when we explain *why* an engine was rejected.
-    #[inline]
-    #[must_use]
-    pub const fn is_refuted(self) -> bool {
-        matches!(self, Tri::No)
-    }
-
-    #[inline]
-    #[must_use]
-    pub const fn is_unknown(self) -> bool {
-        matches!(self, Tri::Unknown)
-    }
-
+    /// Stable label for diagnostics.
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
-            Tri::Yes => "yes",
-            Tri::No => "no",
-            Tri::Unknown => "unknown",
+            Self::Within => "within",
+            Self::Exceeds => "exceeds",
+            Self::Unknown => "unknown",
         }
     }
 }
 
-impl From<bool> for Tri {
-    #[inline]
-    fn from(value: bool) -> Self {
-        if value {
-            Tri::Yes
-        } else {
-            Tri::No
-        }
-    }
+/// Checking a request against a [`Known`] ceiling.
+pub trait KnownLimit<T> {
+    /// Inclusive ceiling check.
+    fn within_ceiling(&self, requested: &T) -> LimitCheck;
 }
 
-impl Default for Tri {
-    /// Defaults to `Unknown`: a capability we never measured is never claimed.
-    #[inline]
-    fn default() -> Self {
-        Tri::Unknown
-    }
-}
-
-/// A capability *value* (a limit, a list, a size) that may be undetermined.
-///
-/// Serialised as the inner value or `null`, so a manifest that omits a limit
-/// round-trips to `Unknown` instead of silently becoming a default.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum Known<T> {
-    Known(T),
-    #[serde(serialize_with = "serialize_unknown")]
-    Unknown,
-}
-
-fn serialize_unknown<S: serde::Serializer>(serializer: S) -> Result<S::Ok, S::Error> {
-    serializer.serialize_none()
-}
-
-impl<T> Known<T> {
-    #[inline]
-    pub const fn known(&self) -> Option<&T> {
-        match self {
-            Known::Known(value) => Some(value),
-            Known::Unknown => None,
-        }
-    }
-
-    #[inline]
-    pub const fn is_unknown(&self) -> bool {
-        matches!(self, Known::Unknown)
-    }
-
-    pub fn map<U, F: FnOnce(T) -> U>(self, f: F) -> Known<U> {
-        match self {
-            Known::Known(value) => Known::Known(f(value)),
-            Known::Unknown => Known::Unknown,
-        }
-    }
-}
-
-impl<T> Default for Known<T> {
-    #[inline]
-    fn default() -> Self {
-        Known::Unknown
-    }
-}
-
-impl<T> From<Option<T>> for Known<T> {
-    #[inline]
-    fn from(value: Option<T>) -> Self {
-        match value {
-            Some(v) => Known::Known(v),
-            None => Known::Unknown,
-        }
-    }
-}
-
-impl<T: PartialOrd> Known<T> {
-    /// Checks a *requirement* against a declared ceiling.
-    ///
-    /// Returns [`LimitCheck::Unknown`] when the ceiling is undetermined; callers
-    /// must treat that as "not permitted" for gating (§8.3) while still being
-    /// able to report it as a distinct reason from an outright breach.
-    pub fn within_ceiling(&self, requested: &T) -> LimitCheck {
-        match self {
-            Known::Unknown => LimitCheck::Unknown,
-            Known::Known(ceiling) => {
+impl<T: PartialOrd> KnownLimit<T> for Known<T> {
+    fn within_ceiling(&self, requested: &T) -> LimitCheck {
+        match self.get() {
+            None => LimitCheck::Unknown,
+            Some(ceiling) => {
                 if requested <= ceiling {
                     LimitCheck::Within
                 } else {
@@ -150,43 +60,16 @@ impl<T: PartialOrd> Known<T> {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum LimitCheck {
-    Within,
-    Exceeds,
-    Unknown,
-}
-
-impl LimitCheck {
-    #[inline]
-    #[must_use]
-    pub const fn satisfies(self) -> bool {
-        matches!(self, LimitCheck::Within)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use plaudon_domain::capability::Tri;
 
     #[test]
     fn unknown_never_satisfies() {
         assert!(!Tri::Unknown.satisfies());
         assert!(!Tri::No.satisfies());
         assert!(Tri::Yes.satisfies());
-    }
-
-    #[test]
-    fn unknown_is_not_refuted() {
-        // "unsupported" and "we never checked" must stay distinguishable so the
-        // selection explanation can say which one happened.
-        assert!(!Tri::Unknown.is_refuted());
-        assert!(Tri::No.is_refuted());
-    }
-
-    #[test]
-    fn default_tri_is_unknown() {
-        assert_eq!(Tri::default(), Tri::Unknown);
     }
 
     #[test]
@@ -201,17 +84,17 @@ mod tests {
         let ceiling = Known::Known(100u64);
         assert_eq!(ceiling.within_ceiling(&100), LimitCheck::Within);
         assert_eq!(ceiling.within_ceiling(&101), LimitCheck::Exceeds);
+        assert_eq!(ceiling.within_ceiling(&0), LimitCheck::Within);
     }
 
     #[test]
-    fn known_round_trips_as_nullable_json() {
-        let known: Known<u64> = Known::Known(7);
-        assert_eq!(serde_json::to_string(&known).unwrap(), "7");
+    fn unknown_and_exceeds_stay_distinguishable() {
         let unknown: Known<u64> = Known::Unknown;
-        assert_eq!(serde_json::to_string(&unknown).unwrap(), "null");
-        let parsed: Known<u64> = serde_json::from_str("null").unwrap();
-        assert_eq!(parsed, Known::Unknown);
-        let parsed: Known<u64> = serde_json::from_str("7").unwrap();
-        assert_eq!(parsed, Known::Known(7));
+        assert_ne!(
+            unknown.within_ceiling(&5),
+            Known::Known(1u64).within_ceiling(&5)
+        );
+        assert_eq!(LimitCheck::Unknown.as_str(), "unknown");
+        assert_eq!(LimitCheck::Exceeds.as_str(), "exceeds");
     }
 }
