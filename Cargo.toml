@@ -38,6 +38,7 @@ plaudon-diagnostics = { path = "crates/diagnostics" }
 async-trait = "0.1"
 hex = "0.4"
 jsonschema = { version = "0.26", default-features = false }
+libc = "0.2"
 proptest = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -60,10 +61,8 @@ rust_2018_idioms = { level = "warn", priority = -1 }
 [workspace.lints.clippy]
 all = { level = "deny", priority = -1 }
 pedantic = { level = "warn", priority = -1 }
+doc_markdown = "allow"
 module_name_repetitions = "allow"
 must_use_candidate = "allow"
 missing_errors_doc = "allow"
 missing_panics_doc = "allow"
-unwrap_used = "warn"
-expect_used = "warn"
-panic = "warn"

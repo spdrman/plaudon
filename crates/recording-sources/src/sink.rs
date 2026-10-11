@@ -41,7 +41,11 @@ impl InMemorySink {
     /// Create a sink that refuses to accept more than `budget` bytes.
     #[must_use]
     pub const fn with_budget(budget: u64) -> Self {
-        Self { buffer: Vec::new(), budget, flushed: 0 }
+        Self {
+            buffer: Vec::new(),
+            budget,
+            flushed: 0,
+        }
     }
 
     /// The accepted bytes.

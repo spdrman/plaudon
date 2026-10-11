@@ -18,13 +18,19 @@ impl Progress {
     /// Progress expressed as a fraction.
     #[must_use]
     pub fn fraction(value: f32) -> Self {
-        Self { fraction: Some(value.clamp(0.0, 1.0)), processed_ms: None }
+        Self {
+            fraction: Some(value.clamp(0.0, 1.0)),
+            processed_ms: None,
+        }
     }
 
     /// Progress expressed as processed audio duration.
     #[must_use]
     pub const fn processed_ms(value: u64) -> Self {
-        Self { fraction: None, processed_ms: Some(value) }
+        Self {
+            fraction: None,
+            processed_ms: Some(value),
+        }
     }
 }
 
@@ -61,7 +67,10 @@ impl RecordingProgressSink {
     /// Snapshot of everything reported so far.
     #[must_use]
     pub fn updates(&self) -> Vec<Progress> {
-        self.updates.lock().map(|guard| guard.clone()).unwrap_or_default()
+        self.updates
+            .lock()
+            .map(|guard| guard.clone())
+            .unwrap_or_default()
     }
 }
 

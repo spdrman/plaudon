@@ -19,13 +19,21 @@ impl FakeTextModel {
     /// Create a model that returns `body`.
     #[must_use]
     pub fn new(capabilities: TextModelCapabilities, body: serde_json::Value) -> Self {
-        Self { capabilities, body, failure: None }
+        Self {
+            capabilities,
+            body,
+            failure: None,
+        }
     }
 
     /// Create a model that always fails with `error`.
     #[must_use]
     pub fn failing(capabilities: TextModelCapabilities, error: TextModelError) -> Self {
-        Self { capabilities, body: serde_json::Value::Null, failure: Some(error) }
+        Self {
+            capabilities,
+            body: serde_json::Value::Null,
+            failure: Some(error),
+        }
     }
 }
 
@@ -46,6 +54,10 @@ impl TextModel for FakeTextModel {
         if ctx.is_cancelled() {
             return Err(TextModelError::Cancelled);
         }
-        Ok(StructuredResponse { body: self.body.clone(), repair_attempts: 0, usage: None })
+        Ok(StructuredResponse {
+            body: self.body.clone(),
+            repair_attempts: 0,
+            usage: None,
+        })
     }
 }

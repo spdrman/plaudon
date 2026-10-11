@@ -162,14 +162,26 @@ CREATE TABLE job_steps (
 -- Spec 10.7: the attempt row is written before dispatch so a lost response is
 -- still accounted for.
 CREATE TABLE inference_attempts (
-    id             TEXT    PRIMARY KEY NOT NULL,
-    job_id         TEXT    NOT NULL REFERENCES jobs(id) ON DELETE RESTRICT,
-    provider       TEXT    NOT NULL,
-    model_id       TEXT    NOT NULL,
-    request_family TEXT    NOT NULL,
-    dispatch_state TEXT    NOT NULL CHECK (dispatch_state IN ('not_sent','sending','accepted_by_provider','outcome_unknown','completed','failed_before_send')),
-    created_at     INTEGER NOT NULL,
-    settled_at     INTEGER
+    id                      TEXT    PRIMARY KEY NOT NULL,
+    job_id                  TEXT    NOT NULL REFERENCES jobs(id) ON DELETE RESTRICT,
+    provider                TEXT    NOT NULL,
+    model_id                TEXT    NOT NULL,
+    request_family          TEXT    NOT NULL,
+    dispatch_state          TEXT    NOT NULL CHECK (dispatch_state IN ('not_sent','sending','accepted_by_provider','outcome_unknown','completed','failed_before_send')),
+    -- Checksum of the exact content that was or would be dispatched.
+    content_sha256          TEXT    CHECK (content_sha256 IS NULL OR length(content_sha256) = 64),
+    -- Resolved provider route and the privacy policy that applied to it.
+    route                   TEXT,
+    privacy_policy_snapshot TEXT,
+    consent_id              TEXT    REFERENCES consent_grants(id) ON DELETE RESTRICT,
+    estimated_units_json    TEXT,
+    final_cost_json         TEXT,
+    -- Vendor request identifier, preserved when the provider returns one.
+    provider_request_id     TEXT,
+    created_at              INTEGER NOT NULL,
+    dispatched_at           INTEGER,
+    responded_at            INTEGER,
+    settled_at              INTEGER
 ) STRICT;
 
 CREATE UNIQUE INDEX ux_inference_attempt ON inference_attempts(id);
@@ -217,19 +229,31 @@ CREATE TABLE export_events (
 
 -- Spec 13.3A durable import order. The journal is the only thing that can
 -- reconcile a filesystem rename with a SQLite commit.
+-- The six durable steps of spec 13.3A are representable as states. The first
+-- three happen before the intent row exists on disk, so an importer that
+-- records them early can do so; our importer writes the row at
+-- 'intent_recorded' and the reconciler treats an unreferenced staging file as
+-- an app-owned orphan.
 CREATE TABLE import_journal (
-    id                 TEXT    PRIMARY KEY NOT NULL,
-    state              TEXT    NOT NULL CHECK (state IN ('prepared','staged','renamed','committed','abandoned','quarantined')),
-    job_id             TEXT    REFERENCES jobs(id) ON DELETE RESTRICT,
-    staging_path       TEXT    NOT NULL,
-    target_relative_path TEXT  NOT NULL,
-    expected_sha256    TEXT    NOT NULL CHECK (length(expected_sha256) = 64),
+    id                   TEXT    PRIMARY KEY NOT NULL,
+    state                TEXT    NOT NULL CHECK (state IN ('staged','hashed','flushed','intent_recorded','renamed','committed','abandoned','quarantined')),
+    job_id               TEXT    REFERENCES jobs(id) ON DELETE RESTRICT,
+    recording_id         TEXT    REFERENCES recordings(id) ON DELETE RESTRICT,
+    staging_path         TEXT    NOT NULL,
+    target_relative_path TEXT    NOT NULL,
+    expected_sha256      TEXT    NOT NULL CHECK (length(expected_sha256) = 64),
     expected_byte_length INTEGER NOT NULL CHECK (expected_byte_length >= 0),
-    quality_class      TEXT    NOT NULL,
-    media_asset_id     TEXT    REFERENCES media_assets(id) ON DELETE RESTRICT,
-    failure_code       TEXT,
-    created_at         INTEGER NOT NULL,
-    updated_at         INTEGER NOT NULL,
+    quality_class        TEXT    NOT NULL,
+    media_asset_id       TEXT    REFERENCES media_assets(id) ON DELETE RESTRICT,
+    failure_code         TEXT,
+    created_at           INTEGER NOT NULL,
+    updated_at           INTEGER NOT NULL,
+    hashed_at            INTEGER,
+    flushed_at           INTEGER,
+    intent_at            INTEGER,
+    renamed_at           INTEGER,
+    committed_at         INTEGER,
+    abandoned_at         INTEGER,
     CHECK (state <> 'committed' OR media_asset_id IS NOT NULL)
 ) STRICT;
 

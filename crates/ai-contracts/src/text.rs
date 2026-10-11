@@ -124,8 +124,11 @@ mod tests {
             TextModelError::SchemaValidationFailed,
             TextModelError::EngineFailure,
         ];
-        let codes: std::collections::BTreeSet<_> =
-            errors.iter().cloned().map(|e| AppError::from(e).code()).collect();
+        let codes: std::collections::BTreeSet<_> = errors
+            .iter()
+            .cloned()
+            .map(|e| AppError::from(e).code())
+            .collect();
         assert_eq!(codes.len(), errors.len());
     }
 }

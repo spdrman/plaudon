@@ -49,7 +49,10 @@ impl TimeRangeMs {
     /// Construct a range, rejecting inverted ranges.
     pub fn new(start: SourceTimeMs, end: SourceTimeMs) -> Result<Self, TimeRangeError> {
         if end.get() < start.get() {
-            return Err(TimeRangeError::Inverted { start_ms: start.get(), end_ms: end.get() });
+            return Err(TimeRangeError::Inverted {
+                start_ms: start.get(),
+                end_ms: end.get(),
+            });
         }
         Ok(Self { start, end })
     }
@@ -86,7 +89,13 @@ mod tests {
     #[test]
     fn inverted_ranges_are_rejected() {
         let err = TimeRangeMs::new(SourceTimeMs::new(10), SourceTimeMs::new(9)).unwrap_err();
-        assert_eq!(err, TimeRangeError::Inverted { start_ms: 10, end_ms: 9 });
+        assert_eq!(
+            err,
+            TimeRangeError::Inverted {
+                start_ms: 10,
+                end_ms: 9
+            }
+        );
     }
 
     #[test]
@@ -100,6 +109,8 @@ mod tests {
         let a = TimeRangeMs::new(SourceTimeMs::ZERO, SourceTimeMs::new(100)).unwrap();
         let b = TimeRangeMs::new(SourceTimeMs::new(100), SourceTimeMs::new(200)).unwrap();
         assert!(!a.overlaps(b));
-        assert!(a.overlaps(TimeRangeMs::new(SourceTimeMs::new(99), SourceTimeMs::new(150)).unwrap()));
+        assert!(
+            a.overlaps(TimeRangeMs::new(SourceTimeMs::new(99), SourceTimeMs::new(150)).unwrap())
+        );
     }
 }

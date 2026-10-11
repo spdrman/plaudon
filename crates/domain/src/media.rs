@@ -63,7 +63,11 @@ impl FromStr for Sha256Digest {
     type Err = Sha256ParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s.len() != 64 || !s.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)) {
+        if s.len() != 64
+            || !s
+                .bytes()
+                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+        {
             return Err(Sha256ParseError);
         }
         let mut out = [0u8; 32];
@@ -104,7 +108,11 @@ impl MediaIdentity {
     /// Construct an identity.
     #[must_use]
     pub fn new(sha256: Sha256Digest, byte_length: u64, observed_codec: impl Into<String>) -> Self {
-        Self { sha256, byte_length, observed_codec: observed_codec.into() }
+        Self {
+            sha256,
+            byte_length,
+            observed_codec: observed_codec.into(),
+        }
     }
 
     /// Compute the identity of an in-memory buffer.
@@ -204,7 +212,11 @@ mod tests {
     #[test]
     fn digest_parsing_rejects_uppercase_and_short_input() {
         assert!("ABC".parse::<Sha256Digest>().is_err());
-        assert!(Sha256Digest::of(b"x").to_hex().to_uppercase().parse::<Sha256Digest>().is_err());
+        assert!(Sha256Digest::of(b"x")
+            .to_hex()
+            .to_uppercase()
+            .parse::<Sha256Digest>()
+            .is_err());
     }
 
     #[test]

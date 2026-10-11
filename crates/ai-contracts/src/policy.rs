@@ -11,6 +11,11 @@ use serde::{Deserialize, Serialize};
 use crate::capabilities::{MediaFormat, SttCapabilities};
 
 /// What a job needs from a transcription engine.
+///
+/// The flags are independent requirements rather than a state machine: a job
+/// may need any combination of them, and collapsing them into an enum would
+/// make impossible combinations representable in the wrong direction.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct SttRequirements {
     /// Media format of the input.
@@ -146,11 +151,19 @@ pub fn select_stt_engine(
     let mut rejected = Vec::new();
     for caps in candidates {
         match evaluate_stt_candidate(caps, requirements) {
-            None => return EngineSelection { chosen: Some(caps.engine_id.clone()), rejected },
+            None => {
+                return EngineSelection {
+                    chosen: Some(caps.engine_id.clone()),
+                    rejected,
+                }
+            }
             Some(reason) => rejected.push((caps.engine_id.clone(), reason)),
         }
     }
-    EngineSelection { chosen: None, rejected }
+    EngineSelection {
+        chosen: None,
+        rejected,
+    }
 }
 
 #[cfg(test)]
@@ -187,7 +200,7 @@ mod tests {
     fn a_qualified_engine_is_chosen() {
         let selection = select_stt_engine(&[local_engine("whisper-cpp")], &wav_job());
         assert_eq!(selection.chosen, Some(EngineId::new("whisper-cpp")));
-        assert!(selection.rejected.is_empty());
+        assert_eq!(selection.rejected.len(), 0);
     }
 
     #[test]
@@ -277,8 +290,7 @@ mod tests {
     fn selection_reports_every_rejection_in_candidate_order() {
         let mut unavailable = local_engine("apple-speech");
         unavailable.availability_reason = AvailabilityReason::DisabledByUser;
-        let selection =
-            select_stt_engine(&[unavailable, local_engine("whisper-cpp")], &wav_job());
+        let selection = select_stt_engine(&[unavailable, local_engine("whisper-cpp")], &wav_job());
         assert_eq!(selection.chosen, Some(EngineId::new("whisper-cpp")));
         assert_eq!(
             selection.rejected,

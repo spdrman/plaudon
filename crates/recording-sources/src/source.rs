@@ -186,11 +186,8 @@ pub trait RecordingSource: Send + Sync {
     ///
     /// Implementations must never modify or delete the source bytes
     /// (spec 7.10, ADR-010).
-    async fn acquire(
-        &self,
-        item: &SourceItem,
-        target: &Path,
-    ) -> Result<AcquiredAsset, SourceError>;
+    async fn acquire(&self, item: &SourceItem, target: &Path)
+        -> Result<AcquiredAsset, SourceError>;
 }
 
 #[cfg(test)]
@@ -208,7 +205,10 @@ mod tests {
     fn a_supported_source_still_needs_declared_listing() {
         let mut caps = SourceCapabilities::unknown(SourceKind::PlaudCloudCli);
         caps.status = CapabilityStatus::Supported;
-        assert!(!caps.is_selectable(), "listing support is not implied by validation status");
+        assert!(
+            !caps.is_selectable(),
+            "listing support is not implied by validation status"
+        );
         caps.supports_listing = Tri::Yes;
         assert!(caps.is_selectable());
     }
@@ -228,14 +228,26 @@ mod tests {
         let pairs = [
             (SourceError::CliMissing, AppErrorCode::CliMissing),
             (SourceError::CliUnsupported, AppErrorCode::CliUnsupported),
-            (SourceError::AuthenticationRequired, AppErrorCode::AuthenticationRequired),
+            (
+                SourceError::AuthenticationRequired,
+                AppErrorCode::AuthenticationRequired,
+            ),
             (SourceError::AuthCanceled, AppErrorCode::AuthCanceled),
-            (SourceError::SourceUnavailable, AppErrorCode::SourceUnavailable),
-            (SourceError::RemoteRateLimited, AppErrorCode::RemoteRateLimited),
+            (
+                SourceError::SourceUnavailable,
+                AppErrorCode::SourceUnavailable,
+            ),
+            (
+                SourceError::RemoteRateLimited,
+                AppErrorCode::RemoteRateLimited,
+            ),
             (SourceError::LinkExpired, AppErrorCode::LinkExpired),
             (SourceError::AssetNotFound, AppErrorCode::AssetNotFound),
             (SourceError::MalformedOutput, AppErrorCode::MalformedOutput),
-            (SourceError::DownloadInterrupted, AppErrorCode::DownloadInterrupted),
+            (
+                SourceError::DownloadInterrupted,
+                AppErrorCode::DownloadInterrupted,
+            ),
             (SourceError::IntegrityFailed, AppErrorCode::IntegrityFailed),
             (SourceError::Cancelled, AppErrorCode::Canceled),
         ];

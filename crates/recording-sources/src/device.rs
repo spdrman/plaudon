@@ -118,7 +118,11 @@ impl DeviceCapabilities {
 
     /// A capability snapshot that claims nothing.
     #[must_use]
-    pub fn unknown(vendor: impl Into<String>, model: impl Into<String>, host_os: impl Into<String>) -> Self {
+    pub fn unknown(
+        vendor: impl Into<String>,
+        model: impl Into<String>,
+        host_os: impl Into<String>,
+    ) -> Self {
         Self {
             payload_version: Self::SUPPORTED_PAYLOAD_VERSION,
             status: CapabilityStatus::Unknown,
@@ -384,7 +388,10 @@ mod tests {
         assert!(caps.is_selectable());
 
         caps.test_run_id = Known::Unknown;
-        assert!(!caps.is_selectable(), "a Supported claim needs an archived test run");
+        assert!(
+            !caps.is_selectable(),
+            "a Supported claim needs an archived test run"
+        );
 
         let mut caps = validated_cell();
         caps.validated_at = Known::Unknown;
@@ -426,11 +433,17 @@ mod tests {
         assert!(transfer.is_complete());
 
         transfer.terminal_marker_observed = false;
-        assert!(!transfer.is_complete(), "our own digest alone does not prove completeness");
+        assert!(
+            !transfer.is_complete(),
+            "our own digest alone does not prove completeness"
+        );
 
         transfer.terminal_marker_observed = true;
         transfer.device_declared_byte_length = Some(9);
-        assert!(!transfer.is_complete(), "a declared length mismatch is not complete");
+        assert!(
+            !transfer.is_complete(),
+            "a declared length mismatch is not complete"
+        );
     }
 
     #[test]
@@ -455,11 +468,17 @@ mod tests {
     #[test]
     fn every_device_error_maps_to_its_spec_7_7_code() {
         let pairs = [
-            (DeviceError::RadioPermissionDenied, "RADIO_PERMISSION_DENIED"),
+            (
+                DeviceError::RadioPermissionDenied,
+                "RADIO_PERMISSION_DENIED",
+            ),
             (DeviceError::DeviceBusy, "DEVICE_BUSY"),
             (DeviceError::DeviceDisconnected, "DEVICE_DISCONNECTED"),
             (DeviceError::UnsupportedFirmware, "UNSUPPORTED_FIRMWARE"),
-            (DeviceError::AuthBootstrapRequired, "AUTH_BOOTSTRAP_REQUIRED"),
+            (
+                DeviceError::AuthBootstrapRequired,
+                "AUTH_BOOTSTRAP_REQUIRED",
+            ),
             (DeviceError::AuthRejected, "AUTH_REJECTED"),
             (DeviceError::TransferIncomplete, "TRANSFER_INCOMPLETE"),
             (DeviceError::UnsupportedCodec, "UNSUPPORTED_CODEC"),
@@ -467,7 +486,11 @@ mod tests {
             (DeviceError::DevicePowerLow, "DEVICE_POWER_LOW"),
         ];
         for (error, expected) in pairs {
-            assert_eq!(AppError::from(error.clone()).code().as_str(), expected, "{error:?}");
+            assert_eq!(
+                AppError::from(error.clone()).code().as_str(),
+                expected,
+                "{error:?}"
+            );
         }
     }
 }

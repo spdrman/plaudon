@@ -17,13 +17,18 @@ use plaudon_domain::transcript::{
 };
 
 fn schemas_dir() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).ancestors().nth(2).expect("root").join("schemas")
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(2)
+        .expect("root")
+        .join("schemas")
 }
 
 fn load(name: &str) -> serde_json::Value {
     let path = schemas_dir().join(name);
-    let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {path:?}: {e}"));
-    serde_json::from_str(&text).unwrap_or_else(|e| panic!("parse {path:?}: {e}"))
+    let text =
+        std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
+    serde_json::from_str(&text).unwrap_or_else(|e| panic!("parse {}: {e}", path.display()))
 }
 
 fn validator(name: &str) -> jsonschema::Validator {
@@ -35,8 +40,14 @@ fn validator(name: &str) -> jsonschema::Validator {
 }
 
 fn assert_valid(validator: &jsonschema::Validator, instance: &serde_json::Value) {
-    let errors: Vec<String> = validator.iter_errors(instance).map(|e| e.to_string()).collect();
-    assert!(errors.is_empty(), "instance failed schema: {errors:?}\n{instance:#}");
+    let errors: Vec<String> = validator
+        .iter_errors(instance)
+        .map(|e| e.to_string())
+        .collect();
+    assert!(
+        errors.is_empty(),
+        "instance failed schema: {errors:?}\n{instance:#}"
+    );
 }
 
 #[test]
@@ -49,7 +60,10 @@ fn the_envelope_schema_lists_exactly_the_rust_code_set() {
         .map(|v| v.as_str().expect("string"))
         .collect();
     let actual: Vec<&str> = AppErrorCode::ALL.iter().map(|c| c.as_str()).collect();
-    assert_eq!(listed, actual, "schemas/error-envelope.v1.schema.json drifted from AppErrorCode");
+    assert_eq!(
+        listed, actual,
+        "schemas/error-envelope.v1.schema.json drifted from AppErrorCode"
+    );
 }
 
 #[test]
@@ -65,7 +79,11 @@ fn the_envelope_schema_lists_exactly_the_rust_action_set() {
         .iter()
         .filter_map(|code| code.action())
         .map(|action| {
-            serde_json::to_value(action).expect("action serializes").as_str().expect("string").to_owned()
+            serde_json::to_value(action)
+                .expect("action serializes")
+                .as_str()
+                .expect("string")
+                .to_owned()
         })
         .collect();
     for action in &actual {
@@ -82,8 +100,11 @@ fn every_error_code_produces_a_schema_valid_envelope() {
     let validator = validator("error-envelope.v1.schema.json");
     let mut log = DiagnosticLog::new();
     for code in AppErrorCode::ALL {
-        let error = AppError::new(*code, "internal detail with https://example.com/signed?sig=x")
-            .with_hint(SafeHint::RetryAfterSeconds(5));
+        let error = AppError::new(
+            *code,
+            "internal detail with https://example.com/signed?sig=x",
+        )
+        .with_hint(SafeHint::RetryAfterSeconds(5));
         let envelope = error.to_envelope(&mut log, Timestamp::EPOCH);
         let json = serde_json::to_value(&envelope).expect("envelope serializes");
         assert_valid(&validator, &json);
@@ -191,7 +212,10 @@ fn the_redactor_is_applied_to_everything_the_diagnostics_log_stores() {
     let record = log.get(envelope.diagnostic_id).expect("entry");
     let stored = serde_json::to_string(record).expect("serializes");
     for forbidden in ["sk-or-v1", "https://", "sig=y"] {
-        assert!(!stored.contains(forbidden), "diagnostics stored {forbidden}");
+        assert!(
+            !stored.contains(forbidden),
+            "diagnostics stored {forbidden}"
+        );
     }
     assert!(stored.contains(Redactor::PLACEHOLDER));
 }

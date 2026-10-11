@@ -11,3 +11,11 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
+plaudon-domain = { workspace = true }
+plaudon-persistence = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true }

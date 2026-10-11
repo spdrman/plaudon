@@ -11,7 +11,15 @@ publish = false
 [lints]
 workspace = true
 
+[[bin]]
+name = "import-step-runner"
+path = "src/bin/import_step_runner.rs"
+
 [dependencies]
+plaudon-domain = { workspace = true }
+plaudon-persistence = { workspace = true }
+tokio = { workspace = true }
 
 [dev-dependencies]
+sqlx = { workspace = true }
 tempfile = { workspace = true }

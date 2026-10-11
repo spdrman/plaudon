@@ -8,7 +8,7 @@ use plaudon_ai_contracts::capabilities::{
     TextModelCapabilities,
 };
 use plaudon_ai_contracts::job::{JobContext, RecordingProgressSink};
-use plaudon_ai_contracts::policy::{EngineRejection, SttRequirements, select_stt_engine};
+use plaudon_ai_contracts::policy::{select_stt_engine, EngineRejection, SttRequirements};
 use plaudon_ai_contracts::stt::{SpeechToText, SttError, SttInput, TranscriptSegmentDraft};
 use plaudon_ai_contracts::text::{StructuredRequest, TextModel, TextModelError};
 use plaudon_domain::capability::{CapabilityStatus, Known, Tri};
@@ -108,25 +108,31 @@ async fn a_fake_source_paginates_and_acquires_without_touching_the_network() {
         vec![
             vec![FakeSourceItem {
                 item: source_item("rec-1", "Monday standup"),
-                bytes: b"audio" .to_vec(),
+                bytes: b"audio".to_vec(),
             }],
             vec![FakeSourceItem {
                 item: source_item("rec-2", "Tuesday review"),
-                bytes: b"other" .to_vec(),
+                bytes: b"other".to_vec(),
             }],
         ],
     );
 
     let first = source.list(None).await.unwrap();
     assert_eq!(first.items.len(), 1);
-    let cursor = first.next_cursor.clone().expect("a second page must be advertised");
+    let cursor = first
+        .next_cursor
+        .clone()
+        .expect("a second page must be advertised");
     let second = source.list(Some(&cursor)).await.unwrap();
     assert_eq!(second.items[0].display_name, "Tuesday review");
     assert_eq!(second.next_cursor, None);
 
     let target = staging.path().join("rec-1.part");
     let acquired = source.acquire(&first.items[0], &target).await.unwrap();
-    assert_eq!(acquired.identity, MediaIdentity::of_bytes(b"audio", "pcm_s16le"));
+    assert_eq!(
+        acquired.identity,
+        MediaIdentity::of_bytes(b"audio", "pcm_s16le")
+    );
     assert_eq!(std::fs::read(&target).unwrap(), b"audio");
     assert_eq!(source.acquisitions(), ["Monday standup"]);
 }
@@ -135,12 +141,18 @@ async fn a_fake_source_paginates_and_acquires_without_touching_the_network() {
 async fn source_failures_surface_as_stable_errors() {
     let source = FakeSource::new(listing_source(), Vec::new());
     source.fail_next(SourceError::AuthenticationRequired);
-    assert_eq!(source.list(None).await.unwrap_err(), SourceError::AuthenticationRequired);
+    assert_eq!(
+        source.list(None).await.unwrap_err(),
+        SourceError::AuthenticationRequired
+    );
 
     let missing = source_item("absent", "Missing");
     let staging = tempfile::tempdir().unwrap();
     assert_eq!(
-        source.acquire(&missing, &staging.path().join("x.part")).await.unwrap_err(),
+        source
+            .acquire(&missing, &staging.path().join("x.part"))
+            .await
+            .unwrap_err(),
         SourceError::AssetNotFound
     );
 }
@@ -166,11 +178,17 @@ async fn a_device_streams_into_staging_and_reports_completeness() {
 
     assert_eq!(device.list_available().await.unwrap().len(), 1);
     let mut sink = InMemorySink::with_budget(1_024);
-    let transfer = device.read_to_staging(&id, &mut sink, &CancellationToken::new()).await.unwrap();
+    let transfer = device
+        .read_to_staging(&id, &mut sink, &CancellationToken::new())
+        .await
+        .unwrap();
 
     assert_eq!(sink.bytes(), b"abcdef");
     assert!(transfer.is_complete());
-    assert_eq!(transfer.quality_class, QualityClass::CompressedDeviceTransfer);
+    assert_eq!(
+        transfer.quality_class,
+        QualityClass::CompressedDeviceTransfer
+    );
     assert!(!transfer.quality_class.is_original_fidelity());
 }
 
@@ -193,7 +211,10 @@ async fn a_transfer_without_a_terminal_marker_is_not_complete() {
         }],
     );
     let mut sink = InMemorySink::with_budget(1_024);
-    let transfer = device.read_to_staging(&id, &mut sink, &CancellationToken::new()).await.unwrap();
+    let transfer = device
+        .read_to_staging(&id, &mut sink, &CancellationToken::new())
+        .await
+        .unwrap();
     assert!(!transfer.is_complete());
 }
 
@@ -221,7 +242,10 @@ async fn a_cancelled_transfer_yields_a_typed_error_and_no_verified_transfer() {
     let mut sink = InMemorySink::with_budget(1_024);
     let result = device.read_to_staging(&id, &mut sink, &cancel).await;
     assert_eq!(result.unwrap_err(), DeviceError::Cancelled);
-    assert!(sink.bytes().is_empty(), "a cancelled transfer must not leave staged bytes");
+    assert!(
+        sink.bytes().is_empty(),
+        "a cancelled transfer must not leave staged bytes"
+    );
 }
 
 #[tokio::test]
@@ -229,7 +253,10 @@ async fn an_unvalidated_device_cell_refuses_to_list_or_read() {
     let mut caps = validated_device_cell();
     caps.observed_firmware = Known::Unknown;
     let device = FakeDevice::new(Ok(caps), Vec::new());
-    assert_eq!(device.list_available().await.unwrap_err(), DeviceError::UnsupportedFirmware);
+    assert_eq!(
+        device.list_available().await.unwrap_err(),
+        DeviceError::UnsupportedFirmware
+    );
 }
 
 #[tokio::test]
@@ -253,9 +280,15 @@ async fn an_interrupted_transfer_reports_disconnection_rather_than_partial_succe
     device.disconnect_after(1);
 
     let mut sink = InMemorySink::with_budget(1_024);
-    let result = device.read_to_staging(&id, &mut sink, &CancellationToken::new()).await;
+    let result = device
+        .read_to_staging(&id, &mut sink, &CancellationToken::new())
+        .await;
     assert_eq!(result.unwrap_err(), DeviceError::DeviceDisconnected);
-    assert_eq!(sink.bytes(), b"abc", "partial bytes stay in staging, never in the archive");
+    assert_eq!(
+        sink.bytes(),
+        b"abc",
+        "partial bytes stay in staging, never in the archive"
+    );
 }
 
 #[tokio::test]
@@ -343,7 +376,13 @@ async fn a_cancelled_transcription_returns_cancelled_not_a_partial_draft() {
     );
     let ctx = JobContext::new(JobId::new());
     ctx.cancel.cancel();
-    assert_eq!(engine.transcribe(stt_input(b"audio"), ctx).await.unwrap_err(), SttError::Cancelled);
+    assert_eq!(
+        engine
+            .transcribe(stt_input(b"audio"), ctx)
+            .await
+            .unwrap_err(),
+        SttError::Cancelled
+    );
 }
 
 #[tokio::test]
@@ -401,14 +440,19 @@ async fn a_text_model_returns_a_validated_body_and_maps_refusals_to_errors() {
     };
 
     let model = FakeTextModel::new(caps.clone(), serde_json::json!({"summary": "ok"}));
-    let response =
-        model.generate_structured(request.clone(), JobContext::new(JobId::new())).await.unwrap();
+    let response = model
+        .generate_structured(request.clone(), JobContext::new(JobId::new()))
+        .await
+        .unwrap();
     assert_eq!(response.body["summary"], "ok");
     assert_eq!(response.repair_attempts, 0);
 
     let refusing = FakeTextModel::failing(caps, TextModelError::ProviderRejected);
     assert_eq!(
-        refusing.generate_structured(request, JobContext::new(JobId::new())).await.unwrap_err(),
+        refusing
+            .generate_structured(request, JobContext::new(JobId::new()))
+            .await
+            .unwrap_err(),
         TextModelError::ProviderRejected
     );
 }
