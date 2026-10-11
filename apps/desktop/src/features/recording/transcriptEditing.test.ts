@@ -46,6 +46,14 @@ describe("draft model", () => {
     state = setSegmentText(state, 0, SEGMENTS[0]!.text, SEGMENTS[0]!.text);
     expect(toEdits(state)).toEqual([]);
   });
+
+  it("coalesces one editing session into a single undo step", () => {
+    const original = SEGMENTS[0]!.text;
+    let state = setSegmentText(createEditState(), 0, original, "a");
+    state = setSegmentText(state, 0, original, "ab", { coalesce: true });
+    state = setSegmentText(state, 0, original, "abc", { coalesce: true });
+    expect(textOf(undo(state), SEGMENTS[0]!)).toBe(original);
+  });
 });
 
 describe("undo and redo", () => {

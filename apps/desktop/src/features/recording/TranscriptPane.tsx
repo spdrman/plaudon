@@ -91,16 +91,17 @@ export function TranscriptPane({
   useEffect(() => {
     setEdits(createEditState());
     setEditingIndex(null);
+    sessionRef.current = null;
     setSelected(new Set());
     setSaveError(null);
   }, [revision.revision_id]);
 
-  const virtualizer = useVirtualizer({
+  const virtualizer = useVirtualizer<HTMLDivElement, HTMLDivElement>({
     count: segments.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => ROW_ESTIMATE_PX,
     overscan: 6,
-    measureElement: (element) => {
+    measureElement: (element: HTMLDivElement) => {
       // Without a layout engine (tests) the estimate stays authoritative.
       const measured = element.getBoundingClientRect().height;
       return measured > 0 ? measured : ROW_ESTIMATE_PX;
@@ -128,11 +129,34 @@ export function TranscriptPane({
     if (position >= 0) virtualizer.scrollToIndex(position, { align: "center" });
   };
 
-  const commitText = (segment: TranscriptSegment, text: string) => {
-    setEdits((current) => setSegmentText(current, segment.index, segment.text, text));
+  // Index whose editor already pushed a history entry in this editing session.
+  const sessionRef = useRef<number | null>(null);
+
+  const openEditor = (index: number) => {
+    sessionRef.current = null;
+    setEditingIndex(index);
   };
 
-  const onPaneKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+  const closeEditor = () => {
+    sessionRef.current = null;
+    setEditingIndex(null);
+  };
+
+  const commitText = (segment: TranscriptSegment, text: string) => {
+    const coalesce = sessionRef.current === segment.index;
+    setEdits((current) =>
+      setSegmentText(current, segment.index, segment.text, text, { coalesce }),
+    );
+    sessionRef.current = segment.index;
+  };
+
+  /** Escape discards the current editing session without touching older edits. */
+  const cancelEditor = (segmentIndex: number) => {
+    if (sessionRef.current === segmentIndex) setEdits((current) => undo(current));
+    closeEditor();
+  };
+
+  const onPaneKeyDown = (event: ReactKeyboardEvent<HTMLElement>) => {
     const intent = undoRedoIntent(event);
     if (!intent) return;
     event.preventDefault();
@@ -170,7 +194,7 @@ export function TranscriptPane({
         edits: toEdits(edits),
       });
       setEdits(createEditState());
-      setEditingIndex(null);
+      closeEditor();
       onSaved(response);
     } catch (caught) {
       // Drafts are deliberately kept: a failed save never discards user text.
@@ -334,10 +358,10 @@ export function TranscriptPane({
                       onKeyDown={(event) => {
                         if (event.key === "Escape") {
                           event.stopPropagation();
-                          setEditingIndex(null);
+                          cancelEditor(segment.index);
                         }
                       }}
-                      onBlur={() => setEditingIndex(null)}
+                      onBlur={closeEditor}
                     />
                   ) : editable ? (
                     <div
@@ -345,11 +369,11 @@ export function TranscriptPane({
                       role="button"
                       tabIndex={0}
                       aria-label={`Segment ${segment.index + 1}: ${text}. Press Enter to edit.`}
-                      onDoubleClick={() => setEditingIndex(segment.index)}
+                      onDoubleClick={() => openEditor(segment.index)}
                       onKeyDown={(event) => {
                         if (event.key === "Enter") {
                           event.preventDefault();
-                          setEditingIndex(segment.index);
+                          openEditor(segment.index);
                         }
                       }}
                     >

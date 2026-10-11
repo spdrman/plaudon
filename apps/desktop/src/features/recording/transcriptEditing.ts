@@ -29,19 +29,24 @@ export function createEditState(): EditState {
 /**
  * Records `text` for `index`. Returning to the baseline text drops the draft
  * so the segment stops counting as dirty and is left out of `toEdits()`.
+ *
+ * `coalesce` folds the change into the previous history entry, so one editing
+ * session is one undo step instead of one per keystroke.
  */
 export function setSegmentText(
   state: EditState,
   index: number,
   baselineText: string,
   text: string,
+  options: { coalesce?: boolean } = {},
 ): EditState {
   const current = state.drafts.get(index) ?? baselineText;
   if (current === text) return state;
   const drafts = new Map(state.drafts);
   if (text === baselineText) drafts.delete(index);
   else drafts.set(index, text);
-  return { drafts, past: [...state.past, state.drafts], future: [] };
+  const coalesce = options.coalesce === true && state.past.length > 0;
+  return { drafts, past: coalesce ? state.past : [...state.past, state.drafts], future: [] };
 }
 
 export function undo(state: EditState): EditState {
