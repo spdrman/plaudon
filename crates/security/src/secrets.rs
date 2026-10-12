@@ -334,6 +334,17 @@ pub enum SecretScope {
     OpenRouterApiKey,
     /// Authorization material for one specific PLAUD device (§7.7, App. B.5).
     DeviceAuthorization { device_id: DeviceId },
+    /// The library's voice-profile data key: the XChaCha20-Poly1305 key that
+    /// every stored speaker embedding is sealed under
+    /// (`VOICE_PROFILES_SPEC` VP-071, ADR-0080).
+    ///
+    /// Two consequences follow from putting it here rather than in a file.
+    /// An unavailable vault locks the **biometric tier only** — the name-only
+    /// roster is ordinary personal data and keeps working (spec §12.2A) —
+    /// and deleting this entry is the "forget everyone" control: every
+    /// remaining ciphertext, including any inside an encrypted backup,
+    /// becomes permanently undecryptable (VP-095).
+    VoiceProfileKey,
 }
 
 impl SecretScope {
@@ -356,6 +367,7 @@ impl SecretScope {
     pub fn account(&self) -> String {
         match self {
             SecretScope::OpenRouterApiKey => "openrouter.api_key".to_owned(),
+            SecretScope::VoiceProfileKey => "voiceprofiles.data_key".to_owned(),
             SecretScope::DeviceAuthorization { device_id } => {
                 format!("device.{device_id}.auth")
             }
@@ -366,7 +378,7 @@ impl SecretScope {
     #[must_use]
     pub fn device_id(&self) -> Option<&str> {
         match self {
-            SecretScope::OpenRouterApiKey => None,
+            SecretScope::OpenRouterApiKey | SecretScope::VoiceProfileKey => None,
             SecretScope::DeviceAuthorization { device_id } => Some(device_id.as_str()),
         }
     }
@@ -376,6 +388,7 @@ impl SecretScope {
     pub fn label(&self) -> String {
         match self {
             SecretScope::OpenRouterApiKey => "OpenRouter API key".to_owned(),
+            SecretScope::VoiceProfileKey => "voice-profile data key".to_owned(),
             SecretScope::DeviceAuthorization { device_id } => {
                 format!("device authorization for {device_id}")
             }
