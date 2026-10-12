@@ -12,8 +12,15 @@ workspace = true
 
 [dependencies]
 egui = { workspace = true }
+plaudon-app = { workspace = true }
+plaudon-craft-ui = { workspace = true }
 plaudon-domain = { workspace = true }
 plaudon-transcript-doc = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
 
 [dev-dependencies]
+egui = { workspace = true, features = ["default_fonts"] }
 egui_kittest = { workspace = true }
+plaudon-ui-testkit = { workspace = true }
+tempfile = { workspace = true }

@@ -16,7 +16,9 @@
 //!   reconciliation and shutdown;
 //! * [`events`], [`notify`], [`secrets`], [`media`], [`updater`] — the event
 //!   stream, notifications, the keychain, archived-media resolution and the
-//!   update root.
+//!   update root;
+//! * [`shell_state`] — the window geometry, panel sizes and appearance a
+//!   desktop shell restores between runs.
 //!
 //! It has no user-interface dependency of any kind: no `tauri`, no `egui`, no
 //! `eframe`. A user interface is a caller of [`command::Dispatcher`] and a
@@ -34,6 +36,7 @@ pub mod notify;
 pub mod ports;
 pub mod runtime;
 pub mod secrets;
+pub mod shell_state;
 pub mod updater;
 pub mod validate;
 
