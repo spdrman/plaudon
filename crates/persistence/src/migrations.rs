@@ -68,8 +68,7 @@ pub const MIGRATIONS: &[Migration] = &[
         name: "transcript_provenance",
         sql: include_str!("../migrations/0200_transcript_provenance.sql"),
     },
-    // EPIC E desktop shell: activity history, UI event sequence and manual
-    // import display metadata. Owned by apps/desktop/src-tauri.
+    // Desktop shell display metadata. Owned by apps/desktop/src-tauri.
     Migration {
         version: 300,
         name: "desktop_shell",
@@ -338,10 +337,6 @@ mod tests {
         let expected: Vec<i64> = MIGRATIONS.iter().map(|m| m.version).collect();
         assert_eq!(report.applied, expected);
         assert_eq!(
-            report.applied,
-            MIGRATIONS.iter().map(|m| m.version).collect::<Vec<_>>()
-        );
-        assert_eq!(
             report.backup_path, None,
             "a fresh library has nothing to back up"
         );
@@ -379,13 +374,6 @@ mod tests {
         let report = full.run(&db).await.unwrap();
         let expected: Vec<i64> = MIGRATIONS.iter().skip(1).map(|m| m.version).collect();
         assert_eq!(report.applied, expected);
-        assert_eq!(
-            report.applied,
-            MIGRATIONS[1..]
-                .iter()
-                .map(|m| m.version)
-                .collect::<Vec<_>>()
-        );
         let backup = report.backup_path.expect("an upgrade must back up first");
         assert!(
             backup.exists(),

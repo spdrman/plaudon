@@ -279,7 +279,7 @@ mod tests {
     use plaudon_domain::ids::JobId;
     use plaudon_domain::model::{EngineId, ModelIdentity};
     use plaudon_domain::transcript::AlignmentOrigin;
-    use std::sync::Mutex;
+    use parking_lot::Mutex;
 
     #[derive(Debug)]
     struct ScriptedModel {
@@ -295,7 +295,7 @@ mod tests {
             }
         }
         fn prompts(&self) -> Vec<String> {
-            self.prompts.lock().unwrap().clone()
+            self.prompts.lock().clone()
         }
     }
 
@@ -309,7 +309,7 @@ mod tests {
             request: StructuredRequest,
             _ctx: JobContext,
         ) -> Result<StructuredResponse, TextModelError> {
-            self.prompts.lock().unwrap().push(request.prompt);
+            self.prompts.lock().push(request.prompt);
             Ok(StructuredResponse {
                 body: self.response.clone(),
                 repair_attempts: 0,

@@ -1,9 +1,9 @@
 # ADR-0021: Native notification backends, payload privacy and non-authoritative delivery
 
-- Status: accepted
-- Date: 2026-10-11
-- Deciders: EPIC E (desktop shell)
-- Spec: §5.5, §14.5, §22(13)
+- **Status:** accepted
+- **Date:** 2026-10-11
+- **Deciders:** EPIC E (desktop shell)
+- **Spec:** §5.5, §14.5, §22(13)
 
 ## Context
 
@@ -79,6 +79,12 @@ Callers persist the outcome next to the activity entry
 application state from it. The committed job row and the in-app activity history
 remain authoritative, which is what keeps every completion event visible when
 notifications are disabled, denied or broken.
+
+## Rejected alternatives
+
+- **`mac-notification-sys` / `notify-rust` on macOS.** Rejected: they drive the deprecated `NSUserNotification` and cannot report OS permission truthfully, which §5.5 and §22(13) need.
+- **Treating a delivered notification as authoritative job state.** Rejected: delivery is OS-controlled and lossy; the destination always refetches committed state.
+- **Putting transcript or title text in notification payloads.** Rejected: payloads are visible on lock screens; only a target kind and id are carried.
 
 ## Consequences
 

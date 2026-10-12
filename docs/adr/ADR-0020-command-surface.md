@@ -1,9 +1,9 @@
 # ADR-0020: Desktop command surface and the two additions to the §15.2 table
 
-- Status: accepted
-- Date: 2026-10-11
-- Deciders: EPIC E (desktop shell)
-- Spec: §15.1–§15.4, §5.5, §22(13)
+- **Status:** accepted
+- **Date:** 2026-10-11
+- **Deciders:** EPIC E (desktop shell)
+- **Spec:** §15.1–§15.4, §5.5, §22(13)
 
 ## Context
 
@@ -55,6 +55,12 @@ activation callback, carries nothing but a target kind and id, and — like
 every other event — is a hint: the destination refetches committed state. The
 alternative (polling a "pending activation" row from the frontend) would add a
 command and still not express the one-shot nature of an activation.
+
+## Rejected alternatives
+
+- **A generic `invoke(name, args)` dispatcher.** Rejected: it turns the command allowlist into a convention and defeats the generic-execution pattern test.
+- **Enabling the Tauri asset protocol for media playback.** Rejected: it requires a filesystem permission and lets JavaScript supply paths; the `plaudon-media` scheme keeps paths in Rust.
+- **Polling a pending-activation row for notification clicks.** Rejected: it adds a command and does not express the one-shot nature of an activation.
 
 ## Consequences
 

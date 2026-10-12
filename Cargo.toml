@@ -73,8 +73,8 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 url = "2"
 uuid = { version = "1", features = ["v4", "v7", "serde"] }
 walkdir = "2"
-whisper-rs = { version = "0.16", default-features = false }
 zeroize = { version = "1", features = ["derive"] }
+whisper-rs = { version = "0.16", default-features = false }
 
 [workspace.lints.rust]
 unsafe_code = "warn"

@@ -484,12 +484,20 @@ impl Redactor {
         for pair in token.split(['&', ';']) {
             if let Some((key, value)) = pair.split_once(['=', ':']) {
                 let key_lower = key.to_ascii_lowercase();
-                if !value.is_empty()
-                    && Self::SENSITIVE_KEYS
-                        .iter()
-                        .any(|needle| key_lower.contains(needle))
+                if Self::SENSITIVE_KEYS
+                    .iter()
+                    .any(|needle| key_lower.contains(needle))
                 {
-                    return Self::PLACEHOLDER.to_owned();
+                    // `Authorization:` with its value in the next token still
+                    // marks the label itself as redacted, so the pair never
+                    // survives half-visible.
+                    return if value == Self::PLACEHOLDER {
+                        token.to_owned()
+                    } else if value.is_empty() {
+                        format!("{key}{}{}", &pair[key.len()..=key.len()], Self::PLACEHOLDER)
+                    } else {
+                        Self::PLACEHOLDER.to_owned()
+                    };
                 }
             }
         }

@@ -337,7 +337,7 @@ impl JobKey {
     }
 
     /// The reprocess token, if any.
-    pub fn reprocess_token(&self) -> Option<&ReprocessToken> {
+    pub fn reprocess_nonce(&self) -> Option<&ReprocessToken> {
         match self {
             JobKey::Import(k) => k.reprocess.as_ref(),
             JobKey::Processing(k) => k.reprocess.as_ref(),

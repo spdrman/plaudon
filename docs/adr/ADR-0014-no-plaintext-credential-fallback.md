@@ -1,5 +1,9 @@
 # ADR-0014: No plaintext credential fallback — an unavailable secret store is a locked state
 
+- **Status:** Accepted
+- **Date:** 2026-10-11
+- **Spec:** SPEC v1.3 (see "Spec references")
+
 ## Status
 
 Accepted — 2026-10-11. Implemented in `crates/security/src/secrets.rs`
@@ -70,18 +74,18 @@ OpenRouter key is a billable bearer credential.
   re-authorizing devices. We accept that over holding a recovery copy
   ourselves, because a recovery copy is a plaintext fallback with a nicer name.
 
-## Alternatives considered
+## Rejected alternatives
 
-* **Encrypted file fallback with a key derived from a user passphrase.**
+- **Encrypted file fallback with a key derived from a user passphrase.**
   Rejected for V1: it adds a second credential to manage and a second recovery
   path, and users would meet it at the exact moment they are least prepared to
   make a security decision. Revisit only with the §13.8 vault work.
-* **Machine-bound encrypted file (DPAPI / `kSecAttrAccessible` file blob).**
+- **Machine-bound encrypted file (DPAPI / `kSecAttrAccessible` file blob).**
   Rejected: on both platforms the honest version of this *is* the platform
   store; a hand-rolled variant adds risk and no capability.
-* **Environment variables for CI.** Rejected: §16.4 forbids them explicitly,
+- **Environment variables for CI.** Rejected: §16.4 forbids them explicitly,
   and any test that needs a secret can use the in-memory fake.
-* **One shared token for all devices of a user.** Rejected: prohibited by
+- **One shared token for all devices of a user.** Rejected: prohibited by
   §16.4 and it would make the loss of one device's token a compromise of all.
 
 ## Spec references
