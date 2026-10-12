@@ -617,7 +617,11 @@ export const SPEC_COMMANDS: readonly CommandName[] = [
 /** Additions reviewed in ADR-0020 because §15.2 has no read path for them. */
 export const ADR_0020_COMMANDS: readonly CommandName[] = ["list_activity", "complete_onboarding"];
 
-export const ALL_COMMANDS: readonly CommandName[] = [...SPEC_COMMANDS, ...ADR_0020_COMMANDS];
+export const ALL_COMMANDS: readonly CommandName[] = [
+  ...SPEC_COMMANDS,
+  ...ADR_0020_COMMANDS,
+  ...EPIC_M_COMMANDS,
+];
 
 /* ----------------------------------------------------------------- events */
 
