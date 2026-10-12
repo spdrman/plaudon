@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/save_template.response.schema.json",
+  "title": "save_template.response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["template", "previous_version"],
+  "properties": {
+    "template": {
+      "$ref": "#/$defs/template_document"
+    },
+    "previous_version": {
+      "type": ["string", "null"]
+    }
+  },
+  "$defs": {
+    "template_document": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "template_id",
+        "version",
+        "display_name",
+        "purpose",
+        "built_in",
+        "base_id",
+        "base_version",
+        "prompt_version",
+        "output_schema_version",
+        "instructions",
+        "fields",
+        "rendering",
+        "document"
+      ],
+      "properties": {
+        "template_id": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "display_name": {
+          "type": "string"
+        },
+        "purpose": {
+          "type": "string"
+        },
+        "built_in": {
+          "type": "boolean"
+        },
+        "base_id": {
+          "type": ["string", "null"]
+        },
+        "base_version": {
+          "type": ["string", "null"]
+        },
+        "prompt_version": {
+          "type": "string"
+        },
+        "output_schema_version": {
+          "type": "string"
+        },
+        "instructions": {
+          "$ref": "#/$defs/template_instructions"
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/template_field"
+          }
+        },
+        "rendering": {
+          "$ref": "#/$defs/template_rendering"
+        },
+        "document": {
+          "type": "string"
+        }
+      }
+    },
+    "template_instructions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["system", "section_summary", "synthesis", "extraction"],
+      "properties": {
+        "system": {
+          "type": "string"
+        },
+        "section_summary": {
+          "type": "string"
+        },
+        "synthesis": {
+          "type": "string"
+        },
+        "extraction": {
+          "type": "string"
+        }
+      }
+    },
+    "template_field": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "kind",
+        "heading",
+        "min_anchors",
+        "max_anchors",
+        "max_items",
+        "max_text_chars"
+      ],
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "summary_statement",
+            "decision",
+            "action_item",
+            "risk",
+            "question",
+            "topic"
+          ]
+        },
+        "heading": {
+          "type": "string"
+        },
+        "min_anchors": {
+          "type": "integer"
+        },
+        "max_anchors": {
+          "type": "integer"
+        },
+        "max_items": {
+          "type": "integer"
+        },
+        "max_text_chars": {
+          "type": "integer"
+        }
+      }
+    },
+    "template_rendering": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["order", "empty_placeholder", "show_anchors"],
+      "properties": {
+        "order": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "empty_placeholder": {
+          "type": "string"
+        },
+        "show_anchors": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

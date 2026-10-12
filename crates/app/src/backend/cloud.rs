@@ -95,11 +95,26 @@ const CAPABILITY_FIXTURE_ID: &str = "capability-check";
 const FALLBACK_SAMPLE_RATE_HZ: u32 = 16_000;
 
 /// Everything the cloud commands need beyond the library itself.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct CloudRuntime {
     ai: CloudAi,
     transport: Arc<dyn AsyncHttpTransport>,
     consents: ConsentStore,
+    text_model: Option<Arc<dyn plaudon_ai_contracts::text::TextModel>>,
+}
+
+/// Written by hand because a [`TextModel`](plaudon_ai_contracts::text::TextModel)
+/// is an object-safe trait without a `Debug` bound. Nothing about the model is
+/// printed beyond whether one was installed.
+impl std::fmt::Debug for CloudRuntime {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CloudRuntime")
+            .field("ai", &self.ai)
+            .field("transport", &self.transport)
+            .field("consents", &self.consents)
+            .field("text_model_installed", &self.text_model.is_some())
+            .finish()
+    }
 }
 
 impl CloudRuntime {
@@ -114,6 +129,7 @@ impl CloudRuntime {
             ai,
             transport: Arc::new(transport),
             consents: ConsentStore::new(pool),
+            text_model: None,
         })
     }
 
@@ -122,6 +138,25 @@ impl CloudRuntime {
     pub fn with_transport(mut self, transport: Arc<dyn AsyncHttpTransport>) -> Self {
         self.transport = transport;
         self
+    }
+
+    /// Install the text model every tool run uses, bypassing route
+    /// resolution. Tests use this to run the whole tool path without a
+    /// network; production never sets it, so `None` is the only value a
+    /// shipped build ever holds.
+    #[must_use]
+    pub fn with_text_model(
+        mut self,
+        model: Arc<dyn plaudon_ai_contracts::text::TextModel>,
+    ) -> Self {
+        self.text_model = Some(model);
+        self
+    }
+
+    /// The installed text model, when a test installed one.
+    #[must_use]
+    pub(super) fn text_model(&self) -> Option<&Arc<dyn plaudon_ai_contracts::text::TextModel>> {
+        self.text_model.as_ref()
     }
 }
 
@@ -473,12 +508,17 @@ fn attempt_dto(row: &AttemptRow) -> Result<UsageAttempt, AppError> {
 /* ------------------------------------------------------------ backend glue */
 
 /// Everything `authorize` established about one dispatch.
+///
+/// Visible to the sibling backend modules that dispatch through the same
+/// gate: a transcript tool run authorizes exactly the way a transcription
+/// does (`backend::tools`), so it carries the same plan rather than growing a
+/// second one.
 #[derive(Debug, Clone)]
-struct DispatchPlan {
+pub(super) struct DispatchPlan {
     policy: Arc<OutboundPolicy>,
     authority: Arc<ConsentAuthority>,
-    grant_id: String,
-    resolution: PrivacyResolution,
+    pub(super) grant_id: String,
+    pub(super) resolution: PrivacyResolution,
 }
 
 /// Media facts of the recording to transcribe.
@@ -545,7 +585,11 @@ impl LocalBackend {
             .map_err(|err| store_error("cannot build the model catalogue", err))
     }
 
-    async fn card_for(&self, task: ModelTask, model_id: &str) -> Result<DomainCard, AppError> {
+    pub(super) async fn card_for(
+        &self,
+        task: ModelTask,
+        model_id: &str,
+    ) -> Result<DomainCard, AppError> {
         let view = self.catalog_view(task, None).await?;
         Ok(view
             .cards
@@ -596,7 +640,7 @@ impl LocalBackend {
 
     /// Evaluate the local budget against an estimate. Runs before consent and
     /// before any job or ledger row exists.
-    async fn check_budget(
+    pub(super) async fn check_budget(
         &self,
         estimate: MoneyEstimate,
         cost_acknowledged: bool,
@@ -630,7 +674,7 @@ impl LocalBackend {
 
     /// The egress gate, a covering grant and the retention posture, for one
     /// dispatch. Nothing is sent and nothing is recorded.
-    async fn authorize_dispatch(
+    pub(super) async fn authorize_dispatch(
         &self,
         recording_id: &str,
         model_id: &str,
@@ -699,7 +743,7 @@ impl LocalBackend {
         })
     }
 
-    fn dispatcher(&self, plan: &DispatchPlan) -> CloudDispatcher {
+    pub(super) fn dispatcher(&self, plan: &DispatchPlan) -> CloudDispatcher {
         CloudDispatcher::new(
             GatedHttpClientFactory::new(Arc::clone(&plan.policy)),
             Arc::clone(&self.cloud.transport),
@@ -709,7 +753,7 @@ impl LocalBackend {
         )
     }
 
-    fn require_key(&self) -> Result<(), AppError> {
+    pub(super) fn require_key(&self) -> Result<(), AppError> {
         match self.secrets().load_openrouter_key()? {
             Some(_) => Ok(()),
             None => Err(AppError::new(

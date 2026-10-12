@@ -1,14 +1,16 @@
 //! Default templates (matrix row A12).
 //!
-//! There is no template backend in this build: no store, no command, nothing
-//! to configure. The React shell said so with an empty state
-//! (`features/templates/TemplatesScreen.tsx`) and the migration plan keeps
-//! that decision — an inert editor that saved nothing would be worse than the
-//! sentence.
+//! Templates have a backend now — `list_templates`, `get_template`,
+//! `create_template_copy`, `save_template`, `validate_template` and
+//! `list_template_versions` — but none of it belongs in the settings screen.
+//! Managing one is a destination's worth of work (a catalogue, an editor, the
+//! validation problems, a version history), and that destination is
+//! [`crate::screens::templates`].
 //!
-//! So this section renders three facts and no control. It is the one place in
-//! the settings screen where "nothing here yet" is the honest answer rather
-//! than a stub, and the absence of a button is the point.
+//! What is still absent is a *default*: no command selects a template for a
+//! run, and `start_processing` has no field for one. So this section says
+//! where templates are managed and offers no control, because the only control
+//! it could offer here would write nowhere.
 
 use egui::Ui;
 
@@ -16,18 +18,17 @@ use super::section;
 use super::theme::SettingsTokens;
 use super::{Section, SettingsData, SettingsOutput};
 
-/// Headline, carried over from `TemplatesScreen.tsx` so the wording a user
-/// already knows does not change under them.
-const TITLE: &str = "Templates are not part of this build";
+/// Headline: where the work happens, not what is missing.
+const TITLE: &str = "Templates are managed on the Templates screen";
 
-/// The body of the React empty state, verbatim.
-const BODY: &str = "Summary and extraction templates are configured once a text model is \
-available. Transcription and the library work without them.";
+/// What that screen does, so the pointer is worth following.
+const BODY: &str = "The Templates screen lists the built-ins and your own copies, edits a copy, \
+checks it before it is stored and keeps its version history.";
 
 /// Why there is no control here, stated rather than implied.
-const NO_COMMAND: &str = "This build ships no template store and no command that creates or \
-changes a template, so this section offers nothing to set. Nothing is saved from here, and nothing \
-is waiting to be filled in.";
+const NO_DEFAULT: &str = "There is no default-template setting: starting a stage does not select \
+a template, so there is nothing to choose here. Each generated output records the template and \
+template version it was produced with.";
 
 /// The templates entry of the settings screen.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -47,6 +48,6 @@ impl Section for TemplatesSection {
     ) {
         section::prose(ui, tokens, TITLE);
         section::prose(ui, tokens, BODY);
-        section::note(ui, tokens, NO_COMMAND);
+        section::note(ui, tokens, NO_DEFAULT);
     }
 }

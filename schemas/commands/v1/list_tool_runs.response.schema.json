@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/list_tool_runs.response.schema.json",
+  "title": "list_tool_runs.response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "runs"
+  ],
+  "properties": {
+    "runs": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/tool_run"}
+    }
+  },
+  "$defs": {
+    "tool_run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "run_id",
+        "recording_id",
+        "transcript_revision_id",
+        "tool_id",
+        "tool_version",
+        "engine",
+        "model_id",
+        "model_version",
+        "request_family",
+        "prompt_version",
+        "schema_version",
+        "input_sha256",
+        "output_sha256",
+        "status",
+        "consent_policy",
+        "cost",
+        "created_at",
+        "finished_at"
+      ],
+      "properties": {
+        "run_id": {"type": "string"},
+        "recording_id": {"type": "string"},
+        "transcript_revision_id": {"type": "string"},
+        "tool_id": {"type": "string"},
+        "tool_version": {"type": "integer", "minimum": 1},
+        "engine": {"type": "string"},
+        "model_id": {"type": "string"},
+        "model_version": {
+          "anyOf": [
+            {"type": "string"},
+            {"type": "null"}
+          ]
+        },
+        "request_family": {"type": "string"},
+        "prompt_version": {"type": "string"},
+        "schema_version": {"type": "string"},
+        "input_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "output_sha256": {
+          "anyOf": [
+            {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            {"type": "null"}
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": ["succeeded", "rejected", "failed", "canceled"]
+        },
+        "consent_policy": {"$ref": "#/$defs/consent_policy"},
+        "cost": {"$ref": "#/$defs/cost_value"},
+        "created_at": {"type": "string"},
+        "finished_at": {
+          "anyOf": [
+            {"type": "string"},
+            {"type": "null"}
+          ]
+        }
+      }
+    },
+    "consent_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "egress_allowed",
+        "privacy_class",
+        "consent_id"
+      ],
+      "properties": {
+        "egress_allowed": {"type": "boolean"},
+        "privacy_class": {
+          "type": "string",
+          "enum": [
+            "on_device",
+            "cloud_zero_retention",
+            "cloud_retaining",
+            "unresolved"
+          ]
+        },
+        "consent_id": {
+          "anyOf": [
+            {"type": "string"},
+            {"type": "null"}
+          ]
+        }
+      }
+    },
+    "money_amount": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["amount", "currency"],
+      "properties": {
+        "amount": {
+          "type": "string",
+          "pattern": "^-?\\d+(\\.\\d+)?$"
+        },
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Z]{3}$"
+        }
+      }
+    },
+    "cost_value": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["confidence", "amount"],
+      "properties": {
+        "confidence": {
+          "type": "string",
+          "enum": ["unknown", "estimated", "finalized"]
+        },
+        "amount": {
+          "anyOf": [
+            {"$ref": "#/$defs/money_amount"},
+            {"type": "null"}
+          ]
+        }
+      }
+    }
+  }
+}

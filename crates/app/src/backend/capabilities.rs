@@ -155,8 +155,21 @@ impl LocalBackend {
 /// render, and a probe costs tens of milliseconds, so the result is cached
 /// and re-taken when the environment fingerprint changes (task H1.3). One
 /// cache per process: the thing it describes is the machine, not the window.
-static APPLE_PROBE_CACHE: std::sync::LazyLock<ProbeCache> =
-    std::sync::LazyLock::new(|| ProbeCache::new(plaudon_ai_apple::host_bridge()));
+static APPLE_PROBE_CACHE: std::sync::LazyLock<std::sync::Arc<ProbeCache>> =
+    std::sync::LazyLock::new(|| {
+        std::sync::Arc::new(ProbeCache::new(plaudon_ai_apple::host_bridge()))
+    });
+
+/// The process-wide Apple probe cache.
+///
+/// Shared rather than re-probed: `backend::tools` has to answer the same
+/// question — is the on-device language model available — before it routes a
+/// transcript tool run, and a second cache would mean a second probe and two
+/// answers that could disagree.
+#[must_use]
+pub(crate) fn apple_probe_cache() -> std::sync::Arc<ProbeCache> {
+    std::sync::Arc::clone(&APPLE_PROBE_CACHE)
+}
 
 /// The two Apple rows, derived from a runtime probe.
 ///

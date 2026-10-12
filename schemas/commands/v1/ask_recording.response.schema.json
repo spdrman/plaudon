@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/ask_recording.response.schema.json",
+  "title": "ask_recording.response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "conversation_id",
+    "transcript_revision_id",
+    "outcome",
+    "text",
+    "anchors",
+    "rejected_anchors",
+    "retrieved_segments",
+    "dispatched",
+    "tool_run_id",
+    "tool_id",
+    "tool_version"
+  ],
+  "properties": {
+    "conversation_id": {"type": "string"},
+    "transcript_revision_id": {"type": "string"},
+    "outcome": {
+      "type": "string",
+      "enum": [
+        "answered",
+        "insufficient_evidence",
+        "not_supported_by_recording"
+      ]
+    },
+    "text": {"type": "string"},
+    "anchors": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/anchor"}
+    },
+    "rejected_anchors": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/rejected_anchor"}
+    },
+    "retrieved_segments": {
+      "type": "array",
+      "items": {"type": "integer", "minimum": 0}
+    },
+    "dispatched": {"type": "boolean"},
+    "tool_run_id": {
+      "anyOf": [
+        {"type": "string"},
+        {"type": "null"}
+      ]
+    },
+    "tool_id": {"type": "string"},
+    "tool_version": {"type": "integer", "minimum": 1}
+  },
+  "$defs": {
+    "anchor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "seq_index",
+        "char_start",
+        "char_end",
+        "excerpt",
+        "verified",
+        "alignment_origin"
+      ],
+      "properties": {
+        "seq_index": {"type": "integer", "minimum": 0},
+        "char_start": {"type": "integer", "minimum": 0},
+        "char_end": {"type": "integer", "minimum": 0},
+        "excerpt": {"type": "string"},
+        "verified": {"type": "boolean"},
+        "rejection_code": {
+          "anyOf": [
+            {"type": "string"},
+            {"type": "null"}
+          ]
+        },
+        "matched_text": {
+          "anyOf": [
+            {"type": "string"},
+            {"type": "null"}
+          ]
+        },
+        "alignment_origin": {
+          "type": "string",
+          "enum": ["none", "native", "derived"]
+        },
+        "seek_ms": {
+          "anyOf": [
+            {"type": "integer", "minimum": 0},
+            {"type": "null"}
+          ]
+        }
+      }
+    },
+    "rejected_anchor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "seq_index",
+        "char_start",
+        "char_end",
+        "excerpt",
+        "rejection_code"
+      ],
+      "properties": {
+        "seq_index": {"type": "integer", "minimum": 0},
+        "char_start": {"type": "integer", "minimum": 0},
+        "char_end": {"type": "integer", "minimum": 0},
+        "excerpt": {"type": "string"},
+        "rejection_code": {
+          "type": "string",
+          "enum": [
+            "revision_mismatch",
+            "segment_not_found",
+            "span_out_of_bounds",
+            "excerpt_mismatch",
+            "empty_span"
+          ]
+        }
+      }
+    }
+  }
+}

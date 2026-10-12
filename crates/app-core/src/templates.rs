@@ -131,6 +131,17 @@ impl TemplateRegistry {
         }
     }
 
+    /// Parse one template document exactly as [`Self::load_user_dir`] does.
+    ///
+    /// The template editor needs to answer "would this document be accepted?"
+    /// before anything is written. Answering it with a second, weaker check
+    /// would let the editor call a document good that the loader then refuses
+    /// on the next start, so the one acceptance test lives here and both
+    /// callers use it.
+    pub fn parse_document(document: &str) -> Result<OutputTemplate, TemplateError> {
+        parse_validated(document, &meta_validator())
+    }
+
     /// Load every `*.json` in `dir` as a user template.
     ///
     /// Returns the number loaded. The first invalid document fails the whole

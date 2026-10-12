@@ -24,6 +24,7 @@ plaudon-domain = { workspace = true }
 plaudon-persistence = { workspace = true }
 plaudon-ai-apple = { workspace = true }
 plaudon-ai-contracts = { workspace = true }
+plaudon-ai-tools = { workspace = true }
 plaudon-app-core = { workspace = true }
 plaudon-ai-diarization = { workspace = true }
 plaudon-export = { workspace = true }

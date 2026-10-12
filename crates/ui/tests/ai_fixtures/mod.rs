@@ -368,3 +368,261 @@ pub fn usage(unknown_count: u32) -> GetUsageResponse {
         },
     }
 }
+
+/* ------------------------------------------------- transcript tools (A11) */
+
+use plaudon_app::dto::{
+    AskRecordingResponse, ConsentPolicyDto, ConversationDto, ConversationTurnDto, DefinitionDto,
+    FlashcardDto, GenerateStudyArtifactsResponse, ListConversationsResponse,
+    ListStudyArtifactsResponse, ListToolRunsResponse, ListTranscriptToolsResponse, QuizItemDto,
+    RejectedAnchorDto, RejectedStudyItemDto, StudyArtifactSetDto, StudyArtifactsDto, TextRouteDto,
+    ToolRunDto, TranscriptToolDto,
+};
+
+pub const CONVERSATION_ID: &str = "99999999-9999-9999-9999-999999999999";
+pub const TOOL_RUN_ID: &str = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+
+/// A text route; `model_id` is `None` for a route that names no model.
+pub fn text_route(engine: &str, model_id: Option<&str>, is_cloud: bool) -> TextRouteDto {
+    TextRouteDto {
+        engine: engine.to_owned(),
+        model_id: model_id.map(str::to_owned),
+        is_cloud,
+        available: true,
+        unavailable_reason: None,
+    }
+}
+
+/// The route of `local_model()`: an engine the inventory reports as
+/// network-free.
+pub fn local_text_route() -> TextRouteDto {
+    text_route("whisper.cpp", Some("whisper-small"), false)
+}
+
+/// The route of `cloud_model()`: an engine the inventory reports as requiring
+/// the network.
+pub fn cloud_text_route() -> TextRouteDto {
+    text_route("openrouter", Some("vendor/whisper-large"), true)
+}
+
+pub fn transcript_tool(
+    tool_id: &str,
+    kind: &str,
+    display_name: &str,
+    offerable: bool,
+    unavailable_reason: Option<&str>,
+) -> TranscriptToolDto {
+    TranscriptToolDto {
+        tool_id: tool_id.to_owned(),
+        version: 1,
+        kind: kind.to_owned(),
+        display_name: display_name.to_owned(),
+        instruction: "Produce study artifacts from the provided passages.".to_owned(),
+        prompt_version: format!("{tool_id}/1"),
+        output_schema_version: format!("{tool_id}.v1"),
+        origin: "built_in".to_owned(),
+        optional: true,
+        offerable,
+        unavailable_reason: unavailable_reason.map(str::to_owned),
+    }
+}
+
+pub fn transcript_tools(
+    tools: Vec<TranscriptToolDto>,
+    text_model: Option<TextRouteDto>,
+) -> ListTranscriptToolsResponse {
+    ListTranscriptToolsResponse { tools, text_model }
+}
+
+/// The two study tools, one offerable and one refused by the model's
+/// capabilities.
+pub fn study_tools(route: TextRouteDto) -> ListTranscriptToolsResponse {
+    transcript_tools(
+        vec![
+            transcript_tool("flashcards", "flashcards", "Flashcards", true, None),
+            transcript_tool(
+                "quiz",
+                "quiz",
+                "Quiz",
+                false,
+                Some("This model does not guarantee schema-constrained output."),
+            ),
+            transcript_tool(
+                "meeting_summary",
+                "meeting_summary",
+                "Meeting summary",
+                true,
+                None,
+            ),
+        ],
+        Some(route),
+    )
+}
+
+pub fn rejected_anchor(rejection_code: &str) -> RejectedAnchorDto {
+    RejectedAnchorDto {
+        seq_index: 12,
+        char_start: 0,
+        char_end: 18,
+        excerpt: "the budget tripled".to_owned(),
+        rejection_code: rejection_code.to_owned(),
+    }
+}
+
+pub fn ask_answer(
+    outcome: &str,
+    text: &str,
+    anchors: Vec<AnchorDto>,
+    rejected_anchors: Vec<RejectedAnchorDto>,
+    dispatched: bool,
+) -> AskRecordingResponse {
+    AskRecordingResponse {
+        conversation_id: CONVERSATION_ID.to_owned(),
+        transcript_revision_id: REVISION_ID.to_owned(),
+        outcome: outcome.to_owned(),
+        text: text.to_owned(),
+        anchors,
+        rejected_anchors,
+        retrieved_segments: vec![7, 8],
+        dispatched,
+        tool_run_id: dispatched.then(|| TOOL_RUN_ID.to_owned()),
+        tool_id: "ask_recording".to_owned(),
+        tool_version: 1,
+    }
+}
+
+pub fn turn(
+    seq_index: u32,
+    role: &str,
+    text: &str,
+    outcome: Option<&str>,
+    anchors: Vec<AnchorDto>,
+) -> ConversationTurnDto {
+    ConversationTurnDto {
+        message_id: format!("message-{seq_index}"),
+        seq_index,
+        role: role.to_owned(),
+        text: text.to_owned(),
+        outcome: outcome.map(str::to_owned),
+        anchors,
+        tool_run_id: (role == "assistant").then(|| TOOL_RUN_ID.to_owned()),
+        created_at: "2026-02-01T12:00:00Z".to_owned(),
+    }
+}
+
+pub fn conversations(
+    revision_is_current: bool,
+    turns: Vec<ConversationTurnDto>,
+) -> ListConversationsResponse {
+    ListConversationsResponse {
+        conversations: vec![ConversationDto {
+            conversation_id: CONVERSATION_ID.to_owned(),
+            recording_id: RECORDING_ID.to_owned(),
+            transcript_revision_id: REVISION_ID.to_owned(),
+            revision_is_current,
+            created_at: "2026-02-01T12:00:00Z".to_owned(),
+            turns,
+        }],
+    }
+}
+
+/// One of each study artifact kind, each with one resolved citation.
+pub fn study_artifacts() -> StudyArtifactsDto {
+    StudyArtifactsDto {
+        flashcards: vec![FlashcardDto {
+            front: "When does the release ship?".to_owned(),
+            back: "On Friday.".to_owned(),
+            anchors: vec![anchor(true, Some(90_000))],
+        }],
+        quiz: vec![QuizItemDto {
+            question: "Which day was agreed for the release?".to_owned(),
+            options: vec!["Thursday".to_owned(), "Friday".to_owned()],
+            answer_index: 1,
+            anchors: vec![anchor(true, None)],
+        }],
+        definitions: vec![DefinitionDto {
+            term: "Release window".to_owned(),
+            definition: "The period in which the build may be shipped.".to_owned(),
+            anchors: vec![anchor(true, None)],
+        }],
+    }
+}
+
+pub fn rejected_study_item(path: &str, reason: &str, detail: &str) -> RejectedStudyItemDto {
+    RejectedStudyItemDto {
+        path: path.to_owned(),
+        reason: reason.to_owned(),
+        detail: detail.to_owned(),
+    }
+}
+
+pub fn study_run(
+    artifacts: StudyArtifactsDto,
+    rejected: Vec<RejectedStudyItemDto>,
+    dispatched: bool,
+) -> GenerateStudyArtifactsResponse {
+    GenerateStudyArtifactsResponse {
+        tool_id: "flashcards".to_owned(),
+        tool_version: 1,
+        transcript_revision_id: REVISION_ID.to_owned(),
+        artifacts,
+        rejected,
+        output_ids: vec![OUTPUT_ID.to_owned()],
+        tool_run_id: dispatched.then(|| TOOL_RUN_ID.to_owned()),
+        dispatched,
+    }
+}
+
+pub fn study_sets(
+    artifacts: StudyArtifactsDto,
+    revision_is_current: bool,
+) -> ListStudyArtifactsResponse {
+    ListStudyArtifactsResponse {
+        sets: vec![StudyArtifactSetDto {
+            output_id: OUTPUT_ID.to_owned(),
+            tool_id: "flashcards".to_owned(),
+            tool_version: 1,
+            transcript_revision_id: REVISION_ID.to_owned(),
+            revision_is_current,
+            created_at: "2026-02-01T13:00:00Z".to_owned(),
+            artifacts,
+        }],
+    }
+}
+
+pub fn tool_run(status: &str, cost: CostValue, egress_allowed: bool) -> ToolRunDto {
+    ToolRunDto {
+        run_id: TOOL_RUN_ID.to_owned(),
+        recording_id: RECORDING_ID.to_owned(),
+        transcript_revision_id: REVISION_ID.to_owned(),
+        tool_id: "flashcards".to_owned(),
+        tool_version: 2,
+        engine: "openrouter".to_owned(),
+        model_id: "vendor/whisper-large".to_owned(),
+        model_version: Some("2026-01".to_owned()),
+        request_family: "chat_json".to_owned(),
+        prompt_version: "flashcards/2".to_owned(),
+        schema_version: "flashcards.v2".to_owned(),
+        input_sha256: "1111111111111111111111111111111111111111111111111111111111111111".to_owned(),
+        output_sha256: Some(
+            "2222222222222222222222222222222222222222222222222222222222222222".to_owned(),
+        ),
+        status: status.to_owned(),
+        consent_policy: ConsentPolicyDto {
+            egress_allowed,
+            privacy_class: if egress_allowed {
+                "cloud_retaining".to_owned()
+            } else {
+                "on_device".to_owned()
+            },
+            consent_id: egress_allowed.then(|| "consent-1".to_owned()),
+        },
+        cost,
+        created_at: "2026-02-01T14:00:00Z".to_owned(),
+        finished_at: Some("2026-02-01T14:00:20Z".to_owned()),
+    }
+}
+
+pub fn tool_runs(runs: Vec<ToolRunDto>) -> ListToolRunsResponse {
+    ListToolRunsResponse { runs }
+}

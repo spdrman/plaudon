@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/create_template_copy.request.schema.json",
+  "title": "create_template_copy.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["base_id", "new_id", "display_name"],
+  "properties": {
+    "base_id": {
+      "type": "string"
+    },
+    "new_id": {
+      "type": "string"
+    },
+    "display_name": {
+      "type": ["string", "null"]
+    }
+  }
+}

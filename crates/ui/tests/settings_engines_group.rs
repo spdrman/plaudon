@@ -391,16 +391,16 @@ fn engine_request(out: &SettingsOutput) -> &SetEnginePreferencesRequest {
 /* -------------------------------------------------------------- templates */
 
 #[test]
-fn the_templates_entry_states_the_facts_and_offers_no_control() {
+fn the_templates_entry_points_at_the_screen_and_offers_no_control() {
     let mut harness = harness(TemplatesSection, SettingsData::default());
     harness.run();
 
-    harness.get_by_label("Templates are not part of this build");
+    harness.get_by_label("Templates are managed on the Templates screen");
     assert!(announces(
         &harness,
-        "Summary and extraction templates are configured once a text model is available."
+        "lists the built-ins and your own copies"
     ));
-    assert!(announces(&harness, "ships no template store"));
+    assert!(announces(&harness, "There is no default-template setting"));
 
     assert!(
         button_labels(&harness).is_empty(),
