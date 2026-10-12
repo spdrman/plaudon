@@ -91,13 +91,17 @@ impl ConnectorState {
                 Self::AuthRequired
             }
             (
-                Self::Authenticated | Self::Ready | Self::Enumerating,
+                Self::CliDetected | Self::Authenticated | Self::Ready | Self::Enumerating,
                 ConnectorEvent::SessionExpired,
             ) => Self::ExpiredAuth,
 
-            (Self::Authenticated | Self::Ready, ConnectorEvent::EnumerationStarted) => {
-                Self::Enumerating
-            }
+            // Enumeration may start straight after detection: running `files`
+            // is how we learn whether the vendor tool still has a session, and
+            // spec 4.2 does not give us a separate "am I signed in" query.
+            (
+                Self::CliDetected | Self::Authenticated | Self::Ready,
+                ConnectorEvent::EnumerationStarted,
+            ) => Self::Enumerating,
             (Self::Enumerating, ConnectorEvent::EnumerationSucceeded) => Self::Ready,
             (Self::Enumerating, ConnectorEvent::EnumerationFailed) => Self::Error,
 
@@ -108,7 +112,7 @@ impl ConnectorState {
     /// Whether enumeration may be attempted from this state.
     #[must_use]
     pub const fn may_enumerate(self) -> bool {
-        matches!(self, Self::Authenticated | Self::Ready)
+        matches!(self, Self::CliDetected | Self::Authenticated | Self::Ready)
     }
 
     /// Whether the connector needs the user before it can progress.

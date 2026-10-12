@@ -1,0 +1,73 @@
+# Fixture compatibility table (spec 7.2, 18.3).
+#
+# This table exists ONLY for the hermetic test suite. It describes the
+# synthetic releases captured under `tests/integration/fixtures/plaud-cli/`,
+# so the connector, parser and golden-snapshot machinery can be exercised
+# end to end without a vendor account.
+#
+# It is never loaded by the application: `CliCompatibilityTable::committed()`
+# reads `crates/source-plaud-cli/cli-compatibility.yaml`, which has no rows.
+# A test asserts that these two documents stay different, so a fixture release
+# can never become a shipped compatibility claim by accident.
+
+schema_version: 1
+updated_at: "2026-10-11"
+
+versions:
+  # Machine-readable JSON Lines, pagination never observed.
+  - version: "1.4.2"
+    listing_format: json_lines
+    pagination:
+      kind: not_observed
+    vendor_artifacts: "yes"
+    logout_command: "no"
+    machine_readable: "yes"
+    evidence_level: observed_on_identified_release
+    fixture_id: v1.4.2-jsonl
+    fixture_sha256: a4eaf4d7a94e8fb7a1975648bedbbd4186b3f79d0c942ef46141c7388117c39d
+    verified_on: "2026-10-11"
+    host_os: ["macos", "windows"]
+
+  # Machine-readable JSON array envelope with an observed cursor flag.
+  - version: "1.5.0"
+    listing_format: json_array
+    pagination:
+      kind: observed
+      cursor_flag: "--cursor"
+      page_size: 2
+    vendor_artifacts: "no"
+    logout_command: "yes"
+    machine_readable: "yes"
+    evidence_level: observed_on_identified_release
+    fixture_id: v1.5.0-jsonarray
+    fixture_sha256: 6df99384c4cb70e46d6d47409872747c7735fba19051cfc22928e225d8541072
+    verified_on: "2026-10-11"
+    host_os: ["macos", "windows"]
+
+  # Human-readable layout, scraped under a version lock with a warning.
+  - version: "1.2.0"
+    listing_format: delimited_table
+    pagination:
+      kind: not_observed
+    vendor_artifacts: unknown
+    logout_command: "no"
+    machine_readable: "no"
+    evidence_level: observed_on_identified_release
+    fixture_id: v1.2.0-table
+    fixture_sha256: 1249e266da0f62221dc9e54e406c3c7dab572e100bce65eecd5ffca47fa9985c
+    verified_on: "2026-10-11"
+    host_os: ["macos"]
+
+  # A release we looked at but never ran: must never be driven.
+  - version: "2.0.0"
+    listing_format: json_lines
+    pagination:
+      kind: not_observed
+    vendor_artifacts: unknown
+    logout_command: unknown
+    machine_readable: unknown
+    evidence_level: implemented_not_verified
+    fixture_id: v2.0.0-unverified
+    fixture_sha256: "0000000000000000000000000000000000000000000000000000000000000000"
+    verified_on: null
+    host_os: []

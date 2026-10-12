@@ -322,7 +322,10 @@ impl CliRunner {
 const fn egress_purpose(command: &CliCommand) -> EgressPurpose {
     match command {
         CliCommand::Version => EgressPurpose::Diagnostic,
-        CliCommand::Login | CliCommand::Logout => EgressPurpose::CredentialValidation,
+        // Sign-in and sign-out are account operations on the vendor side, and
+        // `Subsystem::PlaudCloudCli` is only ever authorized for account sync
+        // and diagnostics.
+        CliCommand::Login | CliCommand::Logout => EgressPurpose::AccountSync,
         CliCommand::Files { .. } | CliCommand::Audio { .. } => EgressPurpose::AccountSync,
     }
 }

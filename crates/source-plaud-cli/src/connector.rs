@@ -14,7 +14,7 @@
 //!   return `CliUnsupported` and manual import remains the working path.
 
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use plaudon_domain::capability::{CapabilityStatus, Tri};
@@ -50,7 +50,7 @@ struct Session {
 pub struct PlaudCloudCliConnector {
     discovery: CliDiscovery,
     runner: CliRunner,
-    table: &'static CliCompatibilityTable,
+    table: Arc<CliCompatibilityTable>,
     account_scope: SourceAccountScope,
     pipeline: AcquisitionPipeline,
     session: Mutex<Session>,
@@ -80,7 +80,7 @@ impl PlaudCloudCliConnector {
         Self {
             discovery,
             runner,
-            table: CliCompatibilityTable::committed(),
+            table: Arc::new(CliCompatibilityTable::committed().clone()),
             account_scope,
             pipeline,
             session: Mutex::new(Session {
@@ -98,7 +98,7 @@ impl PlaudCloudCliConnector {
     /// recorded release before that release is promoted into the committed
     /// table. The application always uses [`CliCompatibilityTable::committed`].
     #[must_use]
-    pub fn with_table(mut self, table: &'static CliCompatibilityTable) -> Self {
+    pub fn with_table(mut self, table: Arc<CliCompatibilityTable>) -> Self {
         self.table = table;
         self
     }
@@ -112,7 +112,7 @@ impl PlaudCloudCliConnector {
     /// Current diagnostics panel.
     #[must_use]
     pub fn diagnostics(&self) -> ConnectorDiagnostics {
-        ConnectorDiagnostics::render(&self.status(), self.table)
+        ConnectorDiagnostics::render(&self.status(), &self.table)
     }
 
     /// The truthful disconnect copy for the detected release.

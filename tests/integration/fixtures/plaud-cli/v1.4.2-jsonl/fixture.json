@@ -1,0 +1,8 @@
+{
+  "version": "1.4.2",
+  "listing_format": "json_lines",
+  "pagination_observed": false,
+  "account_scope": "plaud:eu:account-a",
+  "captured_on": "2026-10-11",
+  "note": "Synthetic capture. Replace with real `plaud files` output when a release is exercised; the digest in cli-compatibility.yaml must be updated in the same commit."
+}

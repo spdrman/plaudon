@@ -1,0 +1,33 @@
+{
+  "completeness": "possibly_incomplete",
+  "next_cursor": null,
+  "items": [
+    {
+      "external_id": "rec_01HF8ZT9",
+      "display_name": "Board sync",
+      "duration_ms": 1830000,
+      "declared_byte_length": 58560044,
+      "captured_at_ms": 1760140800000,
+      "remote_version": "1760140900000",
+      "vendor_transcript_available": true
+    },
+    {
+      "external_id": "rec_01HF9QKA",
+      "display_name": "1:1 with Dana",
+      "duration_ms": 1500,
+      "declared_byte_length": 48044,
+      "captured_at_ms": 1760227200000,
+      "remote_version": "1760227300000",
+      "vendor_transcript_available": false
+    },
+    {
+      "external_id": "rec_01HFA3MM",
+      "display_name": "Untitled recording",
+      "duration_ms": 600000,
+      "declared_byte_length": 19200044,
+      "captured_at_ms": 1760313600000,
+      "remote_version": null,
+      "vendor_transcript_available": false
+    }
+  ]
+}

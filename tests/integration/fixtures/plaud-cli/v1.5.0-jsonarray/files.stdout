@@ -1,0 +1,23 @@
+{
+  "files": [
+    {
+      "id": "rec_01HFB7PP",
+      "title": "Design review",
+      "duration_ms": 2700000,
+      "size_bytes": 86400044,
+      "created_at_ms": 1760400000000,
+      "updated_at": "3",
+      "has_transcript": true
+    },
+    {
+      "id": "rec_01HFC2RS",
+      "title": "Réunion d'équipe — 11/10/2026",
+      "duration_ms": 900000,
+      "size_bytes": 28800044,
+      "created_at_ms": 1760486400000,
+      "updated_at": "1",
+      "has_transcript": false
+    }
+  ],
+  "next_cursor": "eyJvZmZzZXQiOjJ9"
+}

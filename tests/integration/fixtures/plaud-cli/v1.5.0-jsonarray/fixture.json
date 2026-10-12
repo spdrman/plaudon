@@ -1,0 +1,8 @@
+{
+  "version": "1.5.0",
+  "listing_format": "json_array",
+  "pagination_observed": true,
+  "account_scope": "plaud:eu:account-a",
+  "captured_on": "2026-10-11",
+  "note": "Synthetic capture of an enveloped page with an observed cursor flag."
+}

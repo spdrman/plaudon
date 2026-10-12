@@ -10,4 +10,34 @@ repository.workspace = true
 [lints]
 workspace = true
 
+[features]
+default = []
+# Test-only seams. The only thing this enables is the ability to construct a
+# deliberately weakened completion barrier, which the mutation-sanity suite
+# uses to prove the fixtures actually detect a regressed implementation
+# (§18.6A). Production code cannot reach it: `BarrierPolicy::strict` is the
+# only constructor compiled without this feature.
+test-harness = []
+
 [dependencies]
+fs4 = { workspace = true }
+notify = { workspace = true }
+parking_lot = { workspace = true }
+plaudon-app-core = { workspace = true }
+plaudon-diagnostics = { workspace = true }
+plaudon-domain = { workspace = true }
+plaudon-persistence = { workspace = true }
+plaudon-security = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+walkdir = { workspace = true }
+
+[dev-dependencies]
+# Self-reference so `cargo test -p plaudon-source-folder` compiles the crate's
+# own test binaries with the harness seam enabled.
+plaudon-source-folder = { path = ".", features = ["test-harness"] }
+proptest = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true }
