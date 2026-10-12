@@ -318,66 +318,64 @@ fn a_cited_span_is_mapped_exactly_when_its_characters_survived() {
     let edits = prop::collection::vec(
         prop_oneof![
             (0usize..80, "[a-z]{1,4}").prop_map(|(at, text)| (at, text, true)),
-            (0usize..80, 1usize..6)
-                .prop_map(|(at, len)| (at, "x".repeat(len), false)),
+            (0usize..80, 1usize..6).prop_map(|(at, len)| (at, "x".repeat(len), false)),
         ],
         0..12,
     );
 
     runner(512)
-        .run(&(edits, 0usize..40, 1usize..12), |(edits, span_start, span_len)| {
-            let text = SEED_TEXTS[0];
-            let mut session = EditSession::new(document_with(&[text]));
-            let id = session.document().first_id().expect("segment");
-            let mut model = Provenance::new(text.chars().count());
+        .run(
+            &(edits, 0usize..40, 1usize..12),
+            |(edits, span_start, span_len)| {
+                let text = SEED_TEXTS[0];
+                let mut session = EditSession::new(document_with(&[text]));
+                let id = session.document().first_id().expect("segment");
+                let mut model = Provenance::new(text.chars().count());
 
-            for (at, payload, is_insert) in &edits {
-                let current = session
-                    .document()
-                    .segment(id)
-                    .expect("segment")
-                    .char_len();
-                if *is_insert {
-                    let offset = at % (current + 1);
-                    session.set_caret(Position::new(id, offset));
-                    session.insert_text(payload).expect("insert");
-                    model.insert(offset, payload.chars().count());
-                } else if current > 0 {
-                    let offset = at % current;
-                    let count = payload.chars().count().min(current - offset);
-                    session.set_selection(plaudon_transcript_doc::caret::Selection::new(
-                        Position::new(id, offset),
-                        Position::new(id, offset + count),
-                    ));
-                    session.delete_selection().expect("delete");
-                    model.remove(offset, count);
+                for (at, payload, is_insert) in &edits {
+                    let current = session.document().segment(id).expect("segment").char_len();
+                    if *is_insert {
+                        let offset = at % (current + 1);
+                        session.set_caret(Position::new(id, offset));
+                        session.insert_text(payload).expect("insert");
+                        model.insert(offset, payload.chars().count());
+                    } else if current > 0 {
+                        let offset = at % current;
+                        let count = payload.chars().count().min(current - offset);
+                        session.set_selection(plaudon_transcript_doc::caret::Selection::new(
+                            Position::new(id, offset),
+                            Position::new(id, offset + count),
+                        ));
+                        session.delete_selection().expect("delete");
+                        model.remove(offset, count);
+                    }
                 }
-            }
-            let base_len = text.chars().count();
-            let start = span_start % base_len;
-            let end = (start + span_len).min(base_len);
-            if end <= start {
-                return Ok(());
-            }
-            let segment = session.document().segment(id).expect("segment");
-            let mapping = segment.piece_table().map_original_span(start, end);
-            prop_assert_eq!(
-                mapping,
-                model.map_span(start, end),
-                "piece-table mapping disagrees with the provenance model for {}..{}",
-                start,
-                end
-            );
-            if let SpanMapping::Mapped {
-                start: from,
-                end: to,
-            } = mapping
-            {
-                let cited: String = text.chars().skip(start).take(end - start).collect();
-                prop_assert_eq!(segment.slice(from, to), cited);
-            }
-            Ok(())
-        })
+                let base_len = text.chars().count();
+                let start = span_start % base_len;
+                let end = (start + span_len).min(base_len);
+                if end <= start {
+                    return Ok(());
+                }
+                let segment = session.document().segment(id).expect("segment");
+                let mapping = segment.piece_table().map_original_span(start, end);
+                prop_assert_eq!(
+                    mapping,
+                    model.map_span(start, end),
+                    "piece-table mapping disagrees with the provenance model for {}..{}",
+                    start,
+                    end
+                );
+                if let SpanMapping::Mapped {
+                    start: from,
+                    end: to,
+                } = mapping
+                {
+                    let cited: String = text.chars().skip(start).take(end - start).collect();
+                    prop_assert_eq!(segment.slice(from, to), cited);
+                }
+                Ok(())
+            },
+        )
         .expect("anchor span mapping");
 }
 

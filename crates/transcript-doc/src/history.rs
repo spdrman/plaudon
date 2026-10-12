@@ -231,8 +231,8 @@ pub fn replay(
 mod tests {
     use super::*;
     use crate::caret::{Position, Selection};
-    use crate::ops::EditKind;
     use crate::doc::SegmentId;
+    use crate::ops::EditKind;
 
     fn typing(segment: SegmentId, offset: usize, text: &str, at_ms: u64) -> OpGroup {
         OpGroup::new(

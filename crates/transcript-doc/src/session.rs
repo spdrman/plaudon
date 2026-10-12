@@ -202,10 +202,7 @@ impl EditSession {
         let text = segment.slice(at.offset, focus.offset);
         let before = self.selection;
         self.commit(OpGroup::new(
-            vec![Op::Delete {
-                at,
-                text,
-            }],
+            vec![Op::Delete { at, text }],
             EditKind::DeletingBackward,
             before,
             Selection::caret(at),
@@ -248,13 +245,7 @@ impl EditSession {
         let before = self.selection;
         let ops = self.selection_removal_ops();
         let after = Selection::caret(self.insertion_point());
-        self.commit(OpGroup::new(
-            ops,
-            EditKind::Cut,
-            before,
-            after,
-            self.now_ms,
-        ))
+        self.commit(OpGroup::new(ops, EditKind::Cut, before, after, self.now_ms))
     }
 
     /// Cut: the removed text is returned for the host to put on the clipboard.
@@ -304,10 +295,7 @@ impl EditSession {
         let at = Position::new(id, prefix);
         let mut ops = Vec::with_capacity(2);
         if !removed.is_empty() {
-            ops.push(Op::Delete {
-                at,
-                text: removed,
-            });
+            ops.push(Op::Delete { at, text: removed });
         }
         if !inserted.is_empty() {
             ops.push(Op::Insert {
@@ -471,10 +459,7 @@ impl EditSession {
         };
         let removed = segment.slice(hit.start, hit.end);
         let at = Position::new(hit.segment, hit.start);
-        let mut ops = vec![Op::Delete {
-            at,
-            text: removed,
-        }];
+        let mut ops = vec![Op::Delete { at, text: removed }];
         if !replacement.is_empty() {
             ops.push(Op::Insert {
                 at,
@@ -687,10 +672,7 @@ mod tests {
     fn typing_over_a_selection_replaces_it() {
         let mut session = session(&["we will not pay"]);
         let id = ids(&session)[0];
-        session.set_selection(Selection::new(
-            Position::new(id, 8),
-            Position::new(id, 11),
-        ));
+        session.set_selection(Selection::new(Position::new(id, 8), Position::new(id, 11)));
         session.insert_text("never").expect("insert");
         assert_eq!(text_of(&session, 0), "we will never pay");
         session.undo().expect("undo");
@@ -705,10 +687,7 @@ mod tests {
         session.delete_backward().expect("backspace");
         assert_eq!(session.document().len(), 2);
         assert_eq!(text_of(&session, 0), "one");
-        assert_eq!(
-            session.selection().focus,
-            Position::new(segment_ids[0], 3)
-        );
+        assert_eq!(session.selection().focus, Position::new(segment_ids[0], 3));
     }
 
     #[test]
@@ -762,9 +741,15 @@ mod tests {
         let mut session = session(&["one", "two"]);
         let segment_ids = ids(&session);
         let speaker = SpeakerId::new();
-        session.set_speaker(segment_ids[0], Some(speaker)).expect("assign");
+        session
+            .set_speaker(segment_ids[0], Some(speaker))
+            .expect("assign");
         assert_eq!(
-            session.document().segment(segment_ids[0]).expect("segment").speaker_id,
+            session
+                .document()
+                .segment(segment_ids[0])
+                .expect("segment")
+                .speaker_id,
             Some(speaker)
         );
         assert_eq!(text_of(&session, 0), "one");
@@ -774,7 +759,11 @@ mod tests {
         );
         session.undo().expect("undo");
         assert_eq!(
-            session.document().segment(segment_ids[0]).expect("segment").speaker_id,
+            session
+                .document()
+                .segment(segment_ids[0])
+                .expect("segment")
+                .speaker_id,
             None
         );
     }
@@ -785,15 +774,23 @@ mod tests {
         let speaker = SpeakerId::new();
         let other = SpeakerId::new();
         let segment_ids = ids(&session);
-        session.set_speaker(segment_ids[0], Some(speaker)).expect("assign");
-        session.set_speaker(segment_ids[1], Some(speaker)).expect("assign");
+        session
+            .set_speaker(segment_ids[0], Some(speaker))
+            .expect("assign");
+        session
+            .set_speaker(segment_ids[1], Some(speaker))
+            .expect("assign");
         let changed = session
             .reassign_speaker_everywhere(Some(speaker), Some(other))
             .expect("reassign");
         assert_eq!(changed, 2);
         session.undo().expect("undo");
         assert_eq!(
-            session.document().segment(segment_ids[1]).expect("segment").speaker_id,
+            session
+                .document()
+                .segment(segment_ids[1])
+                .expect("segment")
+                .speaker_id,
             Some(speaker)
         );
     }

@@ -39,7 +39,10 @@ impl SearchQuery {
     }
 
     fn folded_needle(&self) -> Vec<char> {
-        self.needle.chars().map(|c| fold(c, self.case_sensitive)).collect()
+        self.needle
+            .chars()
+            .map(|c| fold(c, self.case_sensitive))
+            .collect()
     }
 }
 
@@ -155,7 +158,12 @@ impl SearchResults {
     }
 
     /// Select the first match at or after a position in document order.
-    pub fn focus_nearest(&mut self, document: &TranscriptDocument, segment: SegmentId, offset: usize) {
+    pub fn focus_nearest(
+        &mut self,
+        document: &TranscriptDocument,
+        segment: SegmentId,
+        offset: usize,
+    ) {
         let Some(position) = document.position(segment) else {
             return;
         };

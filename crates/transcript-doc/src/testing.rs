@@ -50,7 +50,9 @@ pub fn read_only_document(texts: &[&str]) -> TranscriptDocument {
     source.segments = texts
         .iter()
         .enumerate()
-        .map(|(index, text)| SegmentSeed::text_only(u32::try_from(index).unwrap_or(u32::MAX), *text))
+        .map(|(index, text)| {
+            SegmentSeed::text_only(u32::try_from(index).unwrap_or(u32::MAX), *text)
+        })
         .collect();
     TranscriptDocument::new(source)
 }

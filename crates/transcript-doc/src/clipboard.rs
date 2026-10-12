@@ -122,12 +122,10 @@ mod tests {
 
     #[test]
     fn a_timed_passage_carries_a_timestamp_per_segment() {
-        let document = timed_document(&[(0, 1_000, "we keep it local"), (42_000, 44_000, "always")]);
+        let document =
+            timed_document(&[(0, 1_000, "we keep it local"), (42_000, 44_000, "always")]);
         let ids: Vec<_> = document.segments().iter().map(|s| s.id).collect();
-        let selection = Selection::new(
-            Position::new(ids[0], 0),
-            Position::new(ids[1], 6),
-        );
+        let selection = Selection::new(Position::new(ids[0], 0), Position::new(ids[1], 6));
         assert_eq!(
             format_passage(&document, selection),
             "[0:00] we keep it local\n[0:42] always"

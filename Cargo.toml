@@ -54,11 +54,14 @@ plaudon-updater = { path = "crates/updater" }
 plaudon-extraction-eval = { path = "crates/extraction-eval" }
 plaudon-release-tools = { path = "crates/release-tools" }
 plaudon-transcript-doc = { path = "crates/transcript-doc" }
+plaudon-ui = { path = "crates/ui" }
 
 argon2 = { version = "0.6", features = ["kdf"] }
 async-trait = "0.1"
 base64 = "0.22"
 clap = { version = "4", features = ["derive"] }
+egui = "0.36"
+egui_kittest = "0.36"
 ed25519-dalek = { version = "2", features = ["rand_core"] }
 fs4 = "1"
 chacha20poly1305 = { version = "0.10", features = ["stream"] }

@@ -60,7 +60,7 @@ impl PlaybackPosition for FixedPosition {
     }
 }
 
-impl<T: PlaybackPosition> PlaybackPosition for &T {
+impl<T: PlaybackPosition + ?Sized> PlaybackPosition for &T {
     fn position_ms(&self) -> Option<u64> {
         (*self).position_ms()
     }

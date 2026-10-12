@@ -209,10 +209,7 @@ pub fn map_anchor(document: &TranscriptDocument, anchor: &SourceAnchor) -> Ancho
 
 /// Map a batch of anchors in one pass.
 #[must_use]
-pub fn map_anchors(
-    document: &TranscriptDocument,
-    anchors: &[SourceAnchor],
-) -> Vec<AnchorMapping> {
+pub fn map_anchors(document: &TranscriptDocument, anchors: &[SourceAnchor]) -> Vec<AnchorMapping> {
     anchors
         .iter()
         .map(|anchor| map_anchor(document, anchor))
@@ -262,7 +259,10 @@ mod tests {
         let anchor = anchor_for(&document, 0, 0, 15);
         let second = document.segment_at(1).expect("segment").id;
         document.insert_text(second, 0, "much ").expect("insert");
-        let span = map_anchor(&document, &anchor).mapped().expect("mapped").clone();
+        let span = map_anchor(&document, &anchor)
+            .mapped()
+            .expect("mapped")
+            .clone();
         assert_eq!((span.char_start, span.char_end), (0, 15));
         assert!(!span.shifted);
     }
@@ -291,7 +291,9 @@ mod tests {
             "we wi",
         );
         assert_eq!(
-            map_anchor(&document, &anchor).staleness().map(AnchorStaleness::code),
+            map_anchor(&document, &anchor)
+                .staleness()
+                .map(AnchorStaleness::code),
             Some("revision_mismatch")
         );
     }
@@ -305,13 +307,7 @@ mod tests {
         let mut document = TranscriptDocument::from_revision(&original);
         let anchor = {
             let segment = document.segment_at(0).expect("segment");
-            SourceAnchor::new(
-                document.base_revision_id(),
-                0,
-                8,
-                15,
-                segment.slice(8, 15),
-            )
+            SourceAnchor::new(document.base_revision_id(), 0, 8, 15, segment.slice(8, 15))
         };
         assert!(anchor.resolve(&original).is_verified());
 
