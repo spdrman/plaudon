@@ -265,6 +265,25 @@ impl EncryptionHeader {
     }
 }
 
+/// Message of the io error raised when an AEAD tag does not verify.
+///
+/// A wrong password and a tampered body are indistinguishable at this layer —
+/// that is the point of authenticated encryption — so both surface through
+/// this marker and the reader turns it into a typed failure.
+pub const AEAD_FAILURE: &str = "plaudon-archive-authentication-failed";
+
+/// Message of the io error raised when the body ends early or declares an
+/// impossible chunk length.
+pub const FRAMING_FAILURE: &str = "plaudon-archive-body-malformed";
+
+fn aead_error() -> std::io::Error {
+    std::io::Error::new(std::io::ErrorKind::InvalidData, AEAD_FAILURE)
+}
+
+fn framing_error() -> std::io::Error {
+    std::io::Error::new(std::io::ErrorKind::InvalidData, FRAMING_FAILURE)
+}
+
 /// Framing flags for one encrypted chunk.
 const CHUNK_MORE: u8 = 0;
 const CHUNK_LAST: u8 = 1;
@@ -419,22 +438,22 @@ impl<R: Read> DecryptingReader<R> {
         if !read_exact_or_eof(&mut self.inner, &mut frame)? {
             // The body ended without a sealed final chunk.
             self.finished = true;
-            return Err(std::io::Error::other("archive body is truncated"));
+            return Err(framing_error());
         }
         let length = u32::from_le_bytes([frame[0], frame[1], frame[2], frame[3]]) as usize;
         let last = frame[4] == CHUNK_LAST;
         if length > self.max_chunk || length < TAG_BYTES {
             self.finished = true;
-            return Err(std::io::Error::other("archive chunk length is invalid"));
+            return Err(framing_error());
         }
         let mut ciphertext = vec![0u8; length];
         if !read_exact_or_eof(&mut self.inner, &mut ciphertext)? {
             self.finished = true;
-            return Err(std::io::Error::other("archive body is truncated"));
+            return Err(framing_error());
         }
         let Some(decryptor) = self.decryptor.take() else {
             self.finished = true;
-            return Err(std::io::Error::other("archive body continues past its end"));
+            return Err(framing_error());
         };
         let payload = Payload {
             msg: &ciphertext,
@@ -443,14 +462,14 @@ impl<R: Read> DecryptingReader<R> {
         let plaintext = if last {
             let plaintext = decryptor
                 .decrypt_last(payload)
-                .map_err(|_| std::io::Error::other("authentication failed"))?;
+                .map_err(|_| aead_error())?;
             self.finished = true;
             plaintext
         } else {
             let mut decryptor = decryptor;
             let plaintext = decryptor
                 .decrypt_next(payload)
-                .map_err(|_| std::io::Error::other("authentication failed"))?;
+                .map_err(|_| aead_error())?;
             self.decryptor = Some(decryptor);
             plaintext
         };
@@ -485,7 +504,7 @@ fn read_exact_or_eof(reader: &mut impl Read, buffer: &mut [u8]) -> std::io::Resu
             if filled == 0 {
                 return Ok(false);
             }
-            return Err(std::io::Error::other("archive body is truncated"));
+            return Err(framing_error());
         }
         filled += read;
     }
@@ -552,7 +571,7 @@ mod tests {
         let header = test_header();
         let body = round_trip(b"secret meeting notes", &header, b"header");
         let error = decrypt(&body, &header, b"header", "wrong").unwrap_err();
-        assert!(error.to_string().contains("authentication failed"));
+        assert!(error.to_string().contains(AEAD_FAILURE));
     }
 
     #[test]

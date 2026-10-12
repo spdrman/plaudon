@@ -154,6 +154,18 @@ pub struct DeletionReceipt {
     pub tombstoned: bool,
 }
 
+/// A deletion whose journal row is committed and whose disclosure the user
+/// confirmed.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlannedDeletion {
+    /// Journal row identity.
+    pub deletion_id: String,
+    /// Recording being deleted.
+    pub recording_id: RecordingId,
+    /// The disclosure the user confirmed.
+    pub disclosure: DeletionDisclosure,
+}
+
 /// Why a deletion could not proceed.
 #[derive(Debug, thiserror::Error)]
 pub enum DeletionError {
@@ -304,7 +316,14 @@ impl DeletionService {
                     &id,
                 )
                 .await?,
-            activity_events: self.count_optional("activity_events", &id).await?,
+            activity_events: self
+                .count_optional(
+                    "activity_events",
+                    "SELECT COUNT(*) FROM activity_events
+                      WHERE target_kind = 'recording' AND target_id = ?1",
+                    &id,
+                )
+                .await?,
         };
 
         Ok(DeletionDisclosure {
@@ -320,12 +339,34 @@ impl DeletionService {
     }
 
     /// Delete a recording after the user confirmed its disclosure.
+    ///
+    /// This is [`Self::plan`], [`Self::remove_rows`], [`Self::unlink_blobs`]
+    /// and [`Self::finish`] in order. The steps are public so a crash-
+    /// injection test can stop between any two of them without the
+    /// production path knowing the test exists.
     pub async fn delete(
         &self,
         recording_id: RecordingId,
         confirmation: &DeletionConfirmation,
         now: Timestamp,
     ) -> DeletionResult<DeletionReceipt> {
+        let planned = self.plan(recording_id, confirmation, now).await?;
+        self.remove_rows_for(&planned, now).await?;
+        let (removed, freed) = self.unlink_blobs(&planned.deletion_id, now).await?;
+        self.finish(&planned, removed, freed, now).await
+    }
+
+    /// Validate the confirmation and commit the deletion journal row.
+    ///
+    /// Nothing is removed yet. A crash straight after this call leaves a
+    /// durable record of what the user authorized, which
+    /// [`Self::reconcile`] finishes at the next start.
+    pub async fn plan(
+        &self,
+        recording_id: RecordingId,
+        confirmation: &DeletionConfirmation,
+        now: Timestamp,
+    ) -> DeletionResult<PlannedDeletion> {
         let disclosure = self.disclose(recording_id).await?;
         if disclosure.digest() != confirmation.disclosure_digest {
             return Err(DeletionError::ConfirmationMismatch);
@@ -358,28 +399,55 @@ impl DeletionService {
         };
         self.journal.open(&record, &blobs).await?;
 
-        self.remove_rows(&deletion_id, recording_id, &disclosure, now)
-            .await?;
-        self.journal
-            .set_state(&deletion_id, DeletionState::RowsRemoved)
-            .await?;
-
-        let (removed, freed) = self.unlink_blobs(&deletion_id, now).await?;
-        self.journal
-            .set_state(&deletion_id, DeletionState::MediaRemoved)
-            .await?;
-        self.journal.complete(&deletion_id, now).await?;
-
-        Ok(DeletionReceipt {
+        Ok(PlannedDeletion {
             deletion_id,
             recording_id,
-            blobs_removed: removed,
-            blobs_retained_shared: disclosure
+            disclosure,
+        })
+    }
+
+    /// Remove every dependent row, write the tombstone and the suppressions.
+    pub async fn remove_rows_for(
+        &self,
+        planned: &PlannedDeletion,
+        now: Timestamp,
+    ) -> DeletionResult<()> {
+        self.remove_rows(
+            &planned.deletion_id,
+            planned.recording_id,
+            &planned.disclosure,
+            now,
+        )
+        .await?;
+        self.journal
+            .set_state(&planned.deletion_id, DeletionState::RowsRemoved)
+            .await?;
+        Ok(())
+    }
+
+    /// Mark the deletion finished and return its receipt.
+    pub async fn finish(
+        &self,
+        planned: &PlannedDeletion,
+        blobs_removed: u64,
+        bytes_freed: u64,
+        now: Timestamp,
+    ) -> DeletionResult<DeletionReceipt> {
+        self.journal
+            .set_state(&planned.deletion_id, DeletionState::MediaRemoved)
+            .await?;
+        self.journal.complete(&planned.deletion_id, now).await?;
+        Ok(DeletionReceipt {
+            deletion_id: planned.deletion_id.clone(),
+            recording_id: planned.recording_id,
+            blobs_removed,
+            blobs_retained_shared: planned
+                .disclosure
                 .media
                 .iter()
                 .filter(|media| media.shared_with_other_recordings)
                 .count() as u64,
-            bytes_freed: freed,
+            bytes_freed,
             tombstoned: true,
         })
     }
@@ -458,7 +526,7 @@ impl DeletionService {
     }
 
     /// Count rows in a table that a later capability may not have shipped yet.
-    async fn count_optional(&self, table: &str, id: &str) -> DeletionResult<u64> {
+    async fn count_optional(&self, table: &str, sql: &str, id: &str) -> DeletionResult<u64> {
         let exists = sqlx::query("SELECT 1 FROM sqlite_master WHERE type='table' AND name = ?1")
             .bind(table)
             .fetch_optional(self.db.pool())
@@ -467,11 +535,7 @@ impl DeletionService {
         if exists.is_none() {
             return Ok(0);
         }
-        self.count(
-            &format!("SELECT COUNT(*) FROM {table} WHERE recording_id = ?1"),
-            id,
-        )
-        .await
+        self.count(sql, id).await
     }
 
     /// One transaction: remove every dependent row, write the tombstone and
@@ -578,20 +642,30 @@ impl DeletionService {
                 .map_err(PersistenceError::from)?;
         }
 
-        for table in ["activity_events", "recording_import_metadata"] {
+        // Tables owned by capabilities that may not have shipped in this
+        // build. The activity history addresses a recording through
+        // `target_kind`/`target_id`, not a foreign key.
+        for (table, statement) in [
+            (
+                "activity_events",
+                "DELETE FROM activity_events WHERE target_kind = 'recording' AND target_id = ?1",
+            ),
+            (
+                "recording_import_metadata",
+                "DELETE FROM recording_import_metadata WHERE recording_id = ?1",
+            ),
+        ] {
             let exists = sqlx::query("SELECT 1 FROM sqlite_master WHERE type='table' AND name = ?1")
                 .bind(table)
                 .fetch_optional(&mut *tx)
                 .await
                 .map_err(PersistenceError::from)?;
             if exists.is_some() {
-                sqlx::query(sqlx::AssertSqlSafe(format!(
-                    "DELETE FROM {table} WHERE recording_id = ?1"
-                )))
-                .bind(&id)
-                .execute(&mut *tx)
-                .await
-                .map_err(PersistenceError::from)?;
+                sqlx::query(sqlx::AssertSqlSafe(statement.to_owned()))
+                    .bind(&id)
+                    .execute(&mut *tx)
+                    .await
+                    .map_err(PersistenceError::from)?;
             }
         }
 
@@ -625,7 +699,7 @@ impl DeletionService {
 
     /// Unlink blobs the journal still owns, re-checking that nothing points at
     /// them. Returns `(blobs removed, bytes freed)`.
-    async fn unlink_blobs(&self, deletion_id: &str, now: Timestamp) -> DeletionResult<(u64, u64)> {
+    pub async fn unlink_blobs(&self, deletion_id: &str, now: Timestamp) -> DeletionResult<(u64, u64)> {
         let mut removed = 0u64;
         let mut freed = 0u64;
         for blob in self.journal.blobs(deletion_id).await? {

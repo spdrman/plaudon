@@ -13,6 +13,7 @@ pub mod stt;
 pub use dedup::{BlobDecision, DedupPolicy};
 pub use deletion::{
     DeletionConfirmation, DeletionDisclosure, DeletionError, DeletionReceipt, DeletionService,
+    PlannedDeletion,
 };
 pub use import::{ImportOutcome, ImportRequest, ImportService};
 pub use models::{ModelError, ModelId, ModelInstaller, ModelPack, ModelRegistry};

@@ -23,7 +23,7 @@ use plaudon_security::fsguard::{validate_archive_entry, ArchiveEntryMeta, Archiv
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-use super::crypto::DecryptingReader;
+use super::crypto::{DecryptingReader, AEAD_FAILURE, FRAMING_FAILURE};
 use super::manifest::{
     in_known_namespace, Compression, Manifest, ManifestEntry, ProtectionKind, MANIFEST_PATH,
     MAX_MANIFEST_BYTES,
@@ -33,6 +33,29 @@ use crate::error::{ArchiveRejection, ExportError, ExportResult};
 
 /// Bytes moved per read while streaming payloads.
 pub const READ_CHUNK: usize = 64 * 1024;
+
+/// Turn a low-level body failure into the typed failure the UI shows.
+///
+/// A wrong password, a tampered chunk and a truncated body all arrive here as
+/// io errors from the decrypting reader; none of them is a storage problem.
+fn classify(error: ExportError) -> ExportError {
+    let ExportError::Io(io) = &error else {
+        return error;
+    };
+    if io.kind() != std::io::ErrorKind::InvalidData {
+        return error;
+    }
+    let message = io.to_string();
+    if message.contains(AEAD_FAILURE) {
+        return ExportError::DecryptionFailed;
+    }
+    if message.contains(FRAMING_FAILURE) {
+        return ExportError::ArchiveRejected(ArchiveRejection::Malformed(
+            "the archive body is truncated or malformed".to_owned(),
+        ));
+    }
+    error
+}
 
 /// A sink that receives verified entry payloads.
 pub trait EntrySink {
@@ -195,7 +218,7 @@ pub fn validate_manifest_entries(
 /// Open an archive and read its manifest without reading any payload.
 pub fn read_manifest(path: &Path, password: Option<&str>) -> ExportResult<(Manifest, bool)> {
     let mut body = open_body(path, password)?;
-    let manifest = read_manifest_frame(&mut body.reader)?;
+    let manifest = read_manifest_frame(&mut body.reader).map_err(classify)?;
     Ok((manifest, body.encrypted))
 }
 
@@ -289,7 +312,7 @@ fn read_manifest_frame(reader: &mut impl Read) -> ExportResult<Manifest> {
         document.extend_from_slice(chunk);
         Ok(())
     })
-    .map_err(|error| match error {
+    .map_err(|error| match classify(error) {
         ExportError::Io(_) => ExportError::ArchiveRejected(ArchiveRejection::Malformed(
             "the manifest could not be read".to_owned(),
         )),
@@ -376,22 +399,25 @@ pub fn stream<S: EntrySink>(
     sink: &mut S,
 ) -> ExportResult<(Manifest, bool)> {
     let mut body = open_body(path, password)?;
-    let manifest = read_manifest_frame(&mut body.reader)?;
+    let manifest = read_manifest_frame(&mut body.reader).map_err(classify)?;
     validate_manifest_entries(&manifest, destination_root)?;
 
     for expected in &manifest.entries {
-        let header = container::read_frame_header(&mut body.reader)?.ok_or_else(|| {
-            ExportError::ArchiveRejected(ArchiveRejection::Malformed(
-                "the body ends before the manifest does".to_owned(),
-            ))
-        })?;
+        let header = container::read_frame_header(&mut body.reader)
+            .map_err(classify)?
+            .ok_or_else(|| {
+                ExportError::ArchiveRejected(ArchiveRejection::Malformed(
+                    "the body ends before the manifest does".to_owned(),
+                ))
+            })?;
         if &header != expected {
             return Err(ExportError::ArchiveRejected(ArchiveRejection::Malformed(
                 format!("frame {} does not match the manifest", header.path),
             )));
         }
         sink.begin(expected)?;
-        let digest = read_payload(&mut body.reader, expected, |chunk| sink.chunk(chunk))?;
+        let digest =
+            read_payload(&mut body.reader, expected, |chunk| sink.chunk(chunk)).map_err(classify)?;
         if digest != expected.sha256 {
             return Err(ExportError::ArchiveRejected(
                 ArchiveRejection::DigestMismatch {
@@ -402,7 +428,10 @@ pub fn stream<S: EntrySink>(
         sink.commit(expected)?;
     }
 
-    if container::read_frame_header(&mut body.reader)?.is_some() {
+    if container::read_frame_header(&mut body.reader)
+        .map_err(classify)?
+        .is_some()
+    {
         return Err(ExportError::ArchiveRejected(ArchiveRejection::Malformed(
             "the body carries entries the manifest does not list".to_owned(),
         )));

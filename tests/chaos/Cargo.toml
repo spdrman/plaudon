@@ -15,8 +15,14 @@ workspace = true
 name = "import-step-runner"
 path = "src/bin/import_step_runner.rs"
 
+[[bin]]
+name = "export-step-runner"
+path = "src/bin/export_step_runner.rs"
+
 [dependencies]
+plaudon-app-core = { workspace = true }
 plaudon-domain = { workspace = true }
+plaudon-export = { workspace = true }
 plaudon-jobs = { workspace = true, features = ["fault-injection"] }
 plaudon-persistence = { workspace = true }
 hex = { workspace = true }
@@ -27,5 +33,5 @@ tempfile = { workspace = true }
 tokio = { workspace = true }
 
 [dev-dependencies]
-sqlx = { workspace = true }
+plaudon-integration-tests = { path = "../integration" }
 tempfile = { workspace = true }
