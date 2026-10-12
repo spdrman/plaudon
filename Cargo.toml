@@ -53,6 +53,7 @@ libc = "0.2"
 parking_lot = "0.12"
 proptest = "1"
 rand = "0.8"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream", "multipart", "json"] }
 regex = "1"
 rusqlite = { version = "0.32", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }

@@ -147,6 +147,27 @@ impl From<OpenRouterError> for SttError {
     }
 }
 
+impl From<OpenRouterError> for plaudon_ai_contracts::text::TextModelError {
+    fn from(error: OpenRouterError) -> Self {
+        match error {
+            OpenRouterError::Unauthorized | OpenRouterError::InsufficientCredit => {
+                Self::ConsentRequired
+            }
+            OpenRouterError::UnknownModel
+            | OpenRouterError::ProviderUnavailable
+            | OpenRouterError::FailedBeforeSend => Self::Unavailable,
+            OpenRouterError::RateLimited { .. } | OpenRouterError::Rejected => {
+                Self::ProviderRejected
+            }
+            OpenRouterError::PayloadTooLarge => Self::ContextTooLarge,
+            OpenRouterError::MalformedResponse | OpenRouterError::TruncatedResponse => {
+                Self::SchemaValidationFailed
+            }
+            OpenRouterError::OutcomeUnknown => Self::OutcomeUnknown,
+        }
+    }
+}
+
 /// Classify an HTTP status into a typed failure.
 ///
 /// `bytes_transmitted` distinguishes a request that never left the machine

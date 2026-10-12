@@ -10,12 +10,28 @@ repository.workspace = true
 [lints]
 workspace = true
 
+[features]
+default = ["reqwest-transport"]
+# The real HTTPS transport. Disabled in crates that only need the contracts.
+reqwest-transport = ["dep:reqwest"]
+
 [dependencies]
 plaudon-ai-contracts = { workspace = true }
 plaudon-domain = { workspace = true }
+plaudon-security = { workspace = true }
+async-trait = { workspace = true }
+rand = { workspace = true }
+reqwest = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+url = { workspace = true }
+zeroize = { workspace = true }
 
 [dev-dependencies]
 proptest = { workspace = true }
+plaudon-security = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["net", "rt-multi-thread", "macros", "io-util", "time"] }

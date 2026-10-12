@@ -14,13 +14,45 @@
 //! model starts at [`plaudon_ai_contracts::RequestFamily::Unknown`] and can
 //! only be promoted by an observed request/response pair.
 
+pub mod allowlist;
 pub mod catalog;
+pub mod client;
+pub mod credential;
+pub mod discovery;
 pub mod error;
+pub mod ledger;
+pub mod pricing;
+pub mod privacy;
+pub mod registry;
 pub mod request;
+pub mod retry;
+pub mod transport;
+pub mod wire;
 
+pub use allowlist::{Allowlist, AllowlistEntry, ModelTask};
 pub use catalog::{CatalogEntry, ModelProbeRecord, ProbeEvidence, TimestampSupport};
+pub use client::{
+    CloudDispatchAuthority, CloudDispatcher, DispatchRefused, JobBinding, OpenRouterSpeechToText,
+    OpenRouterTextModel,
+};
+pub use credential::{ApiKey, ApiKeySource, CredentialError, VaultApiKey};
+pub use discovery::{CatalogClient, DegradedReason, Discovered};
 pub use error::{classify_http_status, OpenRouterError, Retriability};
-pub use request::{AudioChatRequest, MultipartSttRequest, RequestBuildError};
+pub use ledger::{AttemptId, AttemptIntent, AttemptLedger, AttemptUpdate, LedgerUnavailable};
+pub use pricing::{CostEstimate, CostOrigin, PricingUnits, SettledCost};
+pub use privacy::{PrivacyResolution, PrivacyRefusal, ZERO_RETENTION_CAVEAT};
+pub use registry::{ModelCard, ModelRegistry, NotVerifiedReason, Verification};
+pub use request::{
+    AudioChatRequest, MultipartSttRequest, RequestBuildError, TextGenerationRequest,
+};
+pub use retry::{RetryDecision, RetryPolicy};
+pub use transport::{AsyncHttpTransport, TransportFailure};
+
+/// The model catalog path (spec 10.1).
+pub const MODELS_PATH: &str = "/models";
+
+/// Per-model route metadata path; `{author}/{slug}` is substituted in.
+pub const MODEL_ENDPOINTS_PATH: &str = "/models/{model}/endpoints";
 
 /// Cargo package name of this crate, used by the workspace layout conformance test.
 pub const PACKAGE_NAME: &str = "plaudon-ai-openrouter";

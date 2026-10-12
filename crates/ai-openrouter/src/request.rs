@@ -135,6 +135,66 @@ impl AudioChatRequest {
     }
 }
 
+/// A text-generation request for `POST /chat/completions` (spec 9.5, 10.3).
+///
+/// Separate from [`AudioChatRequest`] even though both reach the same path:
+/// the two carry different content, are consented to separately (§16.3
+/// transcription vs summarization) and are priced differently. Keeping them as
+/// distinct types means a summarization client structurally cannot emit an
+/// audio payload, and vice versa.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TextGenerationRequest {
+    /// Request path, relative to the API base.
+    pub path: &'static str,
+    /// Model to route to.
+    pub model: String,
+    /// Task instruction. Never contains recording-derived content: transcript
+    /// text goes in `user_content`, which the prompt treats as data (§9.6).
+    pub system_instruction: String,
+    /// The untrusted material the model works over.
+    pub user_content: String,
+    /// Whether to ask for schema-enforced output.
+    pub structured_output: bool,
+    /// Name of the schema, when structured output is requested.
+    pub schema_name: String,
+    /// The JSON schema the output must satisfy.
+    pub output_schema: serde_json::Value,
+    /// Output budget, when the caller set one.
+    pub max_output_tokens: Option<u32>,
+}
+
+impl TextGenerationRequest {
+    /// Build a text-generation request.
+    ///
+    /// `structured_output` is only ever set when the model's capability record
+    /// observed schema enforcement working; otherwise the caller falls back to
+    /// prompt-constrained JSON with local validation (§9.5) and this flag stays
+    /// false rather than asking for a feature that was never verified.
+    pub fn build(
+        model: &str,
+        system_instruction: &str,
+        user_content: &str,
+        schema_name: &str,
+        output_schema: serde_json::Value,
+        structured_output: bool,
+        max_output_tokens: Option<u32>,
+    ) -> Result<Self, RequestBuildError> {
+        if user_content.is_empty() {
+            return Err(RequestBuildError::EmptyPayload);
+        }
+        Ok(Self {
+            path: CHAT_COMPLETIONS_PATH,
+            model: model.to_owned(),
+            system_instruction: system_instruction.to_owned(),
+            user_content: user_content.to_owned(),
+            structured_output,
+            schema_name: schema_name.to_owned(),
+            output_schema,
+            max_output_tokens,
+        })
+    }
+}
+
 fn validate_payload(
     format: &MediaFormat,
     accepted: &[MediaFormat],

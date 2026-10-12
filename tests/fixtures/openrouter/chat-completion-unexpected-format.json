@@ -1,0 +1,10 @@
+{
+  "_shape": "Status 200 whose choices carry a provider-specific content shape we do not model. Must fail closed, not be coerced.",
+  "status": 200,
+  "body": {
+    "id": "gen-01HZY8ODD",
+    "choices": [
+      { "message": { "role": "assistant", "content": [ { "type": "text", "text": "hello" } ] } }
+    ]
+  }
+}
