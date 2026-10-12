@@ -5,11 +5,15 @@
 //! repeated import of the same source item stays idempotent.
 
 pub mod dedup;
+pub mod deletion;
 pub mod import;
 pub mod models;
 pub mod stt;
 
 pub use dedup::{BlobDecision, DedupPolicy};
+pub use deletion::{
+    DeletionConfirmation, DeletionDisclosure, DeletionError, DeletionReceipt, DeletionService,
+};
 pub use import::{ImportOutcome, ImportRequest, ImportService};
 pub use models::{ModelError, ModelId, ModelInstaller, ModelPack, ModelRegistry};
 pub use stt::{select_engine, EngineCandidate, EngineDecision, SelectionRequest};

@@ -45,7 +45,7 @@ plaudon-notifications = { path = "crates/notifications" }
 plaudon-automation = { path = "crates/automation" }
 plaudon-diagnostics = { path = "crates/diagnostics" }
 
-argon2 = "0.6"
+argon2 = { version = "0.6", features = ["kdf"] }
 async-trait = "0.1"
 fs4 = "1"
 chacha20poly1305 = { version = "0.10", features = ["stream"] }

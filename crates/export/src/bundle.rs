@@ -138,6 +138,38 @@ pub struct SpeakerFacts {
     pub display: String,
 }
 
+/// One word alignment inside a segment (spec 8.5, migration 0200).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct WordFacts {
+    /// Zero-based position inside the segment.
+    pub seq_index: u32,
+    /// Start offset in milliseconds.
+    pub start_ms: u64,
+    /// End offset in milliseconds.
+    pub end_ms: u64,
+    /// The word as normalized by the engine.
+    pub text: String,
+    /// Engine-scoped confidence, when reported.
+    pub confidence: Option<f64>,
+    /// Scale the confidence is expressed on.
+    pub confidence_scale: Option<String>,
+}
+
+/// A non-destructive quality flag on a revision (spec 8.6A, migration 0200).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TranscriptAnnotationFacts {
+    /// Segment the flag applies to.
+    pub segment_index: u32,
+    /// Flag kind.
+    pub kind: String,
+    /// Why the flag was raised.
+    pub reason: String,
+    /// Start offset, when the flag carries one.
+    pub start_ms: Option<u64>,
+    /// End offset, when the flag carries one.
+    pub end_ms: Option<u64>,
+}
+
 /// One transcript segment, as exported.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SegmentFacts {
@@ -157,6 +189,8 @@ pub struct SegmentFacts {
     pub confidence: Option<f64>,
     /// Scale the confidence is expressed on.
     pub confidence_scale: Option<String>,
+    /// Word alignments, when the engine reported them.
+    pub words: Vec<WordFacts>,
 }
 
 /// One transcript revision, as exported.
@@ -192,6 +226,12 @@ pub struct TranscriptFacts {
     pub duration_ms: Option<u64>,
     /// Creation instant.
     pub created_at: Timestamp,
+    /// Compute backend the engine ran on, when recorded.
+    pub engine_backend: Option<String>,
+    /// Canonical engine parameters, when recorded.
+    pub engine_params: Option<serde_json::Value>,
+    /// Non-destructive quality flags, ordered by segment.
+    pub annotations: Vec<TranscriptAnnotationFacts>,
     /// Ordered segments.
     pub segments: Vec<SegmentFacts>,
 }
@@ -602,7 +642,7 @@ impl BundleLoader {
         let rows = sqlx::query(
             "SELECT id, parent_id, origin, input_sha256, engine, model_id, model_version,
                     locale, alignment_origin, status, normalization_profile, chunking_strategy,
-                    duration_ms, created_at
+                    duration_ms, created_at, engine_backend, engine_params_json
              FROM transcript_revisions WHERE recording_id = ?1 ORDER BY created_at, id",
         )
         .bind(id.to_string())
@@ -637,10 +677,45 @@ impl BundleLoader {
                     .get::<Option<i64>, _>("duration_ms")
                     .and_then(|v| u64::try_from(v).ok()),
                 created_at: Timestamp::from_millis(row.get::<i64, _>("created_at")),
+                engine_backend: row.get("engine_backend"),
+                engine_params: row
+                    .get::<Option<String>, _>("engine_params_json")
+                    .and_then(|raw| serde_json::from_str(&raw).ok()),
+                annotations: self.annotation_facts(revision_id).await?,
                 segments: self.segment_facts(revision_id).await?,
             });
         }
         Ok(out)
+    }
+
+    async fn annotation_facts(
+        &self,
+        id: TranscriptRevisionId,
+    ) -> ExportResult<Vec<TranscriptAnnotationFacts>> {
+        let rows = sqlx::query(
+            "SELECT segment_index, kind, reason, start_ms, end_ms
+             FROM transcript_annotations WHERE transcript_revision_id = ?1
+             ORDER BY segment_index, kind",
+        )
+        .bind(id.to_string())
+        .fetch_all(self.db.pool())
+        .await
+        .map_err(PersistenceError::from)?;
+
+        Ok(rows
+            .iter()
+            .map(|row| TranscriptAnnotationFacts {
+                segment_index: u32::try_from(row.get::<i64, _>("segment_index")).unwrap_or(0),
+                kind: row.get("kind"),
+                reason: row.get("reason"),
+                start_ms: row
+                    .get::<Option<i64>, _>("start_ms")
+                    .and_then(|v| u64::try_from(v).ok()),
+                end_ms: row
+                    .get::<Option<i64>, _>("end_ms")
+                    .and_then(|v| u64::try_from(v).ok()),
+            })
+            .collect())
     }
 
     async fn segment_facts(&self, id: TranscriptRevisionId) -> ExportResult<Vec<SegmentFacts>> {
@@ -653,10 +728,10 @@ impl BundleLoader {
         .await
         .map_err(PersistenceError::from)?;
 
-        Ok(rows
-            .iter()
-            .map(|row| SegmentFacts {
-                id: row.get("id"),
+        let mut out = Vec::with_capacity(rows.len());
+        for row in &rows {
+            let segment_id: String = row.get("id");
+            out.push(SegmentFacts {
                 seq_index: u32::try_from(row.get::<i64, _>("seq_index")).unwrap_or(0),
                 start_ms: row
                     .get::<Option<i64>, _>("start_ms")
@@ -665,6 +740,32 @@ impl BundleLoader {
                     .get::<Option<i64>, _>("end_ms")
                     .and_then(|v| u64::try_from(v).ok()),
                 speaker_id: row.get("speaker_id"),
+                text: row.get("text"),
+                confidence: row.get("confidence"),
+                confidence_scale: row.get("confidence_scale"),
+                words: self.word_facts(&segment_id).await?,
+                id: segment_id,
+            });
+        }
+        Ok(out)
+    }
+
+    async fn word_facts(&self, segment_id: &str) -> ExportResult<Vec<WordFacts>> {
+        let rows = sqlx::query(
+            "SELECT seq_index, start_ms, end_ms, text, confidence, confidence_scale
+             FROM transcript_words WHERE segment_id = ?1 ORDER BY seq_index",
+        )
+        .bind(segment_id)
+        .fetch_all(self.db.pool())
+        .await
+        .map_err(PersistenceError::from)?;
+
+        Ok(rows
+            .iter()
+            .map(|row| WordFacts {
+                seq_index: u32::try_from(row.get::<i64, _>("seq_index")).unwrap_or(0),
+                start_ms: u64::try_from(row.get::<i64, _>("start_ms")).unwrap_or(0),
+                end_ms: u64::try_from(row.get::<i64, _>("end_ms")).unwrap_or(0),
                 text: row.get("text"),
                 confidence: row.get("confidence"),
                 confidence_scale: row.get("confidence_scale"),

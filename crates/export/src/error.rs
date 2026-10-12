@@ -251,7 +251,7 @@ mod tests {
         ];
         for rejection in rejections {
             let text = rejection.explanation();
-            assert!(!text.is_empty());
+            assert_ne!(text, String::new());
             assert!(text.ends_with('.') || text.contains(':'));
         }
     }

@@ -419,7 +419,7 @@ mod tests {
             .await
             .unwrap();
         repo.complete("d1", Timestamp::from_millis(3)).await.unwrap();
-        assert!(repo.unfinished().await.unwrap().is_empty());
+        assert_eq!(repo.unfinished().await.unwrap(), Vec::new());
         assert_eq!(
             repo.get("d1").await.unwrap().completed_at,
             Some(Timestamp::from_millis(3))
