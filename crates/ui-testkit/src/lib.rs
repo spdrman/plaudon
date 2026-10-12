@@ -144,7 +144,10 @@ pub mod a11y {
         let mut order: Vec<String> = Vec::new();
         for _ in 0..max_stops {
             harness.key_press(egui::Key::Tab);
-            harness.run();
+            // A fixed number of frames, not `run()`: a screen that is still
+            // loading shows a spinner, which legitimately keeps repainting, and
+            // a focus walk must not depend on how fast the engine answered.
+            harness.run_steps(8);
             let Some(label) = focused_label(harness) else {
                 continue;
             };
