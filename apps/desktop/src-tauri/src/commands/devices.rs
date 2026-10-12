@@ -359,7 +359,7 @@ mod tests {
             .await
             .expect("a scan request is valid");
         assert_eq!(scan.radio.state, RadioState::UnavailableInBuild);
-        assert!(scan.devices.is_empty());
+        assert_eq!(scan.devices, Vec::new());
         assert!(scan.scanned_at.is_none());
     }
 

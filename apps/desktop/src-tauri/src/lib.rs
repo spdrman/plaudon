@@ -133,10 +133,19 @@ pub async fn build_ports_with_radio(
     }
     let events = backend.events().clone();
     let devices = DevicesBackend::new(DevicesDeps::production(
-        backend.pool().clone(),
+        backend.store().db().clone(),
+        backend.store().archive().clone(),
         events.clone(),
         radio,
     )?);
+    // A transfer a previous run left `in_flight` is `interrupted` before the
+    // UI can ask for anything (spec §13.3A).
+    if let Err(err) = devices.recover_interrupted().await {
+        tracing::warn!(
+            code = err.code().as_str(),
+            "device transfers were not reconciled"
+        );
+    }
     Ok(AppPorts {
         capabilities: Arc::clone(&backend) as Arc<dyn CapabilitiesPort>,
         library: Arc::clone(&backend) as Arc<dyn LibraryPort>,

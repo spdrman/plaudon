@@ -27,6 +27,9 @@ plaudon-source-plaud-device = { workspace = true }
 plaudon-plaud-ble = { workspace = true }
 plaudon-plaud-protocol = { workspace = true }
 plaudon-security = { workspace = true }
+plaudon-recording-sources = { workspace = true }
+tokio-util = { workspace = true }
+btleplug = { version = "0.11", optional = true }
 async-trait = { workspace = true }
 hex = { workspace = true }
 serde = { workspace = true }
@@ -47,7 +50,13 @@ keyring = { version = "3", features = ["apple-native", "windows-native", "sync-s
 dirs = "6"
 sysinfo = "0.37"
 
+[features]
+# The real Bluetooth radio. Off by default so the workspace builds and tests
+# without a Bluetooth stack and CI never touches a radio (spec 18.3A).
+hardware-scan = ["plaudon-plaud-ble/hardware-scan", "dep:btleplug"]
+
 [dev-dependencies]
+plaudon-plaud-ble = { workspace = true, features = ["test-support"] }
 plaudon-security = { workspace = true, features = ["test-support"] }
 tempfile = { workspace = true }
 serde_json = { workspace = true }
