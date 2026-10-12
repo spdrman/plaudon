@@ -75,7 +75,12 @@ Vulkan — the same frame is not the same image.
    mis-rendered icon — not noise. A test that genuinely needs slack states
    `SnapshotOptions::max_failed_pixels` locally, with a comment saying why; it is never raised
    globally.
-5. **Scope.** Snapshots cover screens and the few widgets whose *painting* is the behaviour
+5. **A snapshot may only contain a deterministic frame.** Identifiers (recording and job UUIDs),
+   timestamps and durations minted during the test are not reproducible, so either snapshot a state
+   that predates them — the spike snapshots the empty library, not the post-import activity log — or
+   mask the region with `Harness::mask`. This was found the hard way: the first baseline compared
+   clean against itself and failed on the next run because the activity log printed a fresh job id.
+6. **Scope.** Snapshots cover screens and the few widgets whose *painting* is the behaviour
    (waveform, timeline, progress). Everything else is asserted on state and on the AccessKit tree,
    which is faster, legible in a diff and does not need a GPU. craft-libs' paired-reference
    technique stays available as a fallback for a widget that proves flaky, per §7.2 of the plan.
