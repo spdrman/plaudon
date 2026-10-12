@@ -44,6 +44,10 @@ cells:
       - "The BLE listing is a delta of unsynchronized files; recordings already synced to a phone may be absent."
       - "Legacy mode exchanges a static token over an unencrypted link."
       - "Yields a compressed .ASR Opus sidecar, not the original stereo WAV."
+      - "The per-entry listing and data-request payload layouts are this build's bounded definition, not a published or observed vendor layout; a real device may differ (docs/protocol/plaud-legacy-ble.md)."
+      - "The playable artefact is an Ogg Opus remux of the same coded packets, a derived conversion; this build bundles no Opus decoder, so no decoded WAV is produced (A1.4)."
+      - "Offset reads are undemonstrated, so an interrupted transfer always restarts into fresh staging rather than resuming."
+      - "Automatic transfer when nearby is unavailable until a non-destructive audit passes for this profile."
 
   - source_type: plaud_device_ble
     vendor: PLAUD
@@ -65,6 +69,9 @@ cells:
     known_limitations:
       - "Never exercised against real hardware by this build."
       - "A cross-platform BLE crate proves central discovery exists; it does not prove PLAUD protocol success (spec 2.5B)."
+      - "The per-entry listing and data-request payload layouts are this build's bounded definition, not a published or observed vendor layout."
+      - "The playable artefact is an Ogg Opus remux, a derived conversion; this build bundles no Opus decoder, so no decoded WAV is produced (A1.4)."
+      - "Automatic transfer when nearby is unavailable until a non-destructive audit passes for this profile."
 
   - source_type: plaud_device_ble
     vendor: PLAUD
