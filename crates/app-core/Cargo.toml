@@ -41,5 +41,7 @@ parking_lot = { workspace = true }
 sqlx = { workspace = true }
 uuid = { workspace = true }
 proptest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true }
