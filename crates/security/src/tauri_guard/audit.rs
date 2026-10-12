@@ -38,12 +38,39 @@ pub const APP_SRC_TAURI: &str = "apps/desktop/src-tauri";
 /// CSP source tokens that address the local webview/IPC transport and are
 /// therefore not remote origins. Everything else matching `http://`/`https://`
 /// is a remote origin and is rejected (§6.3A: no remotely hosted UI content).
+///
+/// Tauri serves a custom protocol as `<scheme>://localhost` on macOS/Linux and
+/// as `http://<scheme>.localhost` on Windows, so an application that registers
+/// its own Rust-side scheme for media playback legitimately needs both forms in
+/// `media-src`. Those are handled by [`is_local_custom_protocol_origin`] rather
+/// than listed here, because the scheme name is the application's to choose.
 pub const LOCAL_CSP_ORIGINS: &[&str] = &[
     "http://ipc.localhost",
     "http://asset.localhost",
     "ipc:",
     "asset:",
 ];
+
+/// `true` for `http://<label>.localhost`, the Windows form of a Tauri custom
+/// protocol, with no port, path, query or credentials.
+///
+/// Such an origin is served by the application's own Rust handler and never
+/// leaves the machine, so it is not a remote origin. The checks are strict: a
+/// port, a path, userinfo or a nested dot-label would all make this something
+/// other than a plain custom-protocol host, so they are refused.
+#[must_use]
+pub fn is_local_custom_protocol_origin(source: &str) -> bool {
+    let lowered = source.to_ascii_lowercase();
+    let Some(host) = lowered.strip_prefix("http://") else {
+        return false;
+    };
+    let Some(label) = host.strip_suffix(".localhost") else {
+        return false;
+    };
+    !label.is_empty()
+        && !label.contains(['.', '/', ':', '@', '?', '#'])
+        && label.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
+}
 
 /// CSP source tokens that defeat the purpose of having a CSP.
 const UNSAFE_CSP_SOURCES: &[&str] = &["*", "'unsafe-inline'", "'unsafe-eval'", "data:", "blob:"];
@@ -953,7 +980,9 @@ pub fn is_remote_origin(source: &str) -> bool {
         || lowered.starts_with("ws://")
         || lowered.starts_with("wss://")
         || lowered.starts_with("//");
-    looks_remote && !LOCAL_CSP_ORIGINS.iter().any(|allowed| lowered == *allowed)
+    looks_remote
+        && !LOCAL_CSP_ORIGINS.iter().any(|allowed| lowered == *allowed)
+        && !is_local_custom_protocol_origin(&lowered)
 }
 
 fn audit_release_flags(config: &Value, locus: &str, report: &mut AuditReport) {

@@ -7,7 +7,9 @@ use std::collections::BTreeSet;
 use serde_json::json;
 
 use super::allowlist::{glob_matches, CommandAllowlist, ManifestError, NamePattern, WindowLabel};
-use super::audit::{is_remote_origin, parse_csp, parse_generate_handler};
+use super::audit::{
+    is_local_custom_protocol_origin, is_remote_origin, parse_csp, parse_generate_handler,
+};
 use super::response::{assert_no_secret_in_response, secret_shape_of, SecretShape};
 use super::validate::{
     reject_raw_path, validate_bounded_string, validate_cursor, validate_enum, validate_identifier,
@@ -73,12 +75,47 @@ fn main_window() -> WindowLabel {
 // Manifest ↔ §15.2
 // ---------------------------------------------------------------------------
 
+/// The manifest must cover the whole §15.2 table, and anything beyond it must
+/// be deliberate: a command that is not in the spec carries an ADR reference in
+/// its `spec` field and a `note` explaining why it exists and what it returns.
+///
+/// This is what stops the allowlist becoming a dumping ground. A new command
+/// cannot be added silently — it either matches the spec table or it names the
+/// decision record that introduced it.
 #[test]
-fn embedded_manifest_is_exactly_the_spec_command_table() {
+fn the_manifest_covers_the_spec_table_and_documents_every_addition() {
     let names: BTreeSet<&str> = allowlist().command_names().into_iter().collect();
     let spec: BTreeSet<&str> = SPEC_15_2_COMMANDS.iter().copied().collect();
-    assert_eq!(names, spec);
-    assert_eq!(allowlist().commands().len(), 40);
+
+    let missing: Vec<_> = spec.difference(&names).copied().collect();
+    assert!(
+        missing.is_empty(),
+        "§15.2 commands absent from the manifest: {missing:?}"
+    );
+
+    for command in allowlist().commands() {
+        if spec.contains(command.name.as_str()) {
+            assert_eq!(
+                command.spec, "§15.2",
+                "{} is in the spec table and must cite §15.2",
+                command.name
+            );
+            continue;
+        }
+        assert!(
+            command.spec.starts_with("ADR-"),
+            "{} is not in §15.2, so its `spec` must name the ADR that introduced it (got {:?})",
+            command.name,
+            command.spec
+        );
+        let note = command.note.as_deref().unwrap_or_default();
+        assert!(
+            note.len() >= 40,
+            "{} is not in §15.2, so it must carry a substantive `note` explaining why it exists",
+            command.name
+        );
+    }
+
     assert_eq!(allowlist().version(), 1);
 }
 
@@ -683,4 +720,41 @@ fn remote_origins_are_detected_and_local_ipc_origins_are_not() {
     assert!(!is_remote_origin("http://asset.localhost"));
     assert!(!is_remote_origin("'self'"));
     assert!(!is_remote_origin("ipc:"));
+}
+
+/// An application that registers its own Rust-side scheme (EPIC E serves media
+/// over `plaudon-media://` instead of enabling the asset protocol) must be able
+/// to name it in `media-src`. Tauri exposes such a scheme as
+/// `http://<scheme>.localhost` on Windows, which is served by our own handler
+/// and never leaves the machine, so it is not a remote origin.
+#[test]
+fn a_tauri_custom_protocol_localhost_origin_is_not_remote() {
+    assert!(is_local_custom_protocol_origin(
+        "http://plaudon-media.localhost"
+    ));
+    assert!(!is_remote_origin("http://plaudon-media.localhost"));
+    assert!(!is_remote_origin("HTTP://PLAUDON-MEDIA.LOCALHOST"));
+}
+
+/// The exemption is narrow on purpose: anything that could actually address a
+/// different host, port or path is still a remote origin.
+#[test]
+fn the_custom_protocol_exemption_does_not_widen_into_a_bypass() {
+    for hostile in [
+        "http://evil.localhost.attacker.test",
+        "http://plaudon-media.localhost:8080",
+        "http://plaudon-media.localhost/steal",
+        "http://user:pw@plaudon-media.localhost",
+        "http://a.b.localhost",
+        "http://.localhost",
+        "https://plaudon-media.localhost",
+        "http://localhost",
+        "http://127.0.0.1",
+    ] {
+        assert!(
+            !is_local_custom_protocol_origin(hostile),
+            "{hostile} must not be treated as a custom-protocol origin"
+        );
+        assert!(is_remote_origin(hostile), "{hostile} must count as remote");
+    }
 }

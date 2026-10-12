@@ -40,7 +40,10 @@
     { "name": "create_portable_backup", "windows": ["main"], "returns_secret": false, "spec": "§15.2", "note": "Archive passphrase is entered in a native secure field; it is never echoed back (§13.8)." },
     { "name": "inspect_restore_archive", "windows": ["main"], "returns_secret": false, "spec": "§15.2" },
     { "name": "restore_portable_archive", "windows": ["main"], "returns_secret": false, "spec": "§15.2" },
-    { "name": "set_notification_settings", "windows": ["main"], "returns_secret": false, "spec": "§15.2" }
+    { "name": "set_notification_settings", "windows": ["main"], "returns_secret": false, "spec": "§15.2" },
+
+    { "name": "list_activity", "windows": ["main"], "returns_secret": false, "spec": "ADR-0020", "note": "Not in the §15.2 table. EPIC E in-app activity history (§5.4, E2.4); returns job/import event summaries with recording identifiers only, never content." },
+    { "name": "complete_onboarding", "windows": ["main"], "returns_secret": false, "spec": "ADR-0020", "note": "Not in the §15.2 table. EPIC E first-run flow (§4.1); records that onboarding finished and returns status only." }
   ],
   "forbidden_permissions": [
     "shell:*",

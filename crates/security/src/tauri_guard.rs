@@ -106,7 +106,8 @@ pub use allowlist::{
     ReleaseRequirements, WindowLabel, DEFAULT_MANIFEST_JSON,
 };
 pub use audit::{
-    app_is_present, AuditError, AuditOptions, AuditReport, Finding, FindingCode, Severity,
+    app_is_present, is_local_custom_protocol_origin, AuditError, AuditOptions, AuditReport,
+    Finding, FindingCode, Severity,
 };
 pub use response::{assert_no_secret_in_response, ResponseLeakError, SecretShape};
 pub use validate::{

@@ -476,7 +476,15 @@ fn the_checked_in_manifest_passes_its_own_audit_on_this_branch() {
         "checked-in manifest findings: {:#?}",
         report.findings
     );
-    assert_eq!(report.manifest_commands.len(), 40);
+    // 40 §15.2 commands plus the ADR-documented additions. The exact membership
+    // and the documentation rule are asserted by
+    // `tauri_guard::tests::the_manifest_covers_the_spec_table_and_documents_every_addition`;
+    // here we only pin that nothing is lost.
+    assert!(
+        report.manifest_commands.len() >= 40,
+        "manifest shrank below the §15.2 table: {} commands",
+        report.manifest_commands.len()
+    );
 }
 
 #[test]

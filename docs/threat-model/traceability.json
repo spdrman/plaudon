@@ -270,7 +270,7 @@
       "owner": "crates/security/src/tauri_guard.rs",
       "epic": "D",
       "verification": [
-        "embedded_manifest_is_exactly_the_spec_command_table",
+        "the_manifest_covers_the_spec_table_and_documents_every_addition",
         "authorize_rejects_an_unknown_command",
         "authorize_rejects_an_allowlisted_command_from_the_wrong_window",
         "raw_paths_are_refused_wherever_a_path_is_not_expected",
