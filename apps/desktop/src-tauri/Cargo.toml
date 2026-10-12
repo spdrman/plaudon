@@ -29,7 +29,10 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 sqlx = { workspace = true }
-tauri = { version = "2", features = ["protocol-asset"] }
+# `assetProtocol.enable` is false in tauri.conf.json (media is served by our
+# own `plaudon-media` scheme) and tauri-build rejects a feature/allowlist
+# mismatch, so the asset protocol feature stays off.
+tauri = { version = "2" }
 tauri-plugin-dialog = "2"
 thiserror = { workspace = true }
 time = { workspace = true }

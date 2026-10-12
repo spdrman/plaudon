@@ -39,7 +39,9 @@ pub fn parse_id<T>(field: &'static str, value: &str) -> Result<T, AppError>
 where
     T: FromStr<Err = IdParseError>,
 {
-    value.parse::<T>().map_err(|_| invalid_argument(format!("{field} is not a canonical UUID")))
+    value
+        .parse::<T>()
+        .map_err(|_| invalid_argument(format!("{field} is not a canonical UUID")))
 }
 
 /* ----------------------------------------------------------------- paging */
@@ -49,7 +51,9 @@ pub fn limit(value: u32) -> Result<u32, AppError> {
     if (MIN_LIMIT..=MAX_LIMIT).contains(&value) {
         Ok(value)
     } else {
-        Err(invalid_argument(format!("limit {value} is outside {MIN_LIMIT}..={MAX_LIMIT}")))
+        Err(invalid_argument(format!(
+            "limit {value} is outside {MIN_LIMIT}..={MAX_LIMIT}"
+        )))
     }
 }
 
@@ -94,8 +98,9 @@ impl PageCursor {
         let digits = text
             .strip_prefix("off:")
             .ok_or_else(|| invalid_argument("cursor has an unknown prefix"))?;
-        let offset =
-            digits.parse::<u64>().map_err(|_| invalid_argument("cursor offset is not a number"))?;
+        let offset = digits
+            .parse::<u64>()
+            .map_err(|_| invalid_argument("cursor offset is not a number"))?;
         Ok(Self { offset })
     }
 }
@@ -112,9 +117,8 @@ pub fn cursor(raw: Option<&str>) -> Result<PageCursor, AppError> {
 
 /// Parse an inclusive RFC 3339 bound.
 pub fn parse_rfc3339(field: &'static str, value: &str) -> Result<Timestamp, AppError> {
-    let parsed =
-        time::OffsetDateTime::parse(value, &time::format_description::well_known::Rfc3339)
-            .map_err(|_| invalid_argument(format!("{field} is not an RFC 3339 timestamp")))?;
+    let parsed = time::OffsetDateTime::parse(value, &time::format_description::well_known::Rfc3339)
+        .map_err(|_| invalid_argument(format!("{field} is not an RFC 3339 timestamp")))?;
     let millis = parsed.unix_timestamp_nanos() / 1_000_000;
     let millis = i64::try_from(millis)
         .map_err(|_| invalid_argument(format!("{field} is outside the representable range")))?;
@@ -126,8 +130,12 @@ pub fn date_bounds(
     from: Option<&str>,
     to: Option<&str>,
 ) -> Result<(Option<Timestamp>, Option<Timestamp>), AppError> {
-    let from = from.map(|value| parse_rfc3339("date_from", value)).transpose()?;
-    let to = to.map(|value| parse_rfc3339("date_to", value)).transpose()?;
+    let from = from
+        .map(|value| parse_rfc3339("date_from", value))
+        .transpose()?;
+    let to = to
+        .map(|value| parse_rfc3339("date_to", value))
+        .transpose()?;
     if let (Some(start), Some(end)) = (from, to) {
         if start > end {
             return Err(invalid_argument("date_from is after date_to"));
@@ -158,7 +166,10 @@ pub fn unique_states(states: &[JobState]) -> Result<Vec<JobState>, AppError> {
     let mut seen: Vec<JobState> = Vec::with_capacity(states.len());
     for state in states {
         if seen.contains(state) {
-            return Err(invalid_argument(format!("duplicate job state {}", state.as_str())));
+            return Err(invalid_argument(format!(
+                "duplicate job state {}",
+                state.as_str()
+            )));
         }
         seen.push(*state);
     }
@@ -170,7 +181,10 @@ pub fn unique_kinds(kinds: &[JobKind]) -> Result<Vec<JobKind>, AppError> {
     let mut seen: Vec<JobKind> = Vec::with_capacity(kinds.len());
     for kind in kinds {
         if seen.contains(kind) {
-            return Err(invalid_argument(format!("duplicate job kind {}", kind.as_str())));
+            return Err(invalid_argument(format!(
+                "duplicate job kind {}",
+                kind.as_str()
+            )));
         }
         seen.push(*kind);
     }
@@ -214,14 +228,20 @@ pub fn validate_import_path(
     let resolved = std::fs::canonicalize(candidate).map_err(|err| {
         AppError::new(
             AppErrorCode::ArchivePathRejected,
-            format!("cannot resolve import path ({}): {err}", candidate.display()),
+            format!(
+                "cannot resolve import path ({}): {err}",
+                candidate.display()
+            ),
         )
     })?;
 
     if !is_inside_approved_root(&resolved, approved_roots)? {
         return Err(AppError::new(
             AppErrorCode::ArchivePathRejected,
-            format!("resolved target {} is outside every approved root", resolved.display()),
+            format!(
+                "resolved target {} is outside every approved root",
+                resolved.display()
+            ),
         ));
     }
 
@@ -331,7 +351,10 @@ pub fn validate_destination(destination: &str) -> Result<ValidatedDestination, A
         .file_name()
         .and_then(OsStr::to_str)
         .ok_or_else(|| {
-            AppError::new(AppErrorCode::ArchivePathRejected, "destination has no file name")
+            AppError::new(
+                AppErrorCode::ArchivePathRejected,
+                "destination has no file name",
+            )
         })?
         .to_owned();
     if file_name == "." || file_name == ".." {
@@ -341,7 +364,10 @@ pub fn validate_destination(destination: &str) -> Result<ValidatedDestination, A
         ));
     }
     let parent = path.parent().ok_or_else(|| {
-        AppError::new(AppErrorCode::ArchivePathRejected, "destination has no parent directory")
+        AppError::new(
+            AppErrorCode::ArchivePathRejected,
+            "destination has no parent directory",
+        )
     })?;
     let parent = std::fs::canonicalize(parent).map_err(|err| {
         AppError::new(
@@ -464,13 +490,18 @@ pub fn segment_edits(edits: &[crate::dto::SegmentEdit]) -> Result<Vec<(u32, Stri
         return Err(invalid_argument("edits must contain at least one segment"));
     }
     if edits.len() > MAX_EDITS {
-        return Err(invalid_argument("edits exceed the maximum accepted in one save"));
+        return Err(invalid_argument(
+            "edits exceed the maximum accepted in one save",
+        ));
     }
     let mut seen: Vec<u32> = Vec::with_capacity(edits.len());
     let mut out = Vec::with_capacity(edits.len());
     for edit in edits {
         if seen.contains(&edit.index) {
-            return Err(invalid_argument(format!("duplicate edit for segment {}", edit.index)));
+            return Err(invalid_argument(format!(
+                "duplicate edit for segment {}",
+                edit.index
+            )));
         }
         if edit.text.contains('\0') {
             return Err(invalid_argument("segment text contains a NUL byte"));
@@ -530,9 +561,15 @@ mod tests {
     #[test]
     fn id_parsing_reports_invalid_argument() {
         let err = parse_id::<RecordingId>("recording_id", "nope").unwrap_err();
-        assert_eq!(err.code(), plaudon_domain::error::AppErrorCode::InvalidArgument);
+        assert_eq!(
+            err.code(),
+            plaudon_domain::error::AppErrorCode::InvalidArgument
+        );
         let id = RecordingId::new();
-        assert_eq!(parse_id::<RecordingId>("recording_id", &id.to_string()).unwrap(), id);
+        assert_eq!(
+            parse_id::<RecordingId>("recording_id", &id.to_string()).unwrap(),
+            id
+        );
     }
 
     #[test]
@@ -556,9 +593,11 @@ mod tests {
     #[test]
     fn hostile_file_names_are_accepted_as_data() {
         let dir = tempfile::tempdir().unwrap();
-        let three_hundred = format!("{}.wav", "a".repeat(296));
+        // 251 bytes: the longest name the host filesystem accepts, which is
+        // what "absurdly long" means in practice on macOS and Windows.
+        let very_long = format!("{}.wav", "a".repeat(247));
         let hostile = [
-            "; rm -rf / .wav",
+            "; rm -rf ~ .wav",
             "$(whoami).wav",
             "`id`.wav",
             "a|b&c;d.wav",
@@ -569,15 +608,15 @@ mod tests {
             "..wav.wav",
             "quote'and\"double.wav",
             "new\tline.wav",
-            three_hundred.as_str(),
+            very_long.as_str(),
         ];
         for name in hostile {
             let path = dir.path().join(name);
             fs::write(&path, b"RIFF0000WAVE").unwrap();
-            let validated =
-                validate_import_path(path.to_str().unwrap(), &roots(dir.path())).unwrap_or_else(
-                    |err| panic!("hostile name {name:?} must be accepted as data: {err:?}"),
-                );
+            let validated = validate_import_path(path.to_str().unwrap(), &roots(dir.path()))
+                .unwrap_or_else(|err| {
+                    panic!("hostile name {name:?} must be accepted as data: {err:?}")
+                });
             assert_eq!(validated.original_file_name, name);
             assert_eq!(validated.extension, "wav");
             assert_eq!(validated.byte_length, 12);
@@ -630,10 +669,17 @@ mod tests {
                 AppErrorCode::ArchivePathRejected,
             ),
             ("empty", String::new(), AppErrorCode::InvalidArgument),
-            ("nul byte", "/tmp/a\0b.wav".to_owned(), AppErrorCode::InvalidArgument),
+            (
+                "nul byte",
+                "/tmp/a\0b.wav".to_owned(),
+                AppErrorCode::InvalidArgument,
+            ),
             (
                 "traversal out of the root",
-                dir.path().join("../../etc/passwd").to_string_lossy().into_owned(),
+                dir.path()
+                    .join("../../etc/passwd")
+                    .to_string_lossy()
+                    .into_owned(),
                 AppErrorCode::ArchivePathRejected,
             ),
         ];
@@ -666,8 +712,8 @@ mod tests {
         assert_eq!(accepted.resolved, fs::canonicalize(&inside_target).unwrap());
         assert_eq!(accepted.original_file_name, "inside-link.wav");
 
-        let err = validate_import_path(escaping_link.to_str().unwrap(), &roots(dir.path()))
-            .unwrap_err();
+        let err =
+            validate_import_path(escaping_link.to_str().unwrap(), &roots(dir.path())).unwrap_err();
         assert_eq!(err.code(), AppErrorCode::ArchivePathRejected);
     }
 
@@ -698,12 +744,22 @@ mod tests {
     fn destinations_require_an_existing_parent_and_a_real_file_name() {
         let dir = tempfile::tempdir().unwrap();
         let ok = dir.path().join("export.txt");
-        assert_eq!(validate_destination(ok.to_str().unwrap()).unwrap().path, ok);
+        let expected = std::fs::canonicalize(dir.path())
+            .unwrap()
+            .join("export.txt");
+        assert_eq!(
+            validate_destination(ok.to_str().unwrap()).unwrap().path,
+            expected
+        );
 
         assert!(validate_destination("relative.txt").is_err());
         assert!(validate_destination("").is_err());
         assert!(validate_destination(
-            dir.path().join("missing-dir").join("x.txt").to_str().unwrap()
+            dir.path()
+                .join("missing-dir")
+                .join("x.txt")
+                .to_str()
+                .unwrap()
         )
         .is_err());
         assert!(validate_destination(dir.path().to_str().unwrap()).is_err());
@@ -714,18 +770,29 @@ mod tests {
         use crate::dto::SegmentEdit;
         assert!(segment_edits(&[]).is_err());
         let dup = vec![
-            SegmentEdit { index: 1, text: "a".into() },
-            SegmentEdit { index: 1, text: "b".into() },
+            SegmentEdit {
+                index: 1,
+                text: "a".into(),
+            },
+            SegmentEdit {
+                index: 1,
+                text: "b".into(),
+            },
         ];
         assert!(segment_edits(&dup).is_err());
-        let ok = vec![SegmentEdit { index: 0, text: "a".into() }];
+        let ok = vec![SegmentEdit {
+            index: 0,
+            text: "a".into(),
+        }];
         assert_eq!(segment_edits(&ok).unwrap(), vec![(0, "a".to_owned())]);
     }
 
     #[test]
     fn import_path_lists_are_bounded() {
         assert!(import_paths(&[]).is_err());
-        let many: Vec<String> = (0..=MAX_IMPORT_PATHS).map(|i| format!("/tmp/{i}.wav")).collect();
+        let many: Vec<String> = (0..=MAX_IMPORT_PATHS)
+            .map(|i| format!("/tmp/{i}.wav"))
+            .collect();
         assert!(import_paths(&many).is_err());
     }
 
@@ -733,6 +800,9 @@ mod tests {
     fn filter_sets_reject_duplicates() {
         assert!(unique_states(&[JobState::Queued, JobState::Queued]).is_err());
         assert!(unique_kinds(&[JobKind::Import, JobKind::Import]).is_err());
-        assert_eq!(unique_states(&[JobState::Queued]).unwrap(), vec![JobState::Queued]);
+        assert_eq!(
+            unique_states(&[JobState::Queued]).unwrap(),
+            vec![JobState::Queued]
+        );
     }
 }

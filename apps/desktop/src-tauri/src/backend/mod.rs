@@ -6,7 +6,7 @@
 //! provides the import use case. This module only adapts those to the wire
 //! contract the UI consumes, plus the three tables nothing else owns yet
 //! (`activity_events`, `event_log`, `recording_import_metadata`, migration
-//! 9001).
+//! 0300).
 //!
 //! EPIC B's `crates/persistence` and EPIC C's `crates/jobs` supersede this
 //! implementation by swapping the port implementations constructed in
@@ -54,6 +54,7 @@ use crate::dto::{
 };
 use crate::error::{internal, invalid_argument};
 use crate::events::{EventDraft, EventPublisher, EventSink};
+use crate::notify::NotificationService;
 use crate::ports::{LibraryPort, MachineRevisionSpec, ResolvedMedia, SettingsPort, TranscriptPort};
 use crate::secrets::SecretStore;
 use crate::validate::{
@@ -77,6 +78,7 @@ pub struct LocalBackend {
     assets: MediaAssetRepository,
     sources: SourceRepository,
     events: EventPublisher,
+    notifications: NotificationService,
     secrets: Arc<dyn SecretStore>,
     approved_roots: Vec<PathBuf>,
 }
@@ -86,6 +88,7 @@ impl LocalBackend {
     pub async fn open(
         root: &Path,
         sink: Arc<dyn EventSink>,
+        notifications: Arc<plaudon_notifications::Dispatcher>,
         secrets: Arc<dyn SecretStore>,
         approved_roots: Vec<PathBuf>,
     ) -> Result<Self, AppError> {
@@ -93,22 +96,37 @@ impl LocalBackend {
         let db: Database = store.db().clone();
         let imports = ImportService::new(db.clone(), store.archive().clone());
         let events = EventPublisher::new(store.pool().clone(), sink);
-        Ok(Self {
+        let notifications = NotificationService::new(notifications, store.pool().clone());
+        let backend = Self {
             recordings: RecordingRepository::new(db.clone()),
             assets: MediaAssetRepository::new(db.clone()),
             sources: SourceRepository::new(db),
             imports,
             events,
+            notifications,
             secrets,
             approved_roots,
             store,
-        })
+        };
+        // The dispatcher starts with whatever the user last chose; nothing
+        // prompts the OS here (spec §5.5: notifications are opt-in).
+        let preferences = backend.preferences().await?;
+        backend
+            .notifications
+            .dispatcher()
+            .set_settings(crate::notify::to_crate_settings(&preferences.notifications))
+            .await;
+        Ok(backend)
     }
 
     /// Reconcile any import interrupted by a crash (spec §13.3A).
     pub async fn reconcile_startup(&self) -> Result<usize, AppError> {
-        let outcomes =
-            self.imports.journal().reconcile(Timestamp::now()).await.map_err(AppError::from)?;
+        let outcomes = self
+            .imports
+            .journal()
+            .reconcile(Timestamp::now())
+            .await
+            .map_err(AppError::from)?;
         Ok(outcomes.len())
     }
 
@@ -160,6 +178,12 @@ impl LocalBackend {
         &self.events
     }
 
+    /// The notification service.
+    #[must_use]
+    pub fn notifications(&self) -> &NotificationService {
+        &self.notifications
+    }
+
     /// The secret store.
     #[must_use]
     pub fn secrets(&self) -> &Arc<dyn SecretStore> {
@@ -202,16 +226,40 @@ impl LocalBackend {
     }
 
     pub(crate) async fn notification_permission_state(&self) -> PermissionState {
-        let stored: Option<String> = self.setting(NOTIFICATION_PERMISSION_KEY).await.ok().flatten();
+        let stored: Option<String> = self
+            .setting(NOTIFICATION_PERMISSION_KEY)
+            .await
+            .ok()
+            .flatten();
         capabilities::permission_from_stored(stored.as_deref())
     }
 
+    /// Push preferences into the dispatcher and record what the OS answered.
+    ///
+    /// The observed permission is stored so `get_capabilities` can report it
+    /// without touching the platform API on every call.
+    pub(crate) async fn apply_notification_settings(
+        &self,
+        preferences: &Preferences,
+    ) -> Result<OsNotificationPermission, AppError> {
+        let observed = self.notifications.apply_settings(&preferences.notifications).await;
+        self.put_setting(NOTIFICATION_PERMISSION_KEY, &permission_str(observed)).await?;
+        Ok(observed)
+    }
+
+    /// The permission last observed from the operating system.
     async fn os_notification_permission(&self) -> OsNotificationPermission {
-        match self.setting::<String>(NOTIFICATION_PERMISSION_KEY).await.ok().flatten().as_deref() {
+        match self
+            .setting::<String>(NOTIFICATION_PERMISSION_KEY)
+            .await
+            .ok()
+            .flatten()
+            .as_deref()
+        {
             Some("granted") => OsNotificationPermission::Granted,
             Some("denied") => OsNotificationPermission::Denied,
             Some("unsupported") => OsNotificationPermission::Unsupported,
-            // Nothing has prompted the OS yet; the notification service records
+            // Nothing has prompted the OS yet; the notification service writes
             // the observed answer here the first time it does.
             _ => OsNotificationPermission::NotRequested,
         }
@@ -225,7 +273,8 @@ impl LocalBackend {
         recording_id: RecordingId,
     ) -> Result<RecordingSummary, AppError> {
         let sql = format!("{RECORDING_SELECT} WHERE r.deleted_at IS NULL AND r.id = ?1");
-        let row = sqlx::query(&sql)
+        // Audited: a constant select plus a constant WHERE clause.
+        let row = sqlx::query(sqlx::AssertSqlSafe(sql))
             .bind(recording_id.to_string())
             .fetch_optional(self.pool())
             .await
@@ -262,7 +311,8 @@ impl LocalBackend {
         revision_id: TranscriptRevisionId,
     ) -> Result<TranscriptRevisionRef, AppError> {
         let sql = format!("{REVISION_SELECT} WHERE tr.id = ?1");
-        let row = sqlx::query(&sql)
+        // Audited: a constant select plus a constant WHERE clause.
+        let row = sqlx::query(sqlx::AssertSqlSafe(sql))
             .bind(revision_id.to_string())
             .fetch_optional(self.pool())
             .await
@@ -300,8 +350,8 @@ impl LocalBackend {
                 .fetch_optional(self.pool())
                 .await
                 .map_err(|err| storage_error("cannot read a revision engine", &err))?;
-        let engine =
-            engine.ok_or_else(|| AppError::new(AppErrorCode::RecordNotFound, "no such revision"))?;
+        let engine = engine
+            .ok_or_else(|| AppError::new(AppErrorCode::RecordNotFound, "no such revision"))?;
 
         let rows = sqlx::query(
             "SELECT ts.seq_index AS seq_index, ts.text AS text, ts.start_ms AS start_ms, \
@@ -317,7 +367,9 @@ impl LocalBackend {
         .fetch_all(self.pool())
         .await
         .map_err(|err| storage_error("cannot read segments", &err))?;
-        rows.iter().map(|row| row_to_segment(row, &engine)).collect()
+        rows.iter()
+            .map(|row| row_to_segment(row, &engine))
+            .collect()
     }
 
     /// The revision that has no child, i.e. the current head.
@@ -400,7 +452,9 @@ fn row_to_summary(row: &sqlx::sqlite::SqliteRow) -> Result<RecordingSummary, App
     let revision_count: i64 = row.get("revision_count");
 
     Ok(RecordingSummary {
-        recording_id: id.parse().map_err(|_| internal("stored recording id is not a uuid"))?,
+        recording_id: id
+            .parse()
+            .map_err(|_| internal("stored recording id is not a uuid"))?,
         title: row.get("title"),
         recorded_at: rfc3339_opt("recordings.captured_at", row.get("captured_at"))?,
         imported_at: rfc3339("recordings.created_at", row.get("created_at"))?,
@@ -426,7 +480,9 @@ fn row_to_summary(row: &sqlx::sqlite::SqliteRow) -> Result<RecordingSummary, App
             .map(|packed| packed.split(TAG_SEPARATOR).map(str::to_owned).collect())
             .unwrap_or_default(),
         byte_length: as_u64("byte length", row.get("byte_length"))?,
-        sha256: sha256.parse().map_err(|_| internal("stored digest is not a sha-256"))?,
+        sha256: sha256
+            .parse()
+            .map_err(|_| internal("stored digest is not a sha-256"))?,
     })
 }
 
@@ -436,7 +492,10 @@ fn row_to_summary(row: &sqlx::sqlite::SqliteRow) -> Result<RecordingSummary, App
 /// canonical message, so nothing about the original failure's internals can
 /// reach the UI through this path.
 fn envelope_for_code(code: &str) -> Option<ErrorEnvelope> {
-    let code = AppErrorCode::ALL.iter().copied().find(|candidate| candidate.as_str() == code)?;
+    let code = AppErrorCode::ALL
+        .iter()
+        .copied()
+        .find(|candidate| candidate.as_str() == code)?;
     Some(
         AppError::new(code, "restored from a persisted job failure")
             .to_envelope(&mut DiagnosticLog::new(), Timestamp::now()),
@@ -480,10 +539,16 @@ fn row_to_revision_ref(row: &sqlx::sqlite::SqliteRow) -> Result<TranscriptRevisi
     let origin: String = row.get("origin");
     let alignment: String = row.get("alignment_origin");
     Ok(TranscriptRevisionRef {
-        revision_id: id.parse().map_err(|_| internal("stored revision id is not a uuid"))?,
+        revision_id: id
+            .parse()
+            .map_err(|_| internal("stored revision id is not a uuid"))?,
         // Only a user edit is a `human` revision; a derived alignment or an
         // overlap reconciliation is still machine output.
-        kind: if origin == "human_edit" { RevisionKind::Human } else { RevisionKind::Machine },
+        kind: if origin == "human_edit" {
+            RevisionKind::Human
+        } else {
+            RevisionKind::Machine
+        },
         created_at: rfc3339("transcript_revisions.created_at", row.get("created_at"))?,
         engine_id: row.get("engine"),
         model_id: row.get("model_id"),
@@ -512,7 +577,10 @@ fn row_to_segment(
         alignment_origin: parse_alignment(&alignment)?,
         confidence: row
             .get::<Option<f64>, _>("confidence")
-            .map(|value| SegmentConfidence { engine_id: engine_id.to_owned(), value }),
+            .map(|value| SegmentConfidence {
+                engine_id: engine_id.to_owned(),
+                value,
+            }),
         speaker_label: row.get("speaker_label"),
         // Annotations are produced by the truthfulness pipeline (spec §8.6A),
         // which the STT EPIC owns; this port stores none and invents none.
@@ -567,9 +635,12 @@ impl LibraryPort for LocalBackend {
             }
         };
 
-        let sql =
-            format!("{RECORDING_SELECT} {where_clause} ORDER BY {order}, r.id ASC LIMIT ? OFFSET ?");
-        let mut statement = sqlx::query(&sql);
+        let sql = format!(
+            "{RECORDING_SELECT} {where_clause} ORDER BY {order}, r.id ASC LIMIT ? OFFSET ?"
+        );
+        // Audited: user values are bound, never interpolated; the only
+        // interpolated fragments are constants and `?` placeholders.
+        let mut statement = sqlx::query(sqlx::AssertSqlSafe(sql));
         for bind in &binds {
             statement = match bind {
                 Bind::Text(value) => statement.bind(value),
@@ -596,7 +667,7 @@ impl LibraryPort for LocalBackend {
             "SELECT COUNT(*) FROM recordings r \
              JOIN media_assets a ON a.id = r.preferred_media_asset_id {where_clause}"
         );
-        let mut count_statement = sqlx::query_scalar::<_, i64>(&count_sql);
+        let mut count_statement = sqlx::query_scalar::<_, i64>(sqlx::AssertSqlSafe(count_sql));
         for bind in &binds {
             count_statement = match bind {
                 Bind::Text(value) => count_statement.bind(value),
@@ -618,7 +689,8 @@ impl LibraryPort for LocalBackend {
 
     async fn get_recording(&self, recording_id: RecordingId) -> Result<RecordingDetail, AppError> {
         let sql = format!("{RECORDING_SELECT} WHERE r.deleted_at IS NULL AND r.id = ?1");
-        let row = sqlx::query(&sql)
+        // Audited: a constant select plus a constant WHERE clause.
+        let row = sqlx::query(sqlx::AssertSqlSafe(sql))
             .bind(recording_id.to_string())
             .fetch_optional(self.pool())
             .await
@@ -627,9 +699,10 @@ impl LibraryPort for LocalBackend {
 
         let summary = row_to_summary(&row)?;
         let original_file_name: Option<String> = row.get("original_file_name");
-        let revision_sql =
-            format!("{REVISION_SELECT} WHERE tr.recording_id = ?1 ORDER BY tr.created_at ASC, tr.id ASC");
-        let revision_rows = sqlx::query(&revision_sql)
+        let revision_sql = format!(
+            "{REVISION_SELECT} WHERE tr.recording_id = ?1 ORDER BY tr.created_at ASC, tr.id ASC"
+        );
+        let revision_rows = sqlx::query(sqlx::AssertSqlSafe(revision_sql))
             .bind(recording_id.to_string())
             .fetch_all(self.pool())
             .await
@@ -717,7 +790,10 @@ fn build_filter(filter: &ValidatedRecordingFilter) -> (String, Vec<Bind>) {
             placeholders(filter.import_status.len())
         ));
         binds.extend(
-            filter.import_status.iter().map(|status| Bind::Text(stored_import_status(*status))),
+            filter
+                .import_status
+                .iter()
+                .map(|status| Bind::Text(stored_import_status(*status))),
         );
     }
     if !filter.transcription_status.is_empty() {
@@ -725,10 +801,10 @@ fn build_filter(filter: &ValidatedRecordingFilter) -> (String, Vec<Bind>) {
         // transcription state this port can observe.
         let wants_completed = filter
             .transcription_status
-            .iter()
-            .any(|status| *status == TranscriptionStatus::Completed);
-        let wants_none =
-            filter.transcription_status.iter().any(|status| *status == TranscriptionStatus::None);
+            .contains(&TranscriptionStatus::Completed);
+        let wants_none = filter
+            .transcription_status
+            .contains(&TranscriptionStatus::None);
         let predicate = match (wants_completed, wants_none) {
             (true, true) => "1 = 1",
             (true, false) => {
@@ -747,7 +823,12 @@ fn build_filter(filter: &ValidatedRecordingFilter) -> (String, Vec<Bind>) {
              WHERE si.recording_id = r.id ORDER BY si.created_at ASC LIMIT 1) IN ({})",
             placeholders(filter.sources.len())
         ));
-        binds.extend(filter.sources.iter().map(|kind| Bind::Text(stored_source_kind(*kind))));
+        binds.extend(
+            filter
+                .sources
+                .iter()
+                .map(|kind| Bind::Text(stored_source_kind(*kind))),
+        );
     }
     for tag in &filter.tags {
         clauses.push(
@@ -789,11 +870,16 @@ fn stored_source_kind(kind: SourceKind) -> String {
 }
 
 fn placeholders(count: usize) -> String {
-    std::iter::repeat_n("?", count).collect::<Vec<_>>().join(", ")
+    std::iter::repeat_n("?", count)
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 fn escape_like(value: &str) -> String {
-    value.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_")
+    value
+        .replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_")
 }
 
 /* ------------------------------------------------------------- transcript */
@@ -851,9 +937,13 @@ impl TranscriptPort for LocalBackend {
         })
         .map_err(|err| invalid_argument(format!("invalid transcript revision: {err}")))?;
 
-        let speakers: Vec<Option<String>> =
-            spec.segments.iter().map(|segment| segment.speaker_label.clone()).collect();
-        self.insert_revision(&revision, RevisionOrigin::Machine, &speakers).await?;
+        let speakers: Vec<Option<String>> = spec
+            .segments
+            .iter()
+            .map(|segment| segment.speaker_label.clone())
+            .collect();
+        self.insert_revision(&revision, RevisionOrigin::Machine, &speakers)
+            .await?;
 
         self.events()
             .publish(
@@ -871,8 +961,12 @@ impl TranscriptPort for LocalBackend {
         query: ValidatedGetTranscript,
     ) -> Result<TranscriptPage, AppError> {
         let revision = self.revision_ref(query.revision_id).await?;
-        let segments = self.revision_segments(query.revision_id, query.cursor, query.limit).await?;
-        let consumed = query.cursor.saturating_add(u32::try_from(segments.len()).unwrap_or(0));
+        let segments = self
+            .revision_segments(query.revision_id, query.cursor, query.limit)
+            .await?;
+        let consumed = query
+            .cursor
+            .saturating_add(u32::try_from(segments.len()).unwrap_or(0));
         let next_cursor = (consumed < revision.segment_count).then_some(consumed);
         Ok(TranscriptPage {
             total_segments: revision.segment_count,
@@ -904,7 +998,9 @@ impl TranscriptPort for LocalBackend {
             ));
         }
 
-        let mut segments = self.revision_segments(request.base_revision_id, 0, u32::MAX).await?;
+        let mut segments = self
+            .revision_segments(request.base_revision_id, 0, u32::MAX)
+            .await?;
         for (index, text) in &request.edits {
             let slot = segments
                 .iter_mut()
@@ -934,7 +1030,9 @@ impl TranscriptPort for LocalBackend {
             engine: engine.clone(),
             model: ModelIdentity::new(
                 engine,
-                base.model_id.clone().unwrap_or_else(|| "human-edit".to_owned()),
+                base.model_id
+                    .clone()
+                    .unwrap_or_else(|| "human-edit".to_owned()),
             ),
             locale: None,
             alignment_origin: base.alignment_origin,
@@ -947,9 +1045,12 @@ impl TranscriptPort for LocalBackend {
         })
         .map_err(|err| invalid_argument(format!("invalid transcript revision: {err}")))?;
 
-        let speakers: Vec<Option<String>> =
-            segments.iter().map(|segment| segment.speaker_label.clone()).collect();
-        self.insert_revision(&revision, RevisionOrigin::HumanEdit, &speakers).await?;
+        let speakers: Vec<Option<String>> = segments
+            .iter()
+            .map(|segment| segment.speaker_label.clone())
+            .collect();
+        self.insert_revision(&revision, RevisionOrigin::HumanEdit, &speakers)
+            .await?;
 
         self.events()
             .publish(
@@ -979,7 +1080,9 @@ impl LocalBackend {
         origin: RevisionOrigin,
         speakers: &[Option<String>],
     ) -> Result<(), AppError> {
-        let speaker_ids = self.ensure_speakers(revision.recording_id, speakers).await?;
+        let speaker_ids = self
+            .ensure_speakers(revision.recording_id, speakers)
+            .await?;
 
         let mut tx = self
             .pool()
@@ -1017,8 +1120,16 @@ impl LocalBackend {
             .bind(uuid::Uuid::now_v7().to_string())
             .bind(revision.id.to_string())
             .bind(i64::from(segment.seq_index))
-            .bind(segment.start.map(|value| i64::try_from(value.get()).unwrap_or(i64::MAX)))
-            .bind(segment.end.map(|value| i64::try_from(value.get()).unwrap_or(i64::MAX)))
+            .bind(
+                segment
+                    .start
+                    .map(|value| i64::try_from(value.get()).unwrap_or(i64::MAX)),
+            )
+            .bind(
+                segment
+                    .end
+                    .map(|value| i64::try_from(value.get()).unwrap_or(i64::MAX)),
+            )
             .bind(speaker_ids.get(position).cloned().flatten())
             .bind(&segment.text)
             .bind(segment.confidence.as_ref().map(|value| value.value))
@@ -1029,7 +1140,9 @@ impl LocalBackend {
             .map_err(|err| storage_error("cannot insert a segment", &err))?;
         }
 
-        tx.commit().await.map_err(|err| storage_error("cannot commit a revision", &err))
+        tx.commit()
+            .await
+            .map_err(|err| storage_error("cannot commit a revision", &err))
     }
 
     /// Resolve speaker labels to rows, creating inferred speakers on demand.
@@ -1101,14 +1214,20 @@ pub fn default_preferences() -> Preferences {
         default_text_engine_id: None,
         appearance: Appearance::System,
         contrast: Contrast::Standard,
-        notifications: NotificationSettings { enabled: false, categories },
+        notifications: NotificationSettings {
+            enabled: false,
+            categories,
+        },
     }
 }
 
 #[async_trait]
 impl SettingsPort for LocalBackend {
     async fn preferences(&self) -> Result<Preferences, AppError> {
-        Ok(self.setting::<Preferences>(PREFERENCES_KEY).await?.unwrap_or_else(default_preferences))
+        Ok(self
+            .setting::<Preferences>(PREFERENCES_KEY)
+            .await?
+            .unwrap_or_else(default_preferences))
     }
 
     async fn set_notification_settings(
@@ -1118,9 +1237,10 @@ impl SettingsPort for LocalBackend {
         let mut preferences = self.preferences().await?;
         preferences.notifications = settings;
         self.put_setting(PREFERENCES_KEY, &preferences).await?;
+        let observed = self.apply_notification_settings(&preferences).await?;
         Ok(NotificationSettingsResponse {
             settings: preferences.notifications,
-            os_permission: self.os_notification_permission().await,
+            os_permission: observed,
         })
     }
 
@@ -1142,7 +1262,18 @@ impl SettingsPort for LocalBackend {
         preferences.local_only_mode = request.local_only_mode;
         preferences.notifications = request.notifications;
         self.put_setting(PREFERENCES_KEY, &preferences).await?;
+        self.apply_notification_settings(&preferences).await?;
         Ok(preferences)
+    }
+}
+
+/// Stable string form of an observed OS permission.
+const fn permission_str(permission: OsNotificationPermission) -> &'static str {
+    match permission {
+        OsNotificationPermission::Granted => "granted",
+        OsNotificationPermission::Denied => "denied",
+        OsNotificationPermission::NotRequested => "not_requested",
+        OsNotificationPermission::Unsupported => "unsupported",
     }
 }
 
@@ -1179,6 +1310,10 @@ pub(crate) mod testing {
     use crate::secrets::InMemorySecretStore;
 
     /// A backend over a temporary library, with a recording event sink.
+    ///
+    /// `secrets` and the two directories are kept alive by the fixture; a
+    /// dropped `TempDir` would delete the library under the test.
+    #[allow(dead_code)]
     pub(crate) struct Fixture {
         pub backend: LocalBackend,
         pub sink: Arc<RecordingEventSink>,
@@ -1209,7 +1344,13 @@ pub(crate) mod testing {
         )
         .await
         .unwrap();
-        Fixture { backend, sink, secrets, dir, imports }
+        Fixture {
+            backend,
+            sink,
+            secrets,
+            dir,
+            imports,
+        }
     }
 }
 
@@ -1237,23 +1378,37 @@ mod tests {
         backend.archive().list_blobs().unwrap().len()
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn importing_the_same_bytes_twice_keeps_one_blob_and_reports_a_duplicate() {
         let fixture = backend_fixture().await;
         let first = fixture.source_file("meeting.wav", b"RIFF....WAVEfmt payload");
         let second = fixture.source_file("copy-of-meeting.wav", b"RIFF....WAVEfmt payload");
 
-        let response =
-            fixture.backend.import_files(vec![first], DuplicatePolicy::Ask).await.unwrap();
-        assert!(matches!(response.results[0], ImportOutcome::Accepted { .. }));
+        let response = fixture
+            .backend
+            .import_files(vec![first], DuplicatePolicy::Ask)
+            .await
+            .unwrap();
+        assert!(matches!(
+            response.results[0],
+            ImportOutcome::Accepted { .. }
+        ));
 
         let response = fixture
             .backend
             .import_files(vec![second.clone()], DuplicatePolicy::Ask)
             .await
             .unwrap();
-        let ImportOutcome::Duplicate { sha256, existing_title, .. } = &response.results[0] else {
-            panic!("the second import must be reported as a duplicate: {:?}", response.results[0]);
+        let ImportOutcome::Duplicate {
+            sha256,
+            existing_title,
+            ..
+        } = &response.results[0]
+        else {
+            panic!(
+                "the second import must be reported as a duplicate: {:?}",
+                response.results[0]
+            );
         };
         assert_eq!(*sha256, Sha256Digest::of(b"RIFF....WAVEfmt payload"));
         assert_eq!(existing_title, "meeting");
@@ -1268,20 +1423,34 @@ mod tests {
             .import_files(vec![second], DuplicatePolicy::ImportAnyway)
             .await
             .unwrap();
-        assert!(matches!(response.results[0], ImportOutcome::Accepted { .. }));
+        assert!(matches!(
+            response.results[0],
+            ImportOutcome::Accepted { .. }
+        ));
         let page = fixture.backend.list_recordings(list_all()).await.unwrap();
         assert_eq!(page.total, 2, "two logical recordings");
         assert_eq!(count_blobs(&fixture.backend), 1, "still one blob");
 
         // skip returns the existing recording without creating anything.
         let third = fixture.source_file("third.wav", b"RIFF....WAVEfmt payload");
-        let response =
-            fixture.backend.import_files(vec![third], DuplicatePolicy::Skip).await.unwrap();
+        let response = fixture
+            .backend
+            .import_files(vec![third], DuplicatePolicy::Skip)
+            .await
+            .unwrap();
         assert!(matches!(response.results[0], ImportOutcome::Skipped { .. }));
-        assert_eq!(fixture.backend.list_recordings(list_all()).await.unwrap().total, 2);
+        assert_eq!(
+            fixture
+                .backend
+                .list_recordings(list_all())
+                .await
+                .unwrap()
+                .total,
+            2
+        );
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn a_rejected_path_fails_its_job_and_persists_the_code() {
         let fixture = backend_fixture().await;
         let outside = tempfile::tempdir().unwrap();
@@ -1290,7 +1459,10 @@ mod tests {
 
         let response = fixture
             .backend
-            .import_files(vec![escaped.to_string_lossy().into_owned()], DuplicatePolicy::Ask)
+            .import_files(
+                vec![escaped.to_string_lossy().into_owned()],
+                DuplicatePolicy::Ask,
+            )
             .await
             .unwrap();
         let ImportOutcome::Rejected { error, .. } = &response.results[0] else {
@@ -1318,18 +1490,23 @@ mod tests {
 
     async fn imported_recording(fixture: &super::testing::Fixture, name: &str) -> RecordingId {
         let path = fixture.source_file(name, format!("bytes of {name}").as_bytes());
-        let response =
-            fixture.backend.import_files(vec![path], DuplicatePolicy::Ask).await.unwrap();
+        let response = fixture
+            .backend
+            .import_files(vec![path], DuplicatePolicy::Ask)
+            .await
+            .unwrap();
         match &response.results[0] {
             ImportOutcome::Accepted { job_id, .. } => {
                 let summary = jobs::load(fixture.backend.pool(), *job_id).await.unwrap();
-                summary.recording_id.expect("a committed import links its recording")
+                summary
+                    .recording_id
+                    .expect("a committed import links its recording")
             }
             other => panic!("expected an accepted import, got {other:?}"),
         }
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn revisions_are_immutable_and_a_stale_base_conflicts() {
         let fixture = backend_fixture().await;
         let recording_id = imported_recording(&fixture, "talk.wav").await;
@@ -1402,7 +1579,7 @@ mod tests {
         assert_eq!(err.code(), AppErrorCode::Conflict);
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn a_text_only_revision_never_gains_times() {
         let fixture = backend_fixture().await;
         let recording_id = imported_recording(&fixture, "notes.m4a").await;
@@ -1433,7 +1610,7 @@ mod tests {
         assert_eq!(page.segments[0].end_ms, None);
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn times_on_an_unaligned_revision_are_rejected_by_the_domain() {
         let fixture = backend_fixture().await;
         let recording_id = imported_recording(&fixture, "bad.flac").await;
@@ -1452,7 +1629,7 @@ mod tests {
         assert_eq!(err.code(), AppErrorCode::InvalidArgument);
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn preferences_round_trip_and_default_to_everything_off() {
         let fixture = backend_fixture().await;
         let defaults = fixture.backend.preferences().await.unwrap();
@@ -1466,24 +1643,44 @@ mod tests {
         }
         let response = fixture
             .backend
-            .set_notification_settings(NotificationSettings { enabled: true, categories })
+            .set_notification_settings(NotificationSettings {
+                enabled: true,
+                categories,
+            })
             .await
             .unwrap();
         assert!(response.settings.enabled);
-        assert_eq!(response.os_permission, OsNotificationPermission::NotRequested);
-        assert!(fixture.backend.preferences().await.unwrap().notifications.enabled);
+        assert_eq!(
+            response.os_permission,
+            OsNotificationPermission::NotRequested
+        );
+        assert!(
+            fixture
+                .backend
+                .preferences()
+                .await
+                .unwrap()
+                .notifications
+                .enabled
+        );
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn the_library_filters_sorts_and_pages() {
         let fixture = backend_fixture().await;
         for (index, name) in ["b.wav", "a.wav", "c.wav"].iter().enumerate() {
             let path = fixture.source_file(name, format!("bytes {index}").as_bytes());
-            fixture.backend.import_files(vec![path], DuplicatePolicy::Ask).await.unwrap();
+            fixture
+                .backend
+                .import_files(vec![path], DuplicatePolicy::Ask)
+                .await
+                .unwrap();
         }
 
-        let sort =
-            RecordingSort { field: RecordingSortField::Title, direction: SortDirection::Asc };
+        let sort = RecordingSort {
+            field: RecordingSortField::Title,
+            direction: SortDirection::Asc,
+        };
         let sorted = fixture
             .backend
             .list_recordings(ValidatedListRecordings {
@@ -1532,8 +1729,15 @@ mod tests {
         assert_eq!(filtered.total, 1);
         assert_eq!(filtered.items[0].title, "a");
 
-        let detail = fixture.backend.get_recording(filtered.items[0].recording_id).await.unwrap();
-        assert_eq!(detail.summary.duration_ms, None, "no decoder measured a duration");
+        let detail = fixture
+            .backend
+            .get_recording(filtered.items[0].recording_id)
+            .await
+            .unwrap();
+        assert_eq!(
+            detail.summary.duration_ms, None,
+            "no decoder measured a duration"
+        );
         assert_eq!(detail.summary.recorded_at, None, "no capture time is known");
         assert_eq!(detail.media.sample_rate_hz, None);
         assert_eq!(detail.media.original_file_name, "a.wav");
@@ -1542,10 +1746,14 @@ mod tests {
         assert_eq!(detail.summary.source.source_kind, SourceKind::ManualImport);
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn missing_records_report_record_not_found() {
         let fixture = backend_fixture().await;
-        let err = fixture.backend.get_recording(RecordingId::new()).await.unwrap_err();
+        let err = fixture
+            .backend
+            .get_recording(RecordingId::new())
+            .await
+            .unwrap_err();
         assert_eq!(err.code(), AppErrorCode::RecordNotFound);
         let err = fixture
             .backend
@@ -1557,5 +1765,79 @@ mod tests {
             .await
             .unwrap_err();
         assert_eq!(err.code(), AppErrorCode::RecordNotFound);
+    }
+
+    /// Sink that checks, at emission time, that the change the event
+    /// describes is already readable from the database.
+    #[derive(Debug, Default)]
+    struct CommitAssertingSink {
+        pool: tokio::sync::Mutex<Option<SqlitePool>>,
+        observations: tokio::sync::Mutex<Vec<(EventKind, bool)>>,
+    }
+
+    #[async_trait]
+    impl EventSink for CommitAssertingSink {
+        async fn emit(&self, event: crate::dto::UiEvent) {
+            let pool = self.pool.lock().await.clone();
+            let Some(pool) = pool else { return };
+            let visible = match (event.recording_id, event.job_id) {
+                (Some(recording_id), _) => {
+                    sqlx::query_scalar::<_, String>("SELECT id FROM recordings WHERE id = ?1")
+                        .bind(recording_id.to_string())
+                        .fetch_optional(&pool)
+                        .await
+                        .ok()
+                        .flatten()
+                        .is_some()
+                }
+                (None, Some(job_id)) => {
+                    sqlx::query_scalar::<_, String>("SELECT id FROM jobs WHERE id = ?1")
+                        .bind(job_id.to_string())
+                        .fetch_optional(&pool)
+                        .await
+                        .ok()
+                        .flatten()
+                        .is_some()
+                }
+                (None, None) => true,
+            };
+            self.observations.lock().await.push((event.kind, visible));
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn no_event_is_emitted_before_its_transaction_commits() {
+        let dir = tempfile::tempdir().unwrap();
+        let imports = tempfile::tempdir().unwrap();
+        let sink = Arc::new(CommitAssertingSink::default());
+        let backend = LocalBackend::open(
+            dir.path(),
+            Arc::clone(&sink) as Arc<dyn EventSink>,
+            Arc::new(crate::secrets::InMemorySecretStore::new()),
+            vec![imports.path().to_path_buf()],
+        )
+        .await
+        .unwrap();
+        *sink.pool.lock().await = Some(backend.pool().clone());
+
+        let path = imports.path().join("committed.wav");
+        std::fs::write(&path, b"RIFF committed").unwrap();
+        backend
+            .import_files(
+                vec![path.to_string_lossy().into_owned()],
+                crate::dto::DuplicatePolicy::Ask,
+            )
+            .await
+            .unwrap();
+
+        let observations = sink.observations.lock().await.clone();
+        assert!(!observations.is_empty(), "the import emitted events");
+        for (kind, visible) in observations {
+            assert!(
+                visible,
+                "{} was emitted before its transaction committed",
+                kind.as_str()
+            );
+        }
     }
 }

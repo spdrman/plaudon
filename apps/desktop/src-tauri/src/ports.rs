@@ -9,7 +9,7 @@ use std::path::PathBuf;
 
 use async_trait::async_trait;
 use plaudon_domain::error::AppError;
-use plaudon_domain::ids::{JobId, RecordingId, TranscriptRevisionId};
+use plaudon_domain::ids::{JobId, RecordingId};
 use plaudon_domain::transcript::AlignmentOrigin;
 
 use crate::dto::{
@@ -160,8 +160,7 @@ pub trait JobsPort: Send + Sync {
 #[async_trait]
 pub trait ActivityPort: Send + Sync {
     /// One page of activity entries.
-    async fn list_activity(&self, query: ValidatedListActivity)
-        -> Result<ActivityPage, AppError>;
+    async fn list_activity(&self, query: ValidatedListActivity) -> Result<ActivityPage, AppError>;
 }
 
 /// Manual import (`import_files`).
@@ -188,8 +187,7 @@ pub trait SettingsPort: Send + Sync {
     ) -> Result<NotificationSettingsResponse, AppError>;
 
     /// Set local-only mode. The caller has already checked the confirmation.
-    async fn set_local_only_mode(&self, enabled: bool)
-        -> Result<LocalOnlyModeResponse, AppError>;
+    async fn set_local_only_mode(&self, enabled: bool) -> Result<LocalOnlyModeResponse, AppError>;
 
     /// Persist the onboarding result.
     async fn complete_onboarding(

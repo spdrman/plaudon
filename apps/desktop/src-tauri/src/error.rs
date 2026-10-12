@@ -21,7 +21,9 @@ pub type CommandResult<T> = Result<T, ErrorEnvelope>;
 pub fn envelope(err: &AppError) -> ErrorEnvelope {
     let mut log = DiagnosticLog::new();
     let envelope = err.to_envelope(&mut log, Timestamp::now());
-    let redacted = log.get(envelope.diagnostic_id).map(|record| record.redacted_detail.clone());
+    let redacted = log
+        .get(envelope.diagnostic_id)
+        .map(|record| record.redacted_detail.clone());
     tracing::warn!(
         code = envelope.code.as_str(),
         diagnostic_id = %envelope.diagnostic_id,
@@ -77,7 +79,10 @@ mod tests {
             "Ashford",
             "Documents",
         ] {
-            assert!(!json.contains(needle), "envelope JSON leaked {needle}: {json}");
+            assert!(
+                !json.contains(needle),
+                "envelope JSON leaked {needle}: {json}"
+            );
         }
     }
 
@@ -85,9 +90,15 @@ mod tests {
     fn the_envelope_message_is_exactly_the_canonical_message() {
         let err = leaky_error();
         let envelope = envelope(&err);
-        assert_eq!(envelope.message, AppErrorCode::ProviderRejected.canonical_message());
+        assert_eq!(
+            envelope.message,
+            AppErrorCode::ProviderRejected.canonical_message()
+        );
         assert_eq!(envelope.code, AppErrorCode::ProviderRejected);
-        assert_eq!(envelope.retryable, AppErrorCode::ProviderRejected.is_retryable());
+        assert_eq!(
+            envelope.retryable,
+            AppErrorCode::ProviderRejected.is_retryable()
+        );
     }
 
     #[test]

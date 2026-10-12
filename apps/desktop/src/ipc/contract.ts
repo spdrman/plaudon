@@ -551,7 +551,11 @@ export const ALL_COMMANDS: readonly CommandName[] = [...SPEC_COMMANDS, ...ADR_00
 
 /* ----------------------------------------------------------------- events */
 
-/** §15.3 event names. Payloads carry a monotonically increasing `seq`. */
+/**
+ * §15.3 event names, plus `ui.activation_requested` (ADR-0020) which the Rust
+ * side emits when the user clicks an OS notification. Payloads carry a
+ * monotonically increasing `seq`.
+ */
 export const EVENT_KINDS = [
   "job.updated",
   "job.failed",
@@ -563,6 +567,7 @@ export const EVENT_KINDS = [
   "consent.required",
   "library.changed",
   "activity.added",
+  "ui.activation_requested",
 ] as const;
 export type EventKind = (typeof EVENT_KINDS)[number];
 
@@ -574,4 +579,23 @@ export interface UiEvent {
   recording_id: string | null;
   /** Opaque, non-authoritative hint payload; the store is the source of truth. */
   payload: Record<string, unknown>;
+}
+
+/** Target carried by `ui.activation_requested` when a notification is clicked. */
+export interface ActivationTarget {
+  kind: "recording" | "job" | "settings";
+  id: string;
+}
+
+/** Narrows an event payload to an activation target; returns null when absent. */
+export function activationTargetOf(event: UiEvent): ActivationTarget | null {
+  if (event.kind !== "ui.activation_requested") return null;
+  const target = event.payload.target;
+  if (!target || typeof target !== "object") return null;
+  if (!("kind" in target) || !("id" in target)) return null;
+  const kind = target.kind;
+  const id = target.id;
+  if (typeof id !== "string") return null;
+  if (kind !== "recording" && kind !== "job" && kind !== "settings") return null;
+  return { kind, id };
 }

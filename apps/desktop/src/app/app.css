@@ -116,6 +116,13 @@
   overflow: hidden;
 }
 
+.app-content__panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
 .screen-width-notice {
   padding: var(--space-3) var(--space-5);
   border-bottom: 1px solid var(--color-border-strong);

@@ -50,7 +50,14 @@ impl ExportPort for LocalBackend {
         )
         .await?;
 
-        let outcome = run(self, job_id, &request, &detail.title, revision.alignment_origin).await;
+        let outcome = run(
+            self,
+            job_id,
+            &request,
+            &detail.title,
+            revision.alignment_origin,
+        )
+        .await;
         finish(self, job_id, outcome).await?;
         Ok(job_id)
     }
@@ -91,7 +98,14 @@ pub async fn rerun(backend: &LocalBackend, job_id: JobId) -> Result<(), AppError
     };
     let detail = backend.recording_row(recording_id).await?;
     let revision = backend.revision_ref(revision_id).await?;
-    let outcome = run(backend, job_id, &request, &detail.title, revision.alignment_origin).await;
+    let outcome = run(
+        backend,
+        job_id,
+        &request,
+        &detail.title,
+        revision.alignment_origin,
+    )
+    .await;
     finish(backend, job_id, outcome).await
 }
 
@@ -124,26 +138,75 @@ async fn run(
     title: &str,
     alignment_origin: AlignmentOrigin,
 ) -> Result<(), AppError> {
-    jobs::transition(backend.pool(), job_id, JobState::Preflight, Some("validating"), None).await?;
-    let segments = backend.revision_segments(request.revision_id, 0, u32::MAX).await?;
-
-    jobs::transition(backend.pool(), job_id, JobState::RunningLocal, Some("rendering"), None)
+    jobs::transition(
+        backend.pool(),
+        job_id,
+        JobState::Preflight,
+        Some("validating"),
+        None,
+    )
+    .await?;
+    let segments = backend
+        .revision_segments(request.revision_id, 0, u32::MAX)
         .await?;
+
+    jobs::transition(
+        backend.pool(),
+        job_id,
+        JobState::RunningLocal,
+        Some("rendering"),
+        None,
+    )
+    .await?;
     let body = render(request, title, alignment_origin, &segments)?;
 
-    let destination = &request.destination.path;
+    write_and_verify(backend, job_id, &request.destination.path, &body).await?;
+    commit_export(backend, job_id, request).await?;
+
+    backend
+        .events()
+        .publish(
+            EventDraft::new(
+                EventKind::JobUpdated,
+                plaudon_domain::time::Timestamp::now(),
+            )
+            .with_job(job_id)
+            .with_recording(request.recording_id)
+            .with_hint("state", json!(JobState::Completed.as_str())),
+        )
+        .await;
+    Ok(())
+}
+
+/// Write the rendered document beside its destination, verify the bytes and
+/// rename onto exactly the path the user chose.
+async fn write_and_verify(
+    backend: &LocalBackend,
+    job_id: JobId,
+    destination: &std::path::Path,
+    body: &str,
+) -> Result<(), AppError> {
     let parent = destination
         .parent()
         .ok_or_else(|| AppError::new(AppErrorCode::ArchivePathRejected, "no parent directory"))?;
     let temporary = parent.join(format!(".plaudon-export-{}.part", uuid::Uuid::new_v4()));
-    tokio::fs::write(&temporary, body.as_bytes()).await.map_err(|err| {
-        AppError::new(
-            AppErrorCode::StorageUnavailable,
-            format!("cannot write the export file: {err}"),
-        )
-    })?;
+    tokio::fs::write(&temporary, body.as_bytes())
+        .await
+        .map_err(|err| {
+            AppError::new(
+                AppErrorCode::StorageUnavailable,
+                format!("cannot write the export file: {err}"),
+            )
+        })?;
 
-    jobs::transition(backend.pool(), job_id, JobState::Verifying, Some("verifying"), None).await?;
+    jobs::transition(
+        backend.pool(),
+        job_id,
+        JobState::Verifying,
+        Some("verifying"),
+        None,
+    )
+    .await?;
     let written = tokio::fs::read(&temporary).await.map_err(|err| {
         AppError::new(
             AppErrorCode::StorageUnavailable,
@@ -158,38 +221,68 @@ async fn run(
         ));
     }
 
-    jobs::transition(backend.pool(), job_id, JobState::Committing, Some("committing"), None)
-        .await?;
-    tokio::fs::rename(&temporary, destination).await.map_err(|err| {
-        AppError::new(
-            AppErrorCode::StorageUnavailable,
-            format!("cannot place the export file: {err}"),
-        )
-    })?;
+    jobs::transition(
+        backend.pool(),
+        job_id,
+        JobState::Committing,
+        Some("committing"),
+        None,
+    )
+    .await?;
+    tokio::fs::rename(&temporary, destination)
+        .await
+        .map_err(|err| {
+            AppError::new(
+                AppErrorCode::StorageUnavailable,
+                format!("cannot place the export file: {err}"),
+            )
+        })
+}
 
+/// Record the export event and complete the job in one transaction.
+async fn commit_export(
+    backend: &LocalBackend,
+    job_id: JobId,
+    request: &ValidatedExport,
+) -> Result<(), AppError> {
     let mut tx = backend
         .pool()
         .begin()
         .await
         .map_err(|err| storage_error("cannot begin an export commit", &err))?;
+    // Spec §13.2: `export_events` records that an export happened, with a
+    // hint rather than the complete path, which may be sensitive.
+    sqlx::query(
+        "INSERT INTO export_events (id, recording_id, format, destination_hint, created_at) \
+         VALUES (?1, ?2, ?3, ?4, ?5)",
+    )
+    .bind(uuid::Uuid::now_v7().to_string())
+    .bind(request.recording_id.to_string())
+    .bind(format_str(request.format))
+    .bind(
+        request
+            .destination
+            .path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default(),
+    )
+    .bind(plaudon_domain::time::Timestamp::now().as_millis())
+    .execute(&mut *tx)
+    .await
+    .map_err(|err| storage_error("cannot record an export event", &err))?;
     jobs::complete_in_tx(
         &mut tx,
         job_id,
-        Some(OutputLink { kind: OutputLinkKind::Export, id: job_id.to_string() }),
+        Some(OutputLink {
+            kind: OutputLinkKind::Export,
+            id: job_id.to_string(),
+        }),
     )
     .await?;
-    tx.commit().await.map_err(|err| storage_error("cannot commit an export", &err))?;
-
-    backend
-        .events()
-        .publish(
-            EventDraft::new(EventKind::JobUpdated, plaudon_domain::time::Timestamp::now())
-                .with_job(job_id)
-                .with_recording(request.recording_id)
-                .with_hint("state", json!(JobState::Completed.as_str())),
-        )
-        .await;
-    Ok(())
+    tx.commit()
+        .await
+        .map_err(|err| storage_error("cannot commit an export", &err))
 }
 
 /// Render a revision in the requested format.
@@ -209,7 +302,9 @@ fn render(
             let mut out = String::new();
             for segment in segments {
                 if let (true, Some(start)) = (timed, segment.start_ms) {
-                    out.push_str(&format!("[{}] ", format_timecode(start)));
+                    out.push('[');
+                    out.push_str(&format_timecode(start));
+                    out.push_str("] ");
                 }
                 out.push_str(&segment.text);
                 out.push('\n');
@@ -219,12 +314,14 @@ fn render(
         ExportFormat::Markdown => {
             let mut out = format!("# {title}\n\n");
             for segment in segments {
-                match (timed, segment.start_ms) {
-                    (true, Some(start)) => {
-                        out.push_str(&format!("- **{}** {}\n", format_timecode(start), segment.text));
-                    }
-                    _ => out.push_str(&format!("- {}\n", segment.text)),
+                out.push_str("- ");
+                if let (true, Some(start)) = (timed, segment.start_ms) {
+                    out.push_str("**");
+                    out.push_str(&format_timecode(start));
+                    out.push_str("** ");
                 }
+                out.push_str(&segment.text);
+                out.push('\n');
             }
             Ok(out)
         }
@@ -239,6 +336,14 @@ fn render(
             serde_json::to_string_pretty(&document)
                 .map_err(|err| internal(format!("cannot render the export: {err}")))
         }
+    }
+}
+
+const fn format_str(format: ExportFormat) -> &'static str {
+    match format {
+        ExportFormat::Txt => "txt",
+        ExportFormat::Markdown => "markdown",
+        ExportFormat::Json => "json",
     }
 }
 
@@ -285,28 +390,47 @@ mod tests {
     #[test]
     fn a_text_only_revision_is_exported_without_invented_timecodes() {
         let segments = vec![segment(0, "hello", None), segment(1, "world", None)];
-        let text =
-            render(&request(ExportFormat::Txt), "T", AlignmentOrigin::None, &segments).unwrap();
+        let text = render(
+            &request(ExportFormat::Txt),
+            "T",
+            AlignmentOrigin::None,
+            &segments,
+        )
+        .unwrap();
         assert_eq!(text, "hello\nworld\n");
-        let markdown =
-            render(&request(ExportFormat::Markdown), "T", AlignmentOrigin::None, &segments)
-                .unwrap();
+        let markdown = render(
+            &request(ExportFormat::Markdown),
+            "T",
+            AlignmentOrigin::None,
+            &segments,
+        )
+        .unwrap();
         assert_eq!(markdown, "# T\n\n- hello\n- world\n");
     }
 
     #[test]
     fn a_timed_revision_keeps_its_timecodes() {
         let segments = vec![segment(0, "hello", Some(61_000))];
-        let text =
-            render(&request(ExportFormat::Txt), "T", AlignmentOrigin::Native, &segments).unwrap();
+        let text = render(
+            &request(ExportFormat::Txt),
+            "T",
+            AlignmentOrigin::Native,
+            &segments,
+        )
+        .unwrap();
         assert_eq!(text, "[00:01:01] hello\n");
     }
 
     #[test]
     fn the_json_export_preserves_null_times() {
         let segments = vec![segment(0, "hello", None)];
-        let rendered =
-            render(&request(ExportFormat::Json), "T", AlignmentOrigin::None, &segments).unwrap();
+        let rendered = render(
+            &request(ExportFormat::Json),
+            "T",
+            AlignmentOrigin::None,
+            &segments,
+        )
+        .unwrap();
         let value: serde_json::Value = serde_json::from_str(&rendered).unwrap();
         assert_eq!(value["segments"][0]["start_ms"], serde_json::Value::Null);
         assert_eq!(value["alignment_origin"], "none");

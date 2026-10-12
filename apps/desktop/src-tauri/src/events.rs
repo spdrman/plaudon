@@ -39,7 +39,13 @@ impl EventDraft {
     /// A draft with an empty payload.
     #[must_use]
     pub fn new(kind: EventKind, occurred_at: Timestamp) -> Self {
-        Self { kind, occurred_at, job_id: None, recording_id: None, payload: Map::new() }
+        Self {
+            kind,
+            occurred_at,
+            job_id: None,
+            recording_id: None,
+            payload: Map::new(),
+        }
     }
 
     /// Attach a job.
@@ -97,7 +103,10 @@ impl RecordingEventSink {
     /// Snapshot of everything emitted so far.
     #[must_use]
     pub fn events(&self) -> Vec<UiEvent> {
-        self.events.lock().map(|events| events.clone()).unwrap_or_default()
+        self.events
+            .lock()
+            .map(|events| events.clone())
+            .unwrap_or_default()
     }
 
     /// Sequence numbers emitted so far.
@@ -160,7 +169,10 @@ impl EventPublisher {
             }
         };
         let Some(occurred_at) = draft.occurred_at.to_rfc3339() else {
-            tracing::warn!(kind = draft.kind.as_str(), "event timestamp is out of range");
+            tracing::warn!(
+                kind = draft.kind.as_str(),
+                "event timestamp is out of range"
+            );
             return;
         };
         let event = UiEvent {
@@ -222,7 +234,7 @@ mod tests {
     use super::*;
     use crate::backend::store::Store;
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn sequences_are_strictly_increasing_without_gaps() {
         let dir = tempfile::tempdir().unwrap();
         let store = Store::open(dir.path()).await.unwrap();
@@ -230,13 +242,15 @@ mod tests {
         let publisher = EventPublisher::new(store.pool().clone(), sink.clone());
 
         for _ in 0..5 {
-            publisher.publish(EventDraft::new(EventKind::LibraryChanged, Timestamp::now())).await;
+            publisher
+                .publish(EventDraft::new(EventKind::LibraryChanged, Timestamp::now()))
+                .await;
         }
 
         assert_eq!(sink.sequences(), vec![1, 2, 3, 4, 5]);
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn the_payload_round_trips_and_ids_are_rendered_as_strings() {
         let dir = tempfile::tempdir().unwrap();
         let store = Store::open(dir.path()).await.unwrap();

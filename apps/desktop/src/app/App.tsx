@@ -6,6 +6,7 @@ import { useAppState } from "./AppState";
 import { AppNav } from "./AppNav";
 import { ToastRegion } from "./ToastRegion";
 import { routeTitle } from "./router";
+import { activationTargetOf } from "../ipc/contract";
 import { COMPACT_LAYOUT_WIDTH, MIN_DESKTOP_WIDTH } from "../design/tokens";
 import { OnboardingFlow } from "../features/onboarding/OnboardingFlow";
 import { LibraryScreen } from "../features/library/LibraryScreen";
@@ -24,8 +25,15 @@ import { ShortcutsDialog } from "./ShortcutsDialog";
 import { destinationForEvent, isTextEntryTarget } from "./shortcuts";
 
 export function App() {
-  const { route, capabilities, capabilitiesError, refreshCapabilities, applyPreferences, navigate } =
-    useAppState();
+  const {
+    route,
+    capabilities,
+    capabilitiesError,
+    refreshCapabilities,
+    applyPreferences,
+    navigate,
+    onLibraryChanged,
+  } = useAppState();
   const width = useWindowWidth();
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
@@ -50,6 +58,22 @@ export function App() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [onKeyDown]);
+
+  // Clicking an OS notification activates the window and asks the UI to open
+  // the affected recording or job (§5.5, ADR-0020). Delivery is a hint: we
+  // navigate, then the destination refetches its own authoritative state.
+  useEffect(
+    () =>
+      onLibraryChanged((event) => {
+        if (!event) return;
+        const target = activationTargetOf(event);
+        if (!target) return;
+        if (target.kind === "recording") navigate({ name: "library.recording", recordingId: target.id });
+        else if (target.kind === "job") navigate({ name: "jobs.job", jobId: target.id });
+        else navigate({ name: "settings.activity" });
+      }),
+    [onLibraryChanged, navigate],
+  );
 
   if (capabilitiesError && !capabilities) {
     return (
@@ -114,12 +138,18 @@ export function App() {
                 ? "app-content app-content--flush"
                 : "app-content"
             }
-            id="main-region"
-            role="tabpanel"
-            aria-labelledby={`nav-${route.name.split(".")[0]}`}
-            tabIndex={-1}
           >
-            <RouteView />
+            {/* `main` cannot carry the tabpanel role, so the panel is an inner
+                box that the navigation's `aria-controls` points at. */}
+            <div
+              className="app-content__panel"
+              id="main-region"
+              role="tabpanel"
+              aria-labelledby={`nav-${route.name.split(".")[0]}`}
+              tabIndex={-1}
+            >
+              <RouteView />
+            </div>
           </main>
         </div>
         <ToastRegion />

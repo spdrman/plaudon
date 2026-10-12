@@ -1,37 +1,41 @@
-//! Manual import (spec §7.4) run as a real job.
+//! Manual import (spec §7.4) run as a real job over `plaudon_app_core`.
 //!
-//! One job per path, moving through
-//! `queued → preflight → running_local → verifying → committing → completed`,
-//! or to `failed_retryable` / `failed_terminal` with the envelope persisted on
-//! the row. Duplicates are decided on the **content hash only** — never on a
-//! file name or a timestamp (spec §14.2).
+//! The copy, hash, fsync, rename and journal steps belong to
+//! `plaudon_persistence::journal` and `plaudon_app_core::import`; this module
+//! only adds the job lifecycle
+//! (`queued → preflight → running_local → verifying → committing → completed`,
+//! or `failed_retryable` / `failed_terminal`), the duplicate decision the UI
+//! asked for, and the activity entry committed with the job.
+//!
+//! Duplicates are decided on the **content hash only** — never on a file name
+//! or a timestamp (spec §14.2). The source file is never modified, moved or
+//! deleted.
 
 use async_trait::async_trait;
+use plaudon_app_core::import::{ImportOutcome as CoreOutcome, ImportRequest, ImportService};
 use plaudon_domain::error::{AppError, AppErrorCode};
-use plaudon_domain::ids::{MediaAssetId, RecordingId};
-use plaudon_domain::media::Sha256Digest;
+use plaudon_domain::ids::{JobId, RecordingId};
+use plaudon_domain::media::{MediaIdentity, QualityClass, Sha256Digest};
 use plaudon_domain::time::Timestamp;
+use plaudon_notifications::privacy::NotificationContext;
+use plaudon_persistence::archive::MediaArchive;
 use serde_json::json;
 use sqlx::Row;
 
-use crate::backend::archive::{digest_file, Archive, StagedFile};
 use crate::backend::store::storage_error;
 use crate::backend::{activity, jobs, LocalBackend};
 use crate::dto::{
     ActivityTarget, ActivityTargetKind, DuplicatePolicy, EventKind, ImportFilesResponse,
-    ImportOutcome, ImportStatus, JobKind, JobState, NotificationCategory, OutputLink,
-    OutputLinkKind, SourceKind, TranscriptionStatus,
+    ImportOutcome, JobKind, JobState, NotificationCategory, OutputLink, OutputLinkKind,
 };
 use crate::error::envelope;
 use crate::events::EventDraft;
 use crate::ports::ImportPort;
 use crate::validate::{import_paths, validate_import_path, ValidatedImportPath};
 
-/// An existing asset that matches the imported bytes.
+/// An existing recording that already holds the imported bytes.
 #[derive(Debug, Clone)]
-struct ExistingBlob {
-    media_asset_id: MediaAssetId,
-    relative_path: String,
+struct ExistingRecording {
     recording_id: RecordingId,
     title: String,
 }
@@ -46,9 +50,10 @@ impl ImportPort for LocalBackend {
         let paths = import_paths(&paths)?;
         let mut results = Vec::with_capacity(paths.len());
         for path in paths {
-            let label = std::path::Path::new(&path)
-                .file_name()
-                .map_or_else(|| "Import".to_owned(), |name| name.to_string_lossy().into_owned());
+            let label = std::path::Path::new(&path).file_name().map_or_else(
+                || "Import".to_owned(),
+                |name| name.to_string_lossy().into_owned(),
+            );
             let job_id = jobs::create(
                 self.pool(),
                 &jobs::JobDraft {
@@ -69,7 +74,7 @@ impl ImportPort for LocalBackend {
 }
 
 /// Re-run the import a job was opened for, from its durable config snapshot.
-pub async fn rerun(backend: &LocalBackend, job_id: plaudon_domain::ids::JobId) -> Result<(), AppError> {
+pub async fn rerun(backend: &LocalBackend, job_id: JobId) -> Result<(), AppError> {
     let config = jobs::config_snapshot(backend.pool(), job_id).await?;
     let path = config
         .get("path")
@@ -89,328 +94,251 @@ pub async fn rerun(backend: &LocalBackend, job_id: plaudon_domain::ids::JobId) -
 
 async fn execute(
     backend: &LocalBackend,
-    job_id: plaudon_domain::ids::JobId,
+    job_id: JobId,
     requested_path: &str,
     policy: DuplicatePolicy,
 ) -> ImportOutcome {
     match run(backend, job_id, requested_path, policy).await {
         Ok(outcome) => outcome,
         Err(error) => {
-            let envelope = match jobs::fail(backend.pool(), job_id, &error).await {
-                Ok(envelope) => envelope,
+            let rendered = match jobs::fail(backend.pool(), job_id, &error).await {
+                Ok(rendered) => rendered,
                 Err(secondary) => envelope(&secondary),
             };
             if let Ok(summary) = jobs::load(backend.pool(), job_id).await {
                 jobs::publish_update(backend.events(), &summary).await;
             }
-            ImportOutcome::Rejected { path: requested_path.to_owned(), error: envelope }
+            ImportOutcome::Rejected {
+                path: requested_path.to_owned(),
+                error: rendered,
+            }
         }
     }
 }
 
 async fn run(
     backend: &LocalBackend,
-    job_id: plaudon_domain::ids::JobId,
+    job_id: JobId,
     requested_path: &str,
     policy: DuplicatePolicy,
 ) -> Result<ImportOutcome, AppError> {
-    jobs::transition(backend.pool(), job_id, JobState::Preflight, Some("validating"), None).await?;
+    jobs::transition(
+        backend.pool(),
+        job_id,
+        JobState::Preflight,
+        Some("validating"),
+        None,
+    )
+    .await?;
     let validated = validate_import_path(requested_path, backend.approved_roots())?;
 
-    jobs::transition(backend.pool(), job_id, JobState::RunningLocal, Some("hashing"), None).await?;
-    let staged = backend.archive().stage(&validated.resolved).await?;
-
-    jobs::transition(backend.pool(), job_id, JobState::Verifying, Some("verifying"), None).await?;
-    let (observed, observed_length) = digest_file(&staged.path).await?;
-    if observed != staged.digest || observed_length != staged.byte_length {
-        Archive::discard(staged).await;
+    // Hash the source in place before copying anything: a duplicate the user
+    // decides to skip must not cost a second copy of the bytes.
+    jobs::transition(
+        backend.pool(),
+        job_id,
+        JobState::RunningLocal,
+        Some("hashing"),
+        None,
+    )
+    .await?;
+    let (digest, byte_length) =
+        MediaArchive::digest_file(&validated.resolved).map_err(AppError::from)?;
+    if byte_length == 0 {
         return Err(AppError::new(
-            AppErrorCode::IntegrityFailed,
-            "the staged copy does not match the digest computed while streaming",
+            AppErrorCode::MediaValidationFailed,
+            "the selected file is empty",
         ));
     }
 
-    let existing = lookup_existing(backend, staged.digest, staged.byte_length).await?;
+    jobs::transition(
+        backend.pool(),
+        job_id,
+        JobState::Verifying,
+        Some("deduplicating"),
+        None,
+    )
+    .await?;
+    let existing = lookup_existing(backend, digest, byte_length).await?;
 
     if let Some(existing) = existing {
-        return resolve_duplicate(backend, job_id, requested_path, &validated, staged, existing, policy)
-            .await;
+        match policy {
+            DuplicatePolicy::Ask => {
+                // A decision is owed by the user, which is exactly what
+                // waiting_for_user means; nothing has been written.
+                jobs::transition(
+                    backend.pool(),
+                    job_id,
+                    JobState::WaitingForUser,
+                    Some("duplicate_decision"),
+                    None,
+                )
+                .await?;
+                publish_job(backend, job_id).await;
+                return Ok(ImportOutcome::Duplicate {
+                    path: requested_path.to_owned(),
+                    sha256: digest,
+                    existing_recording_id: existing.recording_id,
+                    existing_title: existing.title,
+                });
+            }
+            DuplicatePolicy::Skip | DuplicatePolicy::OpenExisting => {
+                jobs::transition(
+                    backend.pool(),
+                    job_id,
+                    JobState::Cancelled,
+                    Some("duplicate_skipped"),
+                    None,
+                )
+                .await?;
+                publish_job(backend, job_id).await;
+                return Ok(ImportOutcome::Skipped {
+                    path: requested_path.to_owned(),
+                    sha256: digest,
+                    existing_recording_id: existing.recording_id,
+                });
+            }
+            // One blob, two logical recordings (spec §6.3B, §13.3A): the
+            // import below reuses the stored blob instead of writing it twice.
+            DuplicatePolicy::ImportAnyway => {}
+        }
     }
 
-    jobs::transition(backend.pool(), job_id, JobState::Committing, Some("committing"), None)
-        .await?;
-    let relative_path = backend.archive().commit(&staged, &validated.extension).await?;
-    let recording_id =
-        commit_new_recording(backend, job_id, &validated, &staged, &relative_path).await?;
-
-    publish_import_events(backend, job_id, recording_id, &validated).await;
-    Ok(ImportOutcome::Accepted { path: requested_path.to_owned(), job_id })
+    jobs::transition(
+        backend.pool(),
+        job_id,
+        JobState::Committing,
+        Some("committing"),
+        None,
+    )
+    .await?;
+    let (recording_id, activity_id) = commit(backend, &validated, job_id).await?;
+    publish_import_events(backend, job_id, recording_id, &validated.original_file_name).await;
+    // Strictly after the commit, and never awaited on the command path: the
+    // OS notification is a side effect of a durable event (spec §14.5).
+    backend
+        .notifications()
+        .notify(
+            activity_id,
+            NotificationContext::ImportFinished {
+                imported: 1,
+                failed: 0,
+                recording: Some(recording_id),
+            },
+            Timestamp::now(),
+        )
+        .await;
+    Ok(ImportOutcome::Accepted {
+        path: requested_path.to_owned(),
+        job_id,
+    })
 }
 
 async fn lookup_existing(
     backend: &LocalBackend,
     digest: Sha256Digest,
     byte_length: u64,
-) -> Result<Option<ExistingBlob>, AppError> {
-    let length = i64::try_from(byte_length)
-        .map_err(|_| crate::error::internal("byte length does not fit in the database"))?;
+) -> Result<Option<ExistingRecording>, AppError> {
+    let identity = MediaIdentity::new(digest, byte_length, String::new());
+    let Some(asset) = backend
+        .assets()
+        .find_by_identity(&identity)
+        .await
+        .map_err(AppError::from)?
+    else {
+        return Ok(None);
+    };
     let row = sqlx::query(
-        "SELECT a.id AS asset_id, a.relative_path AS relative_path, r.id AS recording_id, \
-         r.title AS title FROM media_assets a \
-         JOIN recording_media rm ON rm.media_asset_id = a.id \
-         JOIN recordings r ON r.id = rm.recording_id \
-         WHERE a.sha256 = ?1 AND a.byte_length = ?2 \
-         ORDER BY rm.attached_at ASC LIMIT 1",
+        "SELECT r.id AS id, r.title AS title FROM recordings r \
+         JOIN recording_media rm ON rm.recording_id = r.id \
+         WHERE rm.media_asset_id = ?1 AND r.deleted_at IS NULL \
+         ORDER BY rm.obtained_at ASC LIMIT 1",
     )
-    .bind(digest.to_hex())
-    .bind(length)
+    .bind(asset.id.to_string())
     .fetch_optional(backend.pool())
     .await
-    .map_err(|err| storage_error("cannot look up an existing blob", &err))?;
+    .map_err(|err| storage_error("cannot resolve a duplicate blob", &err))?;
 
     let Some(row) = row else { return Ok(None) };
-    let asset_id: String = row.get("asset_id");
-    let recording_id: String = row.get("recording_id");
-    Ok(Some(ExistingBlob {
-        media_asset_id: asset_id
-            .parse()
-            .map_err(|_| crate::error::internal("stored media asset id is not a uuid"))?,
-        relative_path: row.get("relative_path"),
-        recording_id: recording_id
+    let id: String = row.get("id");
+    Ok(Some(ExistingRecording {
+        recording_id: id
             .parse()
             .map_err(|_| crate::error::internal("stored recording id is not a uuid"))?,
         title: row.get("title"),
     }))
 }
 
-#[allow(clippy::too_many_arguments)]
-async fn resolve_duplicate(
+/// Run the durable import and commit the job and activity entry with it.
+async fn commit(
     backend: &LocalBackend,
-    job_id: plaudon_domain::ids::JobId,
-    requested_path: &str,
     validated: &ValidatedImportPath,
-    staged: StagedFile,
-    existing: ExistingBlob,
-    policy: DuplicatePolicy,
-) -> Result<ImportOutcome, AppError> {
-    let digest = staged.digest;
-    match policy {
-        DuplicatePolicy::Ask => {
-            Archive::discard(staged).await;
-            // A decision is owed by the user, which is exactly what
-            // waiting_for_user means; nothing was written.
-            jobs::transition(
-                backend.pool(),
-                job_id,
-                JobState::WaitingForUser,
-                Some("duplicate_decision"),
-                None,
-            )
-            .await?;
-            if let Ok(summary) = jobs::load(backend.pool(), job_id).await {
-                jobs::publish_update(backend.events(), &summary).await;
-            }
-            Ok(ImportOutcome::Duplicate {
-                path: requested_path.to_owned(),
-                sha256: digest,
-                existing_recording_id: existing.recording_id,
-                existing_title: existing.title,
-            })
-        }
-        DuplicatePolicy::Skip | DuplicatePolicy::OpenExisting => {
-            Archive::discard(staged).await;
-            jobs::transition(
-                backend.pool(),
-                job_id,
-                JobState::Cancelled,
-                Some("duplicate_skipped"),
-                None,
-            )
-            .await?;
-            if let Ok(summary) = jobs::load(backend.pool(), job_id).await {
-                jobs::publish_update(backend.events(), &summary).await;
-            }
-            Ok(ImportOutcome::Skipped {
-                path: requested_path.to_owned(),
-                sha256: digest,
-                existing_recording_id: existing.recording_id,
-            })
-        }
-        DuplicatePolicy::ImportAnyway => {
-            // One blob, two logical recordings (spec §13.3A).
-            Archive::discard(staged).await;
-            jobs::transition(
-                backend.pool(),
-                job_id,
-                JobState::Committing,
-                Some("committing"),
-                None,
-            )
-            .await?;
-            let recording_id = commit_recording_for_existing_asset(
-                backend,
-                job_id,
-                validated,
-                digest,
-                &existing,
-            )
-            .await?;
-            publish_import_events(backend, job_id, recording_id, validated).await;
-            Ok(ImportOutcome::Accepted { path: requested_path.to_owned(), job_id })
-        }
-    }
-}
-
-async fn commit_new_recording(
-    backend: &LocalBackend,
-    job_id: plaudon_domain::ids::JobId,
-    validated: &ValidatedImportPath,
-    staged: &StagedFile,
-    relative_path: &str,
-) -> Result<RecordingId, AppError> {
+    job_id: JobId,
+) -> Result<(RecordingId, String), AppError> {
     let now = Timestamp::now();
-    let asset_id = MediaAssetId::new();
-    let recording_id = RecordingId::new();
-    let byte_length = i64::try_from(staged.byte_length)
-        .map_err(|_| crate::error::internal("byte length does not fit in the database"))?;
+    let title = title_for(validated);
+    let mut request = ImportRequest::local_file(title.clone(), validated.extension.clone());
+    request.quality_class = QualityClass::UserSuppliedFile;
 
-    let mut tx =
-        backend.pool().begin().await.map_err(|err| storage_error("cannot begin an import", &err))?;
-
-    sqlx::query(
-        "INSERT INTO media_assets (id, sha256, byte_length, relative_path, observed_codec, \
-         sample_rate_hz, channels, duration_ms, verification_state, verified_at, created_at) \
-         VALUES (?1, ?2, ?3, ?4, 'unknown', NULL, NULL, NULL, 'verified', ?5, ?5)",
-    )
-    .bind(asset_id.to_string())
-    .bind(staged.digest.to_hex())
-    .bind(byte_length)
-    .bind(relative_path)
-    .bind(now.as_millis())
-    .execute(&mut *tx)
+    // `ImportService::import` streams from a `&mut dyn Read`, which is not
+    // `Send`, so the whole use case runs on a blocking worker and the copy
+    // never occupies an async worker thread either.
+    let service = backend.imports().clone();
+    let source = validated.resolved.clone();
+    let outcome = tokio::task::spawn_blocking(move || {
+        let mut file = std::fs::File::open(&source).map_err(|err| {
+            AppError::new(
+                AppErrorCode::ArchivePathRejected,
+                format!("cannot open the source file: {err}"),
+            )
+        })?;
+        tokio::runtime::Handle::current()
+            .block_on(service.import(&request, &mut file, now))
+            .map_err(AppError::from)
+    })
     .await
-    .map_err(|err| storage_error("cannot insert a media asset", &err))?;
+    .map_err(|err| crate::error::internal(format!("the import worker failed: {err}")))??;
 
-    insert_recording(&mut tx, recording_id, validated, now).await?;
+    let recording_id = match outcome {
+        CoreOutcome::Imported { recording_id, .. }
+        | CoreOutcome::MediaCandidateAdded { recording_id, .. }
+        | CoreOutcome::AlreadyImported { recording_id, .. } => recording_id,
+        CoreOutcome::RefusedTombstoned { .. } => {
+            return Err(AppError::new(
+                AppErrorCode::Conflict,
+                "the recording was deleted locally and will not be resurrected",
+            ))
+        }
+    };
 
-    sqlx::query(
-        "INSERT INTO recording_media (recording_id, media_asset_id, quality_class, \
-         is_preferred, attached_at) VALUES (?1, ?2, 'user_supplied_file', 1, ?3)",
-    )
-    .bind(recording_id.to_string())
-    .bind(asset_id.to_string())
-    .bind(now.as_millis())
-    .execute(&mut *tx)
-    .await
-    .map_err(|err| storage_error("cannot attach media to a recording", &err))?;
+    backend
+        .record_original_file_name(recording_id, &validated.original_file_name, now)
+        .await?;
+    attach_recording(backend, job_id, recording_id).await?;
 
-    attach_job_and_activity(&mut tx, job_id, recording_id, validated, now).await?;
-
-    tx.commit().await.map_err(|err| storage_error("cannot commit an import", &err))?;
-    Ok(recording_id)
-}
-
-async fn commit_recording_for_existing_asset(
-    backend: &LocalBackend,
-    job_id: plaudon_domain::ids::JobId,
-    validated: &ValidatedImportPath,
-    _digest: Sha256Digest,
-    existing: &ExistingBlob,
-) -> Result<RecordingId, AppError> {
-    let now = Timestamp::now();
-    let recording_id = RecordingId::new();
     let mut tx = backend
         .pool()
         .begin()
         .await
-        .map_err(|err| storage_error("cannot begin a duplicate import", &err))?;
-
-    insert_recording(&mut tx, recording_id, validated, now).await?;
-    sqlx::query(
-        "INSERT INTO recording_media (recording_id, media_asset_id, quality_class, \
-         is_preferred, attached_at) VALUES (?1, ?2, 'user_supplied_file', 1, ?3)",
-    )
-    .bind(recording_id.to_string())
-    .bind(existing.media_asset_id.to_string())
-    .bind(now.as_millis())
-    .execute(&mut *tx)
-    .await
-    .map_err(|err| storage_error("cannot attach the shared media asset", &err))?;
-
-    attach_job_and_activity(&mut tx, job_id, recording_id, validated, now).await?;
-    tx.commit().await.map_err(|err| storage_error("cannot commit a duplicate import", &err))?;
-
-    debug_assert!(backend.archive().contains(&existing.relative_path));
-    Ok(recording_id)
-}
-
-async fn insert_recording(
-    tx: &mut sqlx::SqliteConnection,
-    recording_id: RecordingId,
-    validated: &ValidatedImportPath,
-    now: Timestamp,
-) -> Result<(), AppError> {
-    // `recorded_at` and `duration_ms` stay NULL: nothing here measured them,
-    // and a file modification time is not a capture time (spec §8.6A).
-    sqlx::query(
-        "INSERT INTO recordings (id, title, recorded_at, imported_at, duration_ms, source_kind, \
-         source_label, import_status, transcription_status, processing_engine, last_error_json, \
-         tags_json, original_file_name, current_revision_id, deleted_at) \
-         VALUES (?1, ?2, NULL, ?3, NULL, ?4, ?5, ?6, ?7, NULL, NULL, '[]', ?8, NULL, NULL)",
-    )
-    .bind(recording_id.to_string())
-    .bind(title_for(validated))
-    .bind(now.as_millis())
-    .bind(serde_json::to_value(SourceKind::ManualImport).map_or_else(
-        |_| "manual_import".to_owned(),
-        |value| value.as_str().unwrap_or("manual_import").to_owned(),
-    ))
-    .bind("Manual import")
-    .bind(serde_json::to_value(ImportStatus::Imported).map_or_else(
-        |_| "imported".to_owned(),
-        |value| value.as_str().unwrap_or("imported").to_owned(),
-    ))
-    .bind(serde_json::to_value(TranscriptionStatus::None).map_or_else(
-        |_| "none".to_owned(),
-        |value| value.as_str().unwrap_or("none").to_owned(),
-    ))
-    .bind(&validated.original_file_name)
-    .execute(&mut *tx)
-    .await
-    .map_err(|err| storage_error("cannot insert a recording", &err))?;
-    Ok(())
-}
-
-async fn attach_job_and_activity(
-    tx: &mut sqlx::SqliteConnection,
-    job_id: plaudon_domain::ids::JobId,
-    recording_id: RecordingId,
-    validated: &ValidatedImportPath,
-    now: Timestamp,
-) -> Result<(), AppError> {
-    sqlx::query("UPDATE jobs SET recording_id = ?2 WHERE id = ?1")
-        .bind(job_id.to_string())
-        .bind(recording_id.to_string())
-        .execute(&mut *tx)
-        .await
-        .map_err(|err| storage_error("cannot link a job to its recording", &err))?;
-
+        .map_err(|err| storage_error("cannot begin an import commit", &err))?;
     jobs::complete_in_tx(
-        tx,
+        &mut tx,
         job_id,
-        Some(OutputLink { kind: OutputLinkKind::Recording, id: recording_id.to_string() }),
+        Some(OutputLink {
+            kind: OutputLinkKind::Recording,
+            id: recording_id.to_string(),
+        }),
     )
     .await?;
-
     // Spec §22(13): the activity entry is committed with the job, so it exists
     // whether or not a notification is ever delivered.
-    activity::record_in_tx(
-        tx,
+    let activity_id = activity::record_in_tx(
+        &mut tx,
         &activity::ActivityDraft {
             category: NotificationCategory::ImportFinished,
             occurred_at: now,
             title: "Import finished".to_owned(),
-            body: format!("{} was added to your library.", title_for(validated)),
+            body: format!("{title} was added to your library."),
             target: Some(ActivityTarget {
                 kind: ActivityTargetKind::Recording,
                 id: recording_id.to_string(),
@@ -418,40 +346,72 @@ async fn attach_job_and_activity(
         },
     )
     .await?;
+    tx.commit()
+        .await
+        .map_err(|err| storage_error("cannot commit an import", &err))?;
+
+    Ok((recording_id, activity_id))
+}
+
+/// Record the produced recording on the job's durable config snapshot.
+///
+/// The core `jobs` table has no recording column; the snapshot is the row that
+/// already carries the request, so the association lives there.
+async fn attach_recording(
+    backend: &LocalBackend,
+    job_id: JobId,
+    recording_id: RecordingId,
+) -> Result<(), AppError> {
+    let mut config = jobs::config_snapshot(backend.pool(), job_id).await?;
+    if let Some(object) = config.as_object_mut() {
+        object.insert("recording_id".to_owned(), json!(recording_id.to_string()));
+    }
+    sqlx::query("UPDATE jobs SET config_snapshot_json = ?2 WHERE id = ?1")
+        .bind(job_id.to_string())
+        .bind(config.to_string())
+        .execute(backend.pool())
+        .await
+        .map_err(|err| storage_error("cannot link a job to its recording", &err))?;
     Ok(())
+}
+
+async fn publish_job(backend: &LocalBackend, job_id: JobId) {
+    if let Ok(summary) = jobs::load(backend.pool(), job_id).await {
+        jobs::publish_update(backend.events(), &summary).await;
+    }
 }
 
 async fn publish_import_events(
     backend: &LocalBackend,
-    job_id: plaudon_domain::ids::JobId,
+    job_id: JobId,
     recording_id: RecordingId,
-    validated: &ValidatedImportPath,
+    original_file_name: &str,
 ) {
     let now = Timestamp::now();
-    if let Ok(summary) = jobs::load(backend.pool(), job_id).await {
-        jobs::publish_update(backend.events(), &summary).await;
-    }
+    publish_job(backend, job_id).await;
     backend
         .events()
         .publish(
             EventDraft::new(EventKind::RecordingImported, now)
                 .with_job(job_id)
                 .with_recording(recording_id)
-                .with_hint("title", json!(title_for(validated))),
+                .with_hint("original_file_name", json!(original_file_name)),
         )
         .await;
     backend
         .events()
         .publish(EventDraft::new(EventKind::ActivityAdded, now).with_recording(recording_id))
         .await;
-    backend.events().publish(EventDraft::new(EventKind::LibraryChanged, now)).await;
+    backend
+        .events()
+        .publish(EventDraft::new(EventKind::LibraryChanged, now))
+        .await;
 }
 
 /// Display title derived from the original file name.
 ///
-/// The name is data: it is only ever stored and shown, never used to build a
-/// path (the archive name comes from the content hash) and never passed to a
-/// process.
+/// The name is data: it is only stored and shown, never used to build a path
+/// (archive paths come from the content hash) and never passed to a process.
 fn title_for(validated: &ValidatedImportPath) -> String {
     let stem = std::path::Path::new(&validated.original_file_name)
         .file_stem()
@@ -461,5 +421,86 @@ fn title_for(validated: &ValidatedImportPath) -> String {
         validated.original_file_name.clone()
     } else {
         stem
+    }
+}
+
+/// The service a replacement implementation must provide.
+///
+/// Kept as a named helper so the import path has exactly one place that knows
+/// which use case it drives.
+#[must_use]
+pub fn service(backend: &LocalBackend) -> &ImportService {
+    backend.imports()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::backend::testing::backend_fixture;
+    use crate::ports::ImportPort;
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn an_empty_file_is_rejected_before_anything_is_stored() {
+        let fixture = backend_fixture().await;
+        let path = fixture.source_file("empty.wav", b"");
+        let response = fixture
+            .backend
+            .import_files(vec![path], DuplicatePolicy::Ask)
+            .await
+            .unwrap();
+        let ImportOutcome::Rejected { error, .. } = &response.results[0] else {
+            panic!("an empty file must be rejected");
+        };
+        assert_eq!(error.code, AppErrorCode::MediaValidationFailed);
+        assert_eq!(fixture.backend.archive().list_blobs().unwrap().len(), 0);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn the_source_file_is_never_modified_or_removed() {
+        let fixture = backend_fixture().await;
+        let bytes = b"RIFF original bytes".to_vec();
+        let path = fixture.source_file("keep.wav", &bytes);
+        fixture
+            .backend
+            .import_files(vec![path.clone()], DuplicatePolicy::Ask)
+            .await
+            .unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), bytes);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn an_import_walks_the_expected_job_states() {
+        let fixture = backend_fixture().await;
+        let path = fixture.source_file("states.wav", b"RIFF states");
+        let response = fixture
+            .backend
+            .import_files(vec![path], DuplicatePolicy::Ask)
+            .await
+            .unwrap();
+        let ImportOutcome::Accepted { job_id, .. } = &response.results[0] else {
+            panic!("expected an accepted import");
+        };
+        let summary = jobs::load(fixture.backend.pool(), *job_id).await.unwrap();
+        assert_eq!(summary.state, JobState::Completed);
+        assert_eq!(summary.kind, JobKind::Import);
+        assert!(summary.finished_at.is_some());
+
+        let steps: Vec<String> =
+            sqlx::query_scalar("SELECT state FROM job_steps WHERE job_id = ?1 ORDER BY sequence")
+                .bind(job_id.to_string())
+                .fetch_all(fixture.backend.pool())
+                .await
+                .unwrap();
+        assert_eq!(
+            steps,
+            vec![
+                "queued".to_owned(),
+                "preflight".to_owned(),
+                "running_local".to_owned(),
+                "verifying".to_owned(),
+                "committing".to_owned(),
+                "completed".to_owned(),
+            ]
+        );
     }
 }

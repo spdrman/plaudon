@@ -679,13 +679,19 @@ impl JobState {
     /// Parse a stored or requested state string.
     #[must_use]
     pub fn parse(value: &str) -> Option<Self> {
-        Self::ALL.iter().copied().find(|state| state.as_str() == value)
+        Self::ALL
+            .iter()
+            .copied()
+            .find(|state| state.as_str() == value)
     }
 
     /// Whether no further transition is possible.
     #[must_use]
     pub const fn is_terminal(self) -> bool {
-        matches!(self, Self::Completed | Self::FailedTerminal | Self::Cancelled)
+        matches!(
+            self,
+            Self::Completed | Self::FailedTerminal | Self::Cancelled
+        )
     }
 }
 
@@ -734,7 +740,10 @@ impl JobKind {
     /// Parse a stored or requested kind string.
     #[must_use]
     pub fn parse(value: &str) -> Option<Self> {
-        Self::ALL.iter().copied().find(|kind| kind.as_str() == value)
+        Self::ALL
+            .iter()
+            .copied()
+            .find(|kind| kind.as_str() == value)
     }
 }
 
@@ -977,7 +986,10 @@ impl NotificationCategory {
     /// Parse a stored or requested category string.
     #[must_use]
     pub fn parse(value: &str) -> Option<Self> {
-        Self::ALL.iter().copied().find(|category| category.as_str() == value)
+        Self::ALL
+            .iter()
+            .copied()
+            .find(|category| category.as_str() == value)
     }
 }
 
@@ -1163,6 +1175,12 @@ pub enum EventKind {
     /// An activity entry was appended.
     #[serde(rename = "activity.added")]
     ActivityAdded,
+    /// The user clicked an OS notification and the app should navigate.
+    ///
+    /// The only event name outside §15.3; recorded in ADR-0020 next to the
+    /// two command additions.
+    #[serde(rename = "ui.activation_requested")]
+    ActivationRequested,
 }
 
 impl EventKind {
@@ -1178,6 +1196,7 @@ impl EventKind {
         Self::ConsentRequired,
         Self::LibraryChanged,
         Self::ActivityAdded,
+        Self::ActivationRequested,
     ];
 
     /// Stable wire string, which is also the Tauri event name.
@@ -1194,6 +1213,7 @@ impl EventKind {
             Self::ConsentRequired => "consent.required",
             Self::LibraryChanged => "library.changed",
             Self::ActivityAdded => "activity.added",
+            Self::ActivationRequested => "ui.activation_requested",
         }
     }
 }
@@ -1263,7 +1283,8 @@ mod tests {
             let json = serde_json::to_string(kind).unwrap();
             assert_eq!(json, format!("\"{}\"", kind.as_str()));
         }
-        assert_eq!(EventKind::ALL.len(), 10);
+        // The ten §15.3 names plus the ADR-0020 activation event.
+        assert_eq!(EventKind::ALL.len(), 11);
     }
 
     #[test]
@@ -1336,13 +1357,19 @@ mod tests {
             outputs: Vec::new(),
         };
         let json = serde_json::to_value(&detail).unwrap();
-        assert!(json.get("recording_id").is_some(), "summary fields are flattened");
+        assert!(
+            json.get("recording_id").is_some(),
+            "summary fields are flattened"
+        );
         assert_eq!(json["media"]["original_file_name"], "a.wav");
         assert_eq!(json["duration_ms"], serde_json::Value::Null);
     }
 
     #[test]
     fn status_response_is_always_ok_true() {
-        assert_eq!(serde_json::to_value(StatusResponse::ok()).unwrap()["ok"], true);
+        assert_eq!(
+            serde_json::to_value(StatusResponse::ok()).unwrap()["ok"],
+            true
+        );
     }
 }

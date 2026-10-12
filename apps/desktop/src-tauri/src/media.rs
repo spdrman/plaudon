@@ -53,7 +53,10 @@ pub enum RangeError {
 /// Multi-range requests are deliberately not implemented: the webview never
 /// sends one for media playback, and answering one requires multipart bodies.
 pub fn parse_range(header: &str, length: u64) -> Result<ByteRange, RangeError> {
-    let spec = header.trim().strip_prefix("bytes=").ok_or(RangeError::Malformed)?;
+    let spec = header
+        .trim()
+        .strip_prefix("bytes=")
+        .ok_or(RangeError::Malformed)?;
     if spec.contains(',') {
         return Err(RangeError::Malformed);
     }
@@ -72,7 +75,10 @@ pub fn parse_range(header: &str, length: u64) -> Result<ByteRange, RangeError> {
             return Err(RangeError::Unsatisfiable);
         }
         let start = length.saturating_sub(suffix);
-        ByteRange { start, end: length - 1 }
+        ByteRange {
+            start,
+            end: length - 1,
+        }
     } else {
         let start: u64 = raw_start.parse().map_err(|_| RangeError::Malformed)?;
         if start >= length {
@@ -90,7 +96,10 @@ pub fn parse_range(header: &str, length: u64) -> Result<ByteRange, RangeError> {
         ByteRange { start, end }
     };
 
-    Ok(ByteRange { start: range.start, end: range.end.min(range.start + MAX_CHUNK_BYTES - 1) })
+    Ok(ByteRange {
+        start: range.start,
+        end: range.end.min(range.start + MAX_CHUNK_BYTES - 1),
+    })
 }
 
 /// Parse the path component of a `plaudon-media` URL.
@@ -174,8 +183,14 @@ pub async fn serve(
 
 async fn serve_resolved(media: &ResolvedMedia, range_header: Option<&str>) -> MediaResponse {
     let Some(header) = range_header else {
-        return match read_slice(media, ByteRange { start: 0, end: media.byte_length.max(1) - 1 })
-            .await
+        return match read_slice(
+            media,
+            ByteRange {
+                start: 0,
+                end: media.byte_length.max(1) - 1,
+            },
+        )
+        .await
         {
             Ok(body) => MediaResponse {
                 status: 200,
@@ -213,9 +228,11 @@ async fn read_slice(media: &ResolvedMedia, range: ByteRange) -> Result<Vec<u8>, 
     let mut file = tokio::fs::File::open(&media.path).await.map_err(|err| {
         tracing::warn!(error = %err, "archived blob could not be opened");
     })?;
-    file.seek(SeekFrom::Start(range.start)).await.map_err(|err| {
-        tracing::warn!(error = %err, "archived blob could not be positioned");
-    })?;
+    file.seek(SeekFrom::Start(range.start))
+        .await
+        .map_err(|err| {
+            tracing::warn!(error = %err, "archived blob could not be positioned");
+        })?;
     let length = usize::try_from(range.length().min(MAX_CHUNK_BYTES)).unwrap_or(0);
     let mut body = vec![0u8; length];
     let read = file.read_exact(&mut body).await.unwrap_or(0);
@@ -226,6 +243,7 @@ async fn read_slice(media: &ResolvedMedia, range: ByteRange) -> Result<Vec<u8>, 
 /// Register the scheme on the Tauri builder.
 pub fn register<R: tauri::Runtime>(builder: tauri::Builder<R>) -> tauri::Builder<R> {
     builder.register_asynchronous_uri_scheme_protocol(SCHEME, move |context, request, responder| {
+        use tauri::Manager as _;
         let Some(state) = context.app_handle().try_state::<crate::AppState>() else {
             responder.respond(
                 tauri::http::Response::builder()
@@ -267,10 +285,28 @@ mod tests {
 
     #[test]
     fn range_parsing_covers_the_forms_a_media_element_sends() {
-        assert_eq!(parse_range("bytes=0-", LENGTH).unwrap(), ByteRange { start: 0, end: 999 });
-        assert_eq!(parse_range("bytes=0-99", LENGTH).unwrap(), ByteRange { start: 0, end: 99 });
-        assert_eq!(parse_range("bytes=500-", LENGTH).unwrap(), ByteRange { start: 500, end: 999 });
-        assert_eq!(parse_range("bytes=-100", LENGTH).unwrap(), ByteRange { start: 900, end: 999 });
+        assert_eq!(
+            parse_range("bytes=0-", LENGTH).unwrap(),
+            ByteRange { start: 0, end: 999 }
+        );
+        assert_eq!(
+            parse_range("bytes=0-99", LENGTH).unwrap(),
+            ByteRange { start: 0, end: 99 }
+        );
+        assert_eq!(
+            parse_range("bytes=500-", LENGTH).unwrap(),
+            ByteRange {
+                start: 500,
+                end: 999
+            }
+        );
+        assert_eq!(
+            parse_range("bytes=-100", LENGTH).unwrap(),
+            ByteRange {
+                start: 900,
+                end: 999
+            }
+        );
         assert_eq!(
             parse_range("bytes=0-100000", LENGTH).unwrap(),
             ByteRange { start: 0, end: 999 },
@@ -282,11 +318,26 @@ mod tests {
     #[test]
     fn range_parsing_rejects_what_it_cannot_honour() {
         assert_eq!(parse_range("items=0-1", LENGTH), Err(RangeError::Malformed));
-        assert_eq!(parse_range("bytes=0-1,5-6", LENGTH), Err(RangeError::Malformed));
-        assert_eq!(parse_range("bytes=abc-", LENGTH), Err(RangeError::Malformed));
-        assert_eq!(parse_range("bytes=10-5", LENGTH), Err(RangeError::Malformed));
-        assert_eq!(parse_range("bytes=1000-", LENGTH), Err(RangeError::Unsatisfiable));
-        assert_eq!(parse_range("bytes=-0", LENGTH), Err(RangeError::Unsatisfiable));
+        assert_eq!(
+            parse_range("bytes=0-1,5-6", LENGTH),
+            Err(RangeError::Malformed)
+        );
+        assert_eq!(
+            parse_range("bytes=abc-", LENGTH),
+            Err(RangeError::Malformed)
+        );
+        assert_eq!(
+            parse_range("bytes=10-5", LENGTH),
+            Err(RangeError::Malformed)
+        );
+        assert_eq!(
+            parse_range("bytes=1000-", LENGTH),
+            Err(RangeError::Unsatisfiable)
+        );
+        assert_eq!(
+            parse_range("bytes=-0", LENGTH),
+            Err(RangeError::Unsatisfiable)
+        );
         assert_eq!(parse_range("bytes=0-", 0), Err(RangeError::Unsatisfiable));
     }
 
@@ -310,7 +361,10 @@ mod tests {
             "/%2e%2e",
             "/00000000-0000-0000-0000-000000000000/../x",
         ] {
-            assert!(parse_media_path(hostile).is_err(), "{hostile} must not resolve");
+            assert!(
+                parse_media_path(hostile).is_err(),
+                "{hostile} must not resolve"
+            );
         }
     }
 
@@ -319,10 +373,13 @@ mod tests {
         assert_eq!(content_type_for("media/ab/cd/x.wav"), "audio/wav");
         assert_eq!(content_type_for("media/ab/cd/x.MP3"), "audio/mpeg");
         assert_eq!(content_type_for("media/ab/cd/x.opus"), "audio/opus");
-        assert_eq!(content_type_for("media/ab/cd/x"), "application/octet-stream");
+        assert_eq!(
+            content_type_for("media/ab/cd/x"),
+            "application/octet-stream"
+        );
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn a_range_request_is_answered_with_206_and_the_exact_slice() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("blob.wav");

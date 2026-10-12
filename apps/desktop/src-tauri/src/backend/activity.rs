@@ -68,10 +68,7 @@ pub async fn record_in_tx(
 
 #[async_trait]
 impl ActivityPort for LocalBackend {
-    async fn list_activity(
-        &self,
-        query: ValidatedListActivity,
-    ) -> Result<ActivityPage, AppError> {
+    async fn list_activity(&self, query: ValidatedListActivity) -> Result<ActivityPage, AppError> {
         let limit = i64::from(query.limit);
         let offset = i64::try_from(query.cursor.offset())
             .map_err(|_| internal("activity cursor offset is out of range"))?;
@@ -93,15 +90,18 @@ impl ActivityPort for LocalBackend {
             let target_kind: Option<String> = row.get("target_kind");
             let target_id: Option<String> = row.get("target_id");
             let target = match (target_kind.as_deref(), target_id) {
-                (Some("recording"), Some(id)) => {
-                    Some(ActivityTarget { kind: ActivityTargetKind::Recording, id })
-                }
-                (Some("job"), Some(id)) => {
-                    Some(ActivityTarget { kind: ActivityTargetKind::Job, id })
-                }
-                (Some("settings"), Some(id)) => {
-                    Some(ActivityTarget { kind: ActivityTargetKind::Settings, id })
-                }
+                (Some("recording"), Some(id)) => Some(ActivityTarget {
+                    kind: ActivityTargetKind::Recording,
+                    id,
+                }),
+                (Some("job"), Some(id)) => Some(ActivityTarget {
+                    kind: ActivityTargetKind::Job,
+                    id,
+                }),
+                (Some("settings"), Some(id)) => Some(ActivityTarget {
+                    kind: ActivityTargetKind::Settings,
+                    id,
+                }),
                 _ => None,
             };
             items.push(ActivityEntry {
@@ -125,7 +125,11 @@ impl ActivityPort for LocalBackend {
             .await
             .map_err(|err| storage_error("cannot count unread activity", &err))?;
 
-        Ok(ActivityPage { items, next_cursor, unread_count: as_u64("unread count", unread)? })
+        Ok(ActivityPage {
+            items,
+            next_cursor,
+            unread_count: as_u64("unread count", unread)?,
+        })
     }
 }
 
@@ -134,7 +138,7 @@ mod tests {
     use super::*;
     use crate::backend::testing::backend_fixture;
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn entries_page_newest_first_and_report_no_delivery_until_one_is_recorded() {
         let fixture = backend_fixture().await;
         let mut conn = fixture.backend.pool().acquire().await.unwrap();
@@ -156,14 +160,20 @@ mod tests {
 
         let page = fixture
             .backend
-            .list_activity(ValidatedListActivity { cursor: PageCursor::START, limit: 2 })
+            .list_activity(ValidatedListActivity {
+                cursor: PageCursor::START,
+                limit: 2,
+            })
             .await
             .unwrap();
         assert_eq!(page.items.len(), 2);
         assert_eq!(page.items[0].title, "entry 2");
         assert_eq!(page.unread_count, 3);
         assert!(!page.items[0].notification_delivered);
-        assert_eq!(page.items[0].notification_suppressed_reason.as_deref(), Some(NOT_ATTEMPTED));
+        assert_eq!(
+            page.items[0].notification_suppressed_reason.as_deref(),
+            Some(NOT_ATTEMPTED)
+        );
 
         let cursor = page.next_cursor.clone().unwrap();
         let second = fixture

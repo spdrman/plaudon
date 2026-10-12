@@ -1,7 +1,7 @@
 //! Opening the library: one database, one migration runner, one archive.
 //!
-//! The desktop shell owns no schema of its own beyond migration 9001
-//! (`crates/persistence/migrations/9001_desktop_shell.sql`), which is applied
+//! The desktop shell owns no schema of its own beyond migration 0300
+//! (`crates/persistence/migrations/0300_desktop_shell.sql`), which is applied
 //! by [`plaudon_persistence::migrations::MigrationRunner`] together with the
 //! core migrations. There is no second database file and no second migration
 //! history, so the tamper-detection gate stays valid.
@@ -36,8 +36,13 @@ impl Store {
                 format!("cannot create the library directory: {err}"),
             )
         })?;
-        let db = Database::open(root.join(DATABASE_FILE_NAME)).await.map_err(AppError::from)?;
-        MigrationRunner::new().run(&db).await.map_err(AppError::from)?;
+        let db = Database::open(root.join(DATABASE_FILE_NAME))
+            .await
+            .map_err(AppError::from)?;
+        MigrationRunner::new()
+            .run(&db)
+            .await
+            .map_err(AppError::from)?;
         let archive = MediaArchive::open(&root).map_err(AppError::from)?;
         Ok(Self { db, archive, root })
     }
@@ -75,26 +80,39 @@ impl Store {
 
 /// Map a sqlx failure that is not expected to happen to a storage error.
 pub fn storage_error(context: &str, err: &sqlx::Error) -> AppError {
-    AppError::new(AppErrorCode::StorageUnavailable, format!("{context}: {err}"))
+    AppError::new(
+        AppErrorCode::StorageUnavailable,
+        format!("{context}: {err}"),
+    )
 }
 
 /// Convert a stored signed integer to an unsigned count.
 pub fn as_u64(context: &'static str, value: i64) -> Result<u64, AppError> {
-    u64::try_from(value)
-        .map_err(|_| AppError::new(AppErrorCode::InternalError, format!("{context} is negative")))
+    u64::try_from(value).map_err(|_| {
+        AppError::new(
+            AppErrorCode::InternalError,
+            format!("{context} is negative"),
+        )
+    })
 }
 
 /// Convert a stored signed integer to a 32-bit count.
 pub fn as_u32(context: &'static str, value: i64) -> Result<u32, AppError> {
     u32::try_from(value).map_err(|_| {
-        AppError::new(AppErrorCode::InternalError, format!("{context} is out of range"))
+        AppError::new(
+            AppErrorCode::InternalError,
+            format!("{context} is out of range"),
+        )
     })
 }
 
 /// Render a stored instant as the RFC 3339 string the contract requires.
 pub fn rfc3339(context: &'static str, millis: i64) -> Result<String, AppError> {
     Timestamp::from_millis(millis).to_rfc3339().ok_or_else(|| {
-        AppError::new(AppErrorCode::InternalError, format!("{context} is out of range"))
+        AppError::new(
+            AppErrorCode::InternalError,
+            format!("{context} is out of range"),
+        )
     })
 }
 
@@ -107,13 +125,16 @@ pub fn rfc3339_opt(context: &'static str, millis: Option<i64>) -> Result<Option<
 mod tests {
     use super::*;
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn opening_twice_is_idempotent_and_runs_one_migration_history() {
         let dir = tempfile::tempdir().unwrap();
         let first = Store::open(dir.path()).await.unwrap();
         let applied = MigrationRunner::applied(first.db()).await.unwrap();
-        assert_eq!(applied.len(), plaudon_persistence::migrations::MIGRATIONS.len());
-        assert!(applied.iter().any(|row| row.version == 9001));
+        assert_eq!(
+            applied.len(),
+            plaudon_persistence::migrations::MIGRATIONS.len()
+        );
+        assert!(applied.iter().any(|row| row.version == 300));
         first.db().close().await;
 
         let second = Store::open(dir.path()).await.unwrap();
@@ -124,7 +145,7 @@ mod tests {
         second.db().close().await;
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn the_desktop_tables_exist_next_to_the_core_tables() {
         let dir = tempfile::tempdir().unwrap();
         let store = Store::open(dir.path()).await.unwrap();
@@ -143,7 +164,10 @@ mod tests {
             "recording_import_metadata",
             "schema_migrations",
         ] {
-            assert!(names.iter().any(|name| name == expected), "missing table {expected}");
+            assert!(
+                names.iter().any(|name| name == expected),
+                "missing table {expected}"
+            );
         }
         assert!(
             !names.iter().any(|name| name == "desktop_schema_version"),

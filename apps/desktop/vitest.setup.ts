@@ -28,4 +28,8 @@ if (!window.HTMLElement.prototype.scrollTo) {
   } as HTMLElement["scrollTo"];
 }
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  // The router reads `location.hash`; a route set by one test must not leak.
+  window.location.hash = "";
+});

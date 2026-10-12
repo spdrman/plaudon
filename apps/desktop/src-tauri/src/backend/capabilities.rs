@@ -52,7 +52,10 @@ impl CapabilitiesPort for LocalBackend {
         integrations.insert("openrouter".to_owned(), CapabilityStatus::Unknown);
 
         let mut permissions = std::collections::BTreeMap::new();
-        permissions.insert("notifications".to_owned(), self.notification_permission_state().await);
+        permissions.insert(
+            "notifications".to_owned(),
+            self.notification_permission_state().await,
+        );
 
         Ok(Capabilities {
             os,
@@ -92,7 +95,10 @@ impl LocalBackend {
     }
 
     /// Engine inventory derived from what is actually installed on disk.
-    pub(crate) fn engine_inventory(&self, openrouter_key_present: bool) -> Vec<EngineInventoryEntry> {
+    pub(crate) fn engine_inventory(
+        &self,
+        openrouter_key_present: bool,
+    ) -> Vec<EngineInventoryEntry> {
         let models_dir = self.store().models_dir();
         let whisper_models = installed_models(&models_dir.join("whisper.cpp"));
         let apple_supported = cfg!(target_os = "macos");
@@ -152,7 +158,9 @@ impl LocalBackend {
 
 /// Installed models of one engine: one directory per model id.
 fn installed_models(engine_dir: &std::path::Path) -> Vec<InstalledModel> {
-    let Ok(entries) = std::fs::read_dir(engine_dir) else { return Vec::new() };
+    let Ok(entries) = std::fs::read_dir(engine_dir) else {
+        return Vec::new();
+    };
     let mut models: Vec<InstalledModel> = entries
         .flatten()
         .filter(|entry| entry.path().is_dir())
@@ -172,7 +180,9 @@ fn installed_models(engine_dir: &std::path::Path) -> Vec<InstalledModel> {
 }
 
 fn directory_size(dir: &std::path::Path) -> u64 {
-    let Ok(entries) = std::fs::read_dir(dir) else { return 0 };
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return 0;
+    };
     entries
         .flatten()
         .map(|entry| match entry.metadata() {
@@ -194,7 +204,7 @@ fn host_platform() -> Platform {
 }
 
 /// Permission states this build can honestly report.
-pub(crate) const fn permission_from_stored(stored: Option<&str>) -> PermissionState {
+pub(crate) fn permission_from_stored(stored: Option<&str>) -> PermissionState {
     match stored {
         Some("granted") => PermissionState::Granted,
         Some("denied") => PermissionState::Denied,
@@ -208,7 +218,7 @@ mod tests {
     use super::*;
     use crate::backend::testing::backend_fixture;
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn capabilities_report_real_hardware_and_no_unproven_engine() {
         let fixture = backend_fixture().await;
         let capabilities = fixture.backend.capabilities().await.unwrap();
@@ -216,12 +226,15 @@ mod tests {
         assert_eq!(capabilities.hardware.arch, std::env::consts::ARCH);
         assert!(capabilities.hardware.logical_cores >= 1);
         assert!(capabilities.hardware.total_memory_bytes > 0);
-        assert!(!capabilities.os.version.is_empty());
+        assert_ne!(capabilities.os.version, "");
         assert_eq!(
             capabilities.storage.library_path,
             fixture.backend.store().root().to_string_lossy()
         );
-        assert!(capabilities.storage.total_bytes > 0, "the library volume reports a size");
+        assert!(
+            capabilities.storage.total_bytes > 0,
+            "the library volume reports a size"
+        );
 
         for engine in &capabilities.engines {
             assert_ne!(
@@ -234,19 +247,33 @@ mod tests {
             assert_eq!(engine.download_bytes_required, None);
         }
         assert!(!capabilities.openrouter_key_present);
-        assert_eq!(capabilities.integrations["openrouter"], CapabilityStatus::Unknown);
-        assert_eq!(capabilities.permissions["notifications"], PermissionState::NotRequested);
+        assert_eq!(
+            capabilities.integrations["openrouter"],
+            CapabilityStatus::Unknown
+        );
+        assert_eq!(
+            capabilities.permissions["notifications"],
+            PermissionState::NotRequested
+        );
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn installed_models_are_discovered_from_disk() {
         let fixture = backend_fixture().await;
-        let model_dir = fixture.backend.store().models_dir().join("whisper.cpp").join("small-q5");
+        let model_dir = fixture
+            .backend
+            .store()
+            .models_dir()
+            .join("whisper.cpp")
+            .join("small-q5");
         std::fs::create_dir_all(&model_dir).unwrap();
         std::fs::write(model_dir.join("model.bin"), vec![7u8; 2048]).unwrap();
 
         let engines = fixture.backend.engine_inventory(false);
-        let whisper = engines.iter().find(|entry| entry.engine_id == "whisper.cpp").unwrap();
+        let whisper = engines
+            .iter()
+            .find(|entry| entry.engine_id == "whisper.cpp")
+            .unwrap();
         assert_eq!(whisper.installed_models.len(), 1);
         assert_eq!(whisper.installed_models[0].model_id, "small-q5");
         assert_eq!(whisper.installed_models[0].size_bytes, 2048);

@@ -26,10 +26,16 @@ pub struct SecretValue(String);
 
 impl SecretValue {
     /// Wrap a user-entered secret, rejecting values that cannot be a key.
+    // The secret is moved in and dropped with the wrapper rather than leaving
+    // a second copy in the caller's `String`.
+    #[allow(clippy::needless_pass_by_value)]
     pub fn new(raw: String) -> Result<Self, AppError> {
         let trimmed = raw.trim();
         if trimmed.is_empty() {
-            return Err(AppError::new(AppErrorCode::InvalidArgument, "the key is empty"));
+            return Err(AppError::new(
+                AppErrorCode::InvalidArgument,
+                "the key is empty",
+            ));
         }
         if trimmed.chars().any(char::is_control) {
             return Err(AppError::new(
@@ -74,7 +80,10 @@ pub struct KeyringSecretStore {
 
 impl Default for KeyringSecretStore {
     fn default() -> Self {
-        Self { service: KEYCHAIN_SERVICE.to_owned(), account: OPENROUTER_ACCOUNT.to_owned() }
+        Self {
+            service: KEYCHAIN_SERVICE.to_owned(),
+            account: OPENROUTER_ACCOUNT.to_owned(),
+        }
     }
 }
 
@@ -86,25 +95,30 @@ impl KeyringSecretStore {
     }
 
     fn entry(&self) -> Result<keyring::Entry, AppError> {
-        keyring::Entry::new(&self.service, &self.account).map_err(map_keyring_error)
+        keyring::Entry::new(&self.service, &self.account).map_err(|err| map_keyring_error(&err))
     }
 }
 
-fn map_keyring_error(err: keyring::Error) -> AppError {
+fn map_keyring_error(err: &keyring::Error) -> AppError {
     // The message may name the platform backend, so it stays in the redacted
     // diagnostic detail and never reaches the envelope.
-    AppError::new(AppErrorCode::SecretStoreLocked, format!("keychain unavailable: {err}"))
+    AppError::new(
+        AppErrorCode::SecretStoreLocked,
+        format!("keychain unavailable: {err}"),
+    )
 }
 
 impl SecretStore for KeyringSecretStore {
     fn set_openrouter_key(&self, value: &SecretValue) -> Result<(), AppError> {
-        self.entry()?.set_password(value.expose()).map_err(map_keyring_error)
+        self.entry()?
+            .set_password(value.expose())
+            .map_err(|err| map_keyring_error(&err))
     }
 
     fn remove_openrouter_key(&self) -> Result<(), AppError> {
         match self.entry()?.delete_credential() {
             Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
-            Err(err) => Err(map_keyring_error(err)),
+            Err(err) => Err(map_keyring_error(&err)),
         }
     }
 
@@ -112,7 +126,7 @@ impl SecretStore for KeyringSecretStore {
         match self.entry()?.get_password() {
             Ok(_) => Ok(true),
             Err(keyring::Error::NoEntry) => Ok(false),
-            Err(err) => Err(map_keyring_error(err)),
+            Err(err) => Err(map_keyring_error(&err)),
         }
     }
 }
@@ -134,7 +148,10 @@ impl InMemorySecretStore {
     /// A store that behaves like a locked keychain.
     #[must_use]
     pub fn unavailable() -> Self {
-        Self { value: Mutex::new(None), unavailable: true }
+        Self {
+            value: Mutex::new(None),
+            unavailable: true,
+        }
     }
 
     fn guard(&self) -> Result<std::sync::MutexGuard<'_, Option<String>>, AppError> {
@@ -145,7 +162,10 @@ impl InMemorySecretStore {
             ));
         }
         self.value.lock().map_err(|_| {
-            AppError::new(AppErrorCode::InternalError, "secret store mutex was poisoned")
+            AppError::new(
+                AppErrorCode::InternalError,
+                "secret store mutex was poisoned",
+            )
         })
     }
 }
@@ -188,29 +208,41 @@ mod tests {
     fn the_store_round_trips_presence_without_exposing_the_value() {
         let store = InMemorySecretStore::new();
         assert!(!store.openrouter_key_present().unwrap());
-        store.set_openrouter_key(&SecretValue::new(KEY.into()).unwrap()).unwrap();
+        store
+            .set_openrouter_key(&SecretValue::new(KEY.into()).unwrap())
+            .unwrap();
         assert!(store.openrouter_key_present().unwrap());
         store.remove_openrouter_key().unwrap();
         assert!(!store.openrouter_key_present().unwrap());
-        store.remove_openrouter_key().expect("removing an absent key succeeds");
+        store
+            .remove_openrouter_key()
+            .expect("removing an absent key succeeds");
     }
 
     #[test]
     fn an_unavailable_store_reports_secret_store_locked_and_writes_nothing() {
         let store = InMemorySecretStore::unavailable();
-        let err = store.set_openrouter_key(&SecretValue::new(KEY.into()).unwrap()).unwrap_err();
+        let err = store
+            .set_openrouter_key(&SecretValue::new(KEY.into()).unwrap())
+            .unwrap_err();
         assert_eq!(err.code(), AppErrorCode::SecretStoreLocked);
-        assert_eq!(store.openrouter_key_present().unwrap_err().code(), AppErrorCode::SecretStoreLocked);
+        assert_eq!(
+            store.openrouter_key_present().unwrap_err().code(),
+            AppErrorCode::SecretStoreLocked
+        );
     }
 
     #[test]
-    fn the_debug_representation_of_the_store_never_contains_the_secret() {
+    fn presence_is_the_only_thing_a_response_can_carry() {
         let store = InMemorySecretStore::new();
-        store.set_openrouter_key(&SecretValue::new(KEY.into()).unwrap()).unwrap();
-        // The value itself has no Debug impl; the store's Debug prints the
-        // mutex contents, which is exactly why the shipping store is the
-        // keychain and this one is test-only.
-        let rendered = format!("{:?}", std::mem::size_of::<SecretValue>());
-        assert!(!rendered.contains(KEY));
+        store
+            .set_openrouter_key(&SecretValue::new(KEY.into()).unwrap())
+            .unwrap();
+        // `openrouter_key_present` is a bool; there is no accessor that can
+        // put the stored value into a response at all.
+        let present = store.openrouter_key_present().unwrap();
+        let json = serde_json::to_string(&present).unwrap();
+        assert_eq!(json, "true");
+        assert!(!json.contains(KEY));
     }
 }
