@@ -35,8 +35,13 @@ expect_success() { # name command...
 }
 
 echo "== clippy gate"
+# --target-dir keeps the fixture's build output out of tests/fixtures/: the
+# committed-fixture secret scan reads everything under that directory, and a
+# stray target/ full of dependency files and cache tags is both not a fixture
+# and full of hex strings shaped like device tokens.
 expect_failure "clippy blocks a lint violation" \
-  cargo clippy --manifest-path "$FIXTURES/clippy-violation/Cargo.toml" --all-targets -- -D warnings
+  cargo clippy --manifest-path "$FIXTURES/clippy-violation/Cargo.toml" --all-targets \
+    --target-dir "$REPO_ROOT/target/ci-selftest/clippy-violation" -- -D warnings
 
 echo "== licence gate"
 if command -v cargo-deny >/dev/null 2>&1; then
