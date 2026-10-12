@@ -33,10 +33,11 @@ use plaudon_domain::error::AppError;
 
 use crate::backend::devices::{DeviceRadio, DevicesBackend, DevicesDeps, NoRadio};
 use crate::backend::LocalBackend;
-use crate::events::{EventSink, TauriEventSink};
+use crate::events::EventSink;
+use crate::events::TauriEventSink;
 use crate::ports::{
     ActivityPort, CapabilitiesPort, CloudPort, DevicesPort, ExportPort, ImportPort, JobsPort,
-    LibraryPort, SearchPort, SettingsPort, SourcesPort, SpeakersPort, TranscriptPort,
+    LibraryPort, OutputsPort, SearchPort, SettingsPort, SourcesPort, SpeakersPort, TranscriptPort,
 };
 use crate::secrets::{KeyringSecretStore, SecretStore};
 
@@ -65,6 +66,8 @@ pub struct AppPorts {
     pub cloud: Arc<dyn CloudPort>,
     /// Direct PLAUD device access (read-only).
     pub devices: Arc<dyn DevicesPort>,
+    /// Generated outputs and claim review.
+    pub outputs: Arc<dyn OutputsPort>,
     /// OS keychain storage.
     pub secrets: Arc<dyn SecretStore>,
     /// Cross-recording search.
@@ -166,7 +169,8 @@ pub async fn build_ports_with_radio(
         export: Arc::clone(&backend) as Arc<dyn ExportPort>,
         search: Arc::clone(&backend) as Arc<dyn SearchPort>,
         speakers: Arc::clone(&backend) as Arc<dyn SpeakersPort>,
-        cloud: backend as Arc<dyn CloudPort>,
+        cloud: Arc::clone(&backend) as Arc<dyn CloudPort>,
+        outputs: backend as Arc<dyn OutputsPort>,
         devices: Arc::new(devices),
         secrets,
         events,

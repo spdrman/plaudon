@@ -1266,6 +1266,127 @@ export interface DeviceSyncPolicyRequest {
   enable_when_nearby: boolean;
 }
 
+
+/* ---------------------------------------------------------------- outputs */
+
+export interface ListOutputsRequest {
+  recording_id: string;
+}
+
+export interface AnchorDto {
+  seq_index: number;
+  char_start: number;
+  char_end: number;
+  excerpt: string;
+  verified: boolean;
+  rejection_code: string | null;
+  matched_text: string | null;
+  alignment_origin: string;
+  seek_ms: number | null;
+}
+
+export interface ActionItemFields {
+  verb: string;
+  description: string;
+  owner: string;
+  due_date: string;
+  status: string;
+  assertion: string;
+}
+
+export interface DecisionFields {
+  statement: string;
+  participants: string[];
+  time_reference: string;
+  assertion: string;
+}
+
+export interface RiskFields {
+  description: string;
+  consequence: string;
+  mitigation: string;
+}
+
+export interface QuestionFields {
+  question: string;
+  owner: string;
+}
+
+export interface TopicFields {
+  heading: string;
+  first_segment: number;
+  last_segment: number;
+}
+
+export type RenderedClaimFields =
+  | { kind: "summary_statement" }
+  | ({ kind: "decision" } & DecisionFields)
+  | ({ kind: "action_item" } & ActionItemFields)
+  | ({ kind: "risk" } & RiskFields)
+  | ({ kind: "question" } & QuestionFields)
+  | ({ kind: "topic" } & TopicFields);
+
+export interface ClaimDto {
+  claim_id: string;
+  item_path: string;
+  text: string;
+  state: string;
+  review_required: boolean;
+  review_reasons: string[];
+  entailment: string;
+  category: string;
+  fields: RenderedClaimFields;
+  anchors: AnchorDto[];
+}
+
+export interface CoverageDto {
+  state: string;
+  chunks: number[] | null;
+}
+
+export interface StaleDto {
+  stale_at: string;
+  reason: string;
+}
+
+export interface OutputDto {
+  output_id: string;
+  recording_id: string;
+  transcript_revision_id: string;
+  output_type: string;
+  template_id: string;
+  template_version: string;
+  pipeline_version: string;
+  status: string;
+  coverage: CoverageDto;
+  stale: StaleDto | null;
+  created_at: string;
+  claims: ClaimDto[];
+}
+
+export interface ListOutputsResponse {
+  outputs: OutputDto[];
+}
+
+export interface ReviewClaimRequest {
+  output_id: string;
+  claim_id: string;
+  accepted: boolean;
+  note: string | null;
+}
+
+export interface ReviewClaimResponse {
+  state: string;
+}
+
+export interface RegenerateOutputRequest {
+  output_id: string;
+  acknowledged: boolean;
+}
+
+export interface RegenerateOutputResponse {
+  job_id: string;
+}
 /* ------------------------------------------------------------ command map */
 
 export interface CommandMap {

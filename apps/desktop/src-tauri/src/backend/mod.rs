@@ -22,6 +22,7 @@ pub mod devices;
 pub mod export;
 pub mod import;
 pub mod jobs;
+pub mod outputs;
 pub mod sources;
 pub mod store;
 

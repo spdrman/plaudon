@@ -1,0 +1,165 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.invalid/schemas/outputs/meeting-extraction.v1.schema.json",
+  "title": "Meeting extraction output v1",
+  "description": "The structured body a text model must return for the §9.2 default output types. Every item carries its own source anchors; absent owners and dates are explicit sentinels, never omitted and never invented.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "executive_summary": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/summary_statement" }
+    },
+    "decisions": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/decision" }
+    },
+    "action_items": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/action_item" }
+    },
+    "risks": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/risk" }
+    },
+    "questions": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/question" }
+    },
+    "topics": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/topic" }
+    }
+  },
+  "$defs": {
+    "anchor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["revision_id", "seq_index", "char_start", "char_end", "excerpt"],
+      "properties": {
+        "revision_id": {
+          "type": "string",
+          "description": "The transcript revision this run read. Any other value is rejected.",
+          "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+        },
+        "seq_index": { "type": "integer", "minimum": 0 },
+        "char_start": { "type": "integer", "minimum": 0 },
+        "char_end": { "type": "integer", "minimum": 1 },
+        "excerpt": { "type": "string", "minLength": 1, "maxLength": 2000 }
+      }
+    },
+    "anchors": {
+      "type": "array",
+      "maxItems": 8,
+      "items": { "$ref": "#/$defs/anchor" }
+    },
+    "optional_text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000,
+      "description": "Free text, or the literal sentinel 'not_specified'."
+    },
+    "owner": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "description": "A speaker name stated in the transcript, or the literal sentinel 'unassigned'."
+    },
+    "due_date": {
+      "type": "string",
+      "description": "An ISO calendar date, or the literal sentinel 'not_specified'.",
+      "pattern": "^(not_specified|[0-9]{4}-[0-9]{2}-[0-9]{2})$"
+    },
+    "assertion": {
+      "type": "string",
+      "enum": ["directly_stated", "model_interpretation"]
+    },
+    "summary_statement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "text", "facet", "anchors"],
+      "properties": {
+        "kind": { "const": "summary_statement" },
+        "text": { "type": "string", "minLength": 1, "maxLength": 1200 },
+        "facet": { "type": "string", "enum": ["objective", "outcome", "open_question"] },
+        "anchors": { "$ref": "#/$defs/anchors" }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "statement", "time_reference", "assertion", "anchors"],
+      "properties": {
+        "kind": { "const": "decision" },
+        "statement": { "type": "string", "minLength": 1, "maxLength": 1200 },
+        "participants": {
+          "type": "array",
+          "maxItems": 32,
+          "items": { "type": "string", "minLength": 1, "maxLength": 200 }
+        },
+        "time_reference": { "$ref": "#/$defs/optional_text" },
+        "assertion": { "$ref": "#/$defs/assertion" },
+        "anchors": { "$ref": "#/$defs/anchors" }
+      }
+    },
+    "action_item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "verb",
+        "description",
+        "owner",
+        "due_date",
+        "status",
+        "assertion",
+        "anchors"
+      ],
+      "properties": {
+        "kind": { "const": "action_item" },
+        "verb": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "description": { "type": "string", "minLength": 1, "maxLength": 1200 },
+        "owner": { "$ref": "#/$defs/owner" },
+        "due_date": { "$ref": "#/$defs/due_date" },
+        "status": { "type": "string", "enum": ["open", "in_progress", "done", "unknown"] },
+        "assertion": { "$ref": "#/$defs/assertion" },
+        "anchors": { "$ref": "#/$defs/anchors" }
+      }
+    },
+    "risk": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "description", "consequence", "mitigation", "anchors"],
+      "properties": {
+        "kind": { "const": "risk" },
+        "description": { "type": "string", "minLength": 1, "maxLength": 1200 },
+        "consequence": { "$ref": "#/$defs/optional_text" },
+        "mitigation": { "$ref": "#/$defs/optional_text" },
+        "anchors": { "$ref": "#/$defs/anchors" }
+      }
+    },
+    "question": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "question", "owner", "anchors"],
+      "properties": {
+        "kind": { "const": "question" },
+        "question": { "type": "string", "minLength": 1, "maxLength": 1200 },
+        "owner": { "$ref": "#/$defs/owner" },
+        "anchors": { "$ref": "#/$defs/anchors" }
+      }
+    },
+    "topic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "heading", "first_segment", "last_segment", "anchors"],
+      "properties": {
+        "kind": { "const": "topic" },
+        "heading": { "type": "string", "minLength": 1, "maxLength": 300 },
+        "first_segment": { "type": "integer", "minimum": 0 },
+        "last_segment": { "type": "integer", "minimum": 0 },
+        "anchors": { "$ref": "#/$defs/anchors" }
+      }
+    }
+  }
+}

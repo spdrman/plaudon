@@ -3420,10 +3420,12 @@ name = "plaudon-ai-contracts"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "jsonschema",
  "plaudon-domain",
  "serde",
  "serde_json",
  "thiserror 2.0.21",
+ "time",
  "tokio",
  "tokio-util",
 ]
@@ -3534,10 +3536,13 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "fs4",
+ "jsonschema",
+ "parking_lot",
  "plaudon-ai-contracts",
  "plaudon-ai-diarization",
  "plaudon-ai-tools",
  "plaudon-domain",
+ "plaudon-jobs",
  "plaudon-persistence",
  "proptest",
  "serde",
@@ -3712,6 +3717,26 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
+]
+
+[[package]]
+name = "plaudon-eval"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "hex",
+ "jsonschema",
+ "plaudon-ai-contracts",
+ "plaudon-app-core",
+ "plaudon-domain",
+ "rand 0.8.8",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "thiserror 2.0.21",
+ "time",
+ "tokio",
 ]
 
 [[package]]

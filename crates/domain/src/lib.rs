@@ -5,13 +5,16 @@
 //! network, database or platform dependency. The workspace contains a
 //! dependency-boundary test that fails the build if that changes.
 
+pub mod anchor;
 pub mod capability;
+pub mod claim;
 pub mod error;
 pub mod ids;
 pub mod locale;
 pub mod media;
 pub mod model;
 pub mod money;
+pub mod output;
 pub mod recording;
 pub mod source;
 pub mod time;

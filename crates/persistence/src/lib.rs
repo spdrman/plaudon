@@ -15,6 +15,7 @@ pub mod archive;
 pub mod db;
 pub mod device;
 pub mod error;
+pub mod intelligence;
 pub mod journal;
 pub mod migrations;
 pub mod repo;

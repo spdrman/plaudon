@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.invalid/schemas/outputs/section-summary.v1.schema.json",
+  "title": "Section summary v1",
+  "description": "Spec §9.4 intermediate output: one summary of one chronological chunk, with anchors into the exact segments the chunk contained. The model reports which segment range it actually read so the pipeline can prove full coverage instead of assuming it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["bullets", "covered_first_segment", "covered_last_segment"],
+  "properties": {
+    "bullets": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 40,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["text", "anchors"],
+        "properties": {
+          "text": { "type": "string", "minLength": 1, "maxLength": 1200 },
+          "anchors": {
+            "type": "array",
+            "maxItems": 8,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["revision_id", "seq_index", "char_start", "char_end", "excerpt"],
+              "properties": {
+                "revision_id": {
+                  "type": "string",
+                  "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+                },
+                "seq_index": { "type": "integer", "minimum": 0 },
+                "char_start": { "type": "integer", "minimum": 0 },
+                "char_end": { "type": "integer", "minimum": 1 },
+                "excerpt": { "type": "string", "minLength": 1, "maxLength": 2000 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "covered_first_segment": { "type": "integer", "minimum": 0 },
+    "covered_last_segment": { "type": "integer", "minimum": 0 }
+  }
+}

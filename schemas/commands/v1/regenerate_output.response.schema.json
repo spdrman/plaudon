@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/regenerate_output.response.schema.json",
+  "title": "regenerate_output.response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "job_id"
+  ],
+  "properties": {
+    "job_id": {
+      "type": "string"
+    }
+  }
+}

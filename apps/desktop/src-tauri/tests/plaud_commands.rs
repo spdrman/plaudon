@@ -268,6 +268,7 @@ impl Harness {
                 )
                 .expect("device dependencies"),
             )),
+            outputs: Arc::clone(&backend) as Arc<dyn plaudon_desktop::ports::OutputsPort>,
             secrets,
             events: backend.events().clone(),
         };

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/regenerate_output.request.schema.json",
+  "title": "regenerate_output.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "output_id",
+    "acknowledged"
+  ],
+  "properties": {
+    "output_id": {
+      "type": "string"
+    },
+    "acknowledged": {
+      "type": "boolean"
+    }
+  }
+}

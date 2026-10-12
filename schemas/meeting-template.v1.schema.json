@@ -1,0 +1,146 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.invalid/schemas/meeting-template.v1.schema.json",
+  "title": "Output template v1",
+  "description": "Spec §9.3: a versioned template carries purpose, extraction fields, instructions, the expected JSON schema, rendering rules and the required source anchors. Templates are data; a user copy is editable without changing code, and a template change never rewrites outputs already generated.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "template_schema_version",
+    "id",
+    "version",
+    "display_name",
+    "purpose",
+    "origin",
+    "prompt_version",
+    "output_schema_version",
+    "instructions",
+    "fields",
+    "output_schema",
+    "rendering"
+  ],
+  "properties": {
+    "template_schema_version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Version of this template schema. An unknown value is rejected, never defaulted."
+    },
+    "id": { "$ref": "#/$defs/identifier" },
+    "version": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 32,
+      "description": "Template version recorded in every output's provenance."
+    },
+    "display_name": { "type": "string", "minLength": 1, "maxLength": 120 },
+    "purpose": { "type": "string", "minLength": 1, "maxLength": 2000 },
+    "origin": {
+      "type": "string",
+      "enum": ["built_in", "user_copy"],
+      "description": "A built-in template is never edited in place; customization produces a user copy."
+    },
+    "base_id": { "$ref": "#/$defs/identifier" },
+    "base_version": { "type": "string", "minLength": 1, "maxLength": 32 },
+    "prompt_version": { "type": "string", "minLength": 1, "maxLength": 32 },
+    "output_schema_version": { "type": "string", "minLength": 1, "maxLength": 32 },
+    "instructions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["system", "section_summary", "synthesis", "extraction"],
+      "description": "Task instructions only. Transcript text is never interpolated into these strings; the prompt assembler keeps instructions and data in separate fenced regions (§9.6).",
+      "properties": {
+        "system": { "type": "string", "minLength": 1, "maxLength": 8000 },
+        "section_summary": { "type": "string", "minLength": 1, "maxLength": 8000 },
+        "synthesis": { "type": "string", "minLength": 1, "maxLength": 8000 },
+        "extraction": { "type": "string", "minLength": 1, "maxLength": 8000 }
+      }
+    },
+    "fields": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "items": { "$ref": "#/$defs/field" }
+    },
+    "output_schema": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["schema_ref"],
+          "properties": {
+            "schema_ref": {
+              "type": "string",
+              "description": "Identifier of a schema shipped under schemas/outputs/.",
+              "enum": ["meeting_extraction"]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "description": "A complete inline JSON Schema, used by user templates.",
+          "required": ["type"]
+        }
+      ]
+    },
+    "rendering": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["order", "empty_placeholder", "show_anchors"],
+      "properties": {
+        "order": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/identifier" }
+        },
+        "empty_placeholder": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "show_anchors": { "type": "boolean" }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "origin": { "const": "user_copy" } }, "required": ["origin"] },
+      "then": { "required": ["base_id", "base_version"] }
+    }
+  ],
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z0-9_]+$",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "field": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "kind", "heading", "anchors", "max_items", "max_text_chars"],
+      "properties": {
+        "key": { "$ref": "#/$defs/identifier" },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "summary_statement",
+            "decision",
+            "action_item",
+            "risk",
+            "question",
+            "topic"
+          ]
+        },
+        "heading": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "anchors": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["min_per_item", "max_per_item"],
+          "description": "Spec §9.3 required source anchors. min_per_item 0 makes anchors optional for this field; items without a resolving anchor are still labelled Unverified.",
+          "properties": {
+            "min_per_item": { "type": "integer", "minimum": 0, "maximum": 8 },
+            "max_per_item": { "type": "integer", "minimum": 1, "maximum": 8 }
+          }
+        },
+        "max_items": { "type": "integer", "minimum": 1, "maximum": 1000 },
+        "max_text_chars": { "type": "integer", "minimum": 1, "maximum": 4000 }
+      }
+    }
+  }
+}

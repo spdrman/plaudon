@@ -132,6 +132,18 @@ typed_id!(
     /// Identity of a speaker record scoped to a recording.
     SpeakerId
 );
+typed_id!(
+    /// Identity of one generated claim inside a derived output (spec 9.6A).
+    ClaimId
+);
+typed_id!(
+    /// Identity of one executed summarization-pipeline stage (spec 9.1).
+    StageRunId
+);
+typed_id!(
+    /// Identity of one transcript-tool run (spec 13.3 `tool_runs`).
+    ToolRunId
+);
 
 #[cfg(test)]
 mod tests {

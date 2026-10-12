@@ -1,0 +1,441 @@
+{
+  "id": "lecture_notes_10min",
+  "title": "Consensus Algorithms Lecture",
+  "template_id": "lecture_notes",
+  "locale": "en-US",
+  "provenance": "Synthetic transcript authored for this repository; no real meeting content.",
+  "speakers": [
+    "Dr. Maria Santos"
+  ],
+  "segments": [
+    {
+      "seq_index": 0,
+      "start_ms": 0,
+      "end_ms": 7560,
+      "speaker": "Dr. Maria Santos",
+      "text": "Welcome to Introduction to Distributed Systems, lecture seven. Today we're covering consensus algorithms."
+    },
+    {
+      "seq_index": 1,
+      "start_ms": 7560,
+      "end_ms": 18504,
+      "speaker": "Dr. Maria Santos",
+      "text": "Consensus is fundamental to building reliable distributed systems. It allows multiple nodes to agree on a single value even in the presence of failures."
+    },
+    {
+      "seq_index": 2,
+      "start_ms": 18504,
+      "end_ms": 28008,
+      "speaker": "Dr. Maria Santos",
+      "text": "The classic problem is called the Byzantine Generals Problem, first described by Lamport, Shostak, and Pease in nineteen eighty-two."
+    },
+    {
+      "seq_index": 3,
+      "start_ms": 28008,
+      "end_ms": 39168,
+      "speaker": "Dr. Maria Santos",
+      "text": "Imagine several generals surrounding a city, trying to coordinate an attack. They can only communicate via messengers, and some generals might be traitors."
+    },
+    {
+      "seq_index": 4,
+      "start_ms": 39168,
+      "end_ms": 47160,
+      "speaker": "Dr. Maria Santos",
+      "text": "The challenge is: how can the loyal generals reach agreement on a plan when traitors might send false messages?"
+    },
+    {
+      "seq_index": 5,
+      "start_ms": 47160,
+      "end_ms": 53784,
+      "speaker": "Dr. Maria Santos",
+      "text": "This maps directly to distributed systems where some nodes might fail or behave maliciously."
+    },
+    {
+      "seq_index": 6,
+      "start_ms": 53784,
+      "end_ms": 60120,
+      "speaker": "Dr. Maria Santos",
+      "text": "There are two main types of failures we consider: crash failures and Byzantine failures."
+    },
+    {
+      "seq_index": 7,
+      "start_ms": 60120,
+      "end_ms": 66600,
+      "speaker": "Dr. Maria Santos",
+      "text": "Crash failures are when a node simply stops responding. This is the easier case to handle."
+    },
+    {
+      "seq_index": 8,
+      "start_ms": 66600,
+      "end_ms": 73512,
+      "speaker": "Dr. Maria Santos",
+      "text": "Byzantine failures are when a node sends arbitrary or malicious messages. Much harder to handle."
+    },
+    {
+      "seq_index": 9,
+      "start_ms": 73512,
+      "end_ms": 81144,
+      "speaker": "Dr. Maria Santos",
+      "text": "Let's look at Paxos, one of the most important consensus algorithms. Paxos was invented by Leslie Lamport."
+    },
+    {
+      "seq_index": 10,
+      "start_ms": 81144,
+      "end_ms": 87624,
+      "speaker": "Dr. Maria Santos",
+      "text": "Paxos has three roles: proposers, acceptors, and learners. A node can play multiple roles."
+    },
+    {
+      "seq_index": 11,
+      "start_ms": 87624,
+      "end_ms": 93744,
+      "speaker": "Dr. Maria Santos",
+      "text": "The basic Paxos algorithm runs in two phases: the prepare phase and the accept phase."
+    },
+    {
+      "seq_index": 12,
+      "start_ms": 93744,
+      "end_ms": 100944,
+      "speaker": "Dr. Maria Santos",
+      "text": "In the prepare phase, a proposer selects a proposal number and sends a prepare request to acceptors."
+    },
+    {
+      "seq_index": 13,
+      "start_ms": 100944,
+      "end_ms": 109512,
+      "speaker": "Dr. Maria Santos",
+      "text": "Acceptors respond with a promise not to accept proposals with lower numbers, and report any previously accepted values."
+    },
+    {
+      "seq_index": 14,
+      "start_ms": 109512,
+      "end_ms": 118368,
+      "speaker": "Dr. Maria Santos",
+      "text": "In the accept phase, if the proposer receives promises from a majority, it sends an accept request with the proposal value."
+    },
+    {
+      "seq_index": 15,
+      "start_ms": 118368,
+      "end_ms": 124632,
+      "speaker": "Dr. Maria Santos",
+      "text": "Acceptors accept the proposal unless they've already promised a higher proposal number."
+    },
+    {
+      "seq_index": 16,
+      "start_ms": 124632,
+      "end_ms": 131472,
+      "speaker": "Dr. Maria Santos",
+      "text": "Once a majority of acceptors accept a proposal, consensus is reached and learners are notified."
+    },
+    {
+      "seq_index": 17,
+      "start_ms": 131472,
+      "end_ms": 138240,
+      "speaker": "Dr. Maria Santos",
+      "text": "The key insight is that we only need a majority, not unanimity. This provides fault tolerance."
+    },
+    {
+      "seq_index": 18,
+      "start_ms": 138240,
+      "end_ms": 145800,
+      "speaker": "Dr. Maria Santos",
+      "text": "If you have five nodes, you can tolerate two failures. With seven nodes, you can tolerate three failures."
+    },
+    {
+      "seq_index": 19,
+      "start_ms": 145800,
+      "end_ms": 151632,
+      "speaker": "Dr. Maria Santos",
+      "text": "Now let's discuss Raft, which was designed to be easier to understand than Paxos."
+    },
+    {
+      "seq_index": 20,
+      "start_ms": 151632,
+      "end_ms": 156960,
+      "speaker": "Dr. Maria Santos",
+      "text": "Raft was published by Diego Ongaro and John Ousterhout in twenty fourteen."
+    },
+    {
+      "seq_index": 21,
+      "start_ms": 156960,
+      "end_ms": 163584,
+      "speaker": "Dr. Maria Santos",
+      "text": "Raft divides consensus into three subproblems: leader election, log replication, and safety."
+    },
+    {
+      "seq_index": 22,
+      "start_ms": 163584,
+      "end_ms": 171576,
+      "speaker": "Dr. Maria Santos",
+      "text": "In Raft, one node is elected as leader. The leader handles all client requests and coordinates log replication."
+    },
+    {
+      "seq_index": 23,
+      "start_ms": 171576,
+      "end_ms": 181008,
+      "speaker": "Dr. Maria Santos",
+      "text": "Followers are passive and simply respond to leader requests. If a follower doesn't hear from the leader, it can become a candidate."
+    },
+    {
+      "seq_index": 24,
+      "start_ms": 181008,
+      "end_ms": 189000,
+      "speaker": "Dr. Maria Santos",
+      "text": "Leader election uses randomized timeouts to prevent split votes. This is simpler than Paxos's proposal numbers."
+    },
+    {
+      "seq_index": 25,
+      "start_ms": 189000,
+      "end_ms": 195696,
+      "speaker": "Dr. Maria Santos",
+      "text": "Once elected, the leader appends new entries to its log and replicates them to follower logs."
+    },
+    {
+      "seq_index": 26,
+      "start_ms": 195696,
+      "end_ms": 201384,
+      "speaker": "Dr. Maria Santos",
+      "text": "An entry is committed once the leader has replicated it to a majority of nodes."
+    },
+    {
+      "seq_index": 27,
+      "start_ms": 201384,
+      "end_ms": 208512,
+      "speaker": "Dr. Maria Santos",
+      "text": "Raft guarantees that committed entries will eventually be executed by all available state machines."
+    },
+    {
+      "seq_index": 28,
+      "start_ms": 208512,
+      "end_ms": 218520,
+      "speaker": "Dr. Maria Santos",
+      "text": "Let me show you a comparison. Both Paxos and Raft provide the same safety guarantees, but Raft is generally considered more understandable."
+    },
+    {
+      "seq_index": 29,
+      "start_ms": 218520,
+      "end_ms": 228240,
+      "speaker": "Dr. Maria Santos",
+      "text": "Many production systems use Raft: etcd, Consul, CockroachDB. Fewer systems use pure Paxos, though Google's Chubby uses a Paxos variant."
+    },
+    {
+      "seq_index": 30,
+      "start_ms": 228240,
+      "end_ms": 234864,
+      "speaker": "Dr. Maria Santos",
+      "text": "There's also practical Byzantine fault tolerance, or PBFT, which handles Byzantine failures."
+    },
+    {
+      "seq_index": 31,
+      "start_ms": 234864,
+      "end_ms": 243720,
+      "speaker": "Dr. Maria Santos",
+      "text": "PBFT can tolerate up to one-third of nodes being Byzantine faulty. So with four nodes, you can tolerate one Byzantine node."
+    },
+    {
+      "seq_index": 32,
+      "start_ms": 243720,
+      "end_ms": 250920,
+      "speaker": "Dr. Maria Santos",
+      "text": "PBFT is more expensive than crash-fault-tolerant algorithms because it requires more message rounds."
+    },
+    {
+      "seq_index": 33,
+      "start_ms": 250920,
+      "end_ms": 260208,
+      "speaker": "Dr. Maria Santos",
+      "text": "Blockchain systems use variations of Byzantine consensus. Bitcoin uses proof of work, which is a form of probabilistic consensus."
+    },
+    {
+      "seq_index": 34,
+      "start_ms": 260208,
+      "end_ms": 266544,
+      "speaker": "Dr. Maria Santos",
+      "text": "Ethereum is moving to proof of stake, which is more energy efficient than proof of work."
+    },
+    {
+      "seq_index": 35,
+      "start_ms": 266544,
+      "end_ms": 272376,
+      "speaker": "Dr. Maria Santos",
+      "text": "For your homework, I want you to implement a basic Raft cluster with three nodes."
+    },
+    {
+      "seq_index": 36,
+      "start_ms": 272376,
+      "end_ms": 279792,
+      "speaker": "Dr. Maria Santos",
+      "text": "The assignment is posted on the course website. It's due two weeks from today, on October twenty-fifth."
+    },
+    {
+      "seq_index": 37,
+      "start_ms": 279792,
+      "end_ms": 287064,
+      "speaker": "Dr. Maria Santos",
+      "text": "You should implement leader election and basic log replication. Don't worry about log compaction yet."
+    },
+    {
+      "seq_index": 38,
+      "start_ms": 287064,
+      "end_ms": 293688,
+      "speaker": "Dr. Maria Santos",
+      "text": "In the next lecture, we'll cover distributed transactions and the two-phase commit protocol."
+    },
+    {
+      "seq_index": 39,
+      "start_ms": 293688,
+      "end_ms": 302616,
+      "speaker": "Dr. Maria Santos",
+      "text": "We'll also discuss the CAP theorem and why you can't have consistency, availability, and partition tolerance simultaneously."
+    },
+    {
+      "seq_index": 40,
+      "start_ms": 302616,
+      "end_ms": 309816,
+      "speaker": "Dr. Maria Santos",
+      "text": "Read the Raft paper before next class. It's very well written and includes excellent visualizations."
+    },
+    {
+      "seq_index": 41,
+      "start_ms": 309816,
+      "end_ms": 315792,
+      "speaker": "Dr. Maria Santos",
+      "text": "Any questions? Feel free to come to office hours on Wednesdays from two to four PM."
+    },
+    {
+      "seq_index": 42,
+      "start_ms": 315792,
+      "end_ms": 319320,
+      "speaker": "Dr. Maria Santos",
+      "text": "Alright, that's all for today. See you next week!"
+    }
+  ],
+  "reference": {
+    "decisions": [
+      {
+        "statement": "Homework assignment on Raft implementation is due October twenty-fifth",
+        "participants": [
+          "Dr. Maria Santos"
+        ],
+        "time_reference": "October 25",
+        "assertion": "directly_stated",
+        "evidence": {
+          "seq_index": 36,
+          "char_start": 53,
+          "char_end": 103
+        }
+      }
+    ],
+    "action_items": [
+      {
+        "verb": "Implement",
+        "description": "basic Raft cluster with three nodes for homework",
+        "owner": "unassigned",
+        "due_date": "2026-10-25",
+        "status": "open",
+        "assertion": "directly_stated",
+        "evidence": {
+          "seq_index": 35,
+          "char_start": 26,
+          "char_end": 76
+        }
+      },
+      {
+        "verb": "Read",
+        "description": "the Raft paper before next class",
+        "owner": "unassigned",
+        "due_date": "not_specified",
+        "status": "open",
+        "assertion": "directly_stated",
+        "evidence": {
+          "seq_index": 40,
+          "char_start": 0,
+          "char_end": 33
+        }
+      }
+    ],
+    "risks": [],
+    "questions": [],
+    "topics": [
+      {
+        "heading": "Introduction to Consensus",
+        "first_segment": 0,
+        "last_segment": 9,
+        "evidence": {
+          "seq_index": 1,
+          "char_start": 0,
+          "char_end": 9
+        }
+      },
+      {
+        "heading": "Paxos Algorithm",
+        "first_segment": 9,
+        "last_segment": 19,
+        "evidence": {
+          "seq_index": 9,
+          "char_start": 11,
+          "char_end": 16
+        }
+      },
+      {
+        "heading": "Raft Algorithm",
+        "first_segment": 19,
+        "last_segment": 30,
+        "evidence": {
+          "seq_index": 19,
+          "char_start": 16,
+          "char_end": 20
+        }
+      },
+      {
+        "heading": "Byzantine Fault Tolerance",
+        "first_segment": 30,
+        "last_segment": 35,
+        "evidence": {
+          "seq_index": 30,
+          "char_start": 17,
+          "char_end": 48
+        }
+      },
+      {
+        "heading": "Homework and Next Steps",
+        "first_segment": 35,
+        "last_segment": 42,
+        "evidence": {
+          "seq_index": 35,
+          "char_start": 8,
+          "char_end": 20
+        }
+      }
+    ],
+    "executive_summary": [
+      {
+        "text": "Lecture on consensus algorithms in distributed systems",
+        "facet": "objective",
+        "evidence": {
+          "seq_index": 0,
+          "char_start": 62,
+          "char_end": 102
+        }
+      },
+      {
+        "text": "Covered Paxos, Raft, and Byzantine fault tolerance",
+        "facet": "outcome",
+        "evidence": {
+          "seq_index": 28,
+          "char_start": 28,
+          "char_end": 81
+        }
+      },
+      {
+        "text": "Homework assignment to implement Raft cluster due October twenty-fifth",
+        "facet": "outcome",
+        "evidence": {
+          "seq_index": 36,
+          "char_start": 53,
+          "char_end": 103
+        }
+      }
+    ]
+  }
+}

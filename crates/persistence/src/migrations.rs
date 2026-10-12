@@ -97,6 +97,12 @@ pub const MIGRATIONS: &[Migration] = &[
         name: "device_import",
         sql: include_str!("../migrations/0500_device_import.sql"),
     },
+    // Meeting intelligence and source grounding. Owned by EPIC I.
+    Migration {
+        version: 600,
+        name: "meeting_intelligence",
+        sql: include_str!("../migrations/0600_meeting_intelligence.sql"),
+    },
     // 800+ is EPIC K's range: source reconciliation and watched folders.
     Migration {
         version: 800,

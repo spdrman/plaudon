@@ -11,6 +11,7 @@ pub mod devices;
 pub mod import;
 pub mod jobs;
 pub mod library;
+pub mod outputs;
 pub mod search;
 pub mod settings;
 pub mod sources;
@@ -28,14 +29,15 @@ use crate::dto::{
     GetRecordingRequest, GetTranscriptRequest, GetUsageRequest, GetUsageResponse,
     GrantCloudConsentRequest, GrantCloudConsentResponse, ImportFilesRequest, ImportFilesResponse,
     JobPage, JobSummary, ListActivityRequest, ListJobsRequest, ListModelsRequest,
-    ListModelsResponse, ListNearbyDevicesRequest, ListRecordingsRequest,
-    ListSourceArtifactsRequest, ListSourceArtifactsResponse, ListSpeakersRequest,
-    ListSpeakersResponse, LocalOnlyModeResponse, NotificationSettingsResponse, PlaudConnectRequest,
-    PlaudConnectorSnapshot, PlaudDisconnectResponse, PlaudImportRequest, PlaudImportResponse,
-    PlaudListRequest, PlaudListResponse, Preferences, RecordingDetail, RecordingPage,
-    RenameSpeakerRequest, ResetSpeakerRequest, RetryJobRequest, RevokeCloudConsentRequest,
-    SaveTranscriptRevisionRequest, SaveTranscriptRevisionResponse, SearchLibraryRequest,
-    SearchLibraryResponse, SetCloudBudgetRequest, SetLocalOnlyModeRequest,
+    ListModelsResponse, ListNearbyDevicesRequest, ListOutputsRequest, ListOutputsResponse,
+    ListRecordingsRequest, ListSourceArtifactsRequest, ListSourceArtifactsResponse,
+    ListSpeakersRequest, ListSpeakersResponse, LocalOnlyModeResponse, NotificationSettingsResponse,
+    PlaudConnectRequest, PlaudConnectorSnapshot, PlaudDisconnectResponse, PlaudImportRequest,
+    PlaudImportResponse, PlaudListRequest, PlaudListResponse, Preferences, RecordingDetail,
+    RecordingPage, RegenerateOutputRequest, RegenerateOutputResponse, RenameSpeakerRequest,
+    ResetSpeakerRequest, RetryJobRequest, ReviewClaimRequest, ReviewClaimResponse,
+    RevokeCloudConsentRequest, SaveTranscriptRevisionRequest, SaveTranscriptRevisionResponse,
+    SearchLibraryRequest, SearchLibraryResponse, SetCloudBudgetRequest, SetLocalOnlyModeRequest,
     SetModelPreferenceRequest, SetModelPreferenceResponse, SetNotificationSettingsRequest,
     SetOpenRouterKeyRequest, SourceAddFolderRequest, SourceAddFolderResponse,
     SourceReconcileRequest, SourceReconcileResponse, SourceSyncRequest, SourceSyncResponse,
@@ -94,6 +96,9 @@ pub const COMMAND_ALLOWLIST: &[&str] = &[
     "device_import",
     "device_disconnect",
     "device_sync_policy",
+    "list_outputs",
+    "review_claim",
+    "regenerate_output",
 ];
 
 /// Every command of the IPC surface, for [`tauri::Builder::invoke_handler`].
@@ -145,7 +150,10 @@ pub fn handler<R: tauri::Runtime>() -> impl Fn(tauri::ipc::Invoke<R>) -> bool + 
         device_list_recordings,
         device_import,
         device_disconnect,
-        device_sync_policy
+        device_sync_policy,
+        list_outputs,
+        review_claim,
+        regenerate_output
     ]
 }
 
@@ -509,6 +517,29 @@ pub async fn device_sync_policy(
     to_command_result(devices::device_sync_policy(&state.ports, request).await)
 }
 
+#[tauri::command]
+pub async fn list_outputs(
+    state: State<'_, AppState>,
+    request: ListOutputsRequest,
+) -> CommandResult<ListOutputsResponse> {
+    to_command_result(outputs::list_outputs(&state.ports, request).await)
+}
+
+#[tauri::command]
+pub async fn review_claim(
+    state: State<'_, AppState>,
+    request: ReviewClaimRequest,
+) -> CommandResult<ReviewClaimResponse> {
+    to_command_result(outputs::review_claim(&state.ports, request).await)
+}
+
+#[tauri::command]
+pub async fn regenerate_output(
+    state: State<'_, AppState>,
+    request: RegenerateOutputRequest,
+) -> CommandResult<RegenerateOutputResponse> {
+    to_command_result(outputs::regenerate_output(&state.ports, request).await)
+}
 #[cfg(test)]
 mod tests {
     use super::*;

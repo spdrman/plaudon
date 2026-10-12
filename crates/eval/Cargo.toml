@@ -1,0 +1,30 @@
+[package]
+name = "plaudon-eval"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "extraction-eval"
+path = "src/bin/extraction-eval.rs"
+
+[dependencies]
+plaudon-domain.workspace = true
+plaudon-app-core.workspace = true
+plaudon-ai-contracts.workspace = true
+
+async-trait.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+sha2.workspace = true
+hex.workspace = true
+time.workspace = true
+jsonschema.workspace = true
+tokio.workspace = true
+rand.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

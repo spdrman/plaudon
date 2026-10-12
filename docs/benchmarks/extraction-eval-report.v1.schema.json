@@ -1,0 +1,201 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.invalid/docs/benchmarks/extraction-eval-report.v1.schema.json",
+  "title": "Extraction Evaluation Report v1",
+  "description": "Machine-readable report for the hermetic extraction evaluation suite (EPIC I task I2.5).",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "generated_at",
+    "pipeline_version",
+    "template_id",
+    "template_version",
+    "prompt_version",
+    "locale",
+    "per_corpus",
+    "aggregate",
+    "fixture_provenance"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "description": "Version of this schema."
+    },
+    "generated_at": {
+      "type": "string",
+      "description": "ISO 8601 timestamp when the report was generated."
+    },
+    "pipeline_version": {
+      "type": "string",
+      "description": "Version of the summarization pipeline."
+    },
+    "template_id": {
+      "type": "string",
+      "description": "Template ID (mixed when multiple templates are used)."
+    },
+    "template_version": {
+      "type": "string",
+      "description": "Template version."
+    },
+    "prompt_version": {
+      "type": "string",
+      "description": "Prompt version."
+    },
+    "locale": {
+      "type": "string",
+      "description": "Locale of the fixtures (e.g., en-US)."
+    },
+    "per_corpus": {
+      "type": "object",
+      "description": "Metrics for each corpus fixture.",
+      "additionalProperties": {
+        "$ref": "#/$defs/corpus_metrics"
+      }
+    },
+    "aggregate": {
+      "$ref": "#/$defs/eval_metrics",
+      "description": "Aggregate metrics across all corpora."
+    },
+    "fixture_provenance": {
+      "type": "object",
+      "description": "Fixture file name to SHA256 digest mapping.",
+      "additionalProperties": {
+        "type": "string"
+      }
+    }
+  },
+  "$defs": {
+    "corpus_metrics": {
+      "type": "object",
+      "required": ["corpus_id", "template_id", "metrics"],
+      "properties": {
+        "corpus_id": {
+          "type": "string"
+        },
+        "template_id": {
+          "type": "string"
+        },
+        "metrics": {
+          "$ref": "#/$defs/eval_metrics"
+        }
+      }
+    },
+    "eval_metrics": {
+      "type": "object",
+      "required": [
+        "decision_precision",
+        "decision_recall",
+        "decision_f1",
+        "decision_sample_size",
+        "action_item_precision",
+        "action_item_recall",
+        "action_item_f1",
+        "action_item_sample_size",
+        "owner_accuracy",
+        "owner_sample_size",
+        "due_date_accuracy",
+        "due_date_sample_size",
+        "schema_validity_rate",
+        "schema_sample_size",
+        "anchor_correctness",
+        "anchor_sample_size",
+        "unsupported_claim_rate",
+        "unsupported_claim_sample_size"
+      ],
+      "properties": {
+        "decision_precision": {
+          "type": ["number", "null"],
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "description": "Precision for decisions. Null when undefined (no predicted items)."
+        },
+        "decision_recall": {
+          "type": ["number", "null"],
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "description": "Recall for decisions. Null when undefined (no reference items)."
+        },
+        "decision_f1": {
+          "type": ["number", "null"],
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "description": "F1 score for decisions. Null when undefined."
+        },
+        "decision_sample_size": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total sample size (predicted + reference)."
+        },
+        "action_item_precision": {
+          "type": ["number", "null"],
+          "minimum": 0.0,
+          "maximum": 1.0
+        },
+        "action_item_recall": {
+          "type": ["number", "null"],
+          "minimum": 0.0,
+          "maximum": 1.0
+        },
+        "action_item_f1": {
+          "type": ["number", "null"],
+          "minimum": 0.0,
+          "maximum": 1.0
+        },
+        "action_item_sample_size": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "owner_accuracy": {
+          "type": ["number", "null"],
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "description": "Accuracy of owner field over matched action items."
+        },
+        "owner_sample_size": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "due_date_accuracy": {
+          "type": ["number", "null"],
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "description": "Accuracy of due_date field over matched action items."
+        },
+        "due_date_sample_size": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "schema_validity_rate": {
+          "type": ["number", "null"],
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "description": "Fraction of model items accepted by OutputValidator."
+        },
+        "schema_sample_size": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "anchor_correctness": {
+          "type": ["number", "null"],
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "description": "Anchor correctness from pipeline's GroundingSummary. Null when no anchors."
+        },
+        "anchor_sample_size": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unsupported_claim_rate": {
+          "type": ["number", "null"],
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "description": "Unsupported claim rate from pipeline's GroundingSummary. Null when no claims."
+        },
+        "unsupported_claim_sample_size": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,177 @@
+{
+  "id": "general_meeting_1min",
+  "title": "Weekly sync",
+  "template_id": "general_meeting",
+  "locale": "en-US",
+  "provenance": "Synthetic transcript authored for this repository; no real meeting content.",
+  "speakers": [
+    "Ana Okafor",
+    "Bevan Liu"
+  ],
+  "segments": [
+    {
+      "seq_index": 0,
+      "start_ms": 0,
+      "end_ms": 4200,
+      "speaker": "Ana Okafor",
+      "text": "Good morning everyone, let's do a quick check-in on the website redesign project."
+    },
+    {
+      "seq_index": 1,
+      "start_ms": 4200,
+      "end_ms": 9800,
+      "speaker": "Bevan Liu",
+      "text": "Sure. I've finished the wireframes for the homepage and product pages. They're ready for review."
+    },
+    {
+      "seq_index": 2,
+      "start_ms": 9800,
+      "end_ms": 15200,
+      "speaker": "Ana Okafor",
+      "text": "Great work Bevan. I think we should prioritize getting stakeholder feedback this week."
+    },
+    {
+      "seq_index": 3,
+      "start_ms": 15200,
+      "end_ms": 21500,
+      "speaker": "Bevan Liu",
+      "text": "Agreed. I can schedule a review session for Thursday afternoon if that works for everyone."
+    },
+    {
+      "seq_index": 4,
+      "start_ms": 21500,
+      "end_ms": 27300,
+      "speaker": "Ana Okafor",
+      "text": "Thursday works. One concern though - the timeline feels tight given the upcoming holiday."
+    },
+    {
+      "seq_index": 5,
+      "start_ms": 27300,
+      "end_ms": 34800,
+      "speaker": "Bevan Liu",
+      "text": "Valid point. Should we consider pushing the launch date to early February instead of January fifteenth?"
+    },
+    {
+      "seq_index": 6,
+      "start_ms": 34800,
+      "end_ms": 42100,
+      "speaker": "Ana Okafor",
+      "text": "Yes, let's plan for February first. That gives us more buffer. Can you send the wireframes to the team today?"
+    },
+    {
+      "seq_index": 7,
+      "start_ms": 42100,
+      "end_ms": 48900,
+      "speaker": "Bevan Liu",
+      "text": "Absolutely, I'll email them out by three PM. Anything else we need to cover?"
+    },
+    {
+      "seq_index": 8,
+      "start_ms": 48900,
+      "end_ms": 52000,
+      "speaker": "Ana Okafor",
+      "text": "That's it for now. Thanks Bevan!"
+    }
+  ],
+  "reference": {
+    "decisions": [
+      {
+        "statement": "Launch date moved to February first",
+        "participants": [
+          "Ana Okafor",
+          "Bevan Liu"
+        ],
+        "time_reference": "not_specified",
+        "assertion": "directly_stated",
+        "evidence": {
+          "seq_index": 6,
+          "char_start": 9,
+          "char_end": 34
+        }
+      }
+    ],
+    "action_items": [
+      {
+        "verb": "Send",
+        "description": "wireframes to the team",
+        "owner": "Bevan Liu",
+        "due_date": "not_specified",
+        "status": "open",
+        "assertion": "directly_stated",
+        "evidence": {
+          "seq_index": 7,
+          "char_start": 25,
+          "char_end": 40
+        }
+      },
+      {
+        "verb": "Schedule",
+        "description": "review session for Thursday afternoon",
+        "owner": "Bevan Liu",
+        "due_date": "not_specified",
+        "status": "open",
+        "assertion": "directly_stated",
+        "evidence": {
+          "seq_index": 3,
+          "char_start": 11,
+          "char_end": 59
+        }
+      }
+    ],
+    "risks": [
+      {
+        "description": "Timeline feels tight",
+        "consequence": "not_specified",
+        "mitigation": "Pushed launch date to February",
+        "evidence": {
+          "seq_index": 4,
+          "char_start": 33,
+          "char_end": 53
+        }
+      }
+    ],
+    "questions": [
+      {
+        "question": "Anything else we need to cover?",
+        "owner": "unassigned",
+        "evidence": {
+          "seq_index": 7,
+          "char_start": 0,
+          "char_end": 76
+        }
+      }
+    ],
+    "topics": [
+      {
+        "heading": "Website redesign project check-in",
+        "first_segment": 0,
+        "last_segment": 8,
+        "evidence": {
+          "seq_index": 0,
+          "char_start": 37,
+          "char_end": 64
+        }
+      }
+    ],
+    "executive_summary": [
+      {
+        "text": "Quick check-in on website redesign",
+        "facet": "objective",
+        "evidence": {
+          "seq_index": 0,
+          "char_start": 30,
+          "char_end": 64
+        }
+      },
+      {
+        "text": "Launch date moved to February first",
+        "facet": "outcome",
+        "evidence": {
+          "seq_index": 6,
+          "char_start": 9,
+          "char_end": 34
+        }
+      }
+    ]
+  }
+}

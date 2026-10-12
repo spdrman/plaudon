@@ -109,6 +109,23 @@ pub struct ChunkPolicy {
     pub unknown_context: UnknownContext,
 }
 
+impl ChunkPolicy {
+    /// The shipped default: fail closed, 1024 output tokens, 1024 overhead,
+    /// two segments of overlap.
+    pub const DEFAULT: Self = Self {
+        reserved_output_tokens: 1_024,
+        prompt_overhead_tokens: 1_024,
+        overlap_segments: 2,
+        unknown_context: UnknownContext::FailClosed,
+    };
+}
+
+impl Default for ChunkPolicy {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
 /// Token budget a chunk plan is computed against.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ContextBudget {
@@ -330,6 +347,29 @@ pub fn plan_chunks(
         coverage,
         budget: *budget,
     })
+}
+
+/// Plan chunks directly over a transcript revision.
+///
+/// Thin adapter kept next to [`plan_chunks`] so the pipeline never has to
+/// build extents by hand.
+///
+/// # Errors
+///
+/// The errors of [`plan_chunks`].
+pub fn plan_chunks_for_revision(
+    revision: &plaudon_domain::transcript::TranscriptRevision,
+    budget: &ContextBudget,
+) -> Result<ChunkPlan, ChunkError> {
+    let extents: Vec<SegmentExtent> = revision
+        .segments()
+        .iter()
+        .map(|segment| SegmentExtent {
+            seq_index: segment.seq_index,
+            chars: u32::try_from(segment.text.chars().count()).unwrap_or(u32::MAX),
+        })
+        .collect();
+    plan_chunks(&extents, budget)
 }
 
 // ---------------------------------------------------------------------------
