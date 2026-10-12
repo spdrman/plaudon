@@ -1,4 +1,4 @@
--- EPIC L (direct-device import) owns versions 400-499.
+-- EPIC L (direct-device import) owns versions 500-599.
 --
 -- Spec 13.3 adds these two tables "at the point the associated capability
 -- ships". The device, capability, credential-reference and transfer tables
