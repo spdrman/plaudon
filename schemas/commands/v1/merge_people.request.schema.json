@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/merge_people.request.schema.json",
+  "title": "merge_people.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "loser_person_id",
+    "survivor_person_id",
+    "apply"
+  ],
+  "properties": {
+    "loser_person_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "survivor_person_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "apply": {
+      "type": "boolean"
+    }
+  }
+}

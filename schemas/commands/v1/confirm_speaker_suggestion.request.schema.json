@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/confirm_speaker_suggestion.request.schema.json",
+  "title": "confirm_speaker_suggestion.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "suggestion_id",
+    "overwrite_segment_exceptions"
+  ],
+  "properties": {
+    "suggestion_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "overwrite_segment_exceptions": {
+      "type": "boolean"
+    }
+  }
+}

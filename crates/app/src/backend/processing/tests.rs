@@ -939,19 +939,17 @@ impl VoicePipeline {
         recording_id
     }
 
-    /// Turn the runtime gate on, as the §12.2 activation does.
+    /// Turn the runtime gate on, as the §12.2 activation command does.
     async fn activate(&self) {
-        self.inner
-            .backend
-            .set_voice_matching_settings(&super::speaker_match::VoiceMatchingSettings {
-                enabled: true,
-                accepted_disclosure_version: Some(
-                    plaudon_app_core::voice_profiles::pipeline::CONSENT_DISCLOSURE_VERSION
-                        .to_owned(),
-                ),
-            })
-            .await
-            .expect("the preference is stored");
+        plaudon_persistence::voice_profiles::VoiceProfileGateRepository::new(
+            self.inner.backend.store().db().clone(),
+        )
+        .activate(
+            plaudon_app_core::voice_profiles::pipeline::CONSENT_DISCLOSURE_VERSION,
+            plaudon_domain::time::Timestamp::from_millis(0),
+        )
+        .await
+        .expect("the gate is stored");
     }
 
     /// Enrol a person whose voice is the scripted voice of `cluster`.
@@ -1157,12 +1155,12 @@ async fn turning_matching_off_after_queueing_leaves_the_job_without_biometric_st
 
     // Queue the job, then withdraw the toggle before the worker gets to the
     // biometric stages: the run must plan none of them (VP-003, VP-024).
-    pipeline
-        .inner
-        .backend
-        .set_voice_matching_settings(&super::speaker_match::VoiceMatchingSettings::default())
-        .await
-        .expect("preference");
+    plaudon_persistence::voice_profiles::VoiceProfileGateRepository::new(
+        pipeline.inner.backend.store().db().clone(),
+    )
+    .disable(plaudon_domain::time::Timestamp::from_millis(1))
+    .await
+    .expect("the gate is stored");
     let request = StageRequest {
         recording_id,
         kind: JobKind::SpeakerMatch,
@@ -1232,5 +1230,833 @@ async fn a_build_without_an_embedder_parks_the_job_instead_of_failing_it() {
         })
         .await;
     assert_eq!(summary.state, JobState::WaitingForModel, "{summary:?}");
+    pipeline.stop().await;
+}
+
+/* ------------------------------- voice-profile commands (P1.5, §8, §9A) */
+
+/// An embedder that panics if it is ever called.
+///
+/// The structural claim of VP-011/VP-215 is that no embed call is *reachable*
+/// while the feature is off or the consent gate is unpassed. A double that
+/// cannot be called without failing the test is how that is proved at runtime;
+/// the compile-time half is
+/// [`plaudon_app_core::voice_profiles::ConsentProof`], which the roster path
+/// never obtains.
+#[derive(Debug)]
+struct PanickingEmbedder {
+    checkpoint: Arc<plaudon_app_core::voice_profiles::EmbedderCheckpoint>,
+}
+
+impl PanickingEmbedder {
+    fn new() -> Self {
+        Self {
+            checkpoint: plaudon_app_core::voice_profiles::SpeakerEmbedder::checkpoint(
+                &plaudon_app_core::voice_profiles::embedder::ScriptedEmbedder::new(VOICE_DIM),
+            ),
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl plaudon_app_core::voice_profiles::SpeakerEmbedder for PanickingEmbedder {
+    fn checkpoint(&self) -> Arc<plaudon_app_core::voice_profiles::EmbedderCheckpoint> {
+        Arc::clone(&self.checkpoint)
+    }
+
+    async fn embed_window(
+        &self,
+        _window: &plaudon_app_core::voice_profiles::EmbedWindow,
+        _ctx: &plaudon_ai_contracts::job::JobContext,
+    ) -> Result<
+        plaudon_app_core::voice_profiles::matching::Embedding,
+        plaudon_app_core::voice_profiles::EmbedError,
+    > {
+        panic!("the consent gate did not precede embedding (VP-011, VP-215)");
+    }
+}
+
+impl VoicePipeline {
+    /// A pipeline whose embedder fails the test if anything calls it.
+    async fn open_with_panicking_embedder() -> Self {
+        use plaudon_ai_diarization::SpeakerTurn;
+        use plaudon_app_core::voice_profiles::embedder::ScriptedEmbedder;
+
+        let fixture = crate::backend::testing::backend_fixture().await;
+        let embedder = Arc::new(ScriptedEmbedder::new(VOICE_DIM));
+        let secrets = Arc::new(plaudon_security::secrets::InMemorySecretStore::new());
+        let diarizer = Arc::new(plaudon_ai_diarization::FakeDiarizationProvider::new(vec![
+            SpeakerTurn::new("S1", 0, 12_000),
+            SpeakerTurn::new("S2", 12_000, 24_000),
+        ]));
+        let backend = Arc::new(
+            fixture
+                .backend
+                .clone()
+                .with_stt_engines(vec![ScriptedStt::new(&["one", "two", "three", "four"])
+                    .with_segment_ms(VOICE_SEGMENT_MS)
+                    .shared()])
+                .with_text_model(ScriptedTextModel::new(json!({})).shared())
+                .with_voice_engines(
+                    diarizer as Arc<dyn plaudon_ai_diarization::contract::DiarizationProvider>,
+                    Arc::new(PanickingEmbedder::new())
+                        as Arc<dyn plaudon_app_core::voice_profiles::SpeakerEmbedder>,
+                )
+                .with_voice_secrets(
+                    Arc::clone(&secrets) as Arc<dyn plaudon_security::secrets::SecretStore>
+                ),
+        );
+        let pool = ProcessingHandle::start(&backend, Some(1));
+        Self {
+            inner: Pipeline {
+                fixture,
+                backend,
+                pool: Some(pool),
+            },
+            embedder,
+            secrets,
+        }
+    }
+
+    /// The speaker row of one cluster.
+    async fn cluster_speaker(
+        &self,
+        recording_id: RecordingId,
+        cluster: &str,
+    ) -> plaudon_persistence::speakers::StoredSpeaker {
+        self.inner
+            .backend
+            .speaker_row_for_cluster(recording_id, cluster)
+            .await
+            .expect("the speakers table is readable")
+            .unwrap_or_else(|| panic!("no speaker row for {cluster}"))
+    }
+
+    /// `(person_id, name)` of a speaker row, read straight from SQLite.
+    async fn stored_speaker(
+        &self,
+        speaker_id: plaudon_domain::ids::SpeakerId,
+    ) -> (Option<String>, Option<String>, bool) {
+        let row: (Option<String>, Option<String>, i64) =
+            sqlx::query_as("SELECT person_id, name, user_confirmed FROM speakers WHERE id = ?1")
+                .bind(speaker_id.to_string())
+                .fetch_one(self.inner.backend.pool())
+                .await
+                .expect("the speaker row is readable");
+        (row.0, row.1, row.2 != 0)
+    }
+
+    /// How many of a revision's segments point at `speaker_id`.
+    async fn segments_for(&self, speaker_id: plaudon_domain::ids::SpeakerId) -> i64 {
+        sqlx::query_scalar("SELECT COUNT(*) FROM transcript_segments WHERE speaker_id = ?1")
+            .bind(speaker_id.to_string())
+            .fetch_one(self.inner.backend.pool())
+            .await
+            .expect("the segments table is readable")
+    }
+
+    /// Run the pipeline's non-biometric half, which is what an enrolment
+    /// needs: a diarization run and its reconciliation.
+    ///
+    /// Queued directly rather than through
+    /// [`LocalBackend::enqueue_speaker_match`], because that refuses while the
+    /// gate is closed (VP-003) — and before anybody is enrolled it always is.
+    /// `stage_intent` keeps this job's key distinct from a later real match of
+    /// the same recording, so the two never deduplicate onto each other.
+    async fn diarize_only(&self, recording_id: RecordingId) -> JobState {
+        let mut normalization = std::collections::BTreeMap::new();
+        normalization.insert("stage_intent".to_owned(), "diarize_only".to_owned());
+        let request = StageRequest {
+            recording_id,
+            kind: JobKind::SpeakerMatch,
+            engine: plaudon_ai_diarization::FAKE_PROVIDER_ID.to_owned(),
+            model_id: Some(
+                plaudon_app_core::voice_profiles::embedder::SCRIPTED_EMBEDDER_ID.to_owned(),
+            ),
+            model_version: Some("1.0".to_owned()),
+            stage: "speaker_match".to_owned(),
+            label: "Match speakers".to_owned(),
+            audio_sha256: "c".repeat(64),
+            cloud: false,
+            cost_acknowledged: false,
+            transcript_revision: None,
+            normalization,
+        };
+        let job = self
+            .inner
+            .backend
+            .enqueue_stage(&request)
+            .await
+            .expect("the job is queued directly");
+        self.inner.settled(job).await.state
+    }
+
+    /// Run a real diarization-and-match job to a terminal state.
+    async fn match_now(&self, recording_id: RecordingId) -> JobState {
+        let job = self
+            .inner
+            .backend
+            .enqueue_speaker_match(recording_id)
+            .await
+            .expect("the job is queued");
+        self.inner.settled(job).await.state
+    }
+}
+
+/// The attestation a gated-on enrolment carries (VP-120 level 3).
+fn consent_dto() -> crate::dto::EnrolmentConsentDto {
+    crate::dto::EnrolmentConsentDto {
+        disclosure_version: plaudon_app_core::voice_profiles::ACTIVATION_DISCLOSURE
+            .version
+            .to_owned(),
+        person_attested: true,
+        retention_months: None,
+        consent_note: Some("verbal agreement, stand-up of 2026-03-02".to_owned()),
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_roster_round_trips_with_matching_off_and_never_reaches_the_embedder() {
+    // VP-011/VP-215: the people list, assignment and every roster edit work
+    // with biometric matching off, and nothing in that path can call an
+    // embedder — the double here panics if it is.
+    use crate::ports::{PeoplePort, VoiceProfilesPort};
+
+    let pipeline = VoicePipeline::open_with_panicking_embedder().await;
+    let recording_id = pipeline.transcribed("manual.wav").await;
+    let backend = Arc::clone(&pipeline.inner.backend);
+
+    let settings = backend
+        .voice_profile_settings()
+        .await
+        .expect("settings are readable with the feature off");
+    assert!(!settings.enabled, "biometric matching is off by default");
+    assert_eq!(settings.consent.state, "off");
+    assert_eq!(settings.enrolled_people, 0);
+
+    let priya = backend
+        .create_person(&plaudon_persistence::people::PersonDraft::named("Priya"))
+        .await
+        .expect("a roster entry is created with matching off");
+    let edited = backend
+        .update_person(
+            priya.person_id,
+            &plaudon_persistence::people::PersonDraft {
+                display_name: "Priya Raman".to_owned(),
+                aliases: vec!["Priya".to_owned()],
+                email: Some("priya@example.test".to_owned()),
+                organisation: Some("Acme".to_owned()),
+            },
+        )
+        .await
+        .expect("a roster entry is edited");
+    assert_eq!(edited.display_name, "Priya Raman");
+    assert!(
+        edited.voice.is_none(),
+        "a name-only entry has no voiceprint"
+    );
+
+    // The cluster assignment is one action: the speaker row's name and link,
+    // plus every segment the reconciliation gave that cluster (VP-032).
+    pipeline.diarize_only(recording_id).await;
+    let speaker = pipeline.cluster_speaker(recording_id, "S1").await;
+    let assigned = backend
+        .assign_cluster_person(&crate::ports::ClusterAssignment {
+            recording_id,
+            speaker_id: speaker.id,
+            person_id: Some(priya.person_id),
+            overwrite_segment_exceptions: false,
+        })
+        .await
+        .expect("a cluster is assigned with matching off");
+    assert!(assigned.applied);
+    assert!(assigned.segments_assigned > 0, "{assigned:?}");
+    let (person_id, name, confirmed) = pipeline.stored_speaker(speaker.id).await;
+    assert_eq!(
+        person_id.as_deref(),
+        Some(priya.person_id.to_string()).as_deref()
+    );
+    assert_eq!(name.as_deref(), Some("Priya Raman"));
+    assert!(confirmed, "a user's pick is a confirmed identity");
+
+    let listed = backend
+        .list_people(Some("raman"))
+        .await
+        .expect("the roster is searchable by alias and name");
+    assert_eq!(listed.people.len(), 1);
+    assert_eq!(
+        listed.people[0].recordings, 1,
+        "the blast radius is counted"
+    );
+
+    // Unknown/none clears the link and returns the neutral label (VP-210).
+    let cleared = backend
+        .assign_cluster_person(&crate::ports::ClusterAssignment {
+            recording_id,
+            speaker_id: speaker.id,
+            person_id: None,
+            overwrite_segment_exceptions: false,
+        })
+        .await
+        .expect("an assignment is cleared");
+    assert!(cleared.person.is_none());
+    let (person_id, name, _) = pipeline.stored_speaker(speaker.id).await;
+    assert_eq!(person_id, None);
+    assert_eq!(name, None);
+
+    // Merge and delete are roster actions too, and with nobody enrolled they
+    // never touch a key.
+    let duplicate = backend
+        .create_person(&plaudon_persistence::people::PersonDraft::named("Priya R."))
+        .await
+        .expect("a duplicate entry");
+    let disclosure = backend
+        .merge_people(duplicate.person_id, priya.person_id, false)
+        .await
+        .expect("a merge discloses before it moves");
+    assert!(!disclosure.applied);
+    let merged = backend
+        .merge_people(duplicate.person_id, priya.person_id, true)
+        .await
+        .expect("a merge applies");
+    assert!(merged.applied);
+    assert_eq!(merged.exemplars, 0);
+    let deleted = backend
+        .delete_person(priya.person_id, true)
+        .await
+        .expect("a roster entry is deleted");
+    assert!(deleted.applied);
+    assert_eq!(deleted.exemplars, 0);
+
+    pipeline.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn no_embedding_is_reachable_while_ungated_or_while_matching_is_off() {
+    // The §17.1 structural test: the scripted embedder panics on call, and the
+    // enrolment and matching commands are driven through the whole engine in
+    // both closed states (VP-011, VP-215, VP-003).
+    use crate::ports::{PeoplePort, VoiceProfilesPort};
+
+    let pipeline = VoicePipeline::open_with_panicking_embedder().await;
+    let recording_id = pipeline.transcribed("gated.wav").await;
+    let backend = Arc::clone(&pipeline.inner.backend);
+    let person = backend
+        .create_person(&plaudon_persistence::people::PersonDraft::named("Sam"))
+        .await
+        .expect("a roster entry");
+
+    let request = crate::ports::EnrolmentRequest {
+        person_id: person.person_id,
+        recording_id,
+        cluster_key: "S1".to_owned(),
+        attestation: Some(plaudon_app_core::voice_profiles::EnrolmentAttestation::attested()),
+    };
+
+    // State one: the toggle is off, which is its default.
+    let refused = backend
+        .enroll_person_voice(&request)
+        .await
+        .expect_err("an ungated enrolment computes nothing");
+    assert_eq!(refused.code(), AppErrorCode::CapabilityUnverified);
+    let refused = backend
+        .add_voice_exemplar(&request)
+        .await
+        .expect_err("an ungated exemplar computes nothing");
+    assert_eq!(refused.code(), AppErrorCode::CapabilityUnverified);
+    let queued = backend
+        .start_speaker_matching(&[recording_id])
+        .await
+        .expect("a bulk request answers rather than failing");
+    assert!(queued.jobs.is_empty(), "{queued:?}");
+    assert_eq!(queued.refusals.len(), 1);
+
+    // State two: the toggle is on but the disclosure is stale, which is the
+    // same closed gate from the embedder's point of view (VP-121).
+    plaudon_persistence::voice_profiles::VoiceProfileGateRepository::new(
+        backend.store().db().clone(),
+    )
+    .activate(
+        "voice-matching-v0",
+        plaudon_domain::time::Timestamp::from_millis(0),
+    )
+    .await
+    .expect("a stale acceptance is storable");
+    let refused = backend
+        .enroll_person_voice(&request)
+        .await
+        .expect_err("a stale disclosure computes nothing");
+    assert_eq!(refused.code(), AppErrorCode::CapabilityUnverified);
+
+    // And the whole job runs without a single embed call, because the plan has
+    // no biometric stages at all (VP-024).
+    assert_eq!(
+        pipeline.diarize_only(recording_id).await,
+        JobState::Completed
+    );
+
+    pipeline.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn turning_the_feature_on_requires_accepting_the_current_disclosure() {
+    use crate::ports::VoiceProfilesPort;
+
+    let pipeline = VoicePipeline::open_with_panicking_embedder().await;
+    let backend = Arc::clone(&pipeline.inner.backend);
+
+    let refused = backend
+        .set_voice_profiles_enabled(true, None)
+        .await
+        .expect_err("an enable without an acceptance is refused");
+    assert_eq!(refused.code(), AppErrorCode::InvalidArgument);
+    let refused = backend
+        .set_voice_profiles_enabled(true, Some("voice-matching-v0"))
+        .await
+        .expect_err("an enable quoting another disclosure is refused");
+    assert_eq!(refused.code(), AppErrorCode::InvalidArgument);
+
+    let settings = backend
+        .set_voice_profiles_enabled(
+            true,
+            Some(plaudon_app_core::voice_profiles::ACTIVATION_DISCLOSURE.version),
+        )
+        .await
+        .expect("accepting the current disclosure arms the feature");
+    assert!(settings.enabled);
+    assert_eq!(settings.consent.state, "active");
+    assert!(settings
+        .disclosure
+        .two_tier_sentence
+        .contains("needs no special consent"));
+
+    // The acceptance is journalled, which is what VP-122's exportable consent
+    // record starts from.
+    let events = plaudon_persistence::voice_profiles::VoiceProfileGateRepository::new(
+        backend.store().db().clone(),
+    )
+    .library_events()
+    .await
+    .expect("the journal is readable");
+    assert!(
+        events.iter().any(|event| event.kind == "feature_activated"),
+        "{events:?}"
+    );
+
+    let off = backend
+        .set_voice_profiles_enabled(false, None)
+        .await
+        .expect("the feature switches off");
+    assert!(!off.enabled);
+    assert_eq!(off.consent.state, "off");
+    pipeline.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn enrolling_then_confirming_a_suggestion_names_the_cluster_and_its_segments() {
+    use crate::ports::{PeoplePort, VoiceProfilesPort};
+
+    let pipeline = VoicePipeline::open().await;
+    let first = pipeline.transcribed("week-one.wav").await;
+    let backend = Arc::clone(&pipeline.inner.backend);
+    backend
+        .set_voice_profiles_enabled(
+            true,
+            Some(plaudon_app_core::voice_profiles::ACTIVATION_DISCLOSURE.version),
+        )
+        .await
+        .expect("the gate opens");
+
+    // The enrolment needs a diarization run to cut clean speech from. Before
+    // anybody is enrolled the gate refuses a match job, so the run comes from
+    // the pipeline's non-biometric half (VP-024).
+    pipeline.diarize_only(first).await;
+    let priya = backend
+        .create_person(&plaudon_persistence::people::PersonDraft::named("Priya"))
+        .await
+        .expect("a roster entry");
+    let enrolled = backend
+        .enroll_person_voice(&crate::ports::EnrolmentRequest {
+            person_id: priya.person_id,
+            recording_id: first,
+            cluster_key: "S1".to_owned(),
+            attestation: Some(
+                crate::commands::voice_profiles::attestation(&consent_dto())
+                    .expect("a valid attestation"),
+            ),
+        })
+        .await
+        .expect("an enrolment from a cluster with 12 s of clean speech");
+    assert_eq!(enrolled.exemplars, 1);
+    assert!(enrolled.speech_ms >= plaudon_app_core::voice_profiles::ENROL_SPEECH_MS);
+    assert_eq!(enrolled.retention_months, 12);
+
+    // A later recording's matching job produces a suggestion, and nothing is
+    // renamed until the user confirms (VP-060, ADR-0082).
+    let second = pipeline.transcribed("week-two.wav").await;
+    assert_eq!(pipeline.match_now(second).await, JobState::Completed);
+    let queue = backend
+        .list_speaker_suggestions(None, 50)
+        .await
+        .expect("the review queue reads");
+    assert!(!queue.suggestions.is_empty(), "{queue:?}");
+    let suggestion = queue
+        .suggestions
+        .iter()
+        .find(|row| row.recording_id == second && row.person.person_id == priya.person_id)
+        .expect("the second recording has a suggestion for Priya")
+        .clone();
+    let speaker = pipeline
+        .cluster_speaker(second, &suggestion.cluster_key)
+        .await;
+    let (before, _, _) = pipeline.stored_speaker(speaker.id).await;
+    assert_eq!(before, None, "a suggestion assigns nothing by itself");
+
+    let decision = backend
+        .confirm_speaker_suggestion(suggestion.suggestion_id, false)
+        .await
+        .expect("a confirmation applies the person");
+    assert!(decision.applied);
+    assert_eq!(decision.state, "confirmed");
+    assert!(decision.segments_assigned > 0, "{decision:?}");
+    let (person_id, name, confirmed) = pipeline.stored_speaker(speaker.id).await;
+    assert_eq!(
+        person_id.as_deref(),
+        Some(priya.person_id.to_string()).as_deref()
+    );
+    assert_eq!(name.as_deref(), Some("Priya"));
+    assert!(confirmed);
+    assert!(pipeline.segments_for(speaker.id).await > 0);
+
+    // Renaming the person propagates by reference to every recording that
+    // links to them, and changes no assignment (VP-213a).
+    backend
+        .update_person(
+            priya.person_id,
+            &plaudon_persistence::people::PersonDraft::named("Priya Raman"),
+        )
+        .await
+        .expect("a rename");
+    let listed = backend.list_people(None).await.expect("the roster");
+    let row = listed
+        .people
+        .iter()
+        .find(|row| row.person_id == priya.person_id)
+        .expect("the entry");
+    assert_eq!(row.display_name, "Priya Raman");
+    assert!(row.recordings >= 1);
+    assert!(row.voice.is_some(), "the enrolment badge is present");
+
+    pipeline.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn rejecting_never_renames_and_reject_then_pick_records_the_correction() {
+    use crate::ports::{PeoplePort, VoiceProfilesPort};
+
+    let pipeline = VoicePipeline::open().await;
+    let first = pipeline.transcribed("mistake-one.wav").await;
+    let backend = Arc::clone(&pipeline.inner.backend);
+    backend
+        .set_voice_profiles_enabled(
+            true,
+            Some(plaudon_app_core::voice_profiles::ACTIVATION_DISCLOSURE.version),
+        )
+        .await
+        .expect("the gate opens");
+    pipeline.diarize_only(first).await;
+
+    let sam = backend
+        .create_person(&plaudon_persistence::people::PersonDraft::named("Sam"))
+        .await
+        .expect("a roster entry");
+    backend
+        .enroll_person_voice(&crate::ports::EnrolmentRequest {
+            person_id: sam.person_id,
+            recording_id: first,
+            cluster_key: "S1".to_owned(),
+            attestation: Some(
+                crate::commands::voice_profiles::attestation(&consent_dto())
+                    .expect("a valid attestation"),
+            ),
+        })
+        .await
+        .expect("Sam is enrolled");
+
+    let second = pipeline.transcribed("mistake-two.wav").await;
+    pipeline.match_now(second).await;
+    let suggestion = backend
+        .list_speaker_suggestions(Some(second), 50)
+        .await
+        .expect("the panel reads")
+        .suggestions
+        .first()
+        .cloned()
+        .expect("a suggestion for the second recording");
+    let speaker = pipeline
+        .cluster_speaker(second, &suggestion.cluster_key)
+        .await;
+
+    // Not them, with nobody named: nothing is renamed, and the score stays as
+    // negative evidence (VP-216).
+    let decision = backend
+        .reject_speaker_suggestion(suggestion.suggestion_id, None, false)
+        .await
+        .expect("a rejection settles");
+    assert_eq!(decision.state, "rejected");
+    assert!(!decision.applied, "a rejection never renames");
+    assert_eq!(decision.segments_assigned, 0);
+    let (person_id, name, _) = pipeline.stored_speaker(speaker.id).await;
+    assert_eq!(person_id, None);
+    assert_eq!(name, None);
+    let evidence = plaudon_persistence::voice_profiles::VoiceEnrollmentRepository::new(
+        backend.store().db().clone(),
+    )
+    .decisions(sam.person_id)
+    .await
+    .expect("the decisions read");
+    assert_eq!(evidence.len(), 1);
+    assert!(!evidence[0].confirmed, "a rejection is negative evidence");
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM voice_exemplars WHERE person_id = ?1")
+            .bind(sam.person_id.to_string())
+            .fetch_one(backend.pool())
+            .await
+            .expect("count"),
+        1,
+        "the rejected cluster's embedding is never stored against anybody"
+    );
+
+    // Reject-then-pick on a second cluster: the corrected person is assigned
+    // and the suggestion is marked `corrected` (VP-216, VP-217).
+    let third = pipeline.transcribed("mistake-three.wav").await;
+    pipeline.match_now(third).await;
+    let suggestion = backend
+        .list_speaker_suggestions(Some(third), 50)
+        .await
+        .expect("the panel reads")
+        .suggestions
+        .first()
+        .cloned()
+        .expect("a suggestion for the third recording");
+    let priya = backend
+        .create_person(&plaudon_persistence::people::PersonDraft::named("Priya"))
+        .await
+        .expect("a roster entry");
+    let same_person = backend
+        .reject_speaker_suggestion(suggestion.suggestion_id, Some(sam.person_id), false)
+        .await
+        .expect_err("a correction cannot name the suggested person");
+    assert_eq!(same_person.code(), AppErrorCode::InvalidArgument);
+    let decision = backend
+        .reject_speaker_suggestion(suggestion.suggestion_id, Some(priya.person_id), false)
+        .await
+        .expect("reject-then-pick settles");
+    assert_eq!(decision.state, "corrected");
+    assert!(decision.applied);
+    let speaker = pipeline
+        .cluster_speaker(third, &suggestion.cluster_key)
+        .await;
+    let (person_id, name, _) = pipeline.stored_speaker(speaker.id).await;
+    assert_eq!(
+        person_id.as_deref(),
+        Some(priya.person_id.to_string()).as_deref()
+    );
+    assert_eq!(name.as_deref(), Some("Priya"));
+
+    pipeline.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn splitting_an_enrolment_re_seals_the_exemplars_it_moves() {
+    use crate::ports::{PeoplePort, VoiceProfilesPort};
+
+    let pipeline = VoicePipeline::open().await;
+    let first = pipeline.transcribed("split-one.wav").await;
+    let second = pipeline.transcribed("split-two.wav").await;
+    let backend = Arc::clone(&pipeline.inner.backend);
+    backend
+        .set_voice_profiles_enabled(
+            true,
+            Some(plaudon_app_core::voice_profiles::ACTIVATION_DISCLOSURE.version),
+        )
+        .await
+        .expect("the gate opens");
+    pipeline.diarize_only(first).await;
+    pipeline.diarize_only(second).await;
+
+    let priya = backend
+        .create_person(&plaudon_persistence::people::PersonDraft::named("Priya"))
+        .await
+        .expect("a roster entry");
+    let attestation =
+        crate::commands::voice_profiles::attestation(&consent_dto()).expect("a valid attestation");
+    backend
+        .enroll_person_voice(&crate::ports::EnrolmentRequest {
+            person_id: priya.person_id,
+            recording_id: first,
+            cluster_key: "S1".to_owned(),
+            attestation: Some(attestation.clone()),
+        })
+        .await
+        .expect("enrolled from the first recording");
+    let extended = backend
+        .add_voice_exemplar(&crate::ports::EnrolmentRequest {
+            person_id: priya.person_id,
+            recording_id: second,
+            cluster_key: "S2".to_owned(),
+            attestation: None,
+        })
+        .await
+        .expect("extended from the second recording");
+    assert_eq!(extended.exemplars, 2);
+    assert_eq!(extended.source_recordings, 2, "device diversity is counted");
+
+    let voices = plaudon_persistence::voice_profiles::VoiceEnrollmentRepository::new(
+        backend.store().db().clone(),
+    );
+    let moving = voices
+        .exemplars(priya.person_id)
+        .await
+        .expect("exemplars")
+        .into_iter()
+        .find(|row| row.recording_id == Some(second))
+        .expect("the second recording's exemplar");
+
+    let split = backend
+        .split_voice_enrollment(&crate::ports::SplitRequest {
+            person_id: priya.person_id,
+            exemplar_ids: vec![moving.id],
+            target: crate::ports::SplitTarget::New("Sam".to_owned()),
+            attestation,
+        })
+        .await
+        .expect("a split by provenance");
+    assert_eq!(split.exemplars_moved, 1);
+    assert_eq!(split.exemplars_remaining, 1);
+    assert!(split.target.voice.is_some());
+
+    // The moved ciphertext authenticates under the *target's* binding, which
+    // is the whole point of re-sealing: a bare column rewrite would have left
+    // an exemplar nothing can decrypt.
+    let cipher = plaudon_app_core::voice_profiles::EmbeddingCipher::new(Arc::clone(
+        &pipeline.secrets,
+    )
+        as Arc<dyn plaudon_security::secrets::SecretStore>);
+    let moved = voices
+        .exemplars(split.target_person_id)
+        .await
+        .expect("the target's exemplars")
+        .into_iter()
+        .next()
+        .expect("one exemplar moved");
+    cipher
+        .open(
+            &plaudon_app_core::voice_profiles::SealedEmbedding {
+                cipher: moved.embedding_cipher.clone(),
+                nonce: moved.embedding_nonce.clone(),
+                embedding_dim: moved.embedding_dim,
+            },
+            &plaudon_app_core::voice_profiles::ExemplarBinding {
+                person_id: split.target_person_id,
+                model_id: moved.model_id.clone(),
+                model_version: moved.model_version.clone(),
+                embedding_dim: moved.embedding_dim,
+            },
+        )
+        .expect("the moved exemplar decrypts under its new owner");
+
+    pipeline.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn forgetting_everyone_keeps_the_roster_and_turns_the_feature_off() {
+    use crate::ports::{PeoplePort, VoiceProfilesPort};
+
+    let pipeline = VoicePipeline::open().await;
+    let recording_id = pipeline.transcribed("forget.wav").await;
+    let backend = Arc::clone(&pipeline.inner.backend);
+    backend
+        .set_voice_profiles_enabled(
+            true,
+            Some(plaudon_app_core::voice_profiles::ACTIVATION_DISCLOSURE.version),
+        )
+        .await
+        .expect("the gate opens");
+    pipeline.diarize_only(recording_id).await;
+    let priya = backend
+        .create_person(&plaudon_persistence::people::PersonDraft::named("Priya"))
+        .await
+        .expect("a roster entry");
+    backend
+        .enroll_person_voice(&crate::ports::EnrolmentRequest {
+            person_id: priya.person_id,
+            recording_id,
+            cluster_key: "S1".to_owned(),
+            attestation: Some(
+                crate::commands::voice_profiles::attestation(&consent_dto())
+                    .expect("a valid attestation"),
+            ),
+        })
+        .await
+        .expect("enrolled");
+
+    // Deleting one person's voiceprint keeps them on the roster (VP-080).
+    let disclosure = backend
+        .delete_voice_enrollment(priya.person_id, false, None)
+        .await
+        .expect("the deletion discloses first");
+    assert!(!disclosure.applied);
+    assert_eq!(disclosure.exemplars, 1);
+    let deleted = backend
+        .delete_voice_enrollment(priya.person_id, true, Some("withdrew consent"))
+        .await
+        .expect("the voiceprint goes");
+    assert!(deleted.applied);
+    assert!(deleted.person_kept);
+    assert!(deleted.person.voice.is_none());
+
+    // And "forget everyone" leaves the roster standing with the feature off.
+    backend
+        .enroll_person_voice(&crate::ports::EnrolmentRequest {
+            person_id: priya.person_id,
+            recording_id,
+            cluster_key: "S1".to_owned(),
+            attestation: Some(
+                crate::commands::voice_profiles::attestation(&consent_dto())
+                    .expect("a valid attestation"),
+            ),
+        })
+        .await
+        .expect("re-enrolled");
+    let preview = backend
+        .forget_all_voice_profiles(false)
+        .await
+        .expect("the disclosure");
+    assert!(!preview.applied);
+    assert_eq!(preview.enrollments, 1);
+    assert!(!preview.limits.is_empty(), "the honest limits are shown");
+    let receipt = backend
+        .forget_all_voice_profiles(true)
+        .await
+        .expect("everything goes");
+    assert!(receipt.applied);
+    assert!(receipt.key_destroyed);
+    assert!(receipt.feature_disabled);
+    assert_eq!(receipt.people_kept, 1, "names are not voiceprints");
+    let settings = backend.voice_profile_settings().await.expect("settings");
+    assert!(!settings.enabled);
+    assert_eq!(settings.enrolled_people, 0);
+    assert_eq!(settings.roster_people, 1);
+    assert_eq!(
+        backend
+            .list_people(None)
+            .await
+            .expect("the roster")
+            .people
+            .len(),
+        1
+    );
+
     pipeline.stop().await;
 }

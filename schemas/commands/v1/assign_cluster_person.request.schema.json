@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/assign_cluster_person.request.schema.json",
+  "title": "assign_cluster_person.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "recording_id",
+    "speaker_id",
+    "person_id",
+    "overwrite_segment_exceptions"
+  ],
+  "properties": {
+    "recording_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "speaker_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "person_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "uuid"
+    },
+    "overwrite_segment_exceptions": {
+      "type": "boolean"
+    }
+  }
+}

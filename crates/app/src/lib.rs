@@ -61,8 +61,9 @@ use crate::backend::LocalBackend;
 use crate::events::EventSink;
 use crate::ports::{
     ActivityPort, ArchivePort, CapabilitiesPort, CloudPort, DeletionPort, DevicesPort, ExportPort,
-    ImportPort, JobsPort, LibraryPort, MediaExportPort, ModelsPort, OutputsPort, SearchPort,
-    SettingsPort, SourcesPort, SpeakersPort, TemplatesPort, ToolsPort, TranscriptPort, UpdatePort,
+    ImportPort, JobsPort, LibraryPort, MediaExportPort, ModelsPort, OutputsPort, PeoplePort,
+    SearchPort, SettingsPort, SourcesPort, SpeakersPort, TemplatesPort, ToolsPort, TranscriptPort,
+    UpdatePort, VoiceProfilesPort,
 };
 use crate::secrets::SecretStore;
 
@@ -109,6 +110,10 @@ pub struct AppPorts {
     pub search: Arc<dyn SearchPort>,
     /// Speaker labelling and confirmation.
     pub speakers: Arc<dyn SpeakersPort>,
+    /// The people roster: the master speaker list, ungated (VP-011).
+    pub people: Arc<dyn PeoplePort>,
+    /// The biometric tier: consent gate, enrolments and suggestions.
+    pub voice_profiles: Arc<dyn VoiceProfilesPort>,
     /// Locally installed models.
     pub models: Arc<dyn ModelsPort>,
     /// Read-only update facts.
@@ -335,6 +340,8 @@ pub async fn build_ports_with(
         export: Arc::clone(&backend) as Arc<dyn ExportPort>,
         search: Arc::clone(&backend) as Arc<dyn SearchPort>,
         speakers: Arc::clone(&backend) as Arc<dyn SpeakersPort>,
+        people: Arc::clone(&backend) as Arc<dyn PeoplePort>,
+        voice_profiles: Arc::clone(&backend) as Arc<dyn VoiceProfilesPort>,
         models: Arc::new(crate::backend::models::ModelsBackend::new(
             app_data_dir,
             events.clone(),

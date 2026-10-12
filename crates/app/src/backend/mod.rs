@@ -25,6 +25,7 @@ pub mod import;
 pub mod jobs;
 pub mod models;
 pub mod outputs;
+pub mod people;
 pub mod processing;
 pub mod sources;
 pub mod store;
@@ -32,6 +33,7 @@ pub mod templates;
 pub mod tools;
 pub mod update;
 pub(crate) mod verify_text;
+pub mod voice_profiles;
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};

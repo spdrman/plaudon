@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/forget_all_voice_profiles.response.schema.json",
+  "title": "forget_all_voice_profiles.response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "applied",
+    "enrollments",
+    "exemplars",
+    "suggestions",
+    "people_kept",
+    "key_present",
+    "key_destroyed",
+    "feature_disabled",
+    "limits"
+  ],
+  "properties": {
+    "applied": {
+      "type": "boolean"
+    },
+    "enrollments": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "exemplars": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "suggestions": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "people_kept": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "key_present": {
+      "type": "boolean"
+    },
+    "key_destroyed": {
+      "type": "boolean"
+    },
+    "feature_disabled": {
+      "type": "boolean"
+    },
+    "limits": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  }
+}

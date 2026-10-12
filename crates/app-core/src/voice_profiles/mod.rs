@@ -61,22 +61,34 @@
 //! destroys everything at once, key included (VP-095). Both leave the roster
 //! standing.
 
+pub mod consent;
 pub mod embedder;
+pub mod enroll;
 pub mod erasure;
 pub mod matching;
 pub mod pipeline;
 pub mod retention;
 pub mod store;
 
+pub use consent::{
+    authorise_biometric_work, gate_state, ActivationDisclosure, ConsentError, ConsentGateState,
+    ConsentProof, DisclosureReason, EnrolmentAttestation, ACTIVATION_DISCLOSURE,
+    DEFAULT_RETENTION_MONTHS, MAX_CONSENT_NOTE_CHARS, RESPONSIBILITY_SENTENCE, TWO_TIER_SENTENCE,
+};
 pub use embedder::{
     EmbedError, EmbedWindow, EmbedderCheckpoint, ScriptedEmbedder, SpeakerEmbedder,
     SCRIPTED_EMBEDDER_ID,
 };
+pub use enroll::{
+    reseal_exemplars, EnrolError, EnrolmentSource, ExemplarOutcome, SplitOutcome,
+    VoiceEnrolmentService, ENROL_SPEECH_MS, EXEMPLAR_SPEECH_MS,
+};
 pub use erasure::{ForgetAllDisclosure, ForgetAllReceipt, VoiceProfileEraser, FORGET_ALL_LIMITS};
 pub use pipeline::{
-    cluster_speech, profile_set_digest, ClusterSpeech, GateRefusal, MatchGate, SkippedCluster,
-    SpeakerMatchError, SpeakerMatchOutcome, SpeakerMatchPipeline, SpeakerMatchPlan,
-    SpeakerMatchRequest, SpeakerMatchStage, CONSENT_DISCLOSURE_VERSION, EMBED_WINDOW_MS,
+    cluster_speech, profile_set_digest, reconciliation_from_assignments, ClusterSpeech,
+    CorruptReconciliation, GateRefusal, MatchGate, SkippedCluster, SpeakerMatchError,
+    SpeakerMatchOutcome, SpeakerMatchPipeline, SpeakerMatchPlan, SpeakerMatchRequest,
+    SpeakerMatchStage, CONSENT_DISCLOSURE_VERSION, EMBED_WINDOW_MS,
 };
 pub use retention::{RetentionReport, VoiceRetentionService, TOMBSTONE_DAYS};
 pub use store::{
