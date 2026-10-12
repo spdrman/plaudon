@@ -84,12 +84,17 @@ impl ConnectorState {
                 Self::CliDetected | Self::Authenticated | Self::Ready | Self::Enumerating,
                 ConnectorEvent::LoginRequired,
             ) => Self::AuthRequired,
-            (Self::AuthRequired | Self::ExpiredAuth, ConnectorEvent::LoginSucceeded) => {
-                Self::Authenticated
-            }
-            (Self::AuthRequired | Self::ExpiredAuth, ConnectorEvent::LoginCanceled) => {
-                Self::AuthRequired
-            }
+            // Spec 4.2 step 3 starts the browser login right after detection,
+            // without an intervening "you must sign in" answer from the tool,
+            // so `CliDetected` is a legitimate origin for both outcomes.
+            (
+                Self::CliDetected | Self::AuthRequired | Self::ExpiredAuth,
+                ConnectorEvent::LoginSucceeded,
+            ) => Self::Authenticated,
+            (
+                Self::CliDetected | Self::AuthRequired | Self::ExpiredAuth,
+                ConnectorEvent::LoginCanceled,
+            ) => Self::AuthRequired,
             (
                 Self::CliDetected | Self::Authenticated | Self::Ready | Self::Enumerating,
                 ConnectorEvent::SessionExpired,
@@ -228,6 +233,45 @@ impl ConnectorStatus {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn signing_in_straight_after_detection_reaches_authenticated() {
+        // Spec 4.2: steps 1 and 3 are adjacent. The tool does not tell us "you
+        // must sign in" before we offer the button, so a login outcome has to
+        // be accepted from `CliDetected` or the panel would keep asking the
+        // user to do something they just did.
+        assert_eq!(
+            ConnectorState::CliDetected.apply(ConnectorEvent::LoginSucceeded),
+            ConnectorState::Authenticated
+        );
+    }
+
+    #[test]
+    fn cancelling_the_first_login_asks_again_rather_than_looking_connected() {
+        assert_eq!(
+            ConnectorState::CliDetected.apply(ConnectorEvent::LoginCanceled),
+            ConnectorState::AuthRequired
+        );
+        assert_eq!(
+            ConnectorState::AuthRequired.apply(ConnectorEvent::LoginCanceled),
+            ConnectorState::AuthRequired
+        );
+        assert_eq!(
+            ConnectorState::ExpiredAuth.apply(ConnectorEvent::LoginCanceled),
+            ConnectorState::AuthRequired
+        );
+    }
+
+    #[test]
+    fn a_login_outcome_never_resurrects_a_disconnected_or_incompatible_connector() {
+        for state in [
+            ConnectorState::Unconfigured,
+            ConnectorState::IncompatibleVersion,
+        ] {
+            assert_eq!(state.apply(ConnectorEvent::LoginSucceeded), state);
+            assert_eq!(state.apply(ConnectorEvent::LoginCanceled), state);
+        }
+    }
 
     const ALL_STATES: [ConnectorState; 9] = [
         ConnectorState::Unconfigured,
