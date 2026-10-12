@@ -1,0 +1,308 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.invalid/schemas/speaker-match-report.v1.schema.json",
+  "title": "Speaker matching evaluation report v1",
+  "description": "The committed docs/benchmarks/speaker-match-<model>-eer.json artifact (VOICE_PROFILES_SPEC VP-180, ADR-0081 section 4). Carries scores, rates, bands and counts; never an embedding.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "generator",
+    "measured_on",
+    "commit",
+    "model",
+    "runtime",
+    "release_evidence",
+    "fixtures",
+    "overall",
+    "conditions",
+    "calibration",
+    "diarization",
+    "golden_suggestions",
+    "caveats"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "generator": { "type": "string", "minLength": 1 },
+    "measured_on": { "type": ["string", "null"], "format": "date-time" },
+    "commit": { "type": ["string", "null"] },
+    "model": { "$ref": "#/$defs/model" },
+    "runtime": {
+      "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/runtime" }]
+    },
+    "release_evidence": { "$ref": "#/$defs/releaseEvidence" },
+    "fixtures": { "$ref": "#/$defs/fixtures" },
+    "overall": { "$ref": "#/$defs/condition" },
+    "conditions": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/condition" },
+      "minItems": 1
+    },
+    "calibration": { "$ref": "#/$defs/calibration" },
+    "diarization": {
+      "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/diarization" }]
+    },
+    "golden_suggestions": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/goldenSuggestion" }
+    },
+    "caveats": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "minItems": 3
+    }
+  },
+  "$defs": {
+    "rate": { "type": "number", "minimum": 0, "maximum": 1 },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["model_id", "model_version", "model_sha256", "dim", "embedding_source"],
+      "properties": {
+        "model_id": { "type": "string", "minLength": 1 },
+        "model_version": { "type": "string", "minLength": 1 },
+        "model_sha256": { "$ref": "#/$defs/sha256" },
+        "dim": { "type": "integer", "minimum": 2 },
+        "embedding_source": { "enum": ["scripted", "model_pack"] }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["platform", "host_cpu", "peak_rss_bytes", "startup_ms", "real_time_factor"],
+      "properties": {
+        "platform": { "type": "string", "minLength": 1 },
+        "host_cpu": { "type": ["string", "null"] },
+        "peak_rss_bytes": { "type": ["integer", "null"], "minimum": 0 },
+        "startup_ms": { "type": ["integer", "null"], "minimum": 0 },
+        "real_time_factor": { "type": ["number", "null"], "minimum": 0 }
+      }
+    },
+    "releaseEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["qualifies", "blockers"],
+      "properties": {
+        "qualifies": { "type": "boolean" },
+        "blockers": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "fixtures": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["library_id", "manifest_sha256", "fixtures", "speakers", "attributions"],
+      "properties": {
+        "library_id": { "type": "string", "minLength": 1 },
+        "manifest_sha256": { "$ref": "#/$defs/sha256" },
+        "fixtures": { "type": "integer", "minimum": 1 },
+        "speakers": { "type": "integer", "minimum": 2 },
+        "attributions": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["corpus", "licence", "attribution"],
+            "properties": {
+              "corpus": {
+                "enum": [
+                  "libri_speech_test_clean_derived",
+                  "musan",
+                  "kokoro_tts",
+                  "scripted_synthetic"
+                ]
+              },
+              "licence": { "type": "string", "minLength": 1 },
+              "attribution": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      }
+    },
+    "equalErrorRate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rate", "threshold", "exact"],
+      "properties": {
+        "rate": { "$ref": "#/$defs/rate" },
+        "threshold": { "type": "number" },
+        "exact": { "type": "boolean" }
+      }
+    },
+    "operatingPoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "threshold",
+        "false_accept_rate",
+        "false_reject_rate",
+        "max_false_accept_rate"
+      ],
+      "properties": {
+        "threshold": { "type": "number" },
+        "false_accept_rate": { "$ref": "#/$defs/rate" },
+        "false_reject_rate": { "$ref": "#/$defs/rate" },
+        "max_false_accept_rate": { "$ref": "#/$defs/rate" }
+      }
+    },
+    "bands": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "target_suggest",
+        "target_weak",
+        "target_none",
+        "nontarget_suggest",
+        "nontarget_weak",
+        "nontarget_none"
+      ],
+      "properties": {
+        "target_suggest": { "type": "integer", "minimum": 0 },
+        "target_weak": { "type": "integer", "minimum": 0 },
+        "target_none": { "type": "integer", "minimum": 0 },
+        "nontarget_suggest": { "type": "integer", "minimum": 0 },
+        "nontarget_weak": { "type": "integer", "minimum": 0 },
+        "nontarget_none": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "condition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "condition",
+        "targets",
+        "nontargets",
+        "false_accept_resolution",
+        "equal_error_rate",
+        "operating_points",
+        "bands"
+      ],
+      "properties": {
+        "condition": {
+          "enum": [
+            "overall",
+            "clean",
+            "noise_musan",
+            "opus_low_bitrate",
+            "telephone_bandpass",
+            "room_impulse_response"
+          ]
+        },
+        "targets": { "type": "integer", "minimum": 1 },
+        "nontargets": { "type": "integer", "minimum": 1 },
+        "false_accept_resolution": { "type": "number", "exclusiveMinimum": 0 },
+        "equal_error_rate": { "$ref": "#/$defs/equalErrorRate" },
+        "operating_points": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/operatingPoint" }
+        },
+        "bands": {
+          "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/bands" }]
+        }
+      }
+    },
+    "calibration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "suggest",
+        "floor",
+        "max_profile_offset",
+        "equal_error_rate",
+        "provenance"
+      ],
+      "properties": {
+        "status": {
+          "type": "object",
+          "required": ["status"],
+          "properties": {
+            "status": {
+              "enum": [
+                "derived",
+                "insufficient_trials",
+                "ceiling_unreachable",
+                "no_weak_band",
+                "rejected"
+              ]
+            }
+          }
+        },
+        "suggest": {
+          "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/operatingPoint" }]
+        },
+        "floor": {
+          "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/operatingPoint" }]
+        },
+        "max_profile_offset": { "type": ["number", "null"], "minimum": 0 },
+        "equal_error_rate": { "$ref": "#/$defs/equalErrorRate" },
+        "provenance": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "embedding_source",
+            "model_id",
+            "model_version",
+            "model_sha256",
+            "library_id",
+            "manifest_sha256",
+            "targets",
+            "nontargets",
+            "false_accept_resolution"
+          ],
+          "properties": {
+            "embedding_source": { "enum": ["scripted", "model_pack"] },
+            "model_id": { "type": "string", "minLength": 1 },
+            "model_version": { "type": "string", "minLength": 1 },
+            "model_sha256": { "$ref": "#/$defs/sha256" },
+            "library_id": { "type": "string", "minLength": 1 },
+            "manifest_sha256": { "$ref": "#/$defs/sha256" },
+            "targets": { "type": "integer", "minimum": 1 },
+            "nontargets": { "type": "integer", "minimum": 1 },
+            "false_accept_resolution": { "type": "number", "exclusiveMinimum": 0 }
+          }
+        }
+      }
+    },
+    "diarization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "session_id",
+        "hypothesis_source",
+        "der",
+        "missed_ms",
+        "false_alarm_ms",
+        "confusion_ms",
+        "reference_speech_ms",
+        "overlap_ms",
+        "collar_ms",
+        "skip_overlap_regions"
+      ],
+      "properties": {
+        "session_id": { "type": "string", "minLength": 1 },
+        "hypothesis_source": { "type": "string", "minLength": 1 },
+        "der": { "type": "number", "minimum": 0 },
+        "missed_ms": { "type": "integer", "minimum": 0 },
+        "false_alarm_ms": { "type": "integer", "minimum": 0 },
+        "confusion_ms": { "type": "integer", "minimum": 0 },
+        "reference_speech_ms": { "type": "integer", "minimum": 0 },
+        "overlap_ms": { "type": "integer", "minimum": 0 },
+        "collar_ms": { "type": "integer", "minimum": 0 },
+        "skip_overlap_regions": { "type": "boolean" }
+      }
+    },
+    "goldenSuggestion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cluster_key", "person_id", "band", "score"],
+      "properties": {
+        "cluster_key": { "type": "string", "minLength": 1 },
+        "person_id": { "type": "string", "minLength": 1 },
+        "band": { "enum": ["suggest", "weak", "none"] },
+        "score": { "type": "number" }
+      }
+    }
+  }
+}

@@ -7,7 +7,16 @@
 //!                  [--commit <sha>] [--measured-on <rfc3339>] [--evidence-bundle <id>]
 //! plaudon-eval gate --report <report.json> --claim recommended --manifest <golden manifest>
 //!                   [--engine <id>] [--model <id>] [--as-of <rfc3339>] [--max-age-days <n>]
+//! plaudon-eval speaker-match --plan <plan.json> --out <report.json>
+//!                   [--model-pack <dir>] [--seed <n>] [--dim <n>] [--commit <sha>]
+//!                   [--measured-on <rfc3339>] [--platform <token>] [--host-cpu <s>]
+//!                   [--peak-rss-bytes <n>] [--startup-ms <n>] [--real-time-factor <f>]
 //! ```
+//!
+//! `speaker-match` is the §17.2 harness: it scores a committed fixture plan
+//! with the shipped matching core and writes the ADR-0081 §4 artifact. Without
+//! `--model-pack` it runs on scripted vectors, and the artifact it writes says
+//! so — such a report is never release evidence.
 //!
 //! The tool never invokes an engine and never opens a socket. `run` scores
 //! hypothesis transcripts that a separate, explicitly recorded process already
@@ -28,6 +37,12 @@ use plaudon_eval::gate::{evaluate_claim, Claim, GateRequest, GoldenCorpus};
 use plaudon_eval::hypothesis::HypothesisSet;
 use plaudon_eval::report::{EnvironmentRecord, EvaluationReport, FrozenThresholds};
 use plaudon_eval::runner::{self, CloudPolicy, RunContext};
+use plaudon_eval::speaker::embeddings::{
+    EmbeddingSource, ModelPackEmbeddings, ScriptedEmbeddings, DEFAULT_SCRIPTED_DIM,
+    DEFAULT_SCRIPTED_SEED,
+};
+use plaudon_eval::speaker::harness::{self, HarnessPlan, RunMetadata};
+use plaudon_eval::speaker::report::RuntimeRecord;
 
 const USAGE: &str = "\
 plaudon-eval validate-corpus <manifest>
@@ -36,7 +51,11 @@ plaudon-eval run --manifest <m> --engine <id> --hypotheses <dir|file> --out <rep
                  [--commit <sha>] [--measured-on <rfc3339>] [--evidence-bundle <id>]
 plaudon-eval gate --report <report.json> --claim <supported|recommended>
                   [--manifest <golden manifest>] [--engine <id>] [--model <id>]
-                  [--as-of <rfc3339>] [--max-age-days <n>]";
+                  [--as-of <rfc3339>] [--max-age-days <n>]
+plaudon-eval speaker-match --plan <plan.json> --out <report.json>
+                  [--model-pack <dir>] [--seed <n>] [--dim <n>] [--commit <sha>]
+                  [--measured-on <rfc3339>] [--platform <token>] [--host-cpu <s>]
+                  [--peak-rss-bytes <n>] [--startup-ms <n>] [--real-time-factor <f>]";
 
 const SWITCHES: &[&str] = &["--allow-cloud"];
 
@@ -112,6 +131,7 @@ fn main() -> ExitCode {
         "validate-corpus" => dispatch(validate_corpus(&args)),
         "run" => dispatch(run(&args)),
         "gate" => dispatch(gate(&args)),
+        "speaker-match" => dispatch(speaker_match(&args)),
         "--help" | "-h" | "help" => {
             println!("{USAGE}");
             ExitCode::SUCCESS
@@ -322,4 +342,132 @@ fn gate(args: &Args) -> Outcome {
             Ok(false)
         }
     }
+}
+
+/// The §17.2 speaker-matching harness.
+///
+/// Writes the ADR-0081 §4 artifact and succeeds whenever the pass completed:
+/// "no thresholds could be derived" is a result the artifact records, not a
+/// crash, and a scripted run is a legitimate CI pass. The one thing printed
+/// loudly is whether the document qualifies as release evidence, because that
+/// is the question a reader of `docs/benchmarks/` is actually asking.
+fn speaker_match(args: &Args) -> Outcome {
+    args.reject_unknown(&[
+        "--plan",
+        "--out",
+        "--model-pack",
+        "--seed",
+        "--dim",
+        "--commit",
+        "--measured-on",
+        "--platform",
+        "--host-cpu",
+        "--peak-rss-bytes",
+        "--startup-ms",
+        "--real-time-factor",
+    ])?;
+    let plan_path = PathBuf::from(args.require("--plan")?);
+    let out = PathBuf::from(args.require("--out")?);
+    let document = std::fs::read_to_string(&plan_path)
+        .map_err(|error| format!("reading {}: {error}", plan_path.display()))?;
+    let plan = HarnessPlan::parse(&document).map_err(|error| error.to_string())?;
+
+    let seed = parse_number(args.optional("--seed"), "--seed")?.unwrap_or(DEFAULT_SCRIPTED_SEED);
+    let dim = parse_number(args.optional("--dim"), "--dim")?.unwrap_or(DEFAULT_SCRIPTED_DIM as u64)
+        as usize;
+
+    let pack = match args.optional("--model-pack") {
+        Some(dir) => {
+            Some(ModelPackEmbeddings::open(Path::new(dir)).map_err(|error| error.to_string())?)
+        }
+        None => None,
+    };
+    let scripted = ScriptedEmbeddings::seeded(seed, dim);
+    let source: &dyn EmbeddingSource = match &pack {
+        Some(pack) => pack,
+        None => &scripted,
+    };
+
+    let runtime = args.optional("--platform").map(|platform| RuntimeRecord {
+        platform: platform.to_owned(),
+        host_cpu: args.optional("--host-cpu").map(ToOwned::to_owned),
+        peak_rss_bytes: None,
+        startup_ms: None,
+        real_time_factor: None,
+    });
+    let runtime = match runtime {
+        Some(mut runtime) => {
+            runtime.peak_rss_bytes =
+                parse_number(args.optional("--peak-rss-bytes"), "--peak-rss-bytes")?;
+            runtime.startup_ms = parse_number(args.optional("--startup-ms"), "--startup-ms")?;
+            runtime.real_time_factor = match args.optional("--real-time-factor") {
+                Some(raw) => Some(
+                    raw.parse::<f64>()
+                        .map_err(|_| format!("--real-time-factor expects a number, got `{raw}`"))?,
+                ),
+                None => None,
+            };
+            Some(runtime)
+        }
+        None => None,
+    };
+
+    let metadata = RunMetadata {
+        measured_on: match args.optional("--measured-on") {
+            Some(raw) => Some(parse_timestamp(raw)?),
+            None => None,
+        },
+        commit: args.optional("--commit").map(ToOwned::to_owned),
+        runtime,
+    };
+
+    let report = harness::evaluate(&plan, source, &metadata).map_err(|error| error.to_string())?;
+    if let Some(parent) = out.parent() {
+        if !parent.as_os_str().is_empty() {
+            std::fs::create_dir_all(parent)
+                .map_err(|error| format!("creating {}: {error}", parent.display()))?;
+        }
+    }
+    std::fs::write(&out, report.to_json())
+        .map_err(|error| format!("writing {}: {error}", out.display()))?;
+
+    println!(
+        "speaker-match {} ({} embeddings): EER {:.4} over {} target / {} non-target trial(s)",
+        report.model.model_id,
+        if report.model.embedding_source.is_model_measurement() {
+            "model-pack"
+        } else {
+            "scripted"
+        },
+        report.overall.equal_error_rate.rate,
+        report.overall.targets,
+        report.overall.nontargets
+    );
+    match report.calibration.suggest {
+        Some(point) => println!(
+            "  T_suggest {:.4} (false accept {:.4}, false reject {:.4})",
+            point.threshold, point.false_accept_rate, point.false_reject_rate
+        ),
+        None => println!("  no suggestion threshold: {:?}", report.calibration.status),
+    }
+    if report.release_evidence.qualifies {
+        println!("  release evidence: yes");
+    } else {
+        println!("  release evidence: NO");
+        for blocker in &report.release_evidence.blockers {
+            println!("    - {blocker}");
+        }
+    }
+    println!("wrote {}", out.display());
+    Ok(true)
+}
+
+/// Parse an optional unsigned numeric option.
+fn parse_number(raw: Option<&str>, name: &str) -> Result<Option<u64>, String> {
+    raw.map(|value| {
+        value
+            .parse::<u64>()
+            .map_err(|_| format!("{name} expects a non-negative integer, got `{value}`"))
+    })
+    .transpose()
 }

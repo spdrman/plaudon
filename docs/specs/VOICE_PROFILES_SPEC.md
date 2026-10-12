@@ -1037,6 +1037,16 @@ in CI. Sentence-style test names as throughout the repo.
   (Opus low-bitrate via `crates/audio/src/opus.rs`, telephone band-pass, room IR) and reports EER
   per condition — the §6.5 variance story is measured, not asserted.
 
+*Implementation status (2026-10-12, P2.4):* the harness exists in `crates/eval/src/speaker/`
+(`plaudon-eval speaker-match`), with the licence gate (VP-181/VP-182) enforced in code, the
+DET/EER/operating-point maths, calibration at FA ≤ 1%, per-condition reporting, golden suggestions
+pinned to the model sha256, DER via `crates/ai-diarization::der`, and the committed artifact plus
+its schema (`schemas/speaker-match-report.v1.schema.json`). It runs hermetically in CI on scripted
+embeddings and on real ones as soon as a model pack supplies `eval-embeddings.json`. **No
+checkpoint, no audio tier and no platform runtime figure has been measured**, so the committed
+artifact is explicitly not release evidence and the shipped thresholds remain underived — see
+[docs/benchmarks/speaker-match-eval.md](../benchmarks/speaker-match-eval.md).
+
 ### 17.3 Fuzzing
 
 - **VP-185.** New cargo-fuzz targets in `fuzz/` with stable-replay twins in
