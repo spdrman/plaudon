@@ -14,10 +14,17 @@
 //!   the volume read-write in the common case and writes its own metadata;
 //!   [`mount::HostWriteBehaviour`] records that honestly.
 
+pub mod gate;
+pub mod import;
 pub mod model;
 pub mod mount;
 pub mod scan;
 
+pub use gate::{MountInstruction, UsbRefusal, HOST_READ_ONLY_NOTICE, HOST_WRITE_NOTICE};
+pub use import::{
+    import_recording, ImportError, ImportedDerivative, ImportedRecording, MemoryStagingSink,
+    SinkState, StagingSink,
+};
 pub use model::{UsbSupport, VendorModel};
 pub use mount::{HostWriteBehaviour, MountError, MountedVolume};
 pub use scan::{ScanError, ScannedRecording, VolumeScan};
