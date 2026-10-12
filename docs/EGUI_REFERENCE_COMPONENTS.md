@@ -1089,3 +1089,14 @@ Two further operational notes for Plaudon's CI:
 - Both photocraft and wordcraft exclude native `cargo test` on Windows ARM64 because of "an
   intermittent access violation in egui UI tests there". Plaudon's Windows target is x64, but the
   note is worth carrying into the packaging plan.
+
+---
+
+## Licence note (2026-10-12)
+
+Plaudon's own licence changed from Apache-2.0 to **MIT** (copyright holder Roman Goldmann). The
+reference repositories are `MIT OR Apache-2.0`; Plaudon takes the **MIT** option for vendored code, so
+§6.1's Apache-2.0 obligations (§4(b)–(d)) no longer apply to new vendoring. The existing NOTICE
+attributions and `third_party/craft-ui/LICENSE-MIT`/`LICENSE-APACHE` are kept unchanged: they are
+the upstream notices and remain accurate. Provenance headers should now read
+`Licensed under MIT (taken from MIT OR Apache-2.0)`.

@@ -58,7 +58,7 @@ today (verified by grep); all are new dependencies requiring licence-register en
 Root `Cargo.toml`: `resolver = "2"`, members `crates/*`, `apps/desktop/src-tauri`,
 `tests/integration`, `tests/chaos`, `tests/hardware`, `tests/egress/{monitor,scenario,harness}`;
 `exclude = ["fuzz"]`. Workspace package: version 0.1.0, edition 2021, `rust-version = "1.90"`,
-licence Apache-2.0. `rust-toolchain.toml` pins channel `stable` with rustfmt + clippy.
+licence MIT. `rust-toolchain.toml` pins channel `stable` with rustfmt + clippy.
 `rustfmt.toml`: max_width 100, Unix newlines. Workspace lints: `unsafe_code = "warn"`,
 `missing_debug_implementations = "warn"`, `clippy::all = deny`, `clippy::pedantic = warn` with 14
 named allows. Every crate must carry `[lints] workspace = true`
