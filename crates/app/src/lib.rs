@@ -29,6 +29,7 @@ pub mod dto;
 pub mod error;
 pub mod event;
 pub mod events;
+pub mod folder_pump;
 pub mod media;
 pub mod notify;
 pub mod ports;
