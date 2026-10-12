@@ -21,17 +21,13 @@ use plaudon_persistence::transcript::{RevisionContext, TranscriptRepository};
 use plaudon_persistence::Database;
 
 /// Path of the `plaudon` binary built for this test run.
+///
+/// `CARGO_BIN_EXE_<name>` is cargo's own answer and survives a change of
+/// artifact layout; deriving it from `current_exe()` assumed
+/// `<profile>/deps/<test>`, which the coverage run's toolchain no longer
+/// produces.
 fn binary() -> PathBuf {
-    let mut path = std::env::current_exe().expect("test executable path");
-    path.pop(); // deps/
-    if path.ends_with("deps") {
-        path.pop();
-    }
-    path.join(if cfg!(windows) {
-        "plaudon.exe"
-    } else {
-        "plaudon"
-    })
+    PathBuf::from(env!("CARGO_BIN_EXE_plaudon"))
 }
 
 struct Fixture {
