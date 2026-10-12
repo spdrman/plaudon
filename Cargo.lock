@@ -3171,10 +3171,12 @@ name = "plaudon-ai-contracts"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "jsonschema",
  "plaudon-domain",
  "serde",
  "serde_json",
  "thiserror 2.0.21",
+ "time",
  "tokio",
  "tokio-util",
 ]

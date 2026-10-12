@@ -13,14 +13,17 @@
 //!   success.
 
 pub mod capabilities;
+pub mod extraction;
 pub mod hallucination;
 pub mod job;
 pub mod policy;
 pub mod stt;
+pub mod template;
 pub mod text;
 pub mod transcript;
 pub mod tri;
 pub mod truthfulness;
+pub mod validation;
 
 pub use capabilities::{
     AvailabilityReason, HardwareRequirements, MediaFormat, PricingBasis, PrivacyClass,
@@ -35,6 +38,18 @@ pub use plaudon_domain::transcript::AlignmentOrigin;
 pub use policy::{select_stt_engine, EngineRejection, EngineSelection, SttRequirements};
 pub use stt::{SpeechToText, SttError, SttInput, TranscriptDraft, TranscriptSegmentDraft};
 pub use text::{StructuredRequest, StructuredResponse, TextModel, TextModelError};
+pub use extraction::{
+    ActionItem, ActionStatus, Assertion, CalendarDate, DateError, Decision, DueDate, ExtractedItem,
+    OpenQuestion, OptionalText, OwnerRef, Risk, SummaryFacet, SummaryStatement, Topic,
+};
+pub use template::{
+    AnchorRequirement, ExpectedSchema, ExtractionField, OutputTemplate, RenderingRules,
+    TemplateError, TemplateInstructions, TemplateOrigin, TEMPLATE_SCHEMA_VERSION,
+};
+pub use validation::{
+    AcceptedItem, CompatibilityMode, OutputValidator, RejectedItem, RejectionReason, RepairPolicy,
+    SpeakerDirectory, ValidationReport, ValidatorBuildError,
+};
 pub use transcript::{
     AnnotationKind, ChunkingStrategy, DraftWordAlignment, NormalizationProfile, SourceTime,
     TimePrecision, TranscriptAnnotation,

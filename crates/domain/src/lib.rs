@@ -5,7 +5,9 @@
 //! network, database or platform dependency. The workspace contains a
 //! dependency-boundary test that fails the build if that changes.
 
+pub mod anchor;
 pub mod capability;
+pub mod claim;
 pub mod error;
 pub mod ids;
 pub mod locale;
