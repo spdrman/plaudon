@@ -1,0 +1,43 @@
+[package]
+name = "plaudon-audio-playback"
+description = "Integer-time playback timeline, multiresolution waveform peaks and the UI-independent audio player engine."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[features]
+default = ["cpal-output"]
+# The cpal device backend. Off in environments without an audio stack
+# (headless CI containers do not need ALSA/CoreAudio headers to build the
+# timeline, peak and engine code, which is what the tests exercise).
+cpal-output = ["dep:cpal"]
+
+[dependencies]
+plaudon-ai-contracts = { workspace = true }
+plaudon-audio = { workspace = true }
+plaudon-domain = { workspace = true }
+cpal = { workspace = true, optional = true }
+sha2 = { workspace = true }
+symphonia = { workspace = true, features = [
+    "aac",
+    "adpcm",
+    "flac",
+    "isomp4",
+    "mp3",
+    "ogg",
+    "pcm",
+    "vorbis",
+    "wav",
+] }
+thiserror = { workspace = true }
+tokio-util = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+tempfile = { workspace = true }
