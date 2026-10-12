@@ -80,6 +80,14 @@ Vulkan — the same frame is not the same image.
    which is faster, legible in a diff and does not need a GPU. craft-libs' paired-reference
    technique stays available as a fallback for a widget that proves flaky, per §7.2 of the plan.
 
+**MARS image requirement.** The Linux build of the shell reaches D-Bus through AccessKit's AT-SPI
+adapter and the secret-service keyring backend, so the container needs `libdbus-1-dev`, which the
+runner's default package list does not include. Pass it explicitly:
+
+```sh
+PLAUDON_E2E_APT_PACKAGES=libdbus-1-dev scripts/e2e-remote.sh shell '…'
+```
+
 **Running and regenerating.** Compare on MARS:
 
 ```sh
@@ -92,7 +100,7 @@ scripts/e2e-remote.sh shell 'PLAUDON_VISUAL=1 cargo test -p plaudon-egui --test 
 Regenerate a baseline (and copy it back):
 
 ```sh
-scripts/e2e-remote.sh shell \
+PLAUDON_E2E_APT_PACKAGES=libdbus-1-dev scripts/e2e-remote.sh shell \
   'UPDATE_SNAPSHOTS=1 PLAUDON_VISUAL=1 cargo test -p plaudon-egui --test spike_kittest'
 # artifacts land in target/e2e-results/<crate>/tests/visual/*.png
 cp target/e2e-results/apps/plaudon-egui/tests/visual/*.png apps/plaudon-egui/tests/visual/
