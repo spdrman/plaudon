@@ -38,7 +38,7 @@ plaudon-plaud-wifi = { path = "crates/plaud-wifi" }
 plaudon-source-plaud-cli = { path = "crates/source-plaud-cli" }
 plaudon-source-folder = { path = "crates/source-folder" }
 plaudon-audio = { path = "crates/audio" }
-plaudon-audio-playback = { path = "crates/audio-playback" }
+plaudon-audio-playback = { path = "crates/audio-playback", default-features = false }
 plaudon-ai-contracts = { path = "crates/ai-contracts" }
 plaudon-ai-openrouter = { path = "crates/ai-openrouter" }
 plaudon-ai-whisper = { path = "crates/ai-whisper" }
