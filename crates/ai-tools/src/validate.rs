@@ -160,8 +160,11 @@ mod tests {
         assert!(matches!(err, ToolError::ConfigurationInvalid(_)));
     }
 
+    /// The repair budget is a compile-time constant, so the bound is checked
+    /// at compile time: a `const` block fails the build rather than the test
+    /// run if someone raises it.
     #[test]
     fn the_repair_budget_is_bounded() {
-        assert!(MAX_REPAIR_ATTEMPTS <= 3);
+        const { assert!(MAX_REPAIR_ATTEMPTS <= 3) };
     }
 }

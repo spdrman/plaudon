@@ -927,10 +927,7 @@ fn scripted_engine(dir: &Path) -> AppEngine {
         ])
         .with_pace_ms(40)
         .shared()])
-        .with_text_model(
-            ScriptedTextModel::new(serde_json::Value::Null)
-            .shared(),
-        );
+        .with_text_model(ScriptedTextModel::new(serde_json::Value::Null).shared());
     AppEngine::start(config).expect("the engine starts over the library")
 }
 
@@ -1061,7 +1058,10 @@ fn a_queued_stage_runs_to_completion_and_its_transcript_and_summary_appear() {
     support::run_until_frame(&mut harness, "the summary to finish", |harness| {
         job_is_done(harness.state(), &summary_job)
     });
-    assert_eq!(job(harness.state(), &summary_job).state, JobState::Completed);
+    assert_eq!(
+        job(harness.state(), &summary_job).state,
+        JobState::Completed
+    );
     let answer = harness
         .state()
         .engine()

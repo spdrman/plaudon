@@ -14,8 +14,8 @@ workspace = true
 [dependencies]
 async-trait = { workspace = true }
 plaudon-ai-contracts = { workspace = true }
+plaudon-app = { workspace = true }
 plaudon-audio = { workspace = true }
-plaudon-desktop = { path = "../../apps/desktop/src-tauri" }
 plaudon-domain = { workspace = true }
 plaudon-notifications = { workspace = true }
 plaudon-release-tools = { workspace = true }

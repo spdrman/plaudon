@@ -1,7 +1,9 @@
-//! Wire DTOs for the Tauri command surface (spec §15.2).
+//! Wire DTOs for the published command surface (spec §15.2).
 //!
-//! Every type here mirrors one interface in `apps/desktop/src/ipc/contract.ts`
-//! field for field. The rules the frontend relies on:
+//! Every type here is the Rust side of one `schemas/commands/v1/*.schema.json`
+//! document, field for field; the JSON-schema conformance suite in
+//! `tests/schema_conformance.rs` is what holds the two together. The rules a
+//! consumer relies on:
 //!
 //! * objects use snake_case field names and enums snake_case values;
 //! * an unknown value is `Option::None` and serializes as `null`; it is never
@@ -2924,7 +2926,8 @@ impl EventKind {
         Self::DeviceDisconnected,
     ];
 
-    /// Stable wire string, which is also the Tauri event name.
+    /// Stable wire string, which is also the value the published
+    /// `schemas/events/ui-event.v1.schema.json` enumerates.
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {

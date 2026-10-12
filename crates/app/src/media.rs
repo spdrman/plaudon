@@ -2,10 +2,13 @@
 //!
 //! Two callers, one rule: a recording is named by its canonical UUID and
 //! nothing else, and the bytes are resolved through [`LibraryPort`] into the
-//! archive. [`resolve_media`] is what a native player needs — a path, a
-//! content type and a byte length; [`serve`] is the request/response form the
-//! `plaudon-media://localhost/<recording_id>` scheme of the Tauri shell is
-//! built on, kept here because it is pure and tested. A traversal attempt, a
+//! archive. [`resolve_media`] is what the native player needs — a path, a
+//! content type and a byte length. [`serve`] is the request/response form the
+//! deleted webview shell's `plaudon-media://localhost/<recording_id>` scheme
+//! was built on; it survives the cutover because it is the pure, tested
+//! statement of the range rules (one `Range` header, at most
+//! [`MAX_CHUNK_BYTES`] per response, 200/206/400/404/416/503) that any
+//! byte-range reader over the archive must obey. A traversal attempt, a
 //! percent-encoded separator or any non-UUID is refused by both.
 
 use std::io::SeekFrom;
@@ -16,9 +19,6 @@ use plaudon_domain::ids::RecordingId;
 use tokio::io::{AsyncReadExt as _, AsyncSeekExt as _};
 
 use crate::ports::{LibraryPort, ResolvedMedia};
-
-/// Scheme registered by the Tauri shell. Unused by the native player.
-pub const SCHEME: &str = "plaudon-media";
 
 /// Largest slice served for one request, so a seek cannot ask us to buffer a
 /// whole recording in memory.

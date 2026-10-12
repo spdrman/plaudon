@@ -17,8 +17,8 @@ jobs:
       - name: Read Rust toolchain
         id: toolchain
         run: |
-          TOOLCHAIN=$(cat rust-toolchain.toml | grep '^channel' | cut -d'"' -f2)
-          echo "version=$TOOLCHAIN" >> $GITHUB_OUTPUT
+          TOOLCHAIN=$(grep '^channel' rust-toolchain.toml | cut -d'"' -f2)
+          echo "version=$TOOLCHAIN" >> "$GITHUB_OUTPUT"
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@master

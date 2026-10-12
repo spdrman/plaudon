@@ -19,7 +19,7 @@
 //!   run supplies [`NoopWaker`]. This is what keeps the application layer free
 //!   of any user-interface dependency.
 //!
-//! The sequence contract of `apps/desktop/src/ipc/eventBus.ts` is preserved
+//! The sequence contract the React shell's `ipc/eventBus.ts` carried is kept
 //! and enforced here instead: sequences are strictly increasing, a replayed or
 //! duplicate sequence is suppressed, a gap forces a full refetch, and a fresh
 //! subscriber starts with [`ResyncReason::Subscribed`] because it has not

@@ -193,6 +193,40 @@
         }
       }
     },
+    "export_defaults": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "format",
+        "destination_directory",
+        "include_speaker_labels",
+        "include_timestamps"
+      ],
+      "properties": {
+        "format": {
+          "type": "string",
+          "enum": [
+            "txt",
+            "markdown",
+            "json",
+            "srt",
+            "vtt"
+          ]
+        },
+        "destination_directory": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "include_speaker_labels": {
+          "type": "boolean"
+        },
+        "include_timestamps": {
+          "type": "boolean"
+        }
+      }
+    },
     "notification_settings": {
       "type": "object",
       "additionalProperties": false,
@@ -240,7 +274,8 @@
         "default_text_engine_id",
         "appearance",
         "contrast",
-        "notifications"
+        "notifications",
+        "export_defaults"
       ],
       "properties": {
         "onboarding_completed": {
@@ -278,6 +313,9 @@
         },
         "notifications": {
           "$ref": "#/$defs/notification_settings"
+        },
+        "export_defaults": {
+          "$ref": "#/$defs/export_defaults"
         }
       }
     },

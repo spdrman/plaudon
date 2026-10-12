@@ -6,6 +6,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+publish.workspace = true
 build = "build.rs"
 # Declared so a dependent build script can read DEP_PLAUDON_AI_APPLE_LINK_ARGS
 # and DEP_PLAUDON_AI_APPLE_LIB_DIR instead of restating the linker flags.

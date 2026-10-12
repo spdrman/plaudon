@@ -4,9 +4,10 @@
 //! warns against substituting coverage for meaningful assertions. This crate
 //! provides the reliable part:
 //!
-//! * [`Harness`] drives the real desktop ports — the same code path the Tauri
-//!   IPC layer calls — over a temporary library, with no Tauri runtime, no
-//!   network and no OS notification.
+//! * [`Harness`] drives the real application ports — `plaudon_app::AppPorts`,
+//!   the same code path the shell's command dispatcher calls — over a
+//!   temporary library, with no user interface, no network and no OS
+//!   notification.
 //! * [`EgressWatch`] proves a scenario initiated no outbound request, by
 //!   running it behind the real `OutboundPolicy` with a recording observer.
 //! * [`LocalStt`] runs a *local* transcription step over the real audio
@@ -32,13 +33,13 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use plaudon_ai_contracts::job::JobContext;
+use plaudon_app::events::{EventSink, RecordingEventSink};
+use plaudon_app::ports::{MachineRevisionSpec, MachineSegment};
+use plaudon_app::secrets::{InMemorySecretStore, SecretStore};
+use plaudon_app::{build_ports, AppPorts};
 use plaudon_audio::decode::{decode_to_canonical_pcm, CanonicalPcmProfile, MemoryPcmSink};
 use plaudon_audio::silence::{f32_samples_from_pcm_bytes, measure_speech_activity, SilenceOptions};
 use plaudon_audio::validate::{validate_media, ValidationRequest};
-use plaudon_desktop::events::{EventSink, RecordingEventSink};
-use plaudon_desktop::ports::{MachineRevisionSpec, MachineSegment};
-use plaudon_desktop::secrets::{InMemorySecretStore, SecretStore};
-use plaudon_desktop::{build_ports, AppPorts};
 use plaudon_domain::ids::JobId;
 use plaudon_domain::transcript::AlignmentOrigin;
 use plaudon_notifications::testing::RecordingNotifier;

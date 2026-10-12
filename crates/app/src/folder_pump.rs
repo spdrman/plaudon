@@ -12,21 +12,27 @@
 //! sweep still goes through the ordinary validated command path, with the
 //! ordinary job, events and rule enforcement.
 //!
-//! Scope, stated honestly: the pump syncs the folders it is given. This build
-//! publishes no command that enumerates the watched folders stored on disk, so
-//! a host registers the folders it knows — the ones `source_add_folder` and
-//! `source_sync` answered for in this session. Adding the enumeration would
-//! widen the published command surface, which this task does not do.
+//! Scope, stated honestly: the pump sweeps every watched folder the library
+//! stores that the user has not paused, read back through
+//! [`crate::ports::SourcesPort::watched_folder_ids`] on every tick. Reading
+//! it per tick rather than once at start-up is what makes a folder added in
+//! this session start sweeping without a restart, and what makes a folder
+//! added in a *previous* session start sweeping without the user opening the
+//! sources screen. No command enumerates folders — the published IPC surface
+//! is unchanged — because the timer is inside the application, not a caller
+//! of it.
 
-use std::collections::BTreeSet;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-use parking_lot::Mutex;
+use async_trait::async_trait;
+use plaudon_domain::error::AppError;
 use tokio::runtime::Handle;
 
 use crate::command::{AppCommand, Dispatcher};
 use crate::dto::{SourceSyncRequest, SyncTrigger};
+use crate::ports::SourcesPort;
 
 /// How often the timer fires, when the caller does not choose.
 ///
@@ -52,10 +58,27 @@ impl SyncRequester for Dispatcher {
     }
 }
 
-#[derive(Debug, Default)]
-struct Registry {
-    folders: BTreeSet<String>,
-    stopped: bool,
+/// Where the pump learns which folders there are to sweep.
+///
+/// Also a trait, and for the same reason: the timer is then testable against a
+/// list a test writes, with no library open.
+#[async_trait]
+pub trait FolderRoster: Send + Sync + 'static {
+    /// The folders this tick should sweep.
+    ///
+    /// # Errors
+    ///
+    /// Returns whatever the library said. The pump logs it and tries again on
+    /// the next tick rather than ending: a database that is briefly busy must
+    /// not stop a folder being watched for the rest of the session.
+    async fn folders_to_sweep(&self) -> Result<Vec<String>, AppError>;
+}
+
+#[async_trait]
+impl FolderRoster for Arc<dyn SourcesPort> {
+    async fn folders_to_sweep(&self) -> Result<Vec<String>, AppError> {
+        self.watched_folder_ids().await
+    }
 }
 
 /// A running watched-folder timer.
@@ -64,15 +87,13 @@ struct Registry {
 /// returns, so no sweep outlives the application.
 #[derive(Clone)]
 pub struct WatchedFolderPump {
-    registry: Arc<Mutex<Registry>>,
+    stopped: Arc<AtomicBool>,
 }
 
 impl std::fmt::Debug for WatchedFolderPump {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let registry = self.registry.lock();
         f.debug_struct("WatchedFolderPump")
-            .field("folders", &registry.folders.len())
-            .field("stopped", &registry.stopped)
+            .field("stopped", &self.stopped.load(Ordering::SeqCst))
             .finish()
     }
 }
@@ -80,60 +101,49 @@ impl std::fmt::Debug for WatchedFolderPump {
 impl WatchedFolderPump {
     /// Start the timer on `runtime`.
     ///
-    /// Returns immediately; nothing is swept until a folder is registered with
-    /// [`WatchedFolderPump::watch`].
+    /// Returns immediately. The first sweep happens one `interval` later, not
+    /// at once: the engine has just reconciled the library at start-up, and a
+    /// sweep fired into that has nothing to find.
     #[must_use]
     pub fn start<R: SyncRequester>(
         requester: Arc<R>,
+        roster: Arc<dyn FolderRoster>,
         runtime: &Handle,
         interval: Duration,
     ) -> Self {
         let pump = Self {
-            registry: Arc::new(Mutex::new(Registry::default())),
+            stopped: Arc::new(AtomicBool::new(false)),
         };
-        let registry = Arc::clone(&pump.registry);
+        let stopped = Arc::clone(&pump.stopped);
         runtime.spawn(async move {
             let mut ticker = tokio::time::interval(interval);
-            // The first tick of a Tokio interval completes immediately; a
-            // folder that was just registered has nothing new to sweep, so the
-            // pump waits one period before its first pass.
+            // The first tick of a Tokio interval completes immediately, which
+            // is the pass this waits out.
             ticker.tick().await;
             loop {
                 ticker.tick().await;
-                let folders = {
-                    let registry = registry.lock();
-                    if registry.stopped {
-                        return;
+                if stopped.load(Ordering::SeqCst) {
+                    return;
+                }
+                match roster.folders_to_sweep().await {
+                    Ok(folders) => {
+                        for source_id in folders {
+                            requester.request_background_sync(&source_id);
+                        }
                     }
-                    registry.folders.iter().cloned().collect::<Vec<_>>()
-                };
-                for source_id in folders {
-                    requester.request_background_sync(&source_id);
+                    Err(error) => tracing::warn!(
+                        code = error.code().as_str(),
+                        "the watched folders could not be listed; the next tick tries again"
+                    ),
                 }
             }
         });
         pump
     }
 
-    /// Sweep `source_id` from now on. Registering it twice changes nothing.
-    pub fn watch(&self, source_id: impl Into<String>) {
-        self.registry.lock().folders.insert(source_id.into());
-    }
-
-    /// Stop sweeping `source_id`.
-    pub fn forget(&self, source_id: &str) {
-        self.registry.lock().folders.remove(source_id);
-    }
-
-    /// The folders the timer sweeps.
-    #[must_use]
-    pub fn watched(&self) -> Vec<String> {
-        self.registry.lock().folders.iter().cloned().collect()
-    }
-
     /// Stop the timer. Idempotent.
     pub fn stop(&self) {
-        self.registry.lock().stopped = true;
+        self.stopped.store(true, Ordering::SeqCst);
     }
 }
 
@@ -141,7 +151,7 @@ impl Drop for WatchedFolderPump {
     fn drop(&mut self) {
         // The last handle going away stops the task; an earlier clone going
         // away must not.
-        if Arc::strong_count(&self.registry) == 1 {
+        if Arc::strong_count(&self.stopped) == 1 {
             self.stop();
         }
     }
@@ -150,7 +160,10 @@ impl Drop for WatchedFolderPump {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::atomic::AtomicUsize;
+
+    use parking_lot::Mutex;
+    use plaudon_domain::error::AppErrorCode;
 
     #[derive(Default)]
     struct Recorder {
@@ -165,6 +178,39 @@ mod tests {
         }
     }
 
+    /// A roster a test writes, standing in for the library's folder table.
+    #[derive(Default)]
+    struct Folders {
+        ids: Mutex<Vec<String>>,
+        fail: AtomicBool,
+    }
+
+    impl Folders {
+        fn with(ids: &[&str]) -> Arc<Self> {
+            Arc::new(Self {
+                ids: Mutex::new(ids.iter().map(|id| (*id).to_owned()).collect()),
+                fail: AtomicBool::new(false),
+            })
+        }
+
+        fn set(&self, ids: &[&str]) {
+            *self.ids.lock() = ids.iter().map(|id| (*id).to_owned()).collect();
+        }
+    }
+
+    #[async_trait]
+    impl FolderRoster for Folders {
+        async fn folders_to_sweep(&self) -> Result<Vec<String>, AppError> {
+            if self.fail.load(Ordering::SeqCst) {
+                return Err(AppError::new(
+                    AppErrorCode::InternalError,
+                    "the table is busy",
+                ));
+            }
+            Ok(self.ids.lock().clone())
+        }
+    }
+
     fn runtime() -> tokio::runtime::Runtime {
         tokio::runtime::Builder::new_multi_thread()
             .enable_all()
@@ -174,18 +220,16 @@ mod tests {
     }
 
     #[test]
-    fn the_timer_sweeps_every_registered_folder_and_nothing_else() {
+    fn the_timer_sweeps_every_folder_the_roster_names_and_nothing_else() {
         let runtime = runtime();
         let recorder = Arc::new(Recorder::default());
-        let pump = WatchedFolderPump::start(
+        let folders = Folders::with(&["folder-a", "folder-b"]);
+        let _pump = WatchedFolderPump::start(
             Arc::clone(&recorder),
+            Arc::clone(&folders) as Arc<dyn FolderRoster>,
             runtime.handle(),
             Duration::from_millis(10),
         );
-        pump.watch("folder-a");
-        pump.watch("folder-a");
-        pump.watch("folder-b");
-        assert_eq!(pump.watched(), vec!["folder-a", "folder-b"]);
 
         runtime.block_on(async { tokio::time::sleep(Duration::from_millis(60)).await });
         let calls = recorder.calls.lock().clone();
@@ -194,22 +238,25 @@ mod tests {
             "both folders are swept: {calls:?}"
         );
 
-        pump.forget("folder-b");
+        // The roster is read on every tick, so a folder that stopped being
+        // watched stops being swept without the pump being restarted.
+        folders.set(&["folder-a"]);
         recorder.calls.lock().clear();
         runtime.block_on(async { tokio::time::sleep(Duration::from_millis(40)).await });
         let calls = recorder.calls.lock().clone();
         assert!(
             calls.iter().all(|id| id == "folder-a"),
-            "a forgotten folder is not swept again: {calls:?}"
+            "a folder the roster dropped is not swept again: {calls:?}"
         );
     }
 
     #[test]
-    fn an_empty_registry_asks_for_nothing() {
+    fn an_empty_roster_asks_for_nothing() {
         let runtime = runtime();
         let recorder = Arc::new(Recorder::default());
         let _pump = WatchedFolderPump::start(
             Arc::clone(&recorder),
+            Folders::with(&[]) as Arc<dyn FolderRoster>,
             runtime.handle(),
             Duration::from_millis(5),
         );
@@ -222,15 +269,42 @@ mod tests {
     }
 
     #[test]
+    fn a_roster_that_fails_once_does_not_end_the_timer() {
+        let runtime = runtime();
+        let recorder = Arc::new(Recorder::default());
+        let folders = Folders::with(&["folder-a"]);
+        folders.fail.store(true, Ordering::SeqCst);
+        let _pump = WatchedFolderPump::start(
+            Arc::clone(&recorder),
+            Arc::clone(&folders) as Arc<dyn FolderRoster>,
+            runtime.handle(),
+            Duration::from_millis(5),
+        );
+        runtime.block_on(async { tokio::time::sleep(Duration::from_millis(30)).await });
+        assert_eq!(
+            recorder.count.load(Ordering::SeqCst),
+            0,
+            "a failed read sweeps nothing"
+        );
+
+        folders.fail.store(false, Ordering::SeqCst);
+        runtime.block_on(async { tokio::time::sleep(Duration::from_millis(40)).await });
+        assert!(
+            recorder.count.load(Ordering::SeqCst) > 0,
+            "the timer is still running once the library answers again"
+        );
+    }
+
+    #[test]
     fn stopping_the_pump_ends_the_task() {
         let runtime = runtime();
         let recorder = Arc::new(Recorder::default());
         let pump = WatchedFolderPump::start(
             Arc::clone(&recorder),
+            Folders::with(&["folder-a"]) as Arc<dyn FolderRoster>,
             runtime.handle(),
             Duration::from_millis(5),
         );
-        pump.watch("folder-a");
         runtime.block_on(async { tokio::time::sleep(Duration::from_millis(30)).await });
         assert!(recorder.count.load(Ordering::SeqCst) > 0);
 

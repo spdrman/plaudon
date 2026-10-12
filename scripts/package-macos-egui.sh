@@ -2,13 +2,13 @@
 # O2.6 — build, sign, audit and verify the macOS package for the egui shell
 # (EPIC O #209; spec 16.5, 19 Phase 9).
 #
-# The Tauri bundler produced `apps/desktop`'s `.app`. There is no bundler in
-# the egui build, so this script *is* the bundler: it lays out the bundle,
+# The Tauri bundler used to produce the `.app`; the EPIC O cutover (ADR-0024)
+# deleted it along with the rest of `apps/desktop`. There is no bundler in the
+# egui build, so this script *is* the bundler: it lays out the bundle,
 # composes the Info.plist from a committed template plus the generated file
 # associations, builds the icon, signs, audits and reports.
 #
-# Honest failure modes, in order of preference (identical to
-# `scripts/package-macos.sh`, which packages the Tauri shell until cutover):
+# Honest failure modes, in order of preference:
 #   1. A Developer ID identity and notarytool credentials are present: the
 #      bundle is signed with hardened runtime, notarized, stapled and verified.
 #      This is the only configuration that may be published.

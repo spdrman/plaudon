@@ -325,7 +325,7 @@ mod tests {
                 rationale: "job state transitions (spec 18.9)".to_owned(),
             }],
             exempt: vec![ExemptModule {
-                path_prefix: "apps/desktop".to_owned(),
+                path_prefix: "apps/plaudon-egui".to_owned(),
                 reason: "UI adapter (spec 18.9)".to_owned(),
             }],
             transitions: Vec::new(),
@@ -378,7 +378,7 @@ mod tests {
             &policy(),
             &coverage(&[
                 ("crates/jobs/src/state.rs", 95, 100),
-                ("apps/desktop/src-tauri/src/lib.rs", 1, 100),
+                ("apps/plaudon-egui/src/lib.rs", 1, 100),
             ]),
         );
         assert!(failures.is_empty(), "{failures:?}");

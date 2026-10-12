@@ -62,10 +62,6 @@ rationale = "security policy: update signature verification and rollback (spec 1
 # vendor frameworks."
 
 [[exempt]]
-path_prefix = "apps/desktop"
-reason = "UI adapter and vendor framework glue; covered by the spec 18.6A UI cluster and the E2E suite instead (spec 18.9)"
-
-[[exempt]]
 path_prefix = "apps/plaudon-egui"
 reason = "UI adapter: the egui view layer and its host hooks; covered by the egui_kittest suite instead (spec 18.9, EPIC O)"
 

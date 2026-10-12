@@ -1,9 +1,9 @@
 # Building, testing and packaging the egui desktop app
 
-Exact commands for `apps/plaudon-egui`, the Rust-only desktop shell (EPIC O, #197). The Tauri
-shell under `apps/desktop` is still in the tree and still has its own `scripts/package-macos.sh` /
-`scripts/package-windows.ps1`; nothing here touches it. When the cutover (#209) removes it, the
-"Tauri" rows below go with it.
+Exact commands for `apps/plaudon-egui`, the desktop application (EPIC O, #197). Since the cutover
+(#209, `docs/adr/ADR-0024-delete-the-tauri-react-stack-at-the-egui-cutover.md`) it is the only
+application in the repository: there is no second shell, no `apps/desktop`, and no node, npm or
+JavaScript toolchain anywhere in the build. Everything below is cargo and two platform scripts.
 
 Companion documents: `docs/EGUI_MIGRATION_PLAN.md` (what is being built and why),
 `docs/EGUI_ARCHITECTURE.md` (the layers, the command/event flow and how to add a screen),
@@ -54,12 +54,20 @@ export CXXFLAGS="-isystem $SDKROOT/usr/include/c++/v1"
 cargo build -j 2 --release -p plaudon-egui
 ```
 
-Optional features, both off by default:
+Optional features, all three off by default:
 
 | Feature | Effect | Cost |
 | --- | --- | --- |
-| `apple-bridge` | links the Swift bridge so Apple Speech and Foundation Models are reachable | needs `scripts/build-apple-bridge.sh` and Xcode; macOS only |
+| `apple-bridge` | links the Swift bridge so Apple Speech and Foundation Models are reachable; also enables the direct optional `plaudon-ai-apple` dependency, which is load-bearing (below) | needs `scripts/build-apple-bridge.sh` and Xcode; macOS only |
 | `hardware-scan` | links the real Bluetooth radio (`btleplug`) | the build then touches a radio at run time; CI never enables it |
+| `local-whisper` | links the local whisper.cpp speech engine (`plaudon-app/local-whisper`) | compiles whisper.cpp, which every `cargo test -p plaudon-egui` would otherwise pay for; with it off the transcribe executor reports the engine as unavailable in this build rather than pretending a model could run. **A release bundle is expected to turn it on.** |
+
+Run or package with a feature the usual way:
+
+```sh
+cargo run -j 2 -p plaudon-egui --features local-whisper
+cargo build -j 2 --release -p plaudon-egui --features "apple-bridge,local-whisper"
+```
 
 `apps/plaudon-egui/build.rs` does the two things Cargo will not do by itself:
 
@@ -68,12 +76,33 @@ Optional features, both off by default:
   that emitted it — so the binary that actually links the Swift static library has to repeat them.
   Without the `/usr/lib/swift` rpath the bundle cannot resolve `libswift_Concurrency.dylib`; without
   the weak framework references dyld refuses to start the app on a Mac older than macOS 26. This is
-  the same forwarding `apps/desktop/src-tauri/build.rs` did.
+  also why `apple-bridge` names `plaudon-ai-apple` as a *direct* optional dependency rather than
+  reaching it through `plaudon-app`: Cargo publishes `DEP_<LINKS>_LINK_ARGS` only to the build
+  script of a package that depends on the `links` package directly. Without that edge `build.rs`
+  finds no `DEP_PLAUDONAPPLEBRIDGE_LINK_ARGS`, drops the rpath and the weak references silently,
+  and the bundle fails to launch.
 * **It compiles the Windows resources** (`packaging/windows/plaudon-egui.rc`: icon, `VERSIONINFO`,
   side-by-side manifest) with `llvm-rc` or `rc.exe` and links the `.res` into the binary. With no
   resource compiler it prints a warning and continues, so a Linux or macOS cross-check still builds;
   `scripts/package-windows-egui.ps1` then refuses the resulting executable, because an installer
   must not ship a binary that lost its manifest.
+
+### 2.1 Running against a library that is not the installed one
+
+`PLAUDON_DATA_DIR` (`plaudon_app::runtime::DATA_DIR_ENV`) replaces the data directory for one run
+of the process. `EngineConfig::for_this_platform()` honours it, and everything derived from the
+data directory follows — the database, the media archive, `logs/`, `peak-cache/` and
+`shell-state.json` — because each of them is built by joining onto `EngineConfig::data_dir()`:
+
+```sh
+PLAUDON_DATA_DIR=/tmp/plaudon-smoke cargo run -j 2 -p plaudon-egui
+```
+
+It must be an **absolute** path. An empty or relative value is refused with a typed error rather
+than resolved against the working directory, which for a double-clicked bundle is `/`. This is what
+a release smoke test uses, so launching the artifact never touches the installed library;
+`default_data_dir()` deliberately ignores the override, so code that means "the real library" can
+still say so.
 
 ---
 
@@ -164,7 +193,8 @@ audio input, network server), and refuses again after signing if the *signature*
 `codesign -d --entitlements -` is what it audits, not the file it passed in. A debugger-attachable
 production bundle is the native equivalent of shipping devtools, and that is where it would appear.
 
-**Signing and notarization.** Identical honesty rules to `scripts/package-macos.sh`:
+**Signing and notarization.** The honesty rules are absolute: a status is printed only when it was
+earned.
 
 | Environment | Signature | Notarization | Exit |
 | --- | --- | --- | --- |
@@ -192,10 +222,11 @@ dist/macos-egui/Plaudon.app/Contents/MacOS/plaudon-egui      # it should stay up
 ls "$HOME/Library/Application Support/app.plaudon.desktop"   # the library it opened
 ```
 
-**The library directory.** The bundle identifier is `app.plaudon.desktop`, the identifier the Tauri
-shell used. `Manager::path().app_data_dir()` resolved
-`~/Library/Application Support/<identifier>`; `plaudon_app::runtime::default_data_dir` resolves
-`dirs::data_dir().join(APPLICATION_IDENTIFIER)`, which on macOS is the same path. That is what makes
+**The library directory.** The bundle identifier is `app.plaudon.desktop` — the identifier the
+deleted Tauri shell shipped with, kept deliberately. `plaudon_app::runtime::default_data_dir`
+resolves `dirs::data_dir().join(APPLICATION_IDENTIFIER)`, which on macOS is
+`~/Library/Application Support/app.plaudon.desktop`: exactly where the old shell's
+`app_data_dir()` put it. That is what makes
 an existing library open in the new shell (migration-plan risk R7). The packaging script fails with
 `reason=identifier_mismatch` if the plist and the application layer ever disagree, the packaging
 test asserts the same thing on every platform, and `scripts/release-gate.sh` proves it on a real
@@ -282,7 +313,7 @@ Steps, each recorded as `pass` / `fail` / `not_verified` / `not_applicable` in
 signature (Gatekeeper), tamper detection (a modified binary must fail `codesign`), launch,
 **library directory** (the launched bundle created `~/Library/Application Support/app.plaudon.desktop`
 and the plist identifier matches `APPLICATION_IDENTIFIER`), offline smoke, the **egui UI suite**
-(kittest, for an egui artifact; `not_applicable` for a Tauri one), signed update and rollback,
+(kittest), signed update and rollback,
 portable archive round trip, repeatability.
 
 `--allow-unsigned` only downgrades the signature verdict to `development_only`; the gate still exits
@@ -296,7 +327,7 @@ non-zero. There is no flag that turns a red gate green.
 | --- | --- | --- |
 | `rust` | macos-15, windows-2025 | fmt, clippy, `cargo test --workspace --all-features` |
 | `egui-desktop` | macos-15, windows-2025 | the kittest suites through cargo, then `package-macos-egui.sh` / `package-windows-egui.ps1`; exit 3 is the expected unsigned outcome, and the job asserts the report says `publishable: false` |
-| `desktop-ui` | macos-15, windows-2025 | the Tauri/React suites; deleted with `apps/desktop` at the cutover |
+| — | — | the `desktop-ui` job that ran the Tauri/React suites was deleted with `apps/desktop` at the cutover; no job in the pipeline needs node |
 | `acceptance`, `supply-chain`, `coverage`, `release-gates`, `pipeline-selftest` | as before | unchanged |
 
 The Windows leg of `egui-desktop` locates the SDK's `rc.exe` and exports `RC` before building, and

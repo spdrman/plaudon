@@ -10,7 +10,8 @@
 //! sub-route, and asserts
 //! [`plaudon_ui_testkit::a11y::assert_every_control_is_named`] on each one.
 //!
-//! What this cannot answer is in `scripts/ui-a11y-egui.md`: whether the words
+//! What this cannot answer is in
+//! `docs/accessibility/manual-screen-reader-script.md`: whether the words
 //! a screen reader says are the right words, in the right order, at the right
 //! moment. That script is executed by a human on VoiceOver and Narrator, and
 //! nothing here is a substitute for it.
@@ -257,7 +258,8 @@ fn the_contract_covers_every_destination_the_router_knows() {
         Destination::ALL.len(),
         6,
         "a destination was added or removed; the S17 sweep iterates \
-         Destination::ALL, and the manual script in scripts/ui-a11y-egui.md \
+         Destination::ALL, and the manual script in \
+         docs/accessibility/manual-screen-reader-script.md \
          has one section per destination that must follow"
     );
 }

@@ -15,8 +15,10 @@ use std::time::{Duration, Instant};
 
 use plaudon_app::command::{AppCommand, AppResponse, CommandId};
 use plaudon_app::dto::{
-    Appearance, CompleteOnboardingRequest, Contrast, NotificationCategory, NotificationSettings,
+    ActivityEntry, ActivityPage, Appearance, CompleteOnboardingRequest, Contrast,
+    NotificationCategory, NotificationSettings,
 };
+use plaudon_app::event::AppEvent;
 use plaudon_app::notify::UnsupportedNotifier;
 use plaudon_app::runtime::{AppEngine, EngineConfig};
 use plaudon_app::secrets::InMemorySecretStore;
@@ -96,6 +98,27 @@ impl ShellApp {
             hooks: &self.hooks,
         };
         self.shell.run_command(id, &host);
+    }
+
+    /// Hand the shell an answer exactly as the engine delivers one.
+    ///
+    /// The shell cannot tell this apart from a real response — it is the
+    /// same `AppEvent` on the same handler — which is what makes it a fair
+    /// way to put a known activity history in front of the header bell
+    /// without inventing library state the backend would have to produce.
+    fn deliver(&mut self, command: &'static str, response: AppResponse) {
+        let host = ShellHost {
+            dispatcher: self.engine.dispatcher(),
+            hooks: &self.hooks,
+        };
+        self.shell.handle_event(
+            AppEvent::Response {
+                id: CommandId::from_raw(u64::MAX),
+                command,
+                result: Box::new(Ok(response)),
+            },
+            &host,
+        );
     }
 }
 
@@ -690,4 +713,148 @@ fn the_ready_shell_matches_its_baseline() {
     // it was in the shell being replaced (`systemDark: false`).
     assert_eq!(Tokens::get(&harness.ctx).theme, ThemeKind::Light);
     visual::assert_snapshot(&mut harness, "shell-ready");
+}
+
+/* ------------------------------------------------------------------ J12 */
+
+/// One activity entry, read or unread.
+fn entry(id: &str, title: &str, read: bool) -> ActivityEntry {
+    ActivityEntry {
+        activity_id: id.to_owned(),
+        category: NotificationCategory::ImportFinished,
+        occurred_at: "2026-02-01T10:00:00Z".to_owned(),
+        title: title.to_owned(),
+        body: "Two speakers, 42 minutes.".to_owned(),
+        notification_delivered: true,
+        notification_suppressed_reason: None,
+        target: None,
+        read,
+    }
+}
+
+/// A history page, counted the way the history itself counts it.
+fn activity_page(items: Vec<ActivityEntry>) -> ActivityPage {
+    let unread_count = items.iter().filter(|entry| !entry.read).count() as u64;
+    ActivityPage {
+        items,
+        next_cursor: None,
+        unread_count,
+    }
+}
+
+/// A ready shell with nothing left in flight.
+///
+/// The shell asks for the activity history itself as soon as the
+/// capabilities arrive, and a test that handed it a page while that answer
+/// was still travelling would be overwritten by it. The status bar's
+/// activity indicator is the observable "something is in flight", so this
+/// waits for it to go quiet rather than for a guessed number of frames.
+fn ready_with_history() -> (tempfile::TempDir, Harness<'static, ShellApp>) {
+    let (dir, mut harness) = ready();
+    let deadline = Instant::now() + DEADLINE;
+    loop {
+        harness.run_steps(1);
+        let busy = a11y::nodes(&harness).into_iter().any(|node| {
+            node.announced()
+                .is_some_and(|text| text.contains("task running") || text.contains("tasks running"))
+        });
+        if !busy {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "the shell never finished its start-up commands"
+        );
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    (dir, harness)
+}
+
+#[test]
+fn the_header_bell_states_the_unread_count_in_words() {
+    let (_dir, mut harness) = ready_with_history();
+    harness.state_mut().deliver(
+        "list_activity",
+        AppResponse::ListActivity(activity_page(vec![
+            entry("a1", "Board meeting", true),
+            entry("a2", "Standup", false),
+            entry("a3", "Retro", false),
+        ])),
+    );
+    harness.run();
+
+    assert_eq!(harness.state().shell.activity_unread(), 2);
+    // Not a dot, not a colour: the control announces the number.
+    assert!(
+        a11y::has_label(&harness, "Activity: 2 unread notifications"),
+        "the bell does not announce its count: {:?}",
+        a11y::nodes(&harness)
+            .into_iter()
+            .filter_map(|node| node.announced().map(str::to_owned))
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn activating_the_header_bell_opens_the_activity_history() {
+    let (_dir, mut harness) = ready_with_history();
+    harness.state_mut().deliver(
+        "list_activity",
+        AppResponse::ListActivity(activity_page(vec![entry("a1", "Standup", false)])),
+    );
+    harness.run();
+
+    assert_ne!(harness.state().shell.route(), &Route::SettingsActivity);
+    harness
+        .get_by_label("Activity: 1 unread notification")
+        .click();
+    harness.run();
+    assert_eq!(harness.state().shell.route(), &Route::SettingsActivity);
+}
+
+#[test]
+fn an_empty_history_is_announced_as_nothing_unread_rather_than_decorated() {
+    let (_dir, harness) = ready_with_history();
+    assert_eq!(harness.state().shell.activity_unread(), 0);
+    assert!(
+        a11y::has_label(&harness, "Activity: no unread notifications"),
+        "the bell must still say what it is when there is nothing to report"
+    );
+    let announced: Vec<String> = a11y::nodes(&harness)
+        .into_iter()
+        .filter_map(|node| node.announced().map(str::to_owned))
+        .collect();
+    assert!(
+        !announced.iter().any(|text| text.contains("Activity 0")),
+        "a zero count must not be drawn as a badge: {announced:?}"
+    );
+}
+
+#[test]
+fn the_header_bell_is_reachable_by_keyboard() {
+    let (_dir, mut harness) = ready_with_history();
+    harness.state_mut().deliver(
+        "list_activity",
+        AppResponse::ListActivity(activity_page(vec![entry("a1", "Standup", false)])),
+    );
+    harness.run();
+
+    let order = a11y::focus_order(&mut harness, 40);
+    assert!(
+        order
+            .iter()
+            .any(|label| label == "Activity: 1 unread notification"),
+        "the bell cannot be reached by Tab: {order:?}"
+    );
+}
+
+#[test]
+fn the_header_bell_is_a_named_control_like_every_other() {
+    let (_dir, mut harness) = ready_with_history();
+    harness.state_mut().deliver(
+        "list_activity",
+        AppResponse::ListActivity(activity_page(vec![entry("a1", "Standup", false)])),
+    );
+    harness.run();
+    a11y::assert_every_control_is_named(&harness, "shell header with the activity bell", &[]);
 }

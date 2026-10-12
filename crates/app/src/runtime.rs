@@ -22,6 +22,16 @@
 //! | macOS | `~/Library/Application Support/app.plaudon.desktop` |
 //! | Windows | `%APPDATA%\app.plaudon.desktop` (Roaming) |
 //! | Linux | `$XDG_DATA_HOME/app.plaudon.desktop`, default `~/.local/share/...` |
+//!
+//! **Overriding it.** [`DATA_DIR_ENV`] (`PLAUDON_DATA_DIR`) replaces that path
+//! for one run of the process. It exists so a release smoke test, a support
+//! session or a second profile can open a library other than the installed
+//! one *without touching the installed one*: everything derived from the data
+//! directory — the database, the media archive, `logs/`, `peak-cache/` and
+//! `shell-state.json` — follows the override, because every one of them is
+//! built by joining onto [`EngineConfig::data_dir`]. The override must be an
+//! absolute path; a relative one is refused rather than resolved against a
+//! working directory, which for a double-clicked bundle is `/`.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -31,20 +41,30 @@ use parking_lot::Mutex;
 use plaudon_domain::error::{AppError, AppErrorCode};
 use plaudon_notifications::{Dispatcher as NotificationDispatcher, NotificationSettings};
 
-use crate::backend::devices::{DeviceRadio, NoRadio};
+use crate::backend::devices::DeviceRadio;
 use crate::command::Dispatcher;
 use crate::event::{self, AppEvent, ChannelEventSink, EventReceiver, NoopWaker, Waker};
 use crate::events::{EventPublisher, EventSink};
+use crate::folder_pump::{FolderRoster, WatchedFolderPump};
 use crate::notify;
 use crate::secrets::{KeyringSecretStore, SecretStore};
 use crate::updater::UpdateService;
-use crate::{default_approved_roots, AppPorts};
+use crate::{default_approved_roots, AppPorts, RadioChoice};
 
 /// The bundle identifier the Tauri shell shipped with, and therefore the
 /// directory name an existing installation already uses.
 pub const APPLICATION_IDENTIFIER: &str = "app.plaudon.desktop";
 
+/// Environment variable that replaces the installed library location for one
+/// run of the process. See the module documentation for why it exists and
+/// what it moves.
+pub const DATA_DIR_ENV: &str = "PLAUDON_DATA_DIR";
+
 /// Where the library lives, matching Tauri's `app_data_dir()`.
+///
+/// This is the *installed* location and ignores [`DATA_DIR_ENV`]; callers that
+/// want the override go through [`EngineConfig::for_this_platform`], which can
+/// report a bad override instead of silently falling back to the real library.
 ///
 /// `None` when the platform has no data directory, which is a fatal
 /// configuration problem rather than something to paper over with a guess.
@@ -60,11 +80,11 @@ pub struct EngineConfig {
     event_capacity: usize,
     waker: Arc<dyn Waker>,
     secrets: Arc<dyn SecretStore>,
-    radio: Arc<dyn DeviceRadio>,
-    cloud_transport: Option<Arc<dyn plaudon_ai_openrouter::transport::AsyncHttpTransport>>,
+    radio: RadioChoice,
     notifier: Option<Arc<dyn plaudon_notifications::Notifier>>,
     engines: crate::EngineOverrides,
     worker_threads: Option<usize>,
+    folder_interval: std::time::Duration,
 }
 
 impl std::fmt::Debug for EngineConfig {
@@ -74,6 +94,8 @@ impl std::fmt::Debug for EngineConfig {
             .field("approved_roots", &self.approved_roots.len())
             .field("event_capacity", &self.event_capacity)
             .field("worker_threads", &self.worker_threads)
+            .field("radio", &self.radio)
+            .field("folder_interval", &self.folder_interval)
             .finish_non_exhaustive()
     }
 }
@@ -89,20 +111,47 @@ impl EngineConfig {
             event_capacity: event::DEFAULT_CAPACITY,
             waker: Arc::new(NoopWaker),
             secrets: Arc::new(KeyringSecretStore::new()),
-            radio: Arc::new(NoRadio),
-            cloud_transport: None,
+            radio: RadioChoice::default(),
             notifier: None,
             engines: crate::EngineOverrides::default(),
             worker_threads: None,
+            folder_interval: crate::folder_pump::DEFAULT_INTERVAL,
         }
     }
 
-    /// Configuration for the platform's standard library location.
+    /// Configuration for the platform's standard library location, or for the
+    /// location [`DATA_DIR_ENV`] names.
     ///
     /// # Errors
     ///
-    /// Fails when the platform exposes no data directory.
+    /// Fails when the platform exposes no data directory, and when
+    /// `PLAUDON_DATA_DIR` is set to something that cannot be a library: an
+    /// empty value, or a relative path. Both are refused rather than
+    /// interpreted, because every plausible interpretation either silently
+    /// opens the real library the override was meant to protect or creates one
+    /// under whatever directory the process happens to have been launched in.
     pub fn for_this_platform() -> Result<Self, AppError> {
+        if let Some(override_dir) = std::env::var_os(DATA_DIR_ENV) {
+            let path = PathBuf::from(override_dir);
+            if path.as_os_str().is_empty() {
+                return Err(AppError::new(
+                    AppErrorCode::InternalError,
+                    format!(
+                        "{DATA_DIR_ENV} is set but empty; unset it to use the installed library"
+                    ),
+                ));
+            }
+            if !path.is_absolute() {
+                return Err(AppError::new(
+                    AppErrorCode::InternalError,
+                    format!(
+                        "{DATA_DIR_ENV} must be an absolute path, not {}",
+                        path.display()
+                    ),
+                ));
+            }
+            return Ok(Self::new(path));
+        }
         let data_dir = default_data_dir().ok_or_else(|| {
             AppError::new(
                 AppErrorCode::InternalError,
@@ -145,7 +194,24 @@ impl EngineConfig {
     /// `RadioState::UnavailableInBuild`.
     #[must_use]
     pub fn with_radio(mut self, radio: Arc<dyn DeviceRadio>) -> Self {
-        self.radio = radio;
+        self.radio = RadioChoice::Supplied(radio);
+        self
+    }
+
+    /// Scan and transfer over the host's own Bluetooth adapter (matrix row
+    /// D12).
+    ///
+    /// Exists only in a `hardware-scan` build. Without that feature there is
+    /// no method to call and no radio in the binary, which is why a default
+    /// build reports `RadioState::UnavailableInBuild` and means it.
+    ///
+    /// Calling this does not touch the adapter: the radio is constructed when
+    /// the library opens and first speaks to the hardware when a user asks
+    /// for a scan or a transfer.
+    #[cfg(feature = "hardware-scan")]
+    #[must_use]
+    pub fn with_host_bluetooth(mut self) -> Self {
+        self.radio = RadioChoice::HostBluetooth;
         self
     }
 
@@ -182,7 +248,7 @@ impl EngineConfig {
         mut self,
         transport: Arc<dyn plaudon_ai_openrouter::transport::AsyncHttpTransport>,
     ) -> Self {
-        self.cloud_transport = Some(transport);
+        self.engines.cloud_transport = Some(transport);
         self
     }
 
@@ -206,6 +272,17 @@ impl EngineConfig {
         self.worker_threads = Some(threads);
         self
     }
+
+    /// How often the watched-folder timer sweeps (matrix row D18). Default is
+    /// [`crate::folder_pump::DEFAULT_INTERVAL`].
+    ///
+    /// A test shortens it so a sweep happens inside a test's lifetime; the
+    /// shipped application has no reason to.
+    #[must_use]
+    pub fn with_folder_interval(mut self, interval: std::time::Duration) -> Self {
+        self.folder_interval = interval;
+        self
+    }
 }
 
 /// The running application: runtime, ports, dispatcher and event channel.
@@ -216,6 +293,11 @@ pub struct AppEngine {
     events: EventReceiver,
     ports: AppPorts,
     data_dir: PathBuf,
+    /// The watched-folder timer, owned here so it lives exactly as long as
+    /// the runtime it runs on and is stopped by
+    /// [`AppEngine::shutdown`] — the same ownership
+    /// [`crate::backend::processing::ProcessingHandle`] has.
+    folder_pump: WatchedFolderPump,
 }
 
 impl AppEngine {
@@ -284,7 +366,6 @@ impl AppEngine {
             config.secrets,
             config.approved_roots,
             config.radio,
-            config.cloud_transport,
             config.engines,
         ))?;
         *publisher.lock() = Some(ports.events.clone());
@@ -295,12 +376,28 @@ impl AppEngine {
         recover_update_state(&config.data_dir);
 
         let dispatcher = Dispatcher::new(ports.clone(), runtime.handle().clone(), sender);
+
+        // Matrix row D18: the watched-folder service is poll-driven, so
+        // something has to poll it. That something is a task on this
+        // runtime — never the render loop — which asks for a background sync
+        // of every stored folder on a timer. It goes through the dispatcher,
+        // so a sweep is an ordinary `source_sync` command with the ordinary
+        // job, events and rule enforcement, and the engine owns the pump so
+        // the task cannot outlive the runtime it runs on.
+        let folder_pump = WatchedFolderPump::start(
+            Arc::new(dispatcher.clone()),
+            Arc::new(Arc::clone(&ports.sources)) as Arc<dyn FolderRoster>,
+            runtime.handle(),
+            config.folder_interval,
+        );
+
         Ok(Self {
             runtime: Some(runtime),
             dispatcher,
             events: receiver,
             ports,
             data_dir: config.data_dir,
+            folder_pump,
         })
     }
 
@@ -356,13 +453,17 @@ impl AppEngine {
         self.events.sender().send(event);
     }
 
-    /// Stop the job workers, stop accepting events and wind the runtime down.
+    /// Stop the job workers, stop the watched-folder timer, stop accepting
+    /// events and wind the runtime down.
     ///
     /// Workers are given `grace` to finish the job they hold; anything still
     /// running is abandoned, which is safe because every durable step commits
     /// before it reports and the next start reconciles the row (§14.7).
     pub fn shutdown(mut self, grace: std::time::Duration) {
         self.events.close();
+        // Before the workers, because a sweep that started one tick ago would
+        // otherwise queue a sync into a pool that is being drained.
+        self.folder_pump.stop();
         if let Some(runtime) = self.runtime.take() {
             let processing = self.ports.processing.clone();
             runtime.block_on(async move { processing.stop(grace).await });
@@ -441,6 +542,52 @@ mod tests {
         assert_eq!(APPLICATION_IDENTIFIER, "app.plaudon.desktop");
     }
 
+    /// `PLAUDON_DATA_DIR` moves the whole library, and a value that cannot be
+    /// a library is refused rather than interpreted.
+    ///
+    /// One test, three cases, in sequence: an environment variable is process
+    /// global, so splitting this into three `#[test]`s would let them race.
+    /// Nothing else in this binary reads the variable — `default_data_dir`
+    /// deliberately ignores it — so the sequence is safe.
+    #[test]
+    fn the_data_directory_can_be_overridden_and_a_bad_override_is_refused() {
+        let dir = tempfile::tempdir().expect("temporary directory");
+
+        std::env::set_var(DATA_DIR_ENV, dir.path());
+        let config = EngineConfig::for_this_platform().expect("the override is accepted");
+        assert_eq!(config.data_dir(), dir.path());
+        assert_ne!(
+            Some(config.data_dir().to_path_buf()),
+            default_data_dir(),
+            "the override must not resolve to the installed library"
+        );
+
+        std::env::set_var(DATA_DIR_ENV, "");
+        let empty = EngineConfig::for_this_platform().expect_err("an empty override is refused");
+        assert!(
+            empty.detail().contains(DATA_DIR_ENV),
+            "the refusal must name the variable: {}",
+            empty.detail()
+        );
+
+        std::env::set_var(DATA_DIR_ENV, "relative/library");
+        let relative =
+            EngineConfig::for_this_platform().expect_err("a relative override is refused");
+        assert!(
+            relative.detail().contains("absolute"),
+            "the refusal must say why: {}",
+            relative.detail()
+        );
+
+        std::env::remove_var(DATA_DIR_ENV);
+        let installed = EngineConfig::for_this_platform().expect("the installed location resolves");
+        assert_eq!(
+            Some(installed.data_dir().to_path_buf()),
+            default_data_dir(),
+            "with the variable unset the engine opens the installed library"
+        );
+    }
+
     #[test]
     fn a_command_sent_from_a_non_async_caller_answers_on_the_event_channel() {
         let dir = tempfile::tempdir().unwrap();
@@ -508,6 +655,100 @@ mod tests {
             }))
             .expect_err("an invalid id is refused");
         assert_eq!(envelope.code, AppErrorCode::InvalidArgument);
+        engine.shutdown(std::time::Duration::from_secs(5));
+    }
+
+    /// A minimal but genuine RIFF/WAVE file: the watched folder recognises a
+    /// container from its leading bytes, not from the extension, so a file
+    /// that only *looks* like audio would be left alone and this test would
+    /// prove nothing.
+    fn wav_bytes() -> Vec<u8> {
+        let data: Vec<u8> = (0..2_048_u32).map(|index| (index % 251) as u8).collect();
+        let data_len = u32::try_from(data.len()).unwrap_or(0);
+        let mut out = Vec::new();
+        out.extend_from_slice(b"RIFF");
+        out.extend_from_slice(&(36 + data_len).to_le_bytes());
+        out.extend_from_slice(b"WAVEfmt ");
+        out.extend_from_slice(&16_u32.to_le_bytes());
+        out.extend_from_slice(&1_u16.to_le_bytes());
+        out.extend_from_slice(&1_u16.to_le_bytes());
+        out.extend_from_slice(&16_000_u32.to_le_bytes());
+        out.extend_from_slice(&32_000_u32.to_le_bytes());
+        out.extend_from_slice(&2_u16.to_le_bytes());
+        out.extend_from_slice(&16_u16.to_le_bytes());
+        out.extend_from_slice(b"data");
+        out.extend_from_slice(&data_len.to_le_bytes());
+        out.extend_from_slice(&data);
+        out
+    }
+
+    /// Matrix row D18: the watched-folder service is pumped on a timer.
+    ///
+    /// The test registers a folder and then *never asks for a sync again*.
+    /// The only thing in the process that can turn the file on disk into a
+    /// row in the library is [`crate::folder_pump::WatchedFolderPump`],
+    /// running on the engine's own runtime, so a green run is evidence that
+    /// the timer exists and is wired; before it was wired this test could
+    /// only time out.
+    ///
+    /// The interval is short and the deadline is long because the folder
+    /// service imports nothing until a file has been quiet for its
+    /// quiescence window (two seconds by default), which needs more than one
+    /// sweep by construction.
+    #[test]
+    fn a_file_left_in_a_watched_folder_is_imported_by_the_timer_alone() {
+        let library = tempfile::tempdir().expect("library directory");
+        let watched = tempfile::tempdir().expect("watched directory");
+        let engine = AppEngine::start(
+            EngineConfig::new(library.path())
+                .with_secrets(Arc::new(InMemorySecretStore::new()))
+                .with_notifier(Arc::new(UnsupportedNotifier))
+                .with_worker_threads(2)
+                .with_approved_roots(vec![watched.path().to_path_buf()])
+                .with_folder_interval(std::time::Duration::from_millis(250)),
+        )
+        .expect("the engine starts over a fresh library");
+
+        engine
+            .dispatcher()
+            .call_blocking(AppCommand::SourceAddFolder(
+                crate::dto::SourceAddFolderRequest {
+                    path: watched.path().display().to_string(),
+                    recursive: false,
+                    rule: crate::dto::WatchedFolderRule::ImportOnly,
+                },
+            ))
+            .expect("the folder is accepted");
+
+        std::fs::write(watched.path().join("meeting.wav"), wav_bytes())
+            .expect("the file appears in the folder");
+
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+        let imported = loop {
+            match engine.dispatcher().call_blocking(list_recordings()) {
+                Ok(AppResponse::ListRecordings(page)) if !page.items.is_empty() => break page,
+                Ok(_) => {}
+                Err(envelope) => panic!("the library could not be listed: {envelope:?}"),
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "nothing imported the file: the watched-folder timer is not running"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        };
+
+        assert!(
+            imported
+                .items
+                .iter()
+                .any(|item| item.title.contains("meeting")),
+            "the imported recording is the file that appeared: {:?}",
+            imported
+                .items
+                .iter()
+                .map(|item| item.title.clone())
+                .collect::<Vec<_>>()
+        );
         engine.shutdown(std::time::Duration::from_secs(5));
     }
 }

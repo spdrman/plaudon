@@ -172,14 +172,10 @@ fn watched_app(data_dir: &Path, hooks: HostHooks, watch: &EgressWatch) -> Plaudo
             // Real executors, scripted engines: the processing path that runs
             // here is the production one, so "nothing left the machine" is a
             // claim about work that actually ran.
-            .with_stt_engines(vec![ScriptedStt::new(&[
-                "We agreed to ship on Friday.",
+            .with_stt_engines(vec![
+                ScriptedStt::new(&["We agreed to ship on Friday."]).shared()
             ])
-            .shared()])
-            .with_text_model(
-                ScriptedTextModel::new(serde_json::Value::Null)
-                .shared(),
-            ),
+            .with_text_model(ScriptedTextModel::new(serde_json::Value::Null).shared()),
     )
     .expect("the engine starts over the library");
     // Parity row S15: until the first-run flow has been recorded the shell

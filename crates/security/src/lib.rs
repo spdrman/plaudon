@@ -14,7 +14,7 @@
 //! | [`consent`] | scoped consent grants and the dispatch preflight | §16.3 |
 //! | [`fsguard`] | path canonicalization, private temp dirs, archive entries | §16.5, §7.4 |
 //! | [`sandbox`] | out-of-process isolation for decoders and inference helpers | §6.3A |
-//! | [`tauri_guard`] | Tauri command allowlist and Rust-side authorization | §6.3A, §15.1 |
+//! | [`response`] | secret-shape scanning of serialized command results | §6.3A, §15.4 |
 //! | [`domain_map`] | the one bridge from these errors to `plaudon_domain::error::AppError` | §15.4 |
 //!
 //! # Boundaries
@@ -22,8 +22,8 @@
 //! * The crate has **no HTTP client**. It owns [`outbound::EgressTicket`],
 //!   which an HTTP transport must accept and cannot construct.
 //! * The crate has **no database**. Persistence stores opaque references only.
-//! * The crate does not depend on Tauri, on any vendor SDK, or on the domain
-//!   crate, so it is usable from tests, fuzz targets and audit binaries.
+//! * The crate does not depend on a UI toolkit, on any vendor SDK, or on the
+//!   domain crate, so it is usable from tests, fuzz targets and helper binaries.
 //!
 //! # What this crate does not promise
 //!
@@ -40,9 +40,9 @@ pub mod error;
 pub mod fsguard;
 pub mod local_only;
 pub mod outbound;
+pub mod response;
 pub mod sandbox;
 pub mod secrets;
-pub mod tauri_guard;
 
 /// Cargo package name of this crate, used by the workspace layout conformance test.
 pub const PACKAGE_NAME: &str = "plaudon-security";

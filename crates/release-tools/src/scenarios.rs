@@ -73,7 +73,11 @@ pub const REQUIRED_SCENARIOS: [&str; 44] = [
 pub enum ScenarioStatus {
     /// Runs automatically in CI on every matrix leg listed.
     Implemented {
-        /// Runner the scenario executes on: `rust`, `playwright` or `gate`.
+        /// Runner the scenario executes on: `rust` for a `plaudon-e2e`
+        /// acceptance test, `kittest` for an `egui_kittest` test in
+        /// `apps/plaudon-egui/tests`, or `gate` for a pipeline gate. The
+        /// `playwright` runner disappeared with the Tauri/React shell at the
+        /// EPIC O cutover (ADR-0024).
         harness: String,
         /// Test identifier the harness dispatches on.
         test: String,

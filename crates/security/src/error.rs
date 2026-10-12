@@ -135,9 +135,13 @@ pub const ARCHIVE_ENTRY_REJECTED: ErrorCode = ErrorCode::new("ARCHIVE_ENTRY_REJE
 pub const HELPER_FAILED: ErrorCode = ErrorCode::new("HELPER_FAILED");
 /// A sandboxed helper exceeded its wall-clock or CPU budget.
 pub const HELPER_TIMEOUT: ErrorCode = ErrorCode::new("HELPER_TIMEOUT");
-/// A Tauri command was invoked that is not on the allowlist for that window (§6.3A).
+/// A command was refused instead of executed (§6.3A). Inside this crate it is
+/// produced by [`crate::response::ResponseLeakError`], when a result would have
+/// carried protected data out to the view; `plaudon-automation` reports the same
+/// code when the local automation surface is disabled or owned by another user.
 pub const COMMAND_NOT_AUTHORIZED: ErrorCode = ErrorCode::new("COMMAND_NOT_AUTHORIZED");
-/// A Tauri command argument failed Rust-side validation (§15.1).
+/// A command argument failed Rust-side validation before it reached domain
+/// code (§15.1).
 pub const COMMAND_ARGUMENT_INVALID: ErrorCode = ErrorCode::new("COMMAND_ARGUMENT_INVALID");
 
 // ---------------------------------------------------------------------------

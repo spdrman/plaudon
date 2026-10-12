@@ -21,7 +21,9 @@ use plaudon_ai_contracts::job::{JobContext, Progress};
 use plaudon_ai_contracts::stt::{
     SpeechToText, SttError, SttInput, TranscriptDraft, TranscriptSegmentDraft,
 };
-use plaudon_ai_contracts::text::{StructuredRequest, StructuredResponse, TextModel, TextModelError};
+use plaudon_ai_contracts::text::{
+    StructuredRequest, StructuredResponse, TextModel, TextModelError,
+};
 use plaudon_domain::capability::{CapabilityStatus, Known, Tri};
 use plaudon_domain::model::{EngineId, ModelIdentity};
 use plaudon_domain::transcript::AlignmentOrigin;

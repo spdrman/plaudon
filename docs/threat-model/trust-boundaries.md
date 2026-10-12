@@ -6,19 +6,20 @@ Source: SPEC v1.3 §6.2, §6.3 (invariants 5, 7, 8, 12, 13, 14, 15), §6.3A,
 [`open-findings.md`](open-findings.md).
 
 The Rust core is the only trusted decision point. Everything on the other side
-of a boundary below — including our own frontend — is treated as an input
+of a boundary below — including our own user interface, which since the egui
+cutover runs in the same process — is treated as an input
 domain to be validated, not as a caller to be believed.
 
 ## Boundary diagram
 
 ```mermaid
 flowchart TB
-    subgraph untrusted_ui["Untrusted input domain: UI"]
-        WEBVIEW["React WebView<br/>strict CSP, no remote content, devtools off in production"]
+    subgraph untrusted_ui["Untrusted input domain: view layer (same process)"]
+        VIEW["egui view layer<br/>plaudon_egui / plaudon_ui<br/>renders state, holds no authority"]
     end
 
     subgraph trusted["Rust process (single OS user, no listener)"]
-        CMD["Tauri command layer<br/>plaudon_security::tauri_guard<br/>explicit command allowlist + Rust-side authorization"]
+        CMD["Typed command surface<br/>plaudon_app::command::Dispatcher + plaudon_app::validate<br/>closed command table, arguments validated in Rust"]
         CORE["Rust core: plaudon_app_core / plaudon_jobs<br/>owns disk, subprocess launch, egress, credentials, SQLite"]
         GATE["plaudon_security::outbound::OutboundPolicy<br/>single egress gate, deny by default"]
         FSG["plaudon_security::fsguard<br/>canonicalization, managed roots, archive entries"]
@@ -50,8 +51,8 @@ flowchart TB
         UPDATE(["Update manifest host"])
     end
 
-    WEBVIEW -- "typed commands, no raw tokens, no URLs, no pointers" --> CMD
-    CMD -- "sanitized typed events only" --> WEBVIEW
+    VIEW -- "typed AppCommand values, no raw tokens, no URLs, no pointers" --> CMD
+    CMD -- "typed AppEvent values: what changed, never the state" --> VIEW
     CMD --> CORE
     CORE --> FSG
     CORE --> SEC
@@ -76,30 +77,58 @@ flowchart TB
 
 ## Boundaries in detail
 
-### B1. React WebView ↔ Tauri command layer
+### B1. egui view layer ↔ the typed command surface
 
-* **Crosses inward:** typed command invocations with primitive arguments and
-  opaque ids.
-* **Crosses outward:** sanitized typed events and view models.
-* **Validated by:** `plaudon_security::tauri_guard` — an explicit
-  `invoke_handler` allowlist plus a Rust-side authorization check for every
-  command, independent of any frontend validation (§6.3A). The audit binary
-  `crates/security/src/bin/tauri_audit.rs` is the entry point that proves the
-  registered command set matches the declared one.
-* **Explicitly not trusted:** every argument, including ones the frontend
-  "already validated"; any path string; any id the frontend claims to own.
+This boundary used to be an IPC one: a React webview invoked Tauri commands
+across a process-internal channel the OS could see. At the EPIC O cutover
+(ADR-0024) the webview, the capability manifest and the IPC channel were
+deleted; the view layer is now Rust in the same process. **The boundary did not
+move, and it did not weaken.** It is still the line where untrusted input meets
+authority, because the view layer is written against the same assumption: it
+renders state and sends commands, and it holds no capability of its own.
+
+* **Crosses inward:** `plaudon_app::command::AppCommand` values —
+  typed requests with primitive arguments and opaque ids — handed to
+  `Dispatcher::send`, which returns a `CommandId` and never blocks the frame.
+* **Crosses outward:** `plaudon_app::event::AppEvent` values on a bounded,
+  coalescing channel: a §15.3 `UiEvent` saying *what changed*, a typed command
+  outcome, or an instruction to resynchronise. An event never carries the state
+  itself; the view refetches through another command.
+* **Validated by:** `plaudon_app::validate`, which every dispatch arm calls
+  before a port is touched, exactly as the Tauri command wrappers did (§6.3A),
+  and `plaudon_security::fsguard` for anything path-shaped. The closed surface
+  is structural rather than audited: the enums, `COMMAND_NAMES` and the dispatch
+  arms are generated from one table in `crates/app/src/command.rs`, so a command
+  cannot reach the dispatcher without appearing in the published list, and no
+  generic-execution name (`exec…`, `run_…`, `shell…`, `http_…`, `read_file`,
+  `write_file`) is representable.
+* **Explicitly not trusted:** every argument, including ones a screen
+  "already validated"; any path string; any id the view claims to own. Being in
+  the same address space is not an argument for believing it — a rendering bug
+  that produces a malformed id must fail validation, not reach a port.
 * **Never crosses outward:** bearer tokens, signed download URLs, device
   secrets, filesystem-wide handles or capabilities, platform-bridge pointers
-  (§6.3A). Remote UI content is prohibited, the shell plugin is disabled,
-  devtools are off in production builds (TM-039).
+  (§6.3A). The properties the webview rules used to carry — no remotely hosted
+  UI content, no shell plugin, no devtools in a production build — are now
+  properties of the artifact rather than of a manifest: there is no browser
+  engine to host remote content and no scriptable surface at all, and the
+  "not debuggable, no runtime-protection escape hatch" half is enforced by the
+  packaging entitlement and manifest audits (TM-039).
+* **One honest limit of an in-process boundary.** A webview was also a process
+  and address-space boundary of sorts; the view layer is not. A memory-safety
+  defect in view code is a defect in the trusted process. What limits that is
+  the language, not containment: the screens in `crates/ui` contain no `unsafe`
+  at all, and the `unsafe` the shell does carry is confined to platform
+  interop in `apps/plaudon-egui` — the status item's `Send`/`Sync` assertions
+  and the macOS open-URL delegate — none of which parses untrusted input.
 * **Error envelopes:** a security failure crosses this boundary only through
   `plaudon_security::domain_map`, which maps it onto the closed
   `plaudon_domain::error::AppErrorCode` set. The user-facing message is chosen
   by the domain code; the security layer's specific reason travels in
-  `AppError::detail`, which is never serialized to the frontend. That split is
-  what keeps §15.4's "no signed URLs, credentials, raw request bodies or
-  transcript excerpts in an envelope" true by construction rather than by
-  review (TM-010, TM-042).
+  `AppError::detail`, which is never shown to the user or carried into an
+  event. That split is what keeps §15.4's "no signed URLs, credentials, raw
+  request bodies or transcript excerpts in an envelope" true by construction
+  rather than by review (TM-010, TM-042).
 
 ### B2. Rust core ↔ SQLite (single-writer coordinator)
 
@@ -248,7 +277,7 @@ dropped.
 
 | # | Untrusted input domain | Validating boundary (module) | Status | Rows |
 |---|---|---|---|---|
-| 1 | React WebView: command arguments, ids, paths, any frontend-side validation | `plaudon_security::tauri_guard` (command allowlist + Rust-side authorization), then `plaudon_security::fsguard` for anything path-shaped | implemented — EPIC D; the Tauri manifest the audit must run against is EPIC E | TM-016, TM-037, TM-039 |
+| 1 | The view layer: command arguments, ids, paths, anything a screen "already validated" | `plaudon_app::command` (a closed, generated command table with no generic-execution name) and `plaudon_app::validate` (every argument, before any port), then `plaudon_security::fsguard` for anything path-shaped | implemented — EPIC D for the path core, EPIC O for the typed surface that replaced the IPC allowlist | TM-016, TM-037 |
 | 2 | Local audio files chosen by the user (manual import) | `plaudon_security::fsguard` (canonical path, managed roots) → `plaudon_audio::sniff` (content-based format detection, never the extension) → `plaudon_security::sandbox` (decode out of process) | implemented — fsguard/sandbox EPIC D; planned — sniff EPIC F | TM-012, TM-037 |
 | 3 | Vendor audio files from a mounted USB recording volume and from a watched folder | `plaudon_security::fsguard` (read-only enumeration, expected volume structure, no trust in the volume label) → `plaudon_source_folder` readiness probe and copy-only staging → `plaudon_audio::sniff` → `plaudon_security::sandbox` | implemented — fsguard/sandbox EPIC D; planned — watcher EPIC K, sniff EPIC F | TM-012, TM-018, TM-037 |
 | 4 | PLAUD BLE advertisements, GATT notifications and framed `.ASR` chunks | `plaudon_plaud_protocol` (bounded parsing, opcode and offset coherence) inside the `plaudon_plaud_ble` single-owner actor | planned — EPIC L | TM-003, TM-004, TM-005, TM-006, TM-008 |
@@ -263,5 +292,8 @@ dropped.
   control socket, no webhook endpoint and no remote callback (§6.3 invariant
   12). Local automation invokes the same validated Rust services as the GUI
   through the OS user's own permissions (§6.3 invariant 13, TM-021).
-* **The frontend is not a privilege domain.** It holds no capability that the
-  Rust side does not re-check per command.
+* **The view layer is not a privilege domain.** It holds no capability the
+  application layer does not re-check per command, and the cutover to an
+  in-process user interface did not change that: the commands it may send are a
+  closed generated list, and every argument is validated in Rust before a port
+  sees it.

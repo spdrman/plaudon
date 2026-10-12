@@ -522,11 +522,13 @@ mod tests {
     }
 
     #[test]
-    fn the_published_typescript_contract_names_every_device_command_and_event() {
-        // The TypeScript wire contract is the parity oracle until the React
-        // frontend is deleted at cutover (EPIC O, O2.5); this assertion goes
-        // with it.
-        let contract = include_str!("../../../../apps/desktop/src/ipc/contract.ts");
+    fn the_published_schemas_name_every_device_command_and_event() {
+        // Until the EPIC O cutover (ADR-0024) this assertion read the React
+        // shell's hand-written `contract.ts` as the parity oracle. That file
+        // is gone with the shell it belonged to; the remaining published wire
+        // description is `schemas/`, which is what the application layer must
+        // agree with now. Same shape of claim, one less copy of the truth.
+        let schema_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../schemas");
         for name in [
             "list_nearby_devices",
             "device_probe",
@@ -537,18 +539,30 @@ mod tests {
             "device_sync_policy",
         ] {
             assert!(
-                contract.contains(&format!("{name}:")),
-                "{name} is not in CommandMap"
+                crate::command::COMMAND_NAMES.contains(&name),
+                "{name} is not on the published command surface"
             );
-            assert!(
-                contract.contains(&format!("\"{name}\"")),
-                "{name} is not listed"
-            );
+            for direction in ["request", "response"] {
+                let path = schema_root
+                    .join("commands/v1")
+                    .join(format!("{name}.{direction}.schema.json"));
+                assert!(
+                    path.is_file(),
+                    "{name} has no {direction} schema at {path:?}"
+                );
+            }
         }
+
+        let raw = std::fs::read_to_string(schema_root.join("events/ui-event.v1.schema.json"))
+            .expect("the UI event schema exists");
+        let schema: Value = serde_json::from_str(&raw).expect("valid json");
+        let kinds = schema["properties"]["kind"]["enum"]
+            .as_array()
+            .expect("the schema enumerates the event kinds");
         for kind in crate::dto::EventKind::ALL {
             assert!(
-                contract.contains(&format!("\"{}\"", kind.as_str())),
-                "{} is not in EVENT_KINDS",
+                kinds.iter().any(|value| value == kind.as_str()),
+                "{} is not in the published event enum",
                 kind.as_str()
             );
         }

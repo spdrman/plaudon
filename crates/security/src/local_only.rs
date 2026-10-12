@@ -244,7 +244,8 @@ impl NetworkPolicySettings {
 }
 
 /// The complete, user-facing picture of Local-only Mode. Returned by the
-/// `set_local_only_mode` and `get_capabilities` Tauri commands (§15.2).
+/// `set_local_only_mode` and `get_capabilities` commands of
+/// `plaudon_app::command` (§15.2).
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct LocalOnlyStatus {
     pub mode: NetworkMode,
@@ -643,7 +644,7 @@ mod tests {
     }
 
     #[test]
-    fn status_serializes_for_the_tauri_command() {
+    fn status_serializes_for_the_command_response() {
         let mut settings = NetworkPolicySettings::default();
         settings.set_watched_folders(vec![WatchedFolder::detect("/Users/a/Dropbox/x")]);
         let json = serde_json::to_string(&settings.describe()).unwrap();

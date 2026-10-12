@@ -1,6 +1,6 @@
 # ADR-0021: Native notification backends, payload privacy and non-authoritative delivery
 
-- **Status:** accepted
+- **Status:** accepted; amended 2026-10-12 — the decision stands, the shell that owns the platform wiring is now `apps/plaudon-egui` and the activation path is an in-process event
 - **Date:** 2026-10-11
 - **Deciders:** EPIC E (desktop shell)
 - **Spec:** §5.5, §14.5, §22(13)
@@ -40,12 +40,14 @@ in a payload, and what a delivery result means.
   outlive the call.
 - **Windows** (`crates/notifications/src/windows.rs`): `tauri-winrt-notification`
   over `Windows.UI.Notifications.ToastNotificationManager` — a real WinRT toast,
-  maintained by the Tauri organisation whose runtime we already ship, depending
-  only on the `windows` crate family. Windows has no runtime permission prompt:
-  toasts require a registered **AppUserModelID** (installer shortcut carrying
-  `System.AppUserModel.ID`, or `SetCurrentProcessExplicitAppUserModelID` for a
-  portable build). The desktop crate supplies that AUMID; an empty one reports
-  `Unsupported` rather than pretending to deliver.
+  maintained by the Tauri organisation (whose runtime this product shipped when
+  this record was written and no longer does; see the 2026-10-12 amendment),
+  depending only on the `windows` crate family. Windows has no runtime
+  permission prompt: toasts require a registered **AppUserModelID** (installer
+  shortcut carrying `System.AppUserModel.ID`, or
+  `SetCurrentProcessExplicitAppUserModelID` for a portable build). The
+  application layer supplies that AUMID; an empty one reports `Unsupported`
+  rather than pretending to deliver.
 - **Everything else**: `OsPermission::Unsupported` / `DeliveryOutcome::Unsupported`.
 
 The crate declares no HTTP client, no mail/SMTP client and no push SDK, and
@@ -100,3 +102,42 @@ notifications are disabled, denied or broken.
 - The Windows backend is type-checked for `x86_64-pc-windows-msvc` but has not
   been exercised on Windows hardware yet; §22(17) still requires a named
   real-hardware test before any Windows support claim.
+
+## Amendment, 2026-10-12: no Tauri shell, same notification contract
+
+The EPIC O cutover (#209, [ADR-0024](ADR-0024-delete-the-tauri-react-stack-at-the-egui-cutover.md))
+deleted `apps/desktop`. Every decision above holds — the two backends, the
+structural privacy rule, and "delivery is not the state of record" — but three
+statements named a shell that no longer exists.
+
+**Who owns the platform wiring.** `plaudon_app::notify::platform_notifier`
+picks the backend by target and supplies what each one needs: the macOS backend
+directly, and the Windows backend with the AUMID `app.plaudon.desktop`, which
+is `plaudon_app::runtime::APPLICATION_IDENTIFIER` — the same string the bundle
+identifier, the installer's registry claim and the library directory use, which
+is what keeps a toast from being dropped for an AUMID nothing registered. The
+notification crate still depends on no shell: it is `plaudon-app` that chooses,
+not a Tauri plugin.
+
+**The `tauri-winrt-notification` dependency stays, on purpose.** The crate name
+is now the only trace of the word in the graph of a build that links no
+webview. It is kept because it is what the decision above chose on its merits:
+a real WinRT toast over `ToastNotificationManager`, depending only on the
+`windows` crate family. Replacing a working, correctly-licensed WinRT binding
+to avoid a name would be a change with risk and no benefit, and it pulls in no
+`tauri`, `wry` or webview package.
+
+**Activation.** A notification click still carries nothing but a typed target.
+On macOS the delegate reads `targetContentIdentifier`; on Windows the backend
+holds the activation handler. Both end in
+`plaudon_app::notify::activation_target`, which ignores a token this build did
+not write, and the shell turns it into a `DesktopEvent::Activate`
+(`apps/plaudon-egui/src/desktop.rs`) that navigates the window. The
+`ui.activation_requested` event is no longer an IPC message to a webview but an
+`AppEvent` on the in-process channel; it is still a hint, and the destination
+still refetches committed state.
+
+**The consequence that said "this crate stays free of Tauri"** is now true of
+the whole product, not only of `crates/notifications`. The §22(17) caveat is
+unchanged: the Windows backend is type-checked for `x86_64-pc-windows-msvc` and
+has still not been exercised on Windows hardware.

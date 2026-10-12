@@ -3,7 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-10-11
 - **Spec:** §1, §2.4, §5.3, §6.1, §6.3(1), §15.1, §15.3, §18.6A
-- **Supersedes:** the GUI-toolkit decision of [ADR-0001](ADR-0001-rust-core-with-a-tauri-2-shell.md), effective at the EPIC O cutover (#209)
+- **Supersedes:** the GUI-toolkit decision of [ADR-0001](ADR-0001-rust-core-with-a-tauri-2-shell.md); in effect since the EPIC O cutover (#209) carried it out on 2026-10-12, which [ADR-0024](ADR-0024-delete-the-tauri-react-stack-at-the-egui-cutover.md) records
 
 ## Context
 
@@ -98,8 +98,9 @@ row. Git dependencies stay denied (`deny.toml`), so reuse means vendoring a pinn
   software adapter (MARS Docker, mesa/lavapipe), which is also where screenshot baselines are made.
 - The licence surface grows by the egui/eframe/winit/wgpu/AccessKit/`rfd` trees; each is recorded in
   `docs/licensing/third-party-register.md` and gated by `cargo deny`.
-- Two frontends coexist until the O2.5 cutover. `plaudon-desktop` keeps working against the same
-  `plaudon-app` crate, so there is one implementation of the commands, not two.
+- Two frontends coexisted until the O2.5 cutover; `plaudon-desktop` worked against the same
+  `plaudon-app` crate throughout, so there was one implementation of the commands, not two, and the
+  deletion of the Tauri tree on 2026-10-12 (ADR-0024) removed a shell, not an implementation.
 
 ## Amendment, 2026-10-12: a native application menu on macOS (parity row S8)
 

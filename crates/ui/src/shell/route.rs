@@ -6,7 +6,7 @@
 //! notification activation names a recording or a job, and the shell has to
 //! turn that into a destination.
 //!
-//! Ported from `apps/desktop/src/app/router.ts`, including the ordering
+//! Ported from the React shell's `app/router.ts`, including the ordering
 //! comment: Devices is last so `Mod+1`…`Mod+5` keep the meaning they had
 //! before Devices existed.
 

@@ -1,4 +1,4 @@
-//! The Tauri-free application layer.
+//! The user-interface-free application layer.
 //!
 //! Everything the desktop application does, minus the window. This crate owns
 //!
@@ -125,6 +125,49 @@ impl std::fmt::Debug for AppPorts {
     }
 }
 
+/// Which radio the direct-device port is given.
+///
+/// Two variants and not one `Option`, because the two cases are built at
+/// different moments. A supplied radio exists before the library is opened; a
+/// *real* one cannot, because it commits the bytes it transfers through a
+/// [`plaudon_source_plaud_device::DeviceImportCommitter`] over the database
+/// and the media archive, and those do not exist until [`build_ports_with`]
+/// has opened them. So the caller states the intent and this module builds
+/// the radio at the only point where it can (matrix row D12).
+#[derive(Clone)]
+pub enum RadioChoice {
+    /// The radio the caller built. The default is
+    /// [`backend::devices::NoRadio`], which reports
+    /// [`dto::RadioState::UnavailableInBuild`]; the device tests supply a
+    /// scripted one.
+    Supplied(Arc<dyn DeviceRadio>),
+    /// The host's own Bluetooth adapter.
+    ///
+    /// The variant exists on every build so that resolving a `RadioChoice`
+    /// stays an ordinary two-arm match. What a default build compiles out is
+    /// the *construction*: `EngineConfig::with_host_bluetooth` exists only
+    /// under `hardware-scan`, so nothing outside a hardware build can name
+    /// this. If one arrived here anyway the resolver yields `NoRadio` and the
+    /// screen keeps reporting [`dto::RadioState::UnavailableInBuild`], which
+    /// is the honest answer for a binary with no radio code linked into it.
+    HostBluetooth,
+}
+
+impl Default for RadioChoice {
+    fn default() -> Self {
+        Self::Supplied(Arc::new(NoRadio))
+    }
+}
+
+impl std::fmt::Debug for RadioChoice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Supplied(_) => f.write_str("RadioChoice::Supplied"),
+            Self::HostBluetooth => f.write_str("RadioChoice::HostBluetooth"),
+        }
+    }
+}
+
 /// Build every port over the library in `app_data_dir`.
 ///
 /// This is the swap point: replacing the job engine or the library backend is
@@ -164,14 +207,14 @@ pub async fn build_ports_with_radio(
         notifications,
         secrets,
         approved_roots,
-        radio,
-        None,
+        RadioChoice::Supplied(radio),
         EngineOverrides::default(),
     )
     .await
 }
 
-/// AI engines a caller substitutes for the ones this build would probe for.
+/// Outside dependencies a caller substitutes for the ones this build would
+/// otherwise reach for.
 ///
 /// Production leaves every field empty. A test fills them so the whole
 /// processing path — job states, arbitration, cancellation, progress, the
@@ -183,6 +226,13 @@ pub struct EngineOverrides {
     pub stt: Vec<Arc<dyn plaudon_ai_contracts::stt::SpeechToText>>,
     /// The text model every summarization and tool run uses.
     pub text: Option<Arc<dyn plaudon_ai_contracts::text::TextModel>>,
+    /// The HTTPS transport the cloud gateway dispatches through.
+    ///
+    /// `None` is the real one. A test that must prove nothing left the
+    /// process supplies a transport that records and refuses, which is the
+    /// only way to tell "no request was made" from "a request was made and
+    /// failed".
+    pub cloud_transport: Option<Arc<dyn plaudon_ai_openrouter::transport::AsyncHttpTransport>>,
 }
 
 impl std::fmt::Debug for EngineOverrides {
@@ -190,24 +240,28 @@ impl std::fmt::Debug for EngineOverrides {
         f.debug_struct("EngineOverrides")
             .field("stt", &self.stt.len())
             .field("text", &self.text.is_some())
+            .field("cloud_transport", &self.cloud_transport.is_some())
             .finish()
     }
 }
 
-/// [`build_ports_with_radio`] with the cloud HTTPS transport and the AI
-/// engines replaced.
+/// [`build_ports_with_radio`] with the AI engines, and optionally the cloud
+/// HTTPS transport, replaced.
 ///
 /// The one reason to replace the transport is a test that must prove nothing
 /// left the process: a transport that records and refuses is the only way to
 /// tell "no request was made" apart from "a request was made and failed".
+/// It travels inside [`EngineOverrides`] rather than as its own parameter
+/// because it is the same kind of thing — a substitution for an outside
+/// dependency a hermetic run must not reach — and because seven positional
+/// arguments is as many as this function may carry.
 pub async fn build_ports_with(
     app_data_dir: &Path,
     sink: Arc<dyn EventSink>,
     notifications: Arc<plaudon_notifications::Dispatcher>,
     secrets: Arc<dyn SecretStore>,
     approved_roots: Vec<PathBuf>,
-    radio: Arc<dyn DeviceRadio>,
-    cloud_transport: Option<Arc<dyn plaudon_ai_openrouter::transport::AsyncHttpTransport>>,
+    radio: RadioChoice,
     engines: EngineOverrides,
 ) -> Result<AppPorts, AppError> {
     let mut opened = LocalBackend::open(
@@ -218,7 +272,7 @@ pub async fn build_ports_with(
         approved_roots,
     )
     .await?;
-    if let Some(transport) = cloud_transport {
+    if let Some(transport) = engines.cloud_transport {
         opened = opened.with_cloud_transport(transport);
     }
     if !engines.stt.is_empty() {
@@ -240,6 +294,22 @@ pub async fn build_ports_with(
     let processing =
         crate::backend::processing::ProcessingHandle::start(Arc::clone(&backend), None);
     let events = backend.events().clone();
+    // The library is open, so a real radio can now be given the committer it
+    // needs. A supplied radio passes straight through.
+    let radio: Arc<dyn DeviceRadio> = match radio {
+        RadioChoice::Supplied(radio) => radio,
+        #[cfg(feature = "hardware-scan")]
+        RadioChoice::HostBluetooth => crate::backend::device_radio::host_bluetooth(
+            backend.store().db(),
+            backend.store().archive(),
+        ),
+        // Unreachable through the configuration API, which does not expose
+        // `with_host_bluetooth` without the feature. `NoRadio` rather than a
+        // panic: a binary with no radio code linked in genuinely has no radio,
+        // and that is what the screen already says.
+        #[cfg(not(feature = "hardware-scan"))]
+        RadioChoice::HostBluetooth => Arc::new(NoRadio),
+    };
     let devices = DevicesBackend::new(DevicesDeps::production(
         backend.store().db().clone(),
         backend.store().archive().clone(),
