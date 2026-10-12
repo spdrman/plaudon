@@ -596,7 +596,12 @@ mod tests {
     }
 
     fn draft(anchors: Vec<SourceAnchor>) -> ClaimDraft {
-        ClaimDraft::new("/decisions/0", ClaimKind::Decision, "We ship Friday", anchors)
+        ClaimDraft::new(
+            "/decisions/0",
+            ClaimKind::Decision,
+            "We ship Friday",
+            anchors,
+        )
     }
 
     fn anchor(revision: TranscriptRevisionId) -> SourceAnchor {
@@ -630,7 +635,9 @@ mod tests {
         );
         assert_eq!(claim.state(), ClaimState::Unverified);
         assert!(claim.review_required());
-        assert!(claim.review_reasons().contains(&ReviewReason::GroundingFailed));
+        assert!(claim
+            .review_reasons()
+            .contains(&ReviewReason::GroundingFailed));
         assert!(claim.is_unsupported());
     }
 
@@ -644,13 +651,19 @@ mod tests {
             true,
         );
         assert_eq!(claim.state(), ClaimState::Unverified);
-        assert!(claim.review_reasons().contains(&ReviewReason::MissingAnchor));
+        assert!(claim
+            .review_reasons()
+            .contains(&ReviewReason::MissingAnchor));
     }
 
     #[test]
     fn a_high_consequence_claim_is_review_required_even_when_grounded() {
         let revision = TranscriptRevisionId::new();
-        for category in ClaimCategory::ALL.iter().copied().filter(|c| c.is_high_consequence()) {
+        for category in ClaimCategory::ALL
+            .iter()
+            .copied()
+            .filter(|c| c.is_high_consequence())
+        {
             let claim = Claim::from_draft(
                 draft(vec![anchor(revision)]),
                 vec![verified(revision)],
@@ -678,7 +691,10 @@ mod tests {
         claim.confirm("local", Timestamp::from_millis(10));
         assert_eq!(claim.state(), ClaimState::HumanConfirmed);
         assert!(claim.is_verified_view_eligible());
-        assert!(!claim.review_required(), "a reviewed claim is no longer pending");
+        assert!(
+            !claim.review_required(),
+            "a reviewed claim is no longer pending"
+        );
         assert_eq!(claim.confirmation().map(|c| c.accepted), Some(true));
     }
 

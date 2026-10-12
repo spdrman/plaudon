@@ -190,11 +190,10 @@ impl OutputTemplate {
     /// Validation is structural and total: an invalid template is rejected
     /// with a typed error and never silently replaced by a default.
     pub fn parse(document: &str) -> Result<Self, TemplateError> {
-        let template: Self = serde_json::from_str(document).map_err(|error| {
-            TemplateError::Malformed {
+        let template: Self =
+            serde_json::from_str(document).map_err(|error| TemplateError::Malformed {
                 detail: format!("line {}: {}", error.line(), category_label(&error)),
-            }
-        })?;
+            })?;
         template.validate()?;
         Ok(template)
     }
@@ -252,7 +251,9 @@ impl OutputTemplate {
             }
         }
         if self.rendering.order.len() != self.fields.len() {
-            return Err(invalid("rendering order must list every field exactly once"));
+            return Err(invalid(
+                "rendering order must list every field exactly once",
+            ));
         }
         for key in &self.rendering.order {
             if !seen.contains(key.as_str()) {

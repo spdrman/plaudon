@@ -151,7 +151,11 @@ pub struct RejectedItem {
 impl RejectedItem {
     /// Construct a rejection.
     #[must_use]
-    pub fn new(item_path: impl Into<String>, reason: RejectionReason, detail: impl Into<String>) -> Self {
+    pub fn new(
+        item_path: impl Into<String>,
+        reason: RejectionReason,
+        detail: impl Into<String>,
+    ) -> Self {
         Self {
             item_path: item_path.into(),
             reason,
@@ -209,12 +213,9 @@ impl ValidationReport {
     #[must_use]
     pub fn repair_instruction(&self) -> String {
         let mut lines = vec![
-            "Your previous response was rejected by local schema validation."
-                .to_owned(),
-            "Fix exactly the listed problems and return the whole document again."
-                .to_owned(),
-            "Do not invent values to satisfy a rejection: omit the item instead."
-                .to_owned(),
+            "Your previous response was rejected by local schema validation.".to_owned(),
+            "Fix exactly the listed problems and return the whole document again.".to_owned(),
+            "Do not invent values to satisfy a rejection: omit the item instead.".to_owned(),
         ];
         for rejection in &self.rejected {
             lines.push(format!(
@@ -370,16 +371,20 @@ impl OutputValidator {
                 rejected.push(RejectedItem::new(
                     &pointer,
                     RejectionReason::ArrayTooLarge,
-                    format!("{} items exceed the maximum of {}", items.len(), field.max_items),
+                    format!(
+                        "{} items exceed the maximum of {}",
+                        items.len(),
+                        field.max_items
+                    ),
                 ));
                 continue;
             }
             for (index, raw) in items.iter().enumerate() {
                 let item_path = format!("{pointer}/{index}");
-                if rejected
-                    .iter()
-                    .any(|r| r.reason == RejectionReason::SchemaViolation && r.item_path.starts_with(&item_path))
-                {
+                if rejected.iter().any(|r| {
+                    r.reason == RejectionReason::SchemaViolation
+                        && r.item_path.starts_with(&item_path)
+                }) {
                     continue;
                 }
                 match self.validate_item(&item_path, field.key.as_str(), raw) {
@@ -725,8 +730,7 @@ mod tests {
     #[test]
     fn an_oversized_array_is_rejected_whole() {
         let revision = TranscriptRevisionId::new();
-        let items: Vec<serde_json::Value> =
-            (0..4).map(|_| decision(revision, 1, "Ship")).collect();
+        let items: Vec<serde_json::Value> = (0..4).map(|_| decision(revision, 1, "Ship")).collect();
         let body = serde_json::json!({ "decisions": items });
         let report = validator(revision).validate(&body, CompatibilityMode::SchemaEnforced, 0);
         assert_eq!(report.rejected[0].reason, RejectionReason::ArrayTooLarge);
@@ -760,8 +764,11 @@ mod tests {
     #[test]
     fn a_non_object_body_fails_the_envelope_check() {
         let revision = TranscriptRevisionId::new();
-        let report =
-            validator(revision).validate(&serde_json::json!([1, 2]), CompatibilityMode::PromptConstrained, 0);
+        let report = validator(revision).validate(
+            &serde_json::json!([1, 2]),
+            CompatibilityMode::PromptConstrained,
+            0,
+        );
         assert_eq!(report.rejected[0].reason, RejectionReason::EnvelopeShape);
         assert!(!report.is_usable());
     }

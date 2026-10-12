@@ -248,7 +248,9 @@ pub enum AnchorRejection {
         seq_index: u32,
     },
     /// The span is longer than an excerpt is allowed to be.
-    #[error("span of segment {seq_index} covers {chars} characters, more than the {max_chars} allowed")]
+    #[error(
+        "span of segment {seq_index} covers {chars} characters, more than the {max_chars} allowed"
+    )]
     SpanTooLong {
         /// Index of the cited segment.
         seq_index: u32,

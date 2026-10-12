@@ -1,0 +1,568 @@
+{
+  "id": "project_meeting_10min",
+  "title": "Project Harrier Planning",
+  "template_id": "project_meeting",
+  "locale": "en-US",
+  "provenance": "Synthetic transcript authored for this repository; no real meeting content.",
+  "speakers": [
+    "Carlos Mendes",
+    "Diana Chen",
+    "Elena Rodriguez"
+  ],
+  "segments": [
+    {
+      "seq_index": 0,
+      "start_ms": 0,
+      "end_ms": 5880,
+      "speaker": "Carlos Mendes",
+      "text": "Welcome everyone to the Project Harrier planning session. Let's review where we are."
+    },
+    {
+      "seq_index": 1,
+      "start_ms": 5880,
+      "end_ms": 13300,
+      "speaker": "Diana Chen",
+      "text": "Thanks Carlos. I've completed the initial risk assessment and identified three major technical challenges."
+    },
+    {
+      "seq_index": 2,
+      "start_ms": 13300,
+      "end_ms": 15820,
+      "speaker": "Elena Rodriguez",
+      "text": "Can you walk us through those Diana?"
+    },
+    {
+      "seq_index": 3,
+      "start_ms": 15820,
+      "end_ms": 26110,
+      "speaker": "Diana Chen",
+      "text": "Sure. First challenge is the database migration from MySQL to Postgres. Second is API backwards compatibility. Third is the caching layer redesign."
+    },
+    {
+      "seq_index": 4,
+      "start_ms": 26110,
+      "end_ms": 31710,
+      "speaker": "Carlos Mendes",
+      "text": "Those sound significant. What's your confidence level on the migration timeline?"
+    },
+    {
+      "seq_index": 5,
+      "start_ms": 31710,
+      "end_ms": 37940,
+      "speaker": "Diana Chen",
+      "text": "I'd say seventy percent confident we can finish by March twentieth if we start next week."
+    },
+    {
+      "seq_index": 6,
+      "start_ms": 37940,
+      "end_ms": 39620,
+      "speaker": "Elena Rodriguez",
+      "text": "What happens if we slip?"
+    },
+    {
+      "seq_index": 7,
+      "start_ms": 39620,
+      "end_ms": 45150,
+      "speaker": "Diana Chen",
+      "text": "If we slip past March twentieth, we risk missing the Q2 launch window entirely."
+    },
+    {
+      "seq_index": 8,
+      "start_ms": 45150,
+      "end_ms": 51450,
+      "speaker": "Carlos Mendes",
+      "text": "Okay, so the migration is our critical path. Elena, where are we on the frontend redesign?"
+    },
+    {
+      "seq_index": 9,
+      "start_ms": 51450,
+      "end_ms": 58660,
+      "speaker": "Elena Rodriguez",
+      "text": "Frontend is progressing well. We've completed the component library and started on the dashboard views."
+    },
+    {
+      "seq_index": 10,
+      "start_ms": 58660,
+      "end_ms": 59570,
+      "speaker": "Carlos Mendes",
+      "text": "Any blockers?"
+    },
+    {
+      "seq_index": 11,
+      "start_ms": 59570,
+      "end_ms": 65520,
+      "speaker": "Elena Rodriguez",
+      "text": "Not blockers, but we need final design approval from the product team by next Friday."
+    },
+    {
+      "seq_index": 12,
+      "start_ms": 65520,
+      "end_ms": 71190,
+      "speaker": "Diana Chen",
+      "text": "I can coordinate with product to expedite that. Should I set up a review meeting?"
+    },
+    {
+      "seq_index": 13,
+      "start_ms": 71190,
+      "end_ms": 74060,
+      "speaker": "Elena Rodriguez",
+      "text": "Yes please, that would be really helpful."
+    },
+    {
+      "seq_index": 14,
+      "start_ms": 74060,
+      "end_ms": 82740,
+      "speaker": "Carlos Mendes",
+      "text": "Great. Moving on to budget - I reviewed the cloud infrastructure costs and we're tracking about fifteen percent over budget."
+    },
+    {
+      "seq_index": 15,
+      "start_ms": 82740,
+      "end_ms": 84700,
+      "speaker": "Diana Chen",
+      "text": "Is that the Aurora instance?"
+    },
+    {
+      "seq_index": 16,
+      "start_ms": 84700,
+      "end_ms": 92260,
+      "speaker": "Carlos Mendes",
+      "text": "Partly. The Aurora instance is ten thousand dollars per month but we also have increased data transfer fees."
+    },
+    {
+      "seq_index": 17,
+      "start_ms": 92260,
+      "end_ms": 95200,
+      "speaker": "Elena Rodriguez",
+      "text": "Can we optimize that before the migration?"
+    },
+    {
+      "seq_index": 18,
+      "start_ms": 95200,
+      "end_ms": 100240,
+      "speaker": "Carlos Mendes",
+      "text": "We should. I'll ask the DevOps team to audit our data transfer patterns."
+    },
+    {
+      "seq_index": 19,
+      "start_ms": 100240,
+      "end_ms": 105280,
+      "speaker": "Diana Chen",
+      "text": "Good idea. Also, did we get approval for the two additional contractors?"
+    },
+    {
+      "seq_index": 20,
+      "start_ms": 105280,
+      "end_ms": 110180,
+      "speaker": "Carlos Mendes",
+      "text": "Not yet. Still waiting on finance. I'll follow up with Sarah tomorrow."
+    },
+    {
+      "seq_index": 21,
+      "start_ms": 110180,
+      "end_ms": 114730,
+      "speaker": "Elena Rodriguez",
+      "text": "We really need those contractors by February tenth at the latest."
+    },
+    {
+      "seq_index": 22,
+      "start_ms": 114730,
+      "end_ms": 118230,
+      "speaker": "Carlos Mendes",
+      "text": "Agreed. I'll make it clear that's a hard deadline."
+    },
+    {
+      "seq_index": 23,
+      "start_ms": 118230,
+      "end_ms": 121730,
+      "speaker": "Diana Chen",
+      "text": "What about testing? Do we have enough QA capacity?"
+    },
+    {
+      "seq_index": 24,
+      "start_ms": 121730,
+      "end_ms": 126700,
+      "speaker": "Elena Rodriguez",
+      "text": "That's actually another concern. Our QA team is already stretched thin."
+    },
+    {
+      "seq_index": 25,
+      "start_ms": 126700,
+      "end_ms": 129640,
+      "speaker": "Carlos Mendes",
+      "text": "Could we bring in a QA contractor as well?"
+    },
+    {
+      "seq_index": 26,
+      "start_ms": 129640,
+      "end_ms": 133350,
+      "speaker": "Diana Chen",
+      "text": "Makes sense. I'll include that in the budget request."
+    },
+    {
+      "seq_index": 27,
+      "start_ms": 133350,
+      "end_ms": 140910,
+      "speaker": "Elena Rodriguez",
+      "text": "For the API backwards compatibility issue, I think we need to maintain two versions for at least six months."
+    },
+    {
+      "seq_index": 28,
+      "start_ms": 140910,
+      "end_ms": 142870,
+      "speaker": "Carlos Mendes",
+      "text": "That adds complexity though."
+    },
+    {
+      "seq_index": 29,
+      "start_ms": 142870,
+      "end_ms": 150430,
+      "speaker": "Diana Chen",
+      "text": "It does, but it's safer than breaking existing integrations. We have about forty clients on the current API."
+    },
+    {
+      "seq_index": 30,
+      "start_ms": 150430,
+      "end_ms": 153160,
+      "speaker": "Elena Rodriguez",
+      "text": "Exactly. We can't afford to break them."
+    },
+    {
+      "seq_index": 31,
+      "start_ms": 153160,
+      "end_ms": 160020,
+      "speaker": "Carlos Mendes",
+      "text": "Fair point. Let's plan for dual API versioning then. Diana, can you document the version strategy?"
+    },
+    {
+      "seq_index": 32,
+      "start_ms": 160020,
+      "end_ms": 162960,
+      "speaker": "Diana Chen",
+      "text": "Will do. I'll have a draft by end of week."
+    },
+    {
+      "seq_index": 33,
+      "start_ms": 162960,
+      "end_ms": 166880,
+      "speaker": "Elena Rodriguez",
+      "text": "One more thing - security audit. When is that scheduled?"
+    },
+    {
+      "seq_index": 34,
+      "start_ms": 166880,
+      "end_ms": 172340,
+      "speaker": "Carlos Mendes",
+      "text": "Good question. I think it's scheduled for late February but I need to confirm."
+    },
+    {
+      "seq_index": 35,
+      "start_ms": 172340,
+      "end_ms": 175700,
+      "speaker": "Diana Chen",
+      "text": "We should do it before the migration, not after."
+    },
+    {
+      "seq_index": 36,
+      "start_ms": 175700,
+      "end_ms": 179200,
+      "speaker": "Carlos Mendes",
+      "text": "Agreed. I'll reach out to the security team today."
+    },
+    {
+      "seq_index": 37,
+      "start_ms": 179200,
+      "end_ms": 182630,
+      "speaker": "Elena Rodriguez",
+      "text": "Are we tracking all these action items somewhere?"
+    },
+    {
+      "seq_index": 38,
+      "start_ms": 182630,
+      "end_ms": 188440,
+      "speaker": "Carlos Mendes",
+      "text": "Yes, I'll update the project board after this meeting with everything we discussed."
+    },
+    {
+      "seq_index": 39,
+      "start_ms": 188440,
+      "end_ms": 191800,
+      "speaker": "Diana Chen",
+      "text": "Perfect. Anything else on the technical roadmap?"
+    },
+    {
+      "seq_index": 40,
+      "start_ms": 191800,
+      "end_ms": 199010,
+      "speaker": "Elena Rodriguez",
+      "text": "Just a heads up that the monitoring dashboard redesign is on hold until we complete the main migration."
+    },
+    {
+      "seq_index": 41,
+      "start_ms": 199010,
+      "end_ms": 203350,
+      "speaker": "Carlos Mendes",
+      "text": "Makes sense. We don't want to distract from the critical path."
+    },
+    {
+      "seq_index": 42,
+      "start_ms": 203350,
+      "end_ms": 205940,
+      "speaker": "Diana Chen",
+      "text": "Should we schedule our next check-in?"
+    },
+    {
+      "seq_index": 43,
+      "start_ms": 205940,
+      "end_ms": 209160,
+      "speaker": "Carlos Mendes",
+      "text": "Yes, let's do two weeks from today, same time."
+    },
+    {
+      "seq_index": 44,
+      "start_ms": 209160,
+      "end_ms": 210070,
+      "speaker": "Elena Rodriguez",
+      "text": "Works for me."
+    },
+    {
+      "seq_index": 45,
+      "start_ms": 210070,
+      "end_ms": 212730,
+      "speaker": "Diana Chen",
+      "text": "Same here. I'll send calendar invites."
+    },
+    {
+      "seq_index": 46,
+      "start_ms": 212730,
+      "end_ms": 218260,
+      "speaker": "Carlos Mendes",
+      "text": "Great. Thanks everyone for a productive session. Let's keep the momentum going."
+    }
+  ],
+  "reference": {
+    "decisions": [
+      {
+        "statement": "Plan for dual API versioning for at least six months",
+        "participants": [
+          "Carlos Mendes",
+          "Diana Chen",
+          "Elena Rodriguez"
+        ],
+        "time_reference": "not_specified",
+        "assertion": "directly_stated",
+        "evidence": {
+          "seq_index": 31,
+          "char_start": 17,
+          "char_end": 44
+        }
+      },
+      {
+        "statement": "Database migration must start next week",
+        "participants": [
+          "Diana Chen"
+        ],
+        "time_reference": "next week",
+        "assertion": "model_interpretation",
+        "evidence": {
+          "seq_index": 5,
+          "char_start": 0,
+          "char_end": 89
+        }
+      }
+    ],
+    "action_items": [
+      {
+        "verb": "Coordinate",
+        "description": "with product team for design approval",
+        "owner": "Diana Chen",
+        "due_date": "not_specified",
+        "status": "open",
+        "assertion": "directly_stated",
+        "evidence": {
+          "seq_index": 12,
+          "char_start": 6,
+          "char_end": 50
+        }
+      },
+      {
+        "verb": "Follow up",
+        "description": "with Sarah about contractor approval",
+        "owner": "Carlos Mendes",
+        "due_date": "not_specified",
+        "status": "open",
+        "assertion": "directly_stated",
+        "evidence": {
+          "seq_index": 20,
+          "char_start": 44,
+          "char_end": 69
+        }
+      },
+      {
+        "verb": "Ask",
+        "description": "DevOps team to audit data transfer patterns",
+        "owner": "unassigned",
+        "due_date": "not_specified",
+        "status": "open",
+        "assertion": "directly_stated",
+        "evidence": {
+          "seq_index": 18,
+          "char_start": 17,
+          "char_end": 60
+        }
+      },
+      {
+        "verb": "Document",
+        "description": "API version strategy",
+        "owner": "Diana Chen",
+        "due_date": "not_specified",
+        "status": "open",
+        "assertion": "directly_stated",
+        "evidence": {
+          "seq_index": 32,
+          "char_start": 0,
+          "char_end": 42
+        }
+      },
+      {
+        "verb": "Reach out",
+        "description": "to security team about audit timing",
+        "owner": "Carlos Mendes",
+        "due_date": "not_specified",
+        "status": "open",
+        "assertion": "directly_stated",
+        "evidence": {
+          "seq_index": 36,
+          "char_start": 14,
+          "char_end": 43
+        }
+      },
+      {
+        "verb": "Update",
+        "description": "project board with action items",
+        "owner": "Carlos Mendes",
+        "due_date": "not_specified",
+        "status": "open",
+        "assertion": "directly_stated",
+        "evidence": {
+          "seq_index": 38,
+          "char_start": 14,
+          "char_end": 35
+        }
+      }
+    ],
+    "risks": [
+      {
+        "description": "Missing Q2 launch window if migration slips",
+        "consequence": "Missing Q2 launch window entirely",
+        "mitigation": "Start migration next week",
+        "evidence": {
+          "seq_index": 7,
+          "char_start": 39,
+          "char_end": 77
+        }
+      },
+      {
+        "description": "Tracking fifteen percent over budget",
+        "consequence": "not_specified",
+        "mitigation": "Audit data transfer patterns",
+        "evidence": {
+          "seq_index": 14,
+          "char_start": 0,
+          "char_end": 124
+        }
+      },
+      {
+        "description": "QA team stretched thin",
+        "consequence": "Insufficient testing capacity",
+        "mitigation": "Bring in QA contractor",
+        "evidence": {
+          "seq_index": 24,
+          "char_start": 33,
+          "char_end": 55
+        }
+      }
+    ],
+    "questions": [
+      {
+        "question": "What happens if we slip past March twentieth?",
+        "owner": "Elena Rodriguez",
+        "evidence": {
+          "seq_index": 6,
+          "char_start": 0,
+          "char_end": 24
+        }
+      },
+      {
+        "question": "When is the security audit scheduled?",
+        "owner": "unassigned",
+        "evidence": {
+          "seq_index": 33,
+          "char_start": 19,
+          "char_end": 43
+        }
+      }
+    ],
+    "topics": [
+      {
+        "heading": "Technical Challenges",
+        "first_segment": 1,
+        "last_segment": 8,
+        "evidence": {
+          "seq_index": 1,
+          "char_start": 62,
+          "char_end": 88
+        }
+      },
+      {
+        "heading": "Budget and Resources",
+        "first_segment": 14,
+        "last_segment": 26,
+        "evidence": {
+          "seq_index": 14,
+          "char_start": 18,
+          "char_end": 24
+        }
+      },
+      {
+        "heading": "Testing and Security",
+        "first_segment": 23,
+        "last_segment": 36,
+        "evidence": {
+          "seq_index": 23,
+          "char_start": 11,
+          "char_end": 18
+        }
+      }
+    ],
+    "executive_summary": [
+      {
+        "text": "Review Project Harrier technical planning",
+        "facet": "objective",
+        "evidence": {
+          "seq_index": 0,
+          "char_start": 19,
+          "char_end": 60
+        }
+      },
+      {
+        "text": "Database migration critical path with March twentieth deadline",
+        "facet": "outcome",
+        "evidence": {
+          "seq_index": 5,
+          "char_start": 0,
+          "char_end": 89
+        }
+      },
+      {
+        "text": "Need contractor approval and QA capacity",
+        "facet": "open_question",
+        "evidence": {
+          "seq_index": 19,
+          "char_start": 0,
+          "char_end": 51
+        }
+      }
+    ]
+  }
+}

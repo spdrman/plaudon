@@ -474,8 +474,14 @@ mod tests {
 
     #[test]
     fn an_impossible_date_is_rejected_rather_than_clamped() {
-        assert_eq!(CalendarDate::parse("2025-02-30"), Err(DateError::OutOfRange));
-        assert_eq!(CalendarDate::parse("2025-13-01"), Err(DateError::OutOfRange));
+        assert_eq!(
+            CalendarDate::parse("2025-02-30"),
+            Err(DateError::OutOfRange)
+        );
+        assert_eq!(
+            CalendarDate::parse("2025-13-01"),
+            Err(DateError::OutOfRange)
+        );
         assert_eq!(CalendarDate::parse("next friday"), Err(DateError::Shape));
         assert_eq!(CalendarDate::parse("2025-2-3"), Err(DateError::Shape));
         assert!(serde_json::from_str::<DueDate>("\"2025-02-30\"").is_err());
@@ -484,7 +490,10 @@ mod tests {
     #[test]
     fn a_leap_day_is_accepted_in_a_leap_year_only() {
         assert!(CalendarDate::parse("2028-02-29").is_ok());
-        assert_eq!(CalendarDate::parse("2027-02-29"), Err(DateError::OutOfRange));
+        assert_eq!(
+            CalendarDate::parse("2027-02-29"),
+            Err(DateError::OutOfRange)
+        );
     }
 
     #[test]

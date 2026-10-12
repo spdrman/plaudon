@@ -3226,9 +3226,12 @@ dependencies = [
 name = "plaudon-app-core"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "fs4",
+ "jsonschema",
  "plaudon-ai-contracts",
  "plaudon-domain",
+ "plaudon-jobs",
  "plaudon-persistence",
  "proptest",
  "serde",

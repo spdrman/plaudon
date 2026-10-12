@@ -29,6 +29,10 @@ pub use capabilities::{
     AvailabilityReason, HardwareRequirements, MediaFormat, PricingBasis, PrivacyClass,
     RequestFamily, SttCapabilities, TextModelCapabilities,
 };
+pub use extraction::{
+    ActionItem, ActionStatus, Assertion, CalendarDate, DateError, Decision, DueDate, ExtractedItem,
+    OpenQuestion, OptionalText, OwnerRef, Risk, SummaryFacet, SummaryStatement, Topic,
+};
 pub use hallucination::{
     annotate, detect_hallucinations, ConfidenceFloor, HallucinationPolicy, SpeechActivity,
 };
@@ -37,19 +41,11 @@ pub use plaudon_domain::capability::{CapabilityEnvelope, CapabilityStatus, Known
 pub use plaudon_domain::transcript::AlignmentOrigin;
 pub use policy::{select_stt_engine, EngineRejection, EngineSelection, SttRequirements};
 pub use stt::{SpeechToText, SttError, SttInput, TranscriptDraft, TranscriptSegmentDraft};
-pub use text::{StructuredRequest, StructuredResponse, TextModel, TextModelError};
-pub use extraction::{
-    ActionItem, ActionStatus, Assertion, CalendarDate, DateError, Decision, DueDate, ExtractedItem,
-    OpenQuestion, OptionalText, OwnerRef, Risk, SummaryFacet, SummaryStatement, Topic,
-};
 pub use template::{
     AnchorRequirement, ExpectedSchema, ExtractionField, OutputTemplate, RenderingRules,
     TemplateError, TemplateInstructions, TemplateOrigin, TEMPLATE_SCHEMA_VERSION,
 };
-pub use validation::{
-    AcceptedItem, CompatibilityMode, OutputValidator, RejectedItem, RejectionReason, RepairPolicy,
-    SpeakerDirectory, ValidationReport, ValidatorBuildError,
-};
+pub use text::{StructuredRequest, StructuredResponse, TextModel, TextModelError};
 pub use transcript::{
     AnnotationKind, ChunkingStrategy, DraftWordAlignment, NormalizationProfile, SourceTime,
     TimePrecision, TranscriptAnnotation,
@@ -57,6 +53,10 @@ pub use transcript::{
 pub use tri::{KnownLimit, LimitCheck};
 pub use truthfulness::{
     assert_no_claim_inflation, validate_draft, ClaimInflation, TruthfulnessViolation,
+};
+pub use validation::{
+    AcceptedItem, CompatibilityMode, OutputValidator, RejectedItem, RejectionReason, RepairPolicy,
+    SpeakerDirectory, ValidationReport, ValidatorBuildError,
 };
 
 /// Cargo package name of this crate, used by the workspace layout conformance test.

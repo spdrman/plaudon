@@ -1,0 +1,1724 @@
+{
+  "id": "interview_180min",
+  "title": "Senior Infrastructure Engineer Interview",
+  "template_id": "interview",
+  "locale": "en-US",
+  "provenance": "Synthetic transcript authored for this repository; no real meeting content.",
+  "speakers": [
+    "Jamie Park",
+    "Kai Nakamura",
+    "Leila Ahmed"
+  ],
+  "segments": [
+    {
+      "seq_index": 0,
+      "start_ms": 0,
+      "end_ms": 6955,
+      "speaker": "Jamie Park",
+      "text": "Good morning! Thanks for joining us today. I'm Jamie Park, engineering manager for the infrastructure team."
+    },
+    {
+      "seq_index": 1,
+      "start_ms": 6955,
+      "end_ms": 13000,
+      "speaker": "Kai Nakamura",
+      "text": "Hi, I'm Kai Nakamura, senior staff engineer. I'll be asking about distributed systems design."
+    },
+    {
+      "seq_index": 2,
+      "start_ms": 13000,
+      "end_ms": 18915,
+      "speaker": "Leila Ahmed",
+      "text": "And I'm Leila Ahmed, principal architect. I'll focus on system architecture and trade-offs."
+    },
+    {
+      "seq_index": 3,
+      "start_ms": 18915,
+      "end_ms": 28080,
+      "speaker": "Jamie Park",
+      "text": "We have about three hours scheduled. We'll start with introductions, then technical discussion, then save time for your questions at the end."
+    },
+    {
+      "seq_index": 4,
+      "start_ms": 28080,
+      "end_ms": 33540,
+      "speaker": "Leila Ahmed",
+      "text": "Before we dive in, tell us a bit about yourself and what attracted you to this role."
+    },
+    {
+      "seq_index": 5,
+      "start_ms": 33540,
+      "end_ms": 42510,
+      "speaker": "Kai Nakamura",
+      "text": "I've been in software engineering for twelve years, starting as a backend developer and progressing into distributed systems architecture."
+    },
+    {
+      "seq_index": 6,
+      "start_ms": 42510,
+      "end_ms": 50830,
+      "speaker": "Kai Nakamura",
+      "text": "Most recently I was tech lead at DataFlow Systems, working on real-time analytics pipelines processing billions of events daily."
+    },
+    {
+      "seq_index": 7,
+      "start_ms": 50830,
+      "end_ms": 53170,
+      "speaker": "Leila Ahmed",
+      "text": "What was your team size at DataFlow?"
+    },
+    {
+      "seq_index": 8,
+      "start_ms": 53170,
+      "end_ms": 58305,
+      "speaker": "Kai Nakamura",
+      "text": "I managed a team of eight engineers - five backend, two SRE, one data engineer."
+    },
+    {
+      "seq_index": 9,
+      "start_ms": 58305,
+      "end_ms": 60840,
+      "speaker": "Jamie Park",
+      "text": "What made you decide to leave DataFlow?"
+    },
+    {
+      "seq_index": 10,
+      "start_ms": 60840,
+      "end_ms": 69875,
+      "speaker": "Kai Nakamura",
+      "text": "The company was acquired six months ago and the new leadership shifted focus away from the technical innovation that originally excited me."
+    },
+    {
+      "seq_index": 11,
+      "start_ms": 69875,
+      "end_ms": 73190,
+      "speaker": "Leila Ahmed",
+      "text": "I see. What aspects of this role interest you most?"
+    },
+    {
+      "seq_index": 12,
+      "start_ms": 73190,
+      "end_ms": 81315,
+      "speaker": "Kai Nakamura",
+      "text": "I'm really drawn to the scale challenges you're facing and the opportunity to rebuild core infrastructure from the ground up."
+    },
+    {
+      "seq_index": 13,
+      "start_ms": 81315,
+      "end_ms": 89570,
+      "speaker": "Jamie Park",
+      "text": "Good. Let's talk about your experience with distributed systems. Can you describe a challenging scalability problem you solved?"
+    },
+    {
+      "seq_index": 14,
+      "start_ms": 89570,
+      "end_ms": 97630,
+      "speaker": "Kai Nakamura",
+      "text": "Sure. At DataFlow we had a kafka-based ingestion system that was bottlenecking at around fifty thousand messages per second."
+    },
+    {
+      "seq_index": 15,
+      "start_ms": 97630,
+      "end_ms": 99190,
+      "speaker": "Leila Ahmed",
+      "text": "What was the bottleneck?"
+    },
+    {
+      "seq_index": 16,
+      "start_ms": 99190,
+      "end_ms": 108940,
+      "speaker": "Kai Nakamura",
+      "text": "The issue was actually in our consumer group configuration. We had insufficient partitions and weren't distributing load effectively across consumers."
+    },
+    {
+      "seq_index": 17,
+      "start_ms": 108940,
+      "end_ms": 110630,
+      "speaker": "Jamie Park",
+      "text": "How did you diagnose that?"
+    },
+    {
+      "seq_index": 18,
+      "start_ms": 110630,
+      "end_ms": 121940,
+      "speaker": "Kai Nakamura",
+      "text": "I used kafka's built-in metrics to identify partition-level lag, then analyzed consumer thread utilization and discovered most consumers were idle while a few were maxed out."
+    },
+    {
+      "seq_index": 19,
+      "start_ms": 121940,
+      "end_ms": 123435,
+      "speaker": "Leila Ahmed",
+      "text": "What was your solution?"
+    },
+    {
+      "seq_index": 20,
+      "start_ms": 123435,
+      "end_ms": 135200,
+      "speaker": "Kai Nakamura",
+      "text": "We increased the partition count from sixteen to one hundred twenty-eight, implemented partition key sharding based on message metadata, and tuned the consumer fetch configurations."
+    },
+    {
+      "seq_index": 21,
+      "start_ms": 135200,
+      "end_ms": 136630,
+      "speaker": "Jamie Park",
+      "text": "What were the results?"
+    },
+    {
+      "seq_index": 22,
+      "start_ms": 136630,
+      "end_ms": 147290,
+      "speaker": "Kai Nakamura",
+      "text": "We scaled to two hundred fifty thousand messages per second with room to grow, and reduced end-to-end latency from three seconds to under five hundred milliseconds."
+    },
+    {
+      "seq_index": 23,
+      "start_ms": 147290,
+      "end_ms": 152685,
+      "speaker": "Leila Ahmed",
+      "text": "Impressive. What about data consistency? How did you handle exactly-once semantics?"
+    },
+    {
+      "seq_index": 24,
+      "start_ms": 152685,
+      "end_ms": 160745,
+      "speaker": "Kai Nakamura",
+      "text": "We implemented idempotent producers with transaction support and used kafka's transactional API for consumer offset commits."
+    },
+    {
+      "seq_index": 25,
+      "start_ms": 160745,
+      "end_ms": 163670,
+      "speaker": "Leila Ahmed",
+      "text": "Did you consider alternative message brokers?"
+    },
+    {
+      "seq_index": 26,
+      "start_ms": 163670,
+      "end_ms": 172965,
+      "speaker": "Kai Nakamura",
+      "text": "We evaluated Pulsar and RabbitMQ. Pulsar had interesting features but our team expertise was in kafka, and the migration risk wasn't justified."
+    },
+    {
+      "seq_index": 27,
+      "start_ms": 172965,
+      "end_ms": 180310,
+      "speaker": "Jamie Park",
+      "text": "Good pragmatic decision. Let's shift to database design. Tell me about your experience with database scalability."
+    },
+    {
+      "seq_index": 28,
+      "start_ms": 180310,
+      "end_ms": 187915,
+      "speaker": "Kai Nakamura",
+      "text": "I've worked extensively with PostgreSQL, MySQL, and Cassandra. Each has different trade-offs for different use cases."
+    },
+    {
+      "seq_index": 29,
+      "start_ms": 187915,
+      "end_ms": 191035,
+      "speaker": "Leila Ahmed",
+      "text": "When would you choose Cassandra over PostgreSQL?"
+    },
+    {
+      "seq_index": 30,
+      "start_ms": 191035,
+      "end_ms": 200980,
+      "speaker": "Kai Nakamura",
+      "text": "Cassandra makes sense for write-heavy workloads with eventual consistency requirements and when you need linear scalability across multiple data centers."
+    },
+    {
+      "seq_index": 31,
+      "start_ms": 200980,
+      "end_ms": 202605,
+      "speaker": "Jamie Park",
+      "text": "What about read patterns?"
+    },
+    {
+      "seq_index": 32,
+      "start_ms": 202605,
+      "end_ms": 212550,
+      "speaker": "Kai Nakamura",
+      "text": "Cassandra requires careful data modeling around query patterns because you can't do arbitrary joins. PostgreSQL is better for complex analytical queries."
+    },
+    {
+      "seq_index": 33,
+      "start_ms": 212550,
+      "end_ms": 215735,
+      "speaker": "Leila Ahmed",
+      "text": "Have you dealt with database migrations at scale?"
+    },
+    {
+      "seq_index": 34,
+      "start_ms": 215735,
+      "end_ms": 222430,
+      "speaker": "Kai Nakamura",
+      "text": "Yes, we migrated a monolithic MySQL database to a sharded architecture while maintaining zero downtime."
+    },
+    {
+      "seq_index": 35,
+      "start_ms": 222430,
+      "end_ms": 224640,
+      "speaker": "Jamie Park",
+      "text": "How did you achieve zero downtime?"
+    },
+    {
+      "seq_index": 36,
+      "start_ms": 224640,
+      "end_ms": 234260,
+      "speaker": "Kai Nakamura",
+      "text": "We used dual writes to both old and new systems, validated data consistency in shadow mode, then gradually shifted read traffic using feature flags."
+    },
+    {
+      "seq_index": 37,
+      "start_ms": 234260,
+      "end_ms": 236340,
+      "speaker": "Leila Ahmed",
+      "text": "What was the validation process?"
+    },
+    {
+      "seq_index": 38,
+      "start_ms": 236340,
+      "end_ms": 245115,
+      "speaker": "Kai Nakamura",
+      "text": "We built a reconciliation service that continuously compared data between old and new systems, logging discrepancies for investigation."
+    },
+    {
+      "seq_index": 39,
+      "start_ms": 245115,
+      "end_ms": 247780,
+      "speaker": "Jamie Park",
+      "text": "How long did the complete migration take?"
+    },
+    {
+      "seq_index": 40,
+      "start_ms": 247780,
+      "end_ms": 256100,
+      "speaker": "Kai Nakamura",
+      "text": "Planning took two months, implementation three months, validation one month, and full cutover another month. Seven months total."
+    },
+    {
+      "seq_index": 41,
+      "start_ms": 256100,
+      "end_ms": 262145,
+      "speaker": "Leila Ahmed",
+      "text": "That's quite thorough. Let's talk about monitoring and observability. What's your philosophy?"
+    },
+    {
+      "seq_index": 42,
+      "start_ms": 262145,
+      "end_ms": 268710,
+      "speaker": "Kai Nakamura",
+      "text": "I believe in the three pillars: metrics, logs, and traces. Each serves different debugging scenarios."
+    },
+    {
+      "seq_index": 43,
+      "start_ms": 268710,
+      "end_ms": 270335,
+      "speaker": "Jamie Park",
+      "text": "What tools have you used?"
+    },
+    {
+      "seq_index": 44,
+      "start_ms": 270335,
+      "end_ms": 278395,
+      "speaker": "Kai Nakamura",
+      "text": "Prometheus and Grafana for metrics, ELK stack for logs, Jaeger for distributed tracing. Also used Datadog in previous roles."
+    },
+    {
+      "seq_index": 45,
+      "start_ms": 278395,
+      "end_ms": 280280,
+      "speaker": "Leila Ahmed",
+      "text": "How do you approach alerting?"
+    },
+    {
+      "seq_index": 46,
+      "start_ms": 280280,
+      "end_ms": 289380,
+      "speaker": "Kai Nakamura",
+      "text": "Alerts should be actionable, symptom-based rather than cause-based, and tuned to minimize false positives. I follow the Google SRE playbook."
+    },
+    {
+      "seq_index": 47,
+      "start_ms": 289380,
+      "end_ms": 293215,
+      "speaker": "Jamie Park",
+      "text": "Can you give an example of a good alert versus a bad alert?"
+    },
+    {
+      "seq_index": 48,
+      "start_ms": 293215,
+      "end_ms": 302835,
+      "speaker": "Kai Nakamura",
+      "text": "Good alert: API latency p99 exceeded threshold for five minutes, affecting user experience. Bad alert: CPU usage high, which might not impact users."
+    },
+    {
+      "seq_index": 49,
+      "start_ms": 302835,
+      "end_ms": 304915,
+      "speaker": "Leila Ahmed",
+      "text": "How do you handle alert fatigue?"
+    },
+    {
+      "seq_index": 50,
+      "start_ms": 304915,
+      "end_ms": 314405,
+      "speaker": "Kai Nakamura",
+      "text": "Regular review of alert volume and actionability, consolidating related alerts, and ruthlessly eliminating noisy alerts that don't lead to action."
+    },
+    {
+      "seq_index": 51,
+      "start_ms": 314405,
+      "end_ms": 322010,
+      "speaker": "Jamie Park",
+      "text": "Let's do a design exercise. Imagine you're building a URL shortening service like bit.ly. How would you architect it?"
+    },
+    {
+      "seq_index": 52,
+      "start_ms": 322010,
+      "end_ms": 326170,
+      "speaker": "Kai Nakamura",
+      "text": "Okay, let me start with requirements. What's the expected scale?"
+    },
+    {
+      "seq_index": 53,
+      "start_ms": 326170,
+      "end_ms": 330850,
+      "speaker": "Leila Ahmed",
+      "text": "Plan for one million new URLs per day and one billion redirects per day."
+    },
+    {
+      "seq_index": 54,
+      "start_ms": 330850,
+      "end_ms": 333190,
+      "speaker": "Kai Nakamura",
+      "text": "And what about latency requirements?"
+    },
+    {
+      "seq_index": 55,
+      "start_ms": 333190,
+      "end_ms": 336570,
+      "speaker": "Jamie Park",
+      "text": "Redirects should be under fifty milliseconds at p99."
+    },
+    {
+      "seq_index": 56,
+      "start_ms": 336570,
+      "end_ms": 343525,
+      "speaker": "Kai Nakamura",
+      "text": "Got it. For storage, I'd use a distributed key-value store like DynamoDB or Cassandra for the URL mappings."
+    },
+    {
+      "seq_index": 57,
+      "start_ms": 343525,
+      "end_ms": 345475,
+      "speaker": "Leila Ahmed",
+      "text": "Why not a relational database?"
+    },
+    {
+      "seq_index": 58,
+      "start_ms": 345475,
+      "end_ms": 354315,
+      "speaker": "Kai Nakamura",
+      "text": "The access pattern is pure key-value lookups, we don't need relational features, and we need horizontal scalability for the read volume."
+    },
+    {
+      "seq_index": 59,
+      "start_ms": 354315,
+      "end_ms": 356785,
+      "speaker": "Jamie Park",
+      "text": "How would you generate the short URLs?"
+    },
+    {
+      "seq_index": 60,
+      "start_ms": 356785,
+      "end_ms": 364780,
+      "speaker": "Kai Nakamura",
+      "text": "I'd use a counter-based approach with base62 encoding. Allocate ranges to different servers to avoid coordination overhead."
+    },
+    {
+      "seq_index": 61,
+      "start_ms": 364780,
+      "end_ms": 366015,
+      "speaker": "Leila Ahmed",
+      "text": "What about caching?"
+    },
+    {
+      "seq_index": 62,
+      "start_ms": 366015,
+      "end_ms": 374725,
+      "speaker": "Kai Nakamura",
+      "text": "Definitely. Redis or Memcached in front of the database with TTL-based eviction. Maybe ninety percent cache hit rate for popular URLs."
+    },
+    {
+      "seq_index": 63,
+      "start_ms": 374725,
+      "end_ms": 377975,
+      "speaker": "Jamie Park",
+      "text": "How do you handle the long tail of unpopular URLs?"
+    },
+    {
+      "seq_index": 64,
+      "start_ms": 377975,
+      "end_ms": 385970,
+      "speaker": "Kai Nakamura",
+      "text": "The database handles those. With proper indexing and the key-value access pattern, even cache misses should be fast enough."
+    },
+    {
+      "seq_index": 65,
+      "start_ms": 385970,
+      "end_ms": 389610,
+      "speaker": "Leila Ahmed",
+      "text": "What about analytics? How would you track click metrics?"
+    },
+    {
+      "seq_index": 66,
+      "start_ms": 389610,
+      "end_ms": 399100,
+      "speaker": "Kai Nakamura",
+      "text": "I'd use an event streaming pipeline. Redirects publish events to kafka, then consumers aggregate for analytics without blocking the redirect path."
+    },
+    {
+      "seq_index": 67,
+      "start_ms": 399100,
+      "end_ms": 404105,
+      "speaker": "Jamie Park",
+      "text": "Good separation of concerns. What about the write path for creating new URLs?"
+    },
+    {
+      "seq_index": 68,
+      "start_ms": 404105,
+      "end_ms": 410995,
+      "speaker": "Kai Nakamura",
+      "text": "Write path can be slower. I'd use a write-through cache strategy and maybe rate limiting to prevent abuse."
+    },
+    {
+      "seq_index": 69,
+      "start_ms": 410995,
+      "end_ms": 413400,
+      "speaker": "Leila Ahmed",
+      "text": "How would you prevent malicious URLs?"
+    },
+    {
+      "seq_index": 70,
+      "start_ms": 413400,
+      "end_ms": 421070,
+      "speaker": "Kai Nakamura",
+      "text": "Integrate with URL reputation services, maintain a blocklist of known malicious domains, and implement user reporting."
+    },
+    {
+      "seq_index": 71,
+      "start_ms": 421070,
+      "end_ms": 425230,
+      "speaker": "Jamie Park",
+      "text": "What about custom short URLs where users choose their own alias?"
+    },
+    {
+      "seq_index": 72,
+      "start_ms": 425230,
+      "end_ms": 432510,
+      "speaker": "Kai Nakamura",
+      "text": "That requires a uniqueness check. I'd handle that with optimistic locking or conditional writes in the database."
+    },
+    {
+      "seq_index": 73,
+      "start_ms": 432510,
+      "end_ms": 437320,
+      "speaker": "Leila Ahmed",
+      "text": "Let's talk about failure modes. What if your database becomes unavailable?"
+    },
+    {
+      "seq_index": 74,
+      "start_ms": 437320,
+      "end_ms": 445055,
+      "speaker": "Kai Nakamura",
+      "text": "With a distributed database like Cassandra, we design for partial failures. Some nodes can be down without full outage."
+    },
+    {
+      "seq_index": 75,
+      "start_ms": 445055,
+      "end_ms": 446745,
+      "speaker": "Jamie Park",
+      "text": "What about cache failures?"
+    },
+    {
+      "seq_index": 76,
+      "start_ms": 446745,
+      "end_ms": 455130,
+      "speaker": "Kai Nakamura",
+      "text": "Cache should be a performance optimization, not a hard requirement. If cache fails, degrade gracefully to direct database access."
+    },
+    {
+      "seq_index": 77,
+      "start_ms": 455130,
+      "end_ms": 458380,
+      "speaker": "Leila Ahmed",
+      "text": "How would you handle a complete datacenter outage?"
+    },
+    {
+      "seq_index": 78,
+      "start_ms": 458380,
+      "end_ms": 464685,
+      "speaker": "Kai Nakamura",
+      "text": "Multi-region deployment with geographic DNS routing. Each region has a complete copy of the data."
+    },
+    {
+      "seq_index": 79,
+      "start_ms": 464685,
+      "end_ms": 467220,
+      "speaker": "Jamie Park",
+      "text": "What about consistency between regions?"
+    },
+    {
+      "seq_index": 80,
+      "start_ms": 467220,
+      "end_ms": 475020,
+      "speaker": "Kai Nakamura",
+      "text": "For this use case, eventual consistency is acceptable. Writes can go to the nearest region and replicate asynchronously."
+    },
+    {
+      "seq_index": 81,
+      "start_ms": 475020,
+      "end_ms": 481130,
+      "speaker": "Leila Ahmed",
+      "text": "What if two users in different regions try to create the same custom short URL simultaneously?"
+    },
+    {
+      "seq_index": 82,
+      "start_ms": 481130,
+      "end_ms": 490815,
+      "speaker": "Kai Nakamura",
+      "text": "That's tricky. You'd need some form of distributed consensus like Raft or Paxos, or accept that conflicts might occur and have a resolution strategy."
+    },
+    {
+      "seq_index": 83,
+      "start_ms": 490815,
+      "end_ms": 493545,
+      "speaker": "Jamie Park",
+      "text": "What resolution strategy would you choose?"
+    },
+    {
+      "seq_index": 84,
+      "start_ms": 493545,
+      "end_ms": 502580,
+      "speaker": "Kai Nakamura",
+      "text": "Last write wins based on timestamp, or give preference to the region where the request originated. Document the behavior clearly for users."
+    },
+    {
+      "seq_index": 85,
+      "start_ms": 502580,
+      "end_ms": 508495,
+      "speaker": "Leila Ahmed",
+      "text": "Let's shift to security. What security considerations are important for this URL shortener?"
+    },
+    {
+      "seq_index": 86,
+      "start_ms": 508495,
+      "end_ms": 516555,
+      "speaker": "Kai Nakamura",
+      "text": "Several things. Rate limiting to prevent abuse, HTTPS for all connections, protection against open redirect vulnerabilities."
+    },
+    {
+      "seq_index": 87,
+      "start_ms": 516555,
+      "end_ms": 519025,
+      "speaker": "Jamie Park",
+      "text": "What's an open redirect vulnerability?"
+    },
+    {
+      "seq_index": 88,
+      "start_ms": 519025,
+      "end_ms": 527475,
+      "speaker": "Kai Nakamura",
+      "text": "When an attacker creates a shortened URL pointing to a phishing site, users might trust it because the short URL looks legitimate."
+    },
+    {
+      "seq_index": 89,
+      "start_ms": 527475,
+      "end_ms": 529100,
+      "speaker": "Leila Ahmed",
+      "text": "How do you mitigate that?"
+    },
+    {
+      "seq_index": 90,
+      "start_ms": 529100,
+      "end_ms": 538135,
+      "speaker": "Kai Nakamura",
+      "text": "URL validation against known threat databases, displaying an interstitial warning page for suspicious domains, and user reputation scoring."
+    },
+    {
+      "seq_index": 91,
+      "start_ms": 538135,
+      "end_ms": 539890,
+      "speaker": "Jamie Park",
+      "text": "What about DDoS protection?"
+    },
+    {
+      "seq_index": 92,
+      "start_ms": 539890,
+      "end_ms": 548340,
+      "speaker": "Kai Nakamura",
+      "text": "CDN with DDoS protection like Cloudflare in front of the service, rate limiting at multiple layers, and traffic anomaly detection."
+    },
+    {
+      "seq_index": 93,
+      "start_ms": 548340,
+      "end_ms": 550875,
+      "speaker": "Leila Ahmed",
+      "text": "Have you dealt with a real DDoS attack?"
+    },
+    {
+      "seq_index": 94,
+      "start_ms": 550875,
+      "end_ms": 560560,
+      "speaker": "Kai Nakamura",
+      "text": "Yes, at DataFlow we had a sustained attack targeting our API endpoints. We used geographic blocking, CAPTCHA challenges, and scaled up our WAF rules."
+    },
+    {
+      "seq_index": 95,
+      "start_ms": 560560,
+      "end_ms": 564525,
+      "speaker": "Jamie Park",
+      "text": "How did you distinguish attack traffic from legitimate users?"
+    },
+    {
+      "seq_index": 96,
+      "start_ms": 564525,
+      "end_ms": 573430,
+      "speaker": "Kai Nakamura",
+      "text": "We analyzed request patterns, user agent strings, and implemented behavioral analysis. Also maintained a whitelist of known good clients."
+    },
+    {
+      "seq_index": 97,
+      "start_ms": 573430,
+      "end_ms": 580320,
+      "speaker": "Leila Ahmed",
+      "text": "Let's talk about authentication and authorization. How would you implement user accounts for this service?"
+    },
+    {
+      "seq_index": 98,
+      "start_ms": 580320,
+      "end_ms": 588055,
+      "speaker": "Kai Nakamura",
+      "text": "I'd use OAuth2 for authentication, support social login providers for convenience, and issue JWT tokens for API access."
+    },
+    {
+      "seq_index": 99,
+      "start_ms": 588055,
+      "end_ms": 589940,
+      "speaker": "Jamie Park",
+      "text": "What about API rate limiting?"
+    },
+    {
+      "seq_index": 100,
+      "start_ms": 589940,
+      "end_ms": 597545,
+      "speaker": "Kai Nakamura",
+      "text": "Token bucket algorithm with different tiers for free and paid users. Store rate limit state in Redis for fast access."
+    },
+    {
+      "seq_index": 101,
+      "start_ms": 597545,
+      "end_ms": 600145,
+      "speaker": "Leila Ahmed",
+      "text": "How would you handle secrets management?"
+    },
+    {
+      "seq_index": 102,
+      "start_ms": 600145,
+      "end_ms": 608140,
+      "speaker": "Kai Nakamura",
+      "text": "Use a dedicated secrets manager like HashiCorp Vault or AWS Secrets Manager. Never commit secrets to git, rotate regularly."
+    },
+    {
+      "seq_index": 103,
+      "start_ms": 608140,
+      "end_ms": 610090,
+      "speaker": "Jamie Park",
+      "text": "What about encryption at rest?"
+    },
+    {
+      "seq_index": 104,
+      "start_ms": 610090,
+      "end_ms": 617370,
+      "speaker": "Kai Nakamura",
+      "text": "Database encryption using provider-managed keys, with option for customer-managed keys for enterprise customers."
+    },
+    {
+      "seq_index": 105,
+      "start_ms": 617370,
+      "end_ms": 619840,
+      "speaker": "Leila Ahmed",
+      "text": "Tell me about your testing philosophy."
+    },
+    {
+      "seq_index": 106,
+      "start_ms": 619840,
+      "end_ms": 627055,
+      "speaker": "Kai Nakamura",
+      "text": "I believe in a test pyramid. Lots of unit tests, moderate integration tests, few but critical end-to-end tests."
+    },
+    {
+      "seq_index": 107,
+      "start_ms": 627055,
+      "end_ms": 629200,
+      "speaker": "Jamie Park",
+      "text": "What about test coverage metrics?"
+    },
+    {
+      "seq_index": 108,
+      "start_ms": 629200,
+      "end_ms": 638235,
+      "speaker": "Kai Nakamura",
+      "text": "Coverage is a useful metric but not a goal. I care more about testing critical paths and edge cases than achieving ninety percent coverage."
+    },
+    {
+      "seq_index": 109,
+      "start_ms": 638235,
+      "end_ms": 640575,
+      "speaker": "Leila Ahmed",
+      "text": "How do you test distributed systems?"
+    },
+    {
+      "seq_index": 110,
+      "start_ms": 640575,
+      "end_ms": 647465,
+      "speaker": "Kai Nakamura",
+      "text": "Chaos engineering is crucial. Use tools like Chaos Monkey to inject failures and verify system resilience."
+    },
+    {
+      "seq_index": 111,
+      "start_ms": 647465,
+      "end_ms": 650910,
+      "speaker": "Jamie Park",
+      "text": "Have you implemented chaos engineering in production?"
+    },
+    {
+      "seq_index": 112,
+      "start_ms": 650910,
+      "end_ms": 659555,
+      "speaker": "Kai Nakamura",
+      "text": "Yes, we ran monthly game days where we deliberately failed components and verified our monitoring, alerting, and recovery procedures."
+    },
+    {
+      "seq_index": 113,
+      "start_ms": 659555,
+      "end_ms": 663065,
+      "speaker": "Leila Ahmed",
+      "text": "What's the scariest thing you found during a game day?"
+    },
+    {
+      "seq_index": 114,
+      "start_ms": 663065,
+      "end_ms": 671645,
+      "speaker": "Kai Nakamura",
+      "text": "We discovered our database failover took twelve minutes instead of the expected two minutes because of a misconfigured health check."
+    },
+    {
+      "seq_index": 115,
+      "start_ms": 671645,
+      "end_ms": 672880,
+      "speaker": "Jamie Park",
+      "text": "How did you fix it?"
+    },
+    {
+      "seq_index": 116,
+      "start_ms": 672880,
+      "end_ms": 680680,
+      "speaker": "Kai Nakamura",
+      "text": "Adjusted the health check parameters, added monitoring for failover duration, and automated the process more thoroughly."
+    },
+    {
+      "seq_index": 117,
+      "start_ms": 680680,
+      "end_ms": 685425,
+      "speaker": "Leila Ahmed",
+      "text": "Let's talk about deployment. What's your approach to rolling out changes?"
+    },
+    {
+      "seq_index": 118,
+      "start_ms": 685425,
+      "end_ms": 694200,
+      "speaker": "Kai Nakamura",
+      "text": "Progressive rollout with automated canary deployment. Deploy to one percent of traffic, monitor metrics, gradually increase if healthy."
+    },
+    {
+      "seq_index": 119,
+      "start_ms": 694200,
+      "end_ms": 696995,
+      "speaker": "Jamie Park",
+      "text": "What metrics do you monitor during rollout?"
+    },
+    {
+      "seq_index": 120,
+      "start_ms": 696995,
+      "end_ms": 703430,
+      "speaker": "Kai Nakamura",
+      "text": "Error rates, latency percentiles, resource utilization, and business metrics like conversion rates."
+    },
+    {
+      "seq_index": 121,
+      "start_ms": 703430,
+      "end_ms": 705250,
+      "speaker": "Leila Ahmed",
+      "text": "How do you handle rollbacks?"
+    },
+    {
+      "seq_index": 122,
+      "start_ms": 705250,
+      "end_ms": 714025,
+      "speaker": "Kai Nakamura",
+      "text": "Automated rollback based on metric thresholds. If error rate spikes above baseline, automatically roll back without human intervention."
+    },
+    {
+      "seq_index": 123,
+      "start_ms": 714025,
+      "end_ms": 717665,
+      "speaker": "Jamie Park",
+      "text": "What about database schema migrations during deployment?"
+    },
+    {
+      "seq_index": 124,
+      "start_ms": 717665,
+      "end_ms": 725855,
+      "speaker": "Kai Nakamura",
+      "text": "Schema changes must be backward compatible. Use expand-contract pattern: add new columns, migrate data, deprecate old columns."
+    },
+    {
+      "seq_index": 125,
+      "start_ms": 725855,
+      "end_ms": 728390,
+      "speaker": "Leila Ahmed",
+      "text": "How long does a typical migration take?"
+    },
+    {
+      "seq_index": 126,
+      "start_ms": 728390,
+      "end_ms": 737035,
+      "speaker": "Kai Nakamura",
+      "text": "Depends on data volume. For large tables, we use online schema change tools like gh-ost that can take hours but don't lock the table."
+    },
+    {
+      "seq_index": 127,
+      "start_ms": 737035,
+      "end_ms": 742300,
+      "speaker": "Jamie Park",
+      "text": "Let's discuss performance optimization. How do you approach performance problems?"
+    },
+    {
+      "seq_index": 128,
+      "start_ms": 742300,
+      "end_ms": 750490,
+      "speaker": "Kai Nakamura",
+      "text": "Start with profiling to identify bottlenecks. Don't optimize prematurely - measure first, then optimize the actual bottleneck."
+    },
+    {
+      "seq_index": 129,
+      "start_ms": 750490,
+      "end_ms": 752570,
+      "speaker": "Leila Ahmed",
+      "text": "What profiling tools do you use?"
+    },
+    {
+      "seq_index": 130,
+      "start_ms": 752570,
+      "end_ms": 760110,
+      "speaker": "Kai Nakamura",
+      "text": "For JVM applications, I use JFR and async-profiler. For Go, pprof. For databases, explain plans and slow query logs."
+    },
+    {
+      "seq_index": 131,
+      "start_ms": 760110,
+      "end_ms": 764010,
+      "speaker": "Jamie Park",
+      "text": "Can you describe a performance optimization you're proud of?"
+    },
+    {
+      "seq_index": 132,
+      "start_ms": 764010,
+      "end_ms": 771290,
+      "speaker": "Kai Nakamura",
+      "text": "We had an API endpoint taking two seconds on average. Profiling revealed ninety percent was database query time."
+    },
+    {
+      "seq_index": 133,
+      "start_ms": 771290,
+      "end_ms": 773110,
+      "speaker": "Leila Ahmed",
+      "text": "What was the database issue?"
+    },
+    {
+      "seq_index": 134,
+      "start_ms": 773110,
+      "end_ms": 780650,
+      "speaker": "Kai Nakamura",
+      "text": "Missing index on a frequently queried column. Added the index and latency dropped to under one hundred milliseconds."
+    },
+    {
+      "seq_index": 135,
+      "start_ms": 780650,
+      "end_ms": 783120,
+      "speaker": "Jamie Park",
+      "text": "Why wasn't the index there originally?"
+    },
+    {
+      "seq_index": 136,
+      "start_ms": 783120,
+      "end_ms": 790010,
+      "speaker": "Kai Nakamura",
+      "text": "The access pattern changed as the application evolved. We didn't notice because traffic was low initially."
+    },
+    {
+      "seq_index": 137,
+      "start_ms": 790010,
+      "end_ms": 792805,
+      "speaker": "Leila Ahmed",
+      "text": "How do you prevent performance regressions?"
+    },
+    {
+      "seq_index": 138,
+      "start_ms": 792805,
+      "end_ms": 799825,
+      "speaker": "Kai Nakamura",
+      "text": "Automated performance testing in CI, benchmark critical code paths, and track latency metrics in production."
+    },
+    {
+      "seq_index": 139,
+      "start_ms": 799825,
+      "end_ms": 801385,
+      "speaker": "Jamie Park",
+      "text": "What about memory leaks?"
+    },
+    {
+      "seq_index": 140,
+      "start_ms": 801385,
+      "end_ms": 808080,
+      "speaker": "Kai Nakamura",
+      "text": "Profile heap usage over time, set up alerts for memory growth trends, and use heap dump analysis tools."
+    },
+    {
+      "seq_index": 141,
+      "start_ms": 808080,
+      "end_ms": 811005,
+      "speaker": "Leila Ahmed",
+      "text": "Have you dealt with a production memory leak?"
+    },
+    {
+      "seq_index": 142,
+      "start_ms": 811005,
+      "end_ms": 818350,
+      "speaker": "Kai Nakamura",
+      "text": "Yes, we had a gradual leak in a long-running background job. Heap dumps revealed unreleased database connections."
+    },
+    {
+      "seq_index": 143,
+      "start_ms": 818350,
+      "end_ms": 819585,
+      "speaker": "Jamie Park",
+      "text": "How did you fix it?"
+    },
+    {
+      "seq_index": 144,
+      "start_ms": 819585,
+      "end_ms": 827450,
+      "speaker": "Kai Nakamura",
+      "text": "Implemented proper connection pooling with max lifetime limits and ensured all connections were closed in finally blocks."
+    },
+    {
+      "seq_index": 145,
+      "start_ms": 827450,
+      "end_ms": 832260,
+      "speaker": "Leila Ahmed",
+      "text": "Let's talk about caching strategies. When do you cache and when don't you?"
+    },
+    {
+      "seq_index": 146,
+      "start_ms": 832260,
+      "end_ms": 840905,
+      "speaker": "Kai Nakamura",
+      "text": "Cache when reads vastly outnumber writes, data has temporal locality, and staleness is acceptable. Don't cache rapidly changing data."
+    },
+    {
+      "seq_index": 147,
+      "start_ms": 840905,
+      "end_ms": 843310,
+      "speaker": "Jamie Park",
+      "text": "How do you handle cache invalidation?"
+    },
+    {
+      "seq_index": 148,
+      "start_ms": 843310,
+      "end_ms": 852150,
+      "speaker": "Kai Nakamura",
+      "text": "Cache invalidation is famously hard. I prefer TTL-based expiration for simplicity, or event-based invalidation for stricter consistency."
+    },
+    {
+      "seq_index": 149,
+      "start_ms": 852150,
+      "end_ms": 853840,
+      "speaker": "Leila Ahmed",
+      "text": "What about cache stampede?"
+    },
+    {
+      "seq_index": 150,
+      "start_ms": 853840,
+      "end_ms": 863005,
+      "speaker": "Kai Nakamura",
+      "text": "When a popular cache entry expires, many requests might simultaneously hit the database. Use cache locking or probabilistic early expiration."
+    },
+    {
+      "seq_index": 151,
+      "start_ms": 863005,
+      "end_ms": 869115,
+      "speaker": "Jamie Park",
+      "text": "Let's shift to non-technical topics. Tell me about a time you had conflict with a team member."
+    },
+    {
+      "seq_index": 152,
+      "start_ms": 869115,
+      "end_ms": 878475,
+      "speaker": "Kai Nakamura",
+      "text": "I had a disagreement with a senior engineer about architectural direction. They wanted to use microservices, I advocated for a modular monolith."
+    },
+    {
+      "seq_index": 153,
+      "start_ms": 878475,
+      "end_ms": 879970,
+      "speaker": "Leila Ahmed",
+      "text": "How did you resolve it?"
+    },
+    {
+      "seq_index": 154,
+      "start_ms": 879970,
+      "end_ms": 890110,
+      "speaker": "Kai Nakamura",
+      "text": "We wrote up both proposals with trade-offs, presented to the team, and agreed on decision criteria: team size, deployment frequency, operational complexity."
+    },
+    {
+      "seq_index": 155,
+      "start_ms": 890110,
+      "end_ms": 891475,
+      "speaker": "Jamie Park",
+      "text": "What was the outcome?"
+    },
+    {
+      "seq_index": 156,
+      "start_ms": 891475,
+      "end_ms": 898625,
+      "speaker": "Kai Nakamura",
+      "text": "We chose the monolith because our team was small and we valued iteration speed over independent deployability."
+    },
+    {
+      "seq_index": 157,
+      "start_ms": 898625,
+      "end_ms": 900770,
+      "speaker": "Leila Ahmed",
+      "text": "How did the other engineer react?"
+    },
+    {
+      "seq_index": 158,
+      "start_ms": 900770,
+      "end_ms": 908115,
+      "speaker": "Kai Nakamura",
+      "text": "They were disappointed initially but respected the process. We agreed to revisit if team size grew significantly."
+    },
+    {
+      "seq_index": 159,
+      "start_ms": 908115,
+      "end_ms": 912275,
+      "speaker": "Jamie Park",
+      "text": "Good collaborative approach. How do you mentor junior engineers?"
+    },
+    {
+      "seq_index": 160,
+      "start_ms": 912275,
+      "end_ms": 920855,
+      "speaker": "Kai Nakamura",
+      "text": "I pair program with them on real features, do regular code reviews with detailed feedback, and encourage them to present their work."
+    },
+    {
+      "seq_index": 161,
+      "start_ms": 920855,
+      "end_ms": 924625,
+      "speaker": "Leila Ahmed",
+      "text": "What's the most important thing to teach junior engineers?"
+    },
+    {
+      "seq_index": 162,
+      "start_ms": 924625,
+      "end_ms": 932035,
+      "speaker": "Kai Nakamura",
+      "text": "How to break down problems systematically and how to debug effectively. Those skills transfer across technologies."
+    },
+    {
+      "seq_index": 163,
+      "start_ms": 932035,
+      "end_ms": 935675,
+      "speaker": "Jamie Park",
+      "text": "Tell me about a project that failed. What did you learn?"
+    },
+    {
+      "seq_index": 164,
+      "start_ms": 935675,
+      "end_ms": 943735,
+      "speaker": "Kai Nakamura",
+      "text": "We tried to build a custom service mesh before realizing we should have used Istio. Spent three months before abandoning it."
+    },
+    {
+      "seq_index": 165,
+      "start_ms": 943735,
+      "end_ms": 944775,
+      "speaker": "Leila Ahmed",
+      "text": "Why did it fail?"
+    },
+    {
+      "seq_index": 166,
+      "start_ms": 944775,
+      "end_ms": 952900,
+      "speaker": "Kai Nakamura",
+      "text": "We underestimated the complexity and didn't validate whether we really needed custom functionality versus proven open source."
+    },
+    {
+      "seq_index": 167,
+      "start_ms": 952900,
+      "end_ms": 954135,
+      "speaker": "Jamie Park",
+      "text": "What did you learn?"
+    },
+    {
+      "seq_index": 168,
+      "start_ms": 954135,
+      "end_ms": 962650,
+      "speaker": "Kai Nakamura",
+      "text": "Build versus buy decisions require honest assessment of our core competencies. Networking infrastructure wasn't our differentiator."
+    },
+    {
+      "seq_index": 169,
+      "start_ms": 962650,
+      "end_ms": 965185,
+      "speaker": "Leila Ahmed",
+      "text": "How do you handle competing priorities?"
+    },
+    {
+      "seq_index": 170,
+      "start_ms": 965185,
+      "end_ms": 973310,
+      "speaker": "Kai Nakamura",
+      "text": "I use a framework of impact versus effort. High impact, low effort items first. Also consider technical debt versus features."
+    },
+    {
+      "seq_index": 171,
+      "start_ms": 973310,
+      "end_ms": 975845,
+      "speaker": "Jamie Park",
+      "text": "What's your approach to technical debt?"
+    },
+    {
+      "seq_index": 172,
+      "start_ms": 975845,
+      "end_ms": 984100,
+      "speaker": "Kai Nakamura",
+      "text": "Technical debt is like financial debt - some is strategic. I budget about twenty percent of sprint capacity for debt reduction."
+    },
+    {
+      "seq_index": 173,
+      "start_ms": 984100,
+      "end_ms": 987740,
+      "speaker": "Leila Ahmed",
+      "text": "How do you convince product managers to prioritize debt?"
+    },
+    {
+      "seq_index": 174,
+      "start_ms": 987740,
+      "end_ms": 994370,
+      "speaker": "Kai Nakamura",
+      "text": "Frame it in terms of velocity impact. Show how debt slows feature development and increases bug rates."
+    },
+    {
+      "seq_index": 175,
+      "start_ms": 994370,
+      "end_ms": 998140,
+      "speaker": "Jamie Park",
+      "text": "We have some time left. What questions do you have for us?"
+    },
+    {
+      "seq_index": 176,
+      "start_ms": 998140,
+      "end_ms": 1003795,
+      "speaker": "Kai Nakamura",
+      "text": "Can you tell me more about the team structure and who I'd be working with most closely?"
+    },
+    {
+      "seq_index": 177,
+      "start_ms": 1003795,
+      "end_ms": 1011595,
+      "speaker": "Leila Ahmed",
+      "text": "You'd be joining our platform team which has twelve engineers. You'd work closely with the API team, data team, and SRE."
+    },
+    {
+      "seq_index": 178,
+      "start_ms": 1011595,
+      "end_ms": 1016925,
+      "speaker": "Kai Nakamura",
+      "text": "What's the balance between building new features and maintaining existing systems?"
+    },
+    {
+      "seq_index": 179,
+      "start_ms": 1016925,
+      "end_ms": 1025440,
+      "speaker": "Jamie Park",
+      "text": "Right now we're about sixty percent new development, forty percent maintenance. That ratio fluctuates based on business priorities."
+    },
+    {
+      "seq_index": 180,
+      "start_ms": 1025440,
+      "end_ms": 1029795,
+      "speaker": "Kai Nakamura",
+      "text": "What does success look like in this role over the first six months?"
+    },
+    {
+      "seq_index": 181,
+      "start_ms": 1029795,
+      "end_ms": 1039220,
+      "speaker": "Leila Ahmed",
+      "text": "First three months is onboarding and understanding our systems. By six months, we'd expect you to be independently driving medium-sized projects."
+    },
+    {
+      "seq_index": 182,
+      "start_ms": 1039220,
+      "end_ms": 1043185,
+      "speaker": "Kai Nakamura",
+      "text": "What are the biggest technical challenges the team is facing?"
+    },
+    {
+      "seq_index": 183,
+      "start_ms": 1043185,
+      "end_ms": 1050660,
+      "speaker": "Jamie Park",
+      "text": "Scaling our data pipeline to handle ten X growth, reducing infrastructure costs, and improving deployment velocity."
+    },
+    {
+      "seq_index": 184,
+      "start_ms": 1050660,
+      "end_ms": 1053260,
+      "speaker": "Kai Nakamura",
+      "text": "What's the current deployment frequency?"
+    },
+    {
+      "seq_index": 185,
+      "start_ms": 1053260,
+      "end_ms": 1059240,
+      "speaker": "Leila Ahmed",
+      "text": "We deploy about twice per week currently. Goal is to get to daily or multiple times per day."
+    },
+    {
+      "seq_index": 186,
+      "start_ms": 1059240,
+      "end_ms": 1062360,
+      "speaker": "Kai Nakamura",
+      "text": "What's preventing more frequent deployments now?"
+    },
+    {
+      "seq_index": 187,
+      "start_ms": 1062360,
+      "end_ms": 1068860,
+      "speaker": "Jamie Park",
+      "text": "Manual testing, fear of breaking things, and slow rollback procedures. All solvable with investment."
+    },
+    {
+      "seq_index": 188,
+      "start_ms": 1068860,
+      "end_ms": 1071005,
+      "speaker": "Kai Nakamura",
+      "text": "What's the on-call rotation like?"
+    },
+    {
+      "seq_index": 189,
+      "start_ms": 1071005,
+      "end_ms": 1080300,
+      "speaker": "Leila Ahmed",
+      "text": "One week per month for senior engineers. We have runbooks, escalation procedures, and incidents are learning opportunities, not blame sessions."
+    },
+    {
+      "seq_index": 190,
+      "start_ms": 1080300,
+      "end_ms": 1082315,
+      "speaker": "Kai Nakamura",
+      "text": "How do you handle post-mortems?"
+    },
+    {
+      "seq_index": 191,
+      "start_ms": 1082315,
+      "end_ms": 1090050,
+      "speaker": "Jamie Park",
+      "text": "Blameless post-mortems focused on system improvements. We publish them internally and track action items to completion."
+    },
+    {
+      "seq_index": 192,
+      "start_ms": 1090050,
+      "end_ms": 1093560,
+      "speaker": "Kai Nakamura",
+      "text": "What technologies is the team excited about exploring?"
+    },
+    {
+      "seq_index": 193,
+      "start_ms": 1093560,
+      "end_ms": 1101490,
+      "speaker": "Leila Ahmed",
+      "text": "We're looking at service mesh for cross-cutting concerns, eBPF for observability, and WebAssembly for plugin architecture."
+    },
+    {
+      "seq_index": 194,
+      "start_ms": 1101490,
+      "end_ms": 1104545,
+      "speaker": "Kai Nakamura",
+      "text": "How does the team stay current with technology?"
+    },
+    {
+      "seq_index": 195,
+      "start_ms": 1104545,
+      "end_ms": 1111240,
+      "speaker": "Jamie Park",
+      "text": "We have monthly tech talks, budget for conferences, and dedicate time for learning and experimentation."
+    },
+    {
+      "seq_index": 196,
+      "start_ms": 1111240,
+      "end_ms": 1114555,
+      "speaker": "Kai Nakamura",
+      "text": "What's the company's approach to work-life balance?"
+    },
+    {
+      "seq_index": 197,
+      "start_ms": 1114555,
+      "end_ms": 1122225,
+      "speaker": "Leila Ahmed",
+      "text": "We have flexible hours, support remote work, and discourage after-hours communication unless it's a genuine emergency."
+    },
+    {
+      "seq_index": 198,
+      "start_ms": 1122225,
+      "end_ms": 1124045,
+      "speaker": "Kai Nakamura",
+      "text": "How distributed is the team?"
+    },
+    {
+      "seq_index": 199,
+      "start_ms": 1124045,
+      "end_ms": 1130870,
+      "speaker": "Jamie Park",
+      "text": "About half the team is in the office three days a week, half is fully remote across different time zones."
+    },
+    {
+      "seq_index": 200,
+      "start_ms": 1130870,
+      "end_ms": 1134705,
+      "speaker": "Kai Nakamura",
+      "text": "How do you maintain team cohesion with distributed members?"
+    },
+    {
+      "seq_index": 201,
+      "start_ms": 1134705,
+      "end_ms": 1142570,
+      "speaker": "Leila Ahmed",
+      "text": "Regular video standups, async communication in Slack, quarterly in-person meetups, and intentional relationship building."
+    },
+    {
+      "seq_index": 202,
+      "start_ms": 1142570,
+      "end_ms": 1145040,
+      "speaker": "Kai Nakamura",
+      "text": "What's the growth path from this role?"
+    },
+    {
+      "seq_index": 203,
+      "start_ms": 1145040,
+      "end_ms": 1153750,
+      "speaker": "Jamie Park",
+      "text": "Senior engineer can progress to staff engineer focusing on technical leadership, or engineering manager focusing on people leadership."
+    },
+    {
+      "seq_index": 204,
+      "start_ms": 1153750,
+      "end_ms": 1156675,
+      "speaker": "Kai Nakamura",
+      "text": "Are there opportunities to work across teams?"
+    },
+    {
+      "seq_index": 205,
+      "start_ms": 1156675,
+      "end_ms": 1163565,
+      "speaker": "Leila Ahmed",
+      "text": "Yes, we encourage cross-team collaboration. Engineers often join task forces for company-wide initiatives."
+    },
+    {
+      "seq_index": 206,
+      "start_ms": 1163565,
+      "end_ms": 1166555,
+      "speaker": "Kai Nakamura",
+      "text": "How does the company make technical decisions?"
+    },
+    {
+      "seq_index": 207,
+      "start_ms": 1166555,
+      "end_ms": 1174030,
+      "speaker": "Jamie Park",
+      "text": "We use RFCs for significant changes. Anyone can write one, stakeholders review and comment, and we reach consensus."
+    },
+    {
+      "seq_index": 208,
+      "start_ms": 1174030,
+      "end_ms": 1176825,
+      "speaker": "Kai Nakamura",
+      "text": "What happens if consensus can't be reached?"
+    },
+    {
+      "seq_index": 209,
+      "start_ms": 1176825,
+      "end_ms": 1184430,
+      "speaker": "Leila Ahmed",
+      "text": "The RFC owner makes the final call for their area, or we escalate to architecture council for cross-cutting concerns."
+    },
+    {
+      "seq_index": 210,
+      "start_ms": 1184430,
+      "end_ms": 1186185,
+      "speaker": "Jamie Park",
+      "text": "Any other questions for us?"
+    },
+    {
+      "seq_index": 211,
+      "start_ms": 1186185,
+      "end_ms": 1188915,
+      "speaker": "Kai Nakamura",
+      "text": "What do you enjoy most about working here?"
+    },
+    {
+      "seq_index": 212,
+      "start_ms": 1188915,
+      "end_ms": 1195740,
+      "speaker": "Leila Ahmed",
+      "text": "The technical challenges are interesting and the team is collaborative. I learn something new every week."
+    },
+    {
+      "seq_index": 213,
+      "start_ms": 1195740,
+      "end_ms": 1202045,
+      "speaker": "Jamie Park",
+      "text": "I appreciate the engineering culture. We value craftsmanship but also pragmatism. We ship things."
+    },
+    {
+      "seq_index": 214,
+      "start_ms": 1202045,
+      "end_ms": 1206660,
+      "speaker": "Kai Nakamura",
+      "text": "That aligns with my values. When can I expect to hear about next steps?"
+    },
+    {
+      "seq_index": 215,
+      "start_ms": 1206660,
+      "end_ms": 1212770,
+      "speaker": "Leila Ahmed",
+      "text": "We'll debrief internally this afternoon and aim to get back to you within three business days."
+    },
+    {
+      "seq_index": 216,
+      "start_ms": 1212770,
+      "end_ms": 1220180,
+      "speaker": "Jamie Park",
+      "text": "If we move forward, the next step would be a system design interview and a behavioral interview with our director."
+    },
+    {
+      "seq_index": 217,
+      "start_ms": 1220180,
+      "end_ms": 1223625,
+      "speaker": "Kai Nakamura",
+      "text": "Sounds good. I really enjoyed our conversation today."
+    },
+    {
+      "seq_index": 218,
+      "start_ms": 1223625,
+      "end_ms": 1228955,
+      "speaker": "Leila Ahmed",
+      "text": "Same here. You've clearly got deep experience with the technologies we care about."
+    },
+    {
+      "seq_index": 219,
+      "start_ms": 1228955,
+      "end_ms": 1232725,
+      "speaker": "Jamie Park",
+      "text": "We appreciate you taking the time. We'll be in touch soon."
+    },
+    {
+      "seq_index": 220,
+      "start_ms": 1232725,
+      "end_ms": 1236105,
+      "speaker": "Kai Nakamura",
+      "text": "Thank you both. Looking forward to hearing from you."
+    }
+  ],
+  "reference": {
+    "decisions": [
+      {
+        "statement": "Will debrief and respond within three business days",
+        "participants": [
+          "Leila Ahmed"
+        ],
+        "time_reference": "within three business days",
+        "assertion": "directly_stated",
+        "evidence": {
+          "seq_index": 184,
+          "char_start": 0,
+          "char_end": 40
+        }
+      }
+    ],
+    "action_items": [
+      {
+        "verb": "Debrief",
+        "description": "internally on interview",
+        "owner": "unassigned",
+        "due_date": "not_specified",
+        "status": "open",
+        "assertion": "directly_stated",
+        "evidence": {
+          "seq_index": 184,
+          "char_start": 9,
+          "char_end": 31
+        }
+      }
+    ],
+    "risks": [],
+    "questions": [
+      {
+        "question": "Can you tell me more about the team structure?",
+        "owner": "Kai Nakamura",
+        "evidence": {
+          "seq_index": 151,
+          "char_start": 0,
+          "char_end": 75
+        }
+      },
+      {
+        "question": "What does success look like in this role over the first six months?",
+        "owner": "Kai Nakamura",
+        "evidence": {
+          "seq_index": 154,
+          "char_start": 0,
+          "char_end": 68
+        }
+      },
+      {
+        "question": "What are the biggest technical challenges the team is facing?",
+        "owner": "Kai Nakamura",
+        "evidence": {
+          "seq_index": 156,
+          "char_start": 0,
+          "char_end": 63
+        }
+      }
+    ],
+    "topics": [
+      {
+        "heading": "Introduction and Background",
+        "first_segment": 0,
+        "last_segment": 13,
+        "evidence": {
+          "seq_index": 3,
+          "char_start": 16,
+          "char_end": 65
+        }
+      },
+      {
+        "heading": "Distributed Systems Experience",
+        "first_segment": 14,
+        "last_segment": 43,
+        "evidence": {
+          "seq_index": 14,
+          "char_start": 41,
+          "char_end": 60
+        }
+      },
+      {
+        "heading": "Architecture Design Exercise",
+        "first_segment": 44,
+        "last_segment": 64,
+        "evidence": {
+          "seq_index": 44,
+          "char_start": 10,
+          "char_end": 33
+        }
+      },
+      {
+        "heading": "Security and Testing",
+        "first_segment": 65,
+        "last_segment": 104,
+        "evidence": {
+          "seq_index": 65,
+          "char_start": 14,
+          "char_end": 22
+        }
+      },
+      {
+        "heading": "Performance Optimization",
+        "first_segment": 105,
+        "last_segment": 124,
+        "evidence": {
+          "seq_index": 105,
+          "char_start": 0,
+          "char_end": 38
+        }
+      },
+      {
+        "heading": "Leadership and Collaboration",
+        "first_segment": 125,
+        "last_segment": 149,
+        "evidence": {
+          "seq_index": 125,
+          "char_start": 0,
+          "char_end": 39
+        }
+      },
+      {
+        "heading": "Candidate Questions",
+        "first_segment": 150,
+        "last_segment": 189,
+        "evidence": {
+          "seq_index": 150,
+          "char_start": 29,
+          "char_end": 61
+        }
+      }
+    ],
+    "executive_summary": [
+      {
+        "text": "Three-hour technical interview for senior infrastructure role",
+        "facet": "objective",
+        "evidence": {
+          "seq_index": 3,
+          "char_start": 0,
+          "char_end": 38
+        }
+      },
+      {
+        "text": "Candidate demonstrated deep distributed systems and database expertise",
+        "facet": "outcome",
+        "evidence": {
+          "seq_index": 187,
+          "char_start": 13,
+          "char_end": 72
+        }
+      },
+      {
+        "text": "Next steps include system design and behavioral interviews",
+        "facet": "outcome",
+        "evidence": {
+          "seq_index": 185,
+          "char_start": 0,
+          "char_end": 92
+        }
+      }
+    ]
+  }
+}
