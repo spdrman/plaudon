@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/set_local_only_mode.request.schema.json",
+  "title": "set_local_only_mode.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "enabled",
+    "confirmed"
+  ],
+  "properties": {
+    "enabled": {
+      "type": "boolean"
+    },
+    "confirmed": {
+      "type": "boolean"
+    }
+  }
+}

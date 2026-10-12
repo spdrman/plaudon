@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/list_activity.response.schema.json",
+  "title": "list_activity.response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "items",
+    "next_cursor",
+    "unread_count"
+  ],
+  "properties": {
+    "items": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/activity_entry"
+      }
+    },
+    "next_cursor": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "unread_count": {
+      "type": "integer",
+      "minimum": 0
+    }
+  },
+  "$defs": {
+    "activity_entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "activity_id",
+        "category",
+        "occurred_at",
+        "title",
+        "body",
+        "notification_delivered",
+        "notification_suppressed_reason",
+        "target",
+        "read"
+      ],
+      "properties": {
+        "activity_id": {
+          "type": "string"
+        },
+        "category": {
+          "type": "string",
+          "enum": [
+            "import_finished",
+            "transcription_finished",
+            "requires_attention",
+            "cloud_budget_exceeded"
+          ]
+        },
+        "occurred_at": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "body": {
+          "type": "string"
+        },
+        "notification_delivered": {
+          "type": "boolean"
+        },
+        "notification_suppressed_reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "target": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "kind",
+                "id"
+              ],
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "recording",
+                    "job",
+                    "settings"
+                  ]
+                },
+                "id": {
+                  "type": "string"
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "read": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

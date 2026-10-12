@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/set_notification_settings.response.schema.json",
+  "title": "set_notification_settings.response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "settings",
+    "os_permission"
+  ],
+  "properties": {
+    "settings": {
+      "$ref": "#/$defs/notification_settings"
+    },
+    "os_permission": {
+      "type": "string",
+      "enum": [
+        "granted",
+        "denied",
+        "not_requested",
+        "unsupported"
+      ]
+    }
+  },
+  "$defs": {
+    "notification_settings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "categories"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "categories": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "import_finished",
+            "transcription_finished",
+            "requires_attention",
+            "cloud_budget_exceeded"
+          ],
+          "properties": {
+            "import_finished": {
+              "type": "boolean"
+            },
+            "transcription_finished": {
+              "type": "boolean"
+            },
+            "requires_attention": {
+              "type": "boolean"
+            },
+            "cloud_budget_exceeded": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    }
+  }
+}

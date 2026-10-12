@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/events/ui-event.v1.schema.json",
+  "title": "ui-event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "seq",
+    "kind",
+    "occurred_at",
+    "job_id",
+    "recording_id",
+    "payload"
+  ],
+  "properties": {
+    "seq": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "job.updated",
+        "job.failed",
+        "recording.imported",
+        "recording.source_updated",
+        "transcript.completed",
+        "tool.completed",
+        "model.availability_changed",
+        "consent.required",
+        "library.changed",
+        "activity.added",
+        "ui.activation_requested"
+      ]
+    },
+    "occurred_at": {
+      "type": "string"
+    },
+    "job_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "recording_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "payload": {
+      "type": "object",
+      "description": "Opaque hint payload. For ui.activation_requested it carries {\"target\": {\"kind\": \"recording\"|\"job\"|\"settings\", \"id\": string|null}}."
+    }
+  }
+}

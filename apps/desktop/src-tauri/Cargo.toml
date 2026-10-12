@@ -1,0 +1,52 @@
+[package]
+name = "plaudon-desktop"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Tauri 2 desktop shell: typed commands, validated arguments and the local library backend."
+
+[lib]
+name = "plaudon_desktop"
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[[bin]]
+name = "plaudon-desktop"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+plaudon-domain = { workspace = true }
+plaudon-persistence = { workspace = true }
+plaudon-app-core = { workspace = true }
+plaudon-notifications = { workspace = true }
+async-trait = { workspace = true }
+hex = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+sqlx = { workspace = true }
+# `assetProtocol.enable` is false in tauri.conf.json (media is served by our
+# own `plaudon-media` scheme) and tauri-build rejects a feature/allowlist
+# mismatch, so the asset protocol feature stays off.
+tauri = { version = "2" }
+tauri-plugin-dialog = "2"
+thiserror = { workspace = true }
+time = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
+dirs = "6"
+sysinfo = "0.37"
+
+[dev-dependencies]
+tempfile = { workspace = true }
+serde_json = { workspace = true }
+jsonschema = { workspace = true }
+
+[lints]
+workspace = true
