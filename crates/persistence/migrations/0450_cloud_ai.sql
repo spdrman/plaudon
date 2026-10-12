@@ -1,4 +1,4 @@
--- EPIC G (OpenRouter BYOK). Versions 400-499 are reserved for it.
+-- EPIC G (OpenRouter BYOK). Versions 450-499 are reserved for it.
 --
 -- The cloud request ledger itself (`inference_attempts`) and `usage_events`
 -- are owned by 0002_core.sql and are NOT redefined here. This migration adds

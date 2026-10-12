@@ -1,5 +1,5 @@
 //! Durable state EPIC G owns: the capability registry, model selection and
-//! documented per-route retention policies (migration `0400_cloud_ai.sql`).
+//! documented per-route retention policies (migration `0450_cloud_ai.sql`).
 
 use crate::allowlist::ModelTask;
 use crate::catalog::{ModelProbeRecord, ProbeEvidence};
