@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/restore_portable_archive.request.schema.json",
+  "title": "restore_portable_archive.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "archive_path",
+    "mode",
+    "on_conflict"
+  ],
+  "properties": {
+    "archive_path": {
+      "type": "string"
+    },
+    "password": {
+      "type": ["string", "null"]
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["new_library", "merge"]
+    },
+    "on_conflict": {
+      "type": "string",
+      "enum": ["skip", "fail"]
+    },
+    "restore_tombstoned": {
+      "type": "boolean"
+    }
+  }
+}

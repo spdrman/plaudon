@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/get_deletion_disclosure.response.schema.json",
+  "title": "get_deletion_disclosure.response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "disclosure_version",
+    "recording_id",
+    "title",
+    "has_annotation",
+    "media",
+    "categories",
+    "bytes_to_free",
+    "limits",
+    "confirmation_token"
+  ],
+  "properties": {
+    "disclosure_version": {
+      "type": "string"
+    },
+    "recording_id": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "has_annotation": {
+      "type": "boolean"
+    },
+    "media": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/DeletionMediaDto"
+      }
+    },
+    "categories": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/DeletionCategoryDto"
+      }
+    },
+    "bytes_to_free": {
+      "type": "number"
+    },
+    "limits": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "confirmation_token": {
+      "type": "string"
+    }
+  },
+  "$defs": {
+    "DeletionMediaDto": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sha256",
+        "byte_length",
+        "quality_label",
+        "shared_with_other_recordings",
+        "bytes_will_be_removed"
+      ],
+      "properties": {
+        "sha256": {
+          "type": "string"
+        },
+        "byte_length": {
+          "type": "number"
+        },
+        "quality_label": {
+          "type": "string"
+        },
+        "shared_with_other_recordings": {
+          "type": "boolean"
+        },
+        "bytes_will_be_removed": {
+          "type": "boolean"
+        }
+      }
+    },
+    "DeletionCategoryDto": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "label",
+        "count"
+      ],
+      "properties": {
+        "label": {
+          "type": "string"
+        },
+        "count": {
+          "type": "number"
+        }
+      }
+    }
+  }
+}

@@ -56,6 +56,12 @@ and why, and the consequences we accept.
 
 - [ADR-0060: A device transfer is a replayable wire script, and a derivative is never an original](ADR-0060-a-device-transfer-is-a-replayable-wire-script.md) — Accepted, 2026-10-11 (spec §7.7, §7.9, §17.3A, §18.2A, §18.3A, App. B.3, App. B.4, App. B.6)
 
+## Export, backup and deletion (0070-0079)
+
+- [ADR-0070: An explicitly versioned `.recording-archive` container, not a ZIP](ADR-0070-recording-archive-container.md) — Accepted, 2026-10-11 (spec §13.6, §13.8, §16.5)
+- [ADR-0071: Argon2id plus STREAM XChaCha20-Poly1305 for encrypted backups](ADR-0071-argon2id-stream-aead-backups.md) — Accepted, 2026-10-11 (spec §13.7, §13.8)
+- [ADR-0072: Deletion is a journalled operation with a confirmed disclosure](ADR-0072-deletion-disclosure-and-tombstones.md) — Accepted, 2026-10-11 (spec §4.6, §7.10, §13.5)
+
 ## Transcript tools and automation (0400-0499)
 
 - [ADR-0400: Diarization runtime and licensing](ADR-0400-diarization-runtime-and-licensing.md) — Accepted, 2026-10-11 (spec §8.7, §3.1, §17.4)

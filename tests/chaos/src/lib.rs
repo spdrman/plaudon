@@ -9,6 +9,63 @@
 
 pub mod job_engine;
 
+/// The crash points of the export, backup, restore and deletion paths
+/// (spec 18.6A "Archive" and "Portable backup" clusters).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ExportStep {
+    /// Half of a transcript export has been written to its temporary file.
+    ExportPartialWrite,
+    /// Half of an archive has been written to its temporary file.
+    BackupPartialWrite,
+    /// A restore extracted and verified every entry into private staging.
+    RestoreAfterStaging,
+    /// A restore committed the media blobs but not the database rows.
+    RestoreAfterMediaCommit,
+    /// A deletion committed its journal row and nothing else.
+    DeleteAfterJournal,
+    /// A deletion removed its rows but has not unlinked the blobs.
+    DeleteAfterRows,
+}
+
+impl ExportStep {
+    /// Every step, in order.
+    pub const ALL: [Self; 6] = [
+        Self::ExportPartialWrite,
+        Self::BackupPartialWrite,
+        Self::RestoreAfterStaging,
+        Self::RestoreAfterMediaCommit,
+        Self::DeleteAfterJournal,
+        Self::DeleteAfterRows,
+    ];
+
+    /// Parse the command-line form used by the child process.
+    #[must_use]
+    pub fn parse(raw: &str) -> Option<Self> {
+        Some(match raw {
+            "export-partial-write" => Self::ExportPartialWrite,
+            "backup-partial-write" => Self::BackupPartialWrite,
+            "restore-after-staging" => Self::RestoreAfterStaging,
+            "restore-after-media-commit" => Self::RestoreAfterMediaCommit,
+            "delete-after-journal" => Self::DeleteAfterJournal,
+            "delete-after-rows" => Self::DeleteAfterRows,
+            _ => return None,
+        })
+    }
+
+    /// The command-line form used by the child process.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::ExportPartialWrite => "export-partial-write",
+            Self::BackupPartialWrite => "backup-partial-write",
+            Self::RestoreAfterStaging => "restore-after-staging",
+            Self::RestoreAfterMediaCommit => "restore-after-media-commit",
+            Self::DeleteAfterJournal => "delete-after-journal",
+            Self::DeleteAfterRows => "delete-after-rows",
+        }
+    }
+}
+
 /// Cargo package name of this crate, used by the workspace layout conformance test.
 pub const PACKAGE_NAME: &str = "plaudon-chaos-tests";
 

@@ -718,6 +718,10 @@ mod cloud {
                     .expect("device dependencies"),
                 )),
                 outputs: Arc::clone(&backend) as Arc<dyn plaudon_desktop::ports::OutputsPort>,
+                media_export: Arc::clone(&backend)
+                    as Arc<dyn plaudon_desktop::ports::MediaExportPort>,
+                deletion: Arc::clone(&backend) as Arc<dyn plaudon_desktop::ports::DeletionPort>,
+                archive: Arc::clone(&backend) as Arc<dyn plaudon_desktop::ports::ArchivePort>,
                 secrets,
                 events,
             };

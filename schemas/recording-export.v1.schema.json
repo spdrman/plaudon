@@ -1,0 +1,309 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.local/schemas/recording-export.v1.schema.json",
+  "title": "Recording export v1",
+  "description": "The structured JSON export of one recording (spec 4.6, 13.6). It carries transcript revisions, generated outputs and their source anchors verbatim. It is NOT a backup: it contains no audio and cannot be restored into a library.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "app",
+    "exported_at",
+    "recording",
+    "media",
+    "sources",
+    "speakers",
+    "transcripts",
+    "outputs",
+    "notices"
+  ],
+  "properties": {
+    "schema_version": { "const": "recording-export/1" },
+    "app": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "minLength": 1 }
+      }
+    },
+    "exported_at": { "type": "integer" },
+    "recording": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "created_at", "tags"],
+      "properties": {
+        "id": { "$ref": "#/$defs/uuid" },
+        "title": { "type": "string" },
+        "captured_at": { "type": ["integer", "null"] },
+        "duration_ms": { "type": ["integer", "null"], "minimum": 0 },
+        "created_at": { "type": "integer" },
+        "deleted_at": { "type": ["integer", "null"] },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "annotation": { "type": ["string", "null"] },
+        "preferred_media_asset_id": {
+          "oneOf": [{ "$ref": "#/$defs/uuid" }, { "type": "null" }]
+        }
+      }
+    },
+    "media": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "sha256",
+          "byte_length",
+          "archive_file_name",
+          "quality_class",
+          "quality_label",
+          "verification_state"
+        ],
+        "properties": {
+          "id": { "$ref": "#/$defs/uuid" },
+          "sha256": { "$ref": "#/$defs/sha256" },
+          "byte_length": { "type": "integer", "minimum": 0 },
+          "archive_file_name": { "type": "string", "pattern": "^[0-9a-f]{64}\\.[a-z0-9]{1,8}$" },
+          "codec": { "type": ["string", "null"] },
+          "sample_rate": { "type": ["integer", "null"], "minimum": 1 },
+          "channels": { "type": ["integer", "null"], "minimum": 1 },
+          "duration_ms": { "type": ["integer", "null"], "minimum": 0 },
+          "quality_class": { "type": "string" },
+          "quality_label": { "type": "string", "minLength": 1 },
+          "verification_state": { "enum": ["verified", "failed", "unverified"] },
+          "obtained_at": { "type": ["integer", "null"] }
+        }
+      }
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "source_kind",
+          "account_scope",
+          "display_name",
+          "import_status",
+          "remote_state"
+        ],
+        "properties": {
+          "source_kind": { "type": "string" },
+          "account_scope": { "type": "string" },
+          "display_name": { "type": "string" },
+          "external_id": { "type": ["string", "null"] },
+          "import_status": { "type": "string" },
+          "remote_state": { "type": "string" },
+          "remote_version": { "type": ["string", "null"] },
+          "last_seen_at": { "type": ["integer", "null"] }
+        }
+      }
+    },
+    "speakers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "label", "provenance", "user_confirmed", "display"],
+        "properties": {
+          "id": { "type": "string" },
+          "label": { "type": "string", "minLength": 1 },
+          "name": { "type": ["string", "null"] },
+          "provenance": { "type": "string" },
+          "user_confirmed": { "type": "boolean" },
+          "display": { "type": "string", "minLength": 1 }
+        },
+        "allOf": [
+          {
+            "description": "An unconfirmed cluster never carries a name (spec 8.7).",
+            "if": { "properties": { "user_confirmed": { "const": false } } },
+            "then": { "properties": { "name": { "type": "null" } } }
+          }
+        ]
+      }
+    },
+    "transcripts": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/transcript" }
+    },
+    "outputs": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/output" }
+    },
+    "selected_transcript_id": {
+      "oneOf": [{ "$ref": "#/$defs/uuid" }, { "type": "null" }]
+    },
+    "notices": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["not_a_backup", "anchors"],
+      "properties": {
+        "not_a_backup": { "type": "string", "pattern": "not a backup" },
+        "anchors": { "type": "string", "minLength": 1 }
+      }
+    }
+  },
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "transcript": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "origin",
+        "input_sha256",
+        "engine",
+        "model_id",
+        "alignment_origin",
+        "alignment_label",
+        "status",
+        "normalization_profile",
+        "chunking_strategy",
+        "created_at",
+        "annotations",
+        "segments"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/uuid" },
+        "parent_id": { "oneOf": [{ "$ref": "#/$defs/uuid" }, { "type": "null" }] },
+        "origin": {
+          "enum": ["machine", "human_edit", "derived_alignment", "overlap_reconciliation"]
+        },
+        "input_sha256": { "$ref": "#/$defs/sha256" },
+        "engine": { "type": "string" },
+        "model_id": { "type": "string" },
+        "model_version": { "type": ["string", "null"] },
+        "locale": { "type": ["string", "null"] },
+        "alignment_origin": { "enum": ["native", "derived", "none"] },
+        "alignment_label": { "enum": ["native", "derived (approximate)", "unavailable"] },
+        "status": { "enum": ["complete", "needs_review", "partial"] },
+        "normalization_profile": { "type": "string" },
+        "chunking_strategy": { "type": "string" },
+        "duration_ms": { "type": ["integer", "null"], "minimum": 0 },
+        "created_at": { "type": "integer" },
+        "engine_backend": { "type": ["string", "null"] },
+        "engine_params": {},
+        "annotations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["segment_index", "kind", "reason"],
+            "properties": {
+              "segment_index": { "type": "integer", "minimum": 0 },
+              "kind": { "type": "string" },
+              "reason": { "type": "string" },
+              "start_ms": { "type": ["integer", "null"], "minimum": 0 },
+              "end_ms": { "type": ["integer", "null"], "minimum": 0 }
+            }
+          }
+        },
+        "segments": { "type": "array", "items": { "$ref": "#/$defs/segment" } }
+      },
+      "allOf": [
+        {
+          "description": "A revision with no alignment never exposes a seek time (spec 8.6A).",
+          "if": { "properties": { "alignment_origin": { "const": "none" } } },
+          "then": {
+            "properties": {
+              "segments": {
+                "type": "array",
+                "items": {
+                  "properties": {
+                    "start_ms": { "type": "null" },
+                    "end_ms": { "type": "null" },
+                    "words": { "type": "array", "maxItems": 0 }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "segment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "seq_index", "text", "words"],
+      "properties": {
+        "id": { "type": "string" },
+        "seq_index": { "type": "integer", "minimum": 0 },
+        "start_ms": { "type": ["integer", "null"], "minimum": 0 },
+        "end_ms": { "type": ["integer", "null"], "minimum": 0 },
+        "speaker_id": { "type": ["string", "null"] },
+        "text": { "type": "string" },
+        "confidence": { "type": ["number", "null"] },
+        "confidence_scale": { "type": ["string", "null"] },
+        "words": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["seq_index", "start_ms", "end_ms", "text"],
+            "properties": {
+              "seq_index": { "type": "integer", "minimum": 0 },
+              "start_ms": { "type": "integer", "minimum": 0 },
+              "end_ms": { "type": "integer", "minimum": 0 },
+              "text": { "type": "string" },
+              "confidence": { "type": ["number", "null"] },
+              "confidence_scale": { "type": ["string", "null"] }
+            }
+          }
+        }
+      }
+    },
+    "output": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "output_type",
+        "transcript_revision_id",
+        "template_version",
+        "model_id",
+        "prompt_version",
+        "schema_version",
+        "status",
+        "created_at",
+        "body",
+        "evidence"
+      ],
+      "properties": {
+        "id": { "type": "string" },
+        "output_type": { "type": "string" },
+        "transcript_revision_id": { "$ref": "#/$defs/uuid" },
+        "template_version": { "type": "string" },
+        "model_id": { "type": "string" },
+        "prompt_version": { "type": "string" },
+        "schema_version": { "type": "string" },
+        "status": { "type": "string" },
+        "created_at": { "type": "integer" },
+        "body": {},
+        "evidence": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["item_path", "segment_id", "quote", "verification_status"],
+            "properties": {
+              "item_path": { "type": "string", "pattern": "^/" },
+              "segment_id": { "type": "string" },
+              "segment_index": { "type": ["integer", "null"], "minimum": 0 },
+              "start_ms": { "type": ["integer", "null"], "minimum": 0 },
+              "quote": { "type": "string" },
+              "verification_status": {
+                "enum": ["source_linked", "human_confirmed", "unverified"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

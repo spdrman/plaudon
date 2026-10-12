@@ -36,8 +36,9 @@ use crate::backend::LocalBackend;
 use crate::events::EventSink;
 use crate::events::TauriEventSink;
 use crate::ports::{
-    ActivityPort, CapabilitiesPort, CloudPort, DevicesPort, ExportPort, ImportPort, JobsPort,
-    LibraryPort, OutputsPort, SearchPort, SettingsPort, SourcesPort, SpeakersPort, TranscriptPort,
+    ActivityPort, ArchivePort, CapabilitiesPort, CloudPort, DeletionPort, DevicesPort, ExportPort,
+    ImportPort, JobsPort, LibraryPort, MediaExportPort, OutputsPort, SearchPort, SettingsPort,
+    SourcesPort, SpeakersPort, TranscriptPort,
 };
 use crate::secrets::{KeyringSecretStore, SecretStore};
 
@@ -68,6 +69,12 @@ pub struct AppPorts {
     pub devices: Arc<dyn DevicesPort>,
     /// Generated outputs and claim review.
     pub outputs: Arc<dyn OutputsPort>,
+    /// Original-audio and sanitized-derivative export.
+    pub media_export: Arc<dyn MediaExportPort>,
+    /// Deletion with disclosure and tombstones.
+    pub deletion: Arc<dyn DeletionPort>,
+    /// The portable archive.
+    pub archive: Arc<dyn ArchivePort>,
     /// OS keychain storage.
     pub secrets: Arc<dyn SecretStore>,
     /// Cross-recording search.
@@ -170,8 +177,11 @@ pub async fn build_ports_with_radio(
         search: Arc::clone(&backend) as Arc<dyn SearchPort>,
         speakers: Arc::clone(&backend) as Arc<dyn SpeakersPort>,
         cloud: Arc::clone(&backend) as Arc<dyn CloudPort>,
-        outputs: backend as Arc<dyn OutputsPort>,
+        outputs: Arc::clone(&backend) as Arc<dyn OutputsPort>,
         devices: Arc::new(devices),
+        media_export: Arc::clone(&backend) as Arc<dyn MediaExportPort>,
+        deletion: Arc::clone(&backend) as Arc<dyn DeletionPort>,
+        archive: backend as Arc<dyn ArchivePort>,
         secrets,
         events,
     })

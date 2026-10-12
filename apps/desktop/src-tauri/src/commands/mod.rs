@@ -6,6 +6,7 @@
 //! or the §15.4 error envelope. The allowlist test at the bottom of this file
 //! fails if a handler outside the published list is ever registered.
 
+pub mod archive;
 pub mod cloud;
 pub mod devices;
 pub mod import;
@@ -22,20 +23,23 @@ use tauri::State;
 
 use crate::dto::{
     ActivityPage, CancelJobRequest, Capabilities, CloudBudget, CompleteOnboardingRequest,
-    ConfirmSpeakerRequest, DeviceAuthStatusDto, DeviceAuthorizeRequest, DeviceDisconnectDto,
-    DeviceDisconnectRequest, DeviceIdRequest, DeviceImportDto, DeviceImportRequest,
-    DeviceListingDto, DeviceProbeDto, DeviceProbeRequest, DeviceScanDto, DeviceSyncPolicyDto,
-    DeviceSyncPolicyRequest, EmptyRequest, ExportRecordingRequest, ExportRecordingResponse,
-    GetRecordingRequest, GetTranscriptRequest, GetUsageRequest, GetUsageResponse,
-    GrantCloudConsentRequest, GrantCloudConsentResponse, ImportFilesRequest, ImportFilesResponse,
-    JobPage, JobSummary, ListActivityRequest, ListJobsRequest, ListModelsRequest,
-    ListModelsResponse, ListNearbyDevicesRequest, ListOutputsRequest, ListOutputsResponse,
-    ListRecordingsRequest, ListSourceArtifactsRequest, ListSourceArtifactsResponse,
-    ListSpeakersRequest, ListSpeakersResponse, LocalOnlyModeResponse, NotificationSettingsResponse,
-    PlaudConnectRequest, PlaudConnectorSnapshot, PlaudDisconnectResponse, PlaudImportRequest,
-    PlaudImportResponse, PlaudListRequest, PlaudListResponse, Preferences, RecordingDetail,
-    RecordingPage, RegenerateOutputRequest, RegenerateOutputResponse, RenameSpeakerRequest,
-    ResetSpeakerRequest, RetryJobRequest, ReviewClaimRequest, ReviewClaimResponse,
+    ConfirmSpeakerRequest, CreateBackupRequest, CreateBackupResponse, DeleteRecordingRequest,
+    DeleteRecordingResponse, DeletionDisclosureDto, DeletionDisclosureRequest, DeviceAuthStatusDto,
+    DeviceAuthorizeRequest, DeviceDisconnectDto, DeviceDisconnectRequest, DeviceIdRequest,
+    DeviceImportDto, DeviceImportRequest, DeviceListingDto, DeviceProbeDto, DeviceProbeRequest,
+    DeviceScanDto, DeviceSyncPolicyDto, DeviceSyncPolicyRequest, EmptyRequest, ExportMediaRequest,
+    ExportMediaResponse, ExportRecordingRequest, ExportRecordingResponse, GetRecordingRequest,
+    GetTranscriptRequest, GetUsageRequest, GetUsageResponse, GrantCloudConsentRequest,
+    GrantCloudConsentResponse, ImportFilesRequest, ImportFilesResponse, InspectArchiveRequest,
+    InspectArchiveResponse, JobPage, JobSummary, ListActivityRequest, ListJobsRequest,
+    ListModelsRequest, ListModelsResponse, ListNearbyDevicesRequest, ListOutputsRequest,
+    ListOutputsResponse, ListRecordingsRequest, ListSourceArtifactsRequest,
+    ListSourceArtifactsResponse, ListSpeakersRequest, ListSpeakersResponse, LocalOnlyModeResponse,
+    NotificationSettingsResponse, PlaudConnectRequest, PlaudConnectorSnapshot,
+    PlaudDisconnectResponse, PlaudImportRequest, PlaudImportResponse, PlaudListRequest,
+    PlaudListResponse, Preferences, RecordingDetail, RecordingPage, RegenerateOutputRequest,
+    RegenerateOutputResponse, RenameSpeakerRequest, ResetSpeakerRequest, RestoreArchiveRequest,
+    RestoreArchiveResponse, RetryJobRequest, ReviewClaimRequest, ReviewClaimResponse,
     RevokeCloudConsentRequest, SaveTranscriptRevisionRequest, SaveTranscriptRevisionResponse,
     SearchLibraryRequest, SearchLibraryResponse, SetCloudBudgetRequest, SetLocalOnlyModeRequest,
     SetModelPreferenceRequest, SetModelPreferenceResponse, SetNotificationSettingsRequest,
@@ -61,6 +65,12 @@ pub const COMMAND_ALLOWLIST: &[&str] = &[
     "cancel_job",
     "retry_job",
     "export_recording",
+    "export_media",
+    "get_deletion_disclosure",
+    "delete_recording",
+    "create_portable_backup",
+    "inspect_restore_archive",
+    "restore_portable_archive",
     "set_notification_settings",
     "set_local_only_mode",
     "set_openrouter_key",
@@ -99,6 +109,12 @@ pub const COMMAND_ALLOWLIST: &[&str] = &[
     "list_outputs",
     "review_claim",
     "regenerate_output",
+    "export_media",
+    "get_deletion_disclosure",
+    "delete_recording",
+    "create_portable_backup",
+    "inspect_restore_archive",
+    "restore_portable_archive",
 ];
 
 /// Every command of the IPC surface, for [`tauri::Builder::invoke_handler`].
@@ -116,6 +132,12 @@ pub fn handler<R: tauri::Runtime>() -> impl Fn(tauri::ipc::Invoke<R>) -> bool + 
         cancel_job,
         retry_job,
         export_recording,
+        export_media,
+        get_deletion_disclosure,
+        delete_recording,
+        create_portable_backup,
+        inspect_restore_archive,
+        restore_portable_archive,
         set_notification_settings,
         set_local_only_mode,
         set_openrouter_key,
@@ -153,7 +175,13 @@ pub fn handler<R: tauri::Runtime>() -> impl Fn(tauri::ipc::Invoke<R>) -> bool + 
         device_sync_policy,
         list_outputs,
         review_claim,
-        regenerate_output
+        regenerate_output,
+        export_media,
+        get_deletion_disclosure,
+        delete_recording,
+        create_portable_backup,
+        inspect_restore_archive,
+        restore_portable_archive
     ]
 }
 
@@ -540,6 +568,55 @@ pub async fn regenerate_output(
 ) -> CommandResult<RegenerateOutputResponse> {
     to_command_result(outputs::regenerate_output(&state.ports, request).await)
 }
+
+#[tauri::command]
+pub async fn export_media(
+    state: State<'_, AppState>,
+    request: ExportMediaRequest,
+) -> CommandResult<ExportMediaResponse> {
+    to_command_result(archive::export_media(&state.ports, request).await)
+}
+
+#[tauri::command]
+pub async fn get_deletion_disclosure(
+    state: State<'_, AppState>,
+    request: DeletionDisclosureRequest,
+) -> CommandResult<DeletionDisclosureDto> {
+    to_command_result(archive::get_deletion_disclosure(&state.ports, request).await)
+}
+
+#[tauri::command]
+pub async fn delete_recording(
+    state: State<'_, AppState>,
+    request: DeleteRecordingRequest,
+) -> CommandResult<DeleteRecordingResponse> {
+    to_command_result(archive::delete_recording(&state.ports, request).await)
+}
+
+#[tauri::command]
+pub async fn create_portable_backup(
+    state: State<'_, AppState>,
+    request: CreateBackupRequest,
+) -> CommandResult<CreateBackupResponse> {
+    to_command_result(archive::create_portable_backup(&state.ports, request).await)
+}
+
+#[tauri::command]
+pub async fn inspect_restore_archive(
+    state: State<'_, AppState>,
+    request: InspectArchiveRequest,
+) -> CommandResult<InspectArchiveResponse> {
+    to_command_result(archive::inspect_restore_archive(&state.ports, request).await)
+}
+
+#[tauri::command]
+pub async fn restore_portable_archive(
+    state: State<'_, AppState>,
+    request: RestoreArchiveRequest,
+) -> CommandResult<RestoreArchiveResponse> {
+    to_command_result(archive::restore_portable_archive(&state.ports, request).await)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

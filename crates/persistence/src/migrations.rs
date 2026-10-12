@@ -103,6 +103,13 @@ pub const MIGRATIONS: &[Migration] = &[
         name: "meeting_intelligence",
         sql: include_str!("../migrations/0600_meeting_intelligence.sql"),
     },
+    // 700+ is EPIC J's range: export derivatives, portable archive accounting
+    // and deletion journalling.
+    Migration {
+        version: 700,
+        name: "export_deletion",
+        sql: include_str!("../migrations/0700_export_deletion.sql"),
+    },
     // 800+ is EPIC K's range: source reconciliation and watched folders.
     Migration {
         version: 800,

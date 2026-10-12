@@ -273,6 +273,23 @@ error_codes! {
     HelperFailed => "HELPER_FAILED", retryable: true, action: Some(ErrorAction::RetryImport),
         message: "A background helper stopped unexpectedly. The step was not completed and can be retried.";
 
+    // ---- Export, portable archive and deletion (spec 4.6, 13.5, 13.6, 13.8) ----
+    /// The chosen export destination is not a safe, writable location.
+    ExportDestinationRejected => "EXPORT_DESTINATION_REJECTED", retryable: false, action: Some(ErrorAction::OpenSettings),
+        message: "That export location cannot be used. Choose a different folder.";
+    /// Captions were requested for a transcript that has no real timestamps.
+    CaptionsUnavailable => "CAPTIONS_UNAVAILABLE", retryable: false, action: None,
+        message: "This transcript has no real timestamps, so captions cannot be exported. We do not invent seek times.";
+    /// A portable archive failed validation and was refused before any write.
+    ArchiveRejected => "ARCHIVE_REJECTED", retryable: false, action: Some(ErrorAction::OpenDiagnostics),
+        message: "This archive failed validation and was not restored. Your library was left unchanged.";
+    /// An encrypted archive could not be decrypted with the supplied password.
+    ArchiveDecryptionFailed => "ARCHIVE_DECRYPTION_FAILED", retryable: true, action: None,
+        message: "The archive could not be decrypted. Check the password; it cannot be recovered if lost.";
+    /// Archive creation found credential-shaped content and stopped.
+    SecretExclusionFailed => "SECRET_EXCLUSION_FAILED", retryable: false, action: Some(ErrorAction::OpenDiagnostics),
+        message: "Backup stopped because something credential-shaped would have been written into the archive. No archive file was created.";
+
     // ---- Fallback ----
     /// An unmapped internal or vendor failure.
     InternalError => "INTERNAL_ERROR", retryable: false, action: Some(ErrorAction::OpenDiagnostics),
@@ -670,6 +687,11 @@ mod tests {
                 "EGRESS_DENIED",
                 "COMMAND_NOT_AUTHORIZED",
                 "HELPER_FAILED",
+                "EXPORT_DESTINATION_REJECTED",
+                "CAPTIONS_UNAVAILABLE",
+                "ARCHIVE_REJECTED",
+                "ARCHIVE_DECRYPTION_FAILED",
+                "SECRET_EXCLUSION_FAILED",
                 "INTERNAL_ERROR",
             ]
         );

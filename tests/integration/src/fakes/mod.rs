@@ -2,6 +2,8 @@
 
 pub mod ble;
 pub mod device;
+pub mod hostile_archive;
+pub mod library;
 pub mod source;
 pub mod stt;
 pub mod text;

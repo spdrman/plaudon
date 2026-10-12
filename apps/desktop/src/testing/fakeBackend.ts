@@ -7,6 +7,12 @@
  * installs it when `import.meta.env.DEV` and the `?harness=1` flag are present.
  */
 import type {
+  CreateBackupResponse,
+  DeleteRecordingResponse,
+  DeletionDisclosureDto,
+  ExportMediaResponse,
+  InspectArchiveResponse,
+  RestoreArchiveResponse,
   ActivityEntry,
   ActivityPage,
   Capabilities,
@@ -608,6 +614,155 @@ export class FakeBackend implements Transport {
         this.#requireRecording(request.recording_id);
         const job = this.addJob({ kind: "export", state: "queued", label: "Export" });
         return { job_id: job.job_id };
+      }
+      case "export_media": {
+        this.#requireRecording(request.recording_id);
+        const original = {
+          file_name: "recording-audio.mp3",
+          sha256: fakeSha("original"),
+          byte_length: 2_048_000,
+          is_original: true,
+          label: "Original recording",
+          stripped_metadata: [],
+        };
+        const response: ExportMediaResponse = {
+          original,
+          sanitized: request.include_sanitized_derivative
+            ? {
+                file_name: "recording-audio-sanitized.mp3",
+                sha256: fakeSha("sanitized"),
+                byte_length: 2_047_500,
+                is_original: false,
+                label: "Sanitized copy",
+                stripped_metadata: ["ID3v2.PRIV", "ID3v2.GEOB"],
+              }
+            : null,
+          sanitized_refusal: null,
+        };
+        return response;
+      }
+      case "get_deletion_disclosure": {
+        const rec = this.#requireRecording(request.recording_id);
+        const response: DeletionDisclosureDto = {
+          disclosure_version: "1.0",
+          recording_id: rec.recording_id,
+          title: rec.title,
+          has_annotation: false,
+          media: [
+            {
+              sha256: rec.sha256,
+              byte_length: rec.byte_length,
+              quality_label: "Original",
+              shared_with_other_recordings: false,
+              bytes_will_be_removed: true,
+            },
+          ],
+          categories: [
+            { label: "Transcript revisions", count: rec.revisions.length },
+            { label: "Generated outputs", count: rec.outputs.length },
+          ],
+          bytes_to_free: rec.byte_length,
+          limits: ["Cloud recordings cannot be deleted from this device."],
+          confirmation_token: fakeSha(`delete-${rec.recording_id}`),
+        };
+        return response;
+      }
+      case "delete_recording": {
+        const rec = this.#requireRecording(request.recording_id);
+        const expectedToken = fakeSha(`delete-${rec.recording_id}`);
+        if (request.confirmation_token !== expectedToken) {
+          throw envelope("INVALID_ARGUMENT", "The confirmation token is stale or invalid.");
+        }
+        const index = this.recordings.findIndex((r) => r.recording_id === rec.recording_id);
+        if (index >= 0) this.recordings.splice(index, 1);
+        this.emit("library.changed");
+        const response: DeleteRecordingResponse = {
+          deletion_id: `del-${this.#idCounter++}`,
+          blobs_removed: 1,
+          blobs_retained_shared: 0,
+          bytes_freed: rec.byte_length,
+          tombstoned: true,
+        };
+        return response;
+      }
+      case "create_portable_backup": {
+        const response: CreateBackupResponse = {
+          file_name: `plaudon-backup-${new Date().toISOString().split("T")[0]}.plaudon`,
+          encrypted: request.password !== null && request.password !== undefined,
+          protection_disclosure:
+            request.password !== null && request.password !== undefined
+              ? "This backup is encrypted with your password."
+              : "This backup is NOT encrypted. Anyone with the file can read your recordings.",
+          entry_count: this.recordings.length * 3,
+          total_byte_length: this.recordings.reduce((sum, r) => sum + r.byte_length, 0),
+          file_byte_length: this.recordings.reduce((sum, r) => sum + r.byte_length, 0) + 1024,
+          integrity_digest: fakeSha("backup-integrity"),
+          integrity_note: "The digest proves the manifest matches the backup, not that the data is correct.",
+          manifest_schema_version: "1.0",
+          nonportable_settings: ["OpenRouter API key", "Notification permissions"],
+        };
+        if (request.password) this.receivedSecrets.push(request.password);
+        return response;
+      }
+      case "inspect_restore_archive": {
+        if (request.password) this.receivedSecrets.push(request.password);
+        const response: InspectArchiveResponse = {
+          encrypted: true,
+          manifest_schema_version: "1.0",
+          format_version: 1,
+          created_at: "2026-01-15T12:30:00Z",
+          source_os: "macos",
+          entries_by_namespace: [
+            { label: "Recordings", count: 5 },
+            { label: "Transcripts", count: 5 },
+            { label: "Media", count: 5 },
+          ],
+          total_byte_length: 10_240_000,
+          payloads_verified: true,
+          integrity_digest: fakeSha("archive-integrity"),
+          integrity_note: "The digest proves the manifest matches the archive, not that the data is correct.",
+          nonportable_settings: ["OpenRouter API key", "Notification permissions"],
+          conflicts: this.recordings.length > 0
+            ? [
+                {
+                  entry_path: "recordings/rec-00001",
+                  reason: "A recording with this ID already exists.",
+                },
+              ]
+            : [],
+          target_is_empty: this.recordings.length === 0,
+        };
+        return response;
+      }
+      case "restore_portable_archive": {
+        if (request.password) this.receivedSecrets.push(request.password);
+        if (request.mode === "new_library" && this.recordings.length > 0) {
+          throw envelope(
+            "CONFLICT",
+            "The library must be empty to restore as a new library.",
+          );
+        }
+        const response: RestoreArchiveResponse = {
+          recordings_restored: 5,
+          transcripts_restored: 5,
+          outputs_restored: 3,
+          sources_restored: 2,
+          media_committed: 5,
+          media_reused: 0,
+          conflicts: request.on_conflict === "skip" && this.recordings.length > 0
+            ? [
+                {
+                  entry_path: "recordings/rec-00001",
+                  reason: "A recording with this ID already exists.",
+                },
+              ]
+            : [],
+        };
+        for (let i = 0; i < 5; i += 1) {
+          this.addRecording({ title: `Restored recording ${i + 1}`, segments: 10 });
+        }
+        this.emit("library.changed");
+        return response;
       }
       case "set_notification_settings":
         this.preferences = { ...this.preferences, notifications: request.settings };

@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.local/schemas/recording-archive-manifest.v1.schema.json",
+  "title": "Recording archive manifest v1",
+  "description": "The manifest of a .recording-archive portable backup (spec 13.6, 13.8). Every entry records its path, kind, SHA-256, byte length and schema version; the manifest carries an overall integrity digest, which is an integrity check and not an authenticity signature.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "format_version",
+    "created_at",
+    "app",
+    "source_os",
+    "entries",
+    "totals",
+    "limits",
+    "integrity_digest",
+    "integrity_note",
+    "nonportable_settings"
+  ],
+  "properties": {
+    "schema_version": { "const": "recording-archive-manifest/1" },
+    "format_version": { "const": 1 },
+    "created_at": { "type": "string", "minLength": 1 },
+    "app": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "minLength": 1 }
+      }
+    },
+    "source_os": { "enum": ["macos", "windows", "linux", "unknown"] },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "kind", "sha256", "byte_length", "stored_length", "compression"],
+        "properties": {
+          "path": {
+            "description": "Relative, forward-slash path inside one of the spec 13.6 namespaces. Absolute paths, drive prefixes and parent traversal are unrepresentable.",
+            "type": "string",
+            "pattern": "^(records|media|transcripts|outputs|sources|tools|annotations)/[^\\\\:*?\"<>|]+$",
+            "not": { "pattern": "(^|/)\\.\\.(/|$)" }
+          },
+          "kind": { "const": "file" },
+          "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "byte_length": { "type": "integer", "minimum": 0 },
+          "stored_length": { "type": "integer", "minimum": 0 },
+          "compression": { "enum": ["store", "deflate"] },
+          "schema_version": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "totals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entry_count", "byte_length"],
+      "properties": {
+        "entry_count": { "type": "integer", "minimum": 0 },
+        "byte_length": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_entry_bytes", "max_total_bytes", "max_entries"],
+      "properties": {
+        "max_entry_bytes": { "type": "integer", "minimum": 1 },
+        "max_total_bytes": { "type": "integer", "minimum": 1 },
+        "max_entries": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "integrity_digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "integrity_note": {
+      "type": "string",
+      "pattern": "not an authenticity signature"
+    },
+    "nonportable_settings": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    }
+  }
+}

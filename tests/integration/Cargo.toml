@@ -40,13 +40,21 @@ plaudon-plaud-protocol = { workspace = true }
 plaudon-security = { workspace = true, features = ["test-support"] }
 plaudon-source-plaud-device = { workspace = true }
 plaudon-plaud-usb = { workspace = true }
+flate2 = { workspace = true }
+hex = { workspace = true }
+plaudon-export = { workspace = true }
 plaudon-recording-sources = { workspace = true }
 plaudon-source-folder = { workspace = true, features = ["test-harness"] }
 plaudon-source-plaud-cli = { workspace = true, features = ["test-harness"] }
-hex = { workspace = true }
 serde_json = { workspace = true }
+sqlx = { workspace = true }
 tokio = { workspace = true }
+uuid = { workspace = true }
 tokio-util = { workspace = true }
+
+[[bin]]
+name = "make-archive-fixtures"
+path = "src/bin/make_archive_fixtures.rs"
 
 [dev-dependencies]
 parking_lot = { workspace = true }

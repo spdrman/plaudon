@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/get_deletion_disclosure.request.schema.json",
+  "title": "get_deletion_disclosure.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "recording_id"
+  ],
+  "properties": {
+    "recording_id": {
+      "type": "string"
+    }
+  }
+}

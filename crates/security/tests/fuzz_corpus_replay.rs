@@ -1823,7 +1823,7 @@ mod replay {
         }
         assert_eq!(
             AppErrorCode::ALL.len(),
-            50,
+            55,
             "the closed error-code set changed size"
         );
     }

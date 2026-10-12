@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/create_portable_backup.request.schema.json",
+  "title": "create_portable_backup.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "destination_directory"
+  ],
+  "properties": {
+    "destination_directory": {
+      "type": "string"
+    },
+    "password": {
+      "type": ["string", "null"]
+    },
+    "sensitive_profile": {
+      "type": "boolean"
+    }
+  }
+}

@@ -13,13 +13,17 @@ use serde_json::json;
 
 use crate::backend::store::storage_error;
 use crate::backend::{jobs, LocalBackend};
-use crate::dto::{
-    EventKind, ExportFormat, JobKind, JobState, OutputLink, OutputLinkKind, TranscriptSegmentDto,
-};
+use crate::dto::{EventKind, ExportFormat, JobKind, JobState, OutputLink, OutputLinkKind};
 use crate::error::internal;
 use crate::events::EventDraft;
 use crate::ports::ExportPort;
 use crate::validate::{validate_destination, ValidatedExport};
+use plaudon_export::bundle::BundleLoader;
+use plaudon_export::captions::{self, CaptionFormat};
+use plaudon_export::error::{CaptionRefusal, ExportError};
+use plaudon_export::render::{
+    to_json as render_json, to_markdown as render_markdown, to_text as render_text,
+};
 
 #[async_trait]
 impl ExportPort for LocalBackend {
@@ -50,14 +54,7 @@ impl ExportPort for LocalBackend {
         )
         .await?;
 
-        let outcome = run(
-            self,
-            job_id,
-            &request,
-            &detail.title,
-            revision.alignment_origin,
-        )
-        .await;
+        let outcome = run(self, job_id, &request, revision.alignment_origin).await;
         finish(self, job_id, outcome).await?;
         Ok(job_id)
     }
@@ -96,16 +93,8 @@ pub async fn rerun(backend: &LocalBackend, job_id: JobId) -> Result<(), AppError
         format,
         destination: validate_destination(destination)?,
     };
-    let detail = backend.recording_row(recording_id).await?;
     let revision = backend.revision_ref(revision_id).await?;
-    let outcome = run(
-        backend,
-        job_id,
-        &request,
-        &detail.title,
-        revision.alignment_origin,
-    )
-    .await;
+    let outcome = run(backend, job_id, &request, revision.alignment_origin).await;
     finish(backend, job_id, outcome).await
 }
 
@@ -135,7 +124,6 @@ async fn run(
     backend: &LocalBackend,
     job_id: JobId,
     request: &ValidatedExport,
-    title: &str,
     alignment_origin: AlignmentOrigin,
 ) -> Result<(), AppError> {
     jobs::transition(
@@ -146,10 +134,6 @@ async fn run(
         None,
     )
     .await?;
-    let segments = backend
-        .revision_segments(request.revision_id, 0, u32::MAX)
-        .await?;
-
     jobs::transition(
         backend.pool(),
         job_id,
@@ -158,7 +142,7 @@ async fn run(
         None,
     )
     .await?;
-    let body = render(request, title, alignment_origin, &segments)?;
+    let body = render(backend, request, alignment_origin).await?;
 
     write_and_verify(backend, job_id, &request.destination.path, &body).await?;
     commit_export(backend, job_id, request).await?;
@@ -285,154 +269,48 @@ async fn commit_export(
         .map_err(|err| storage_error("cannot commit an export", &err))
 }
 
-/// Render a revision in the requested format.
+/// Render a revision in the requested format, through `crates/export`.
 ///
-/// Times are written only when the revision actually has an alignment origin
-/// that permits them (spec §8.6A): a text-only transcript never grows invented
-/// timecodes on the way out.
-fn render(
+/// Every rule lives there: segment text is copied verbatim, a `not_specified`
+/// value is never filled in, an unconfirmed speaker name is never presented as
+/// identity, and captions are refused outright when the revision has no real
+/// timestamps (spec §4.6, §8.6A, §22(6)).
+async fn render(
+    backend: &LocalBackend,
     request: &ValidatedExport,
-    title: &str,
     alignment_origin: AlignmentOrigin,
-    segments: &[TranscriptSegmentDto],
 ) -> Result<String, AppError> {
-    let timed = alignment_origin.permits_times();
-    match request.format {
-        ExportFormat::Txt => {
-            let mut out = String::new();
-            for segment in segments {
-                if let (true, Some(start)) = (timed, segment.start_ms) {
-                    out.push('[');
-                    out.push_str(&format_timecode(start));
-                    out.push_str("] ");
-                }
-                out.push_str(&segment.text);
-                out.push('\n');
-            }
-            Ok(out)
-        }
-        ExportFormat::Markdown => {
-            let mut out = format!("# {title}\n\n");
-            for segment in segments {
-                out.push_str("- ");
-                if let (true, Some(start)) = (timed, segment.start_ms) {
-                    out.push_str("**");
-                    out.push_str(&format_timecode(start));
-                    out.push_str("** ");
-                }
-                out.push_str(&segment.text);
-                out.push('\n');
-            }
-            Ok(out)
-        }
-        ExportFormat::Json => {
-            let document = json!({
-                "recording_id": request.recording_id.to_string(),
-                "revision_id": request.revision_id.to_string(),
-                "title": title,
-                "alignment_origin": alignment_origin,
-                "segments": segments,
-            });
-            serde_json::to_string_pretty(&document)
-                .map_err(|err| internal(format!("cannot render the export: {err}")))
-        }
+    if request.format.needs_timestamps() && !alignment_origin.permits_times() {
+        return Err(AppError::from(ExportError::CaptionsUnavailable(
+            CaptionRefusal::NoAlignment,
+        )));
     }
+    let export = BundleLoader::new(backend.store().db().clone())
+        .load(
+            request.recording_id,
+            Some(request.revision_id),
+            plaudon_domain::time::Timestamp::now(),
+        )
+        .await?;
+    let rendered = match request.format {
+        ExportFormat::Txt => render_text(&export),
+        ExportFormat::Markdown => render_markdown(&export),
+        ExportFormat::Json => render_json(&export)?,
+        ExportFormat::Srt | ExportFormat::Vtt => {
+            let transcript = export.selected_transcript().ok_or_else(|| {
+                AppError::from(ExportError::CaptionsUnavailable(CaptionRefusal::NoSegments))
+            })?;
+            let caption_format = if request.format == ExportFormat::Srt {
+                CaptionFormat::Srt
+            } else {
+                CaptionFormat::Vtt
+            };
+            captions::render(&export, transcript, caption_format)?
+        }
+    };
+    Ok(rendered)
 }
 
 const fn format_str(format: ExportFormat) -> &'static str {
-    match format {
-        ExportFormat::Txt => "txt",
-        ExportFormat::Markdown => "markdown",
-        ExportFormat::Json => "json",
-    }
-}
-
-fn format_timecode(millis: u64) -> String {
-    let total_seconds = millis / 1000;
-    let hours = total_seconds / 3600;
-    let minutes = (total_seconds % 3600) / 60;
-    let seconds = total_seconds % 60;
-    format!("{hours:02}:{minutes:02}:{seconds:02}")
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn segment(index: u32, text: &str, start: Option<u64>) -> TranscriptSegmentDto {
-        TranscriptSegmentDto {
-            index,
-            text: text.to_owned(),
-            start_ms: start,
-            end_ms: start.map(|value| value + 1000),
-            alignment_origin: if start.is_some() {
-                AlignmentOrigin::Native
-            } else {
-                AlignmentOrigin::None
-            },
-            confidence: None,
-            speaker_label: None,
-            annotations: Vec::new(),
-        }
-    }
-
-    fn request(format: ExportFormat) -> ValidatedExport {
-        ValidatedExport {
-            recording_id: RecordingId::new(),
-            revision_id: TranscriptRevisionId::new(),
-            format,
-            destination: crate::validate::ValidatedDestination {
-                path: std::path::PathBuf::from("/tmp/export.txt"),
-            },
-        }
-    }
-
-    #[test]
-    fn a_text_only_revision_is_exported_without_invented_timecodes() {
-        let segments = vec![segment(0, "hello", None), segment(1, "world", None)];
-        let text = render(
-            &request(ExportFormat::Txt),
-            "T",
-            AlignmentOrigin::None,
-            &segments,
-        )
-        .unwrap();
-        assert_eq!(text, "hello\nworld\n");
-        let markdown = render(
-            &request(ExportFormat::Markdown),
-            "T",
-            AlignmentOrigin::None,
-            &segments,
-        )
-        .unwrap();
-        assert_eq!(markdown, "# T\n\n- hello\n- world\n");
-    }
-
-    #[test]
-    fn a_timed_revision_keeps_its_timecodes() {
-        let segments = vec![segment(0, "hello", Some(61_000))];
-        let text = render(
-            &request(ExportFormat::Txt),
-            "T",
-            AlignmentOrigin::Native,
-            &segments,
-        )
-        .unwrap();
-        assert_eq!(text, "[00:01:01] hello\n");
-    }
-
-    #[test]
-    fn the_json_export_preserves_null_times() {
-        let segments = vec![segment(0, "hello", None)];
-        let rendered = render(
-            &request(ExportFormat::Json),
-            "T",
-            AlignmentOrigin::None,
-            &segments,
-        )
-        .unwrap();
-        let value: serde_json::Value = serde_json::from_str(&rendered).unwrap();
-        assert_eq!(value["segments"][0]["start_ms"], serde_json::Value::Null);
-        assert_eq!(value["alignment_origin"], "none");
-    }
+    format.as_str()
 }

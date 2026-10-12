@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/delete_recording.request.schema.json",
+  "title": "delete_recording.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "recording_id",
+    "confirmation_token"
+  ],
+  "properties": {
+    "recording_id": {
+      "type": "string"
+    },
+    "confirmation_token": {
+      "type": "string"
+    }
+  }
+}

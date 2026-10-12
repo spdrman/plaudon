@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/inspect_restore_archive.response.schema.json",
+  "title": "inspect_restore_archive.response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "encrypted",
+    "manifest_schema_version",
+    "format_version",
+    "created_at",
+    "source_os",
+    "entries_by_namespace",
+    "total_byte_length",
+    "payloads_verified",
+    "integrity_digest",
+    "integrity_note",
+    "nonportable_settings",
+    "conflicts",
+    "target_is_empty"
+  ],
+  "properties": {
+    "encrypted": {
+      "type": "boolean"
+    },
+    "manifest_schema_version": {
+      "type": "string"
+    },
+    "format_version": {
+      "type": "number"
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "source_os": {
+      "type": "string"
+    },
+    "entries_by_namespace": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/DeletionCategoryDto"
+      }
+    },
+    "total_byte_length": {
+      "type": "number"
+    },
+    "payloads_verified": {
+      "type": "boolean"
+    },
+    "integrity_digest": {
+      "type": "string"
+    },
+    "integrity_note": {
+      "type": "string"
+    },
+    "nonportable_settings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "conflicts": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/RestoreConflictDto"
+      }
+    },
+    "target_is_empty": {
+      "type": "boolean"
+    }
+  },
+  "$defs": {
+    "DeletionCategoryDto": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "label",
+        "count"
+      ],
+      "properties": {
+        "label": {
+          "type": "string"
+        },
+        "count": {
+          "type": "number"
+        }
+      }
+    },
+    "RestoreConflictDto": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "entry_path",
+        "reason"
+      ],
+      "properties": {
+        "entry_path": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

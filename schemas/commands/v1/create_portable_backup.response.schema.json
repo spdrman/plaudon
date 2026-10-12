@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/create_portable_backup.response.schema.json",
+  "title": "create_portable_backup.response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "file_name",
+    "encrypted",
+    "protection_disclosure",
+    "entry_count",
+    "total_byte_length",
+    "file_byte_length",
+    "integrity_digest",
+    "integrity_note",
+    "manifest_schema_version",
+    "nonportable_settings"
+  ],
+  "properties": {
+    "file_name": {
+      "type": "string"
+    },
+    "encrypted": {
+      "type": "boolean"
+    },
+    "protection_disclosure": {
+      "type": "string"
+    },
+    "entry_count": {
+      "type": "number"
+    },
+    "total_byte_length": {
+      "type": "number"
+    },
+    "file_byte_length": {
+      "type": "number"
+    },
+    "integrity_digest": {
+      "type": "string"
+    },
+    "integrity_note": {
+      "type": "string"
+    },
+    "manifest_schema_version": {
+      "type": "string"
+    },
+    "nonportable_settings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

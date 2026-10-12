@@ -6,6 +6,7 @@
 
 pub mod chunking;
 pub mod dedup;
+pub mod deletion;
 pub mod diarization;
 pub mod engine_policy;
 pub mod import;
@@ -25,6 +26,10 @@ pub use chunking::{
     ContextBudget, ContextOrigin, Coverage, SegmentExtent, UnknownContext,
 };
 pub use dedup::{BlobDecision, DedupPolicy};
+pub use deletion::{
+    DeletionConfirmation, DeletionDisclosure, DeletionError, DeletionReceipt, DeletionService,
+    PlannedDeletion,
+};
 pub use diarization::{reconcile, Reconciliation, SegmentAssignment};
 pub use engine_policy::{
     candidate_from_probe, degrade, explain, select_text_model, CorrectiveAction, Degradation,

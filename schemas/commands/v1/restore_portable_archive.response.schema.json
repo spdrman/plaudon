@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/restore_portable_archive.response.schema.json",
+  "title": "restore_portable_archive.response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "recordings_restored",
+    "transcripts_restored",
+    "outputs_restored",
+    "sources_restored",
+    "media_committed",
+    "media_reused",
+    "conflicts"
+  ],
+  "properties": {
+    "recordings_restored": {
+      "type": "number"
+    },
+    "transcripts_restored": {
+      "type": "number"
+    },
+    "outputs_restored": {
+      "type": "number"
+    },
+    "sources_restored": {
+      "type": "number"
+    },
+    "media_committed": {
+      "type": "number"
+    },
+    "media_reused": {
+      "type": "number"
+    },
+    "conflicts": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/RestoreConflictDto"
+      }
+    }
+  },
+  "$defs": {
+    "RestoreConflictDto": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "entry_path",
+        "reason"
+      ],
+      "properties": {
+        "entry_path": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}
