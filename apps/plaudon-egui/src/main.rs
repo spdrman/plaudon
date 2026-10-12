@@ -72,6 +72,12 @@ fn main() -> ExitCode {
             let desktop =
                 plaudon_egui::desktop::Desktop::native(plaudon_egui::desktop::approved_roots());
             plaudon_egui::desktop::install_tray(&desktop, false);
+            // One line per screen (O1.3's registry contract). A destination
+            // with no screen renders the registry's honest empty state.
+            app.shell_mut()
+                .register(Box::new(plaudon_ui::screens::library::LibraryScreen::new()));
+            app.shell_mut()
+                .register(Box::new(plaudon_ui::screens::inbox::InboxScreen::new()));
             Ok(Box::new(app))
         }),
     );

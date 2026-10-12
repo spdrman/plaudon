@@ -6,4 +6,8 @@
 //! tasks do not collide in it.
 
 pub mod devices;
+pub mod inbox;
+pub mod library;
+pub mod recording;
+pub mod search;
 pub mod sources;

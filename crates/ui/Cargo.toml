@@ -12,6 +12,7 @@ workspace = true
 
 [dependencies]
 egui = { workspace = true }
+egui_extras = { workspace = true }
 plaudon-app = { workspace = true }
 plaudon-craft-ui = { workspace = true }
 plaudon-domain = { workspace = true }
@@ -22,6 +23,7 @@ plaudon-transcript-doc = { workspace = true }
 # backend back on with `features = ["cpal-output"]`.
 plaudon-audio-playback = { workspace = true }
 thiserror = { workspace = true }
+time = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]
