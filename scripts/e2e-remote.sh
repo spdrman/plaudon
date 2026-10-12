@@ -23,7 +23,7 @@
 #
 # Environment overrides:
 #   PLAUDON_E2E_HOST         ssh destination           (devshell@192.168.0.100)
-#   PLAUDON_E2E_REMOTE_ROOT  remote scratch parent     (/tmp)
+#   PLAUDON_E2E_REMOTE_ROOT  remote scratch parent     (/home/devshell/.plaudon-e2e)
 #   PLAUDON_E2E_IMAGE        docker image for the mode (mode-specific default)
 #   PLAUDON_E2E_CPUS         docker --cpus             (8)
 #   PLAUDON_E2E_MEMORY       docker --memory           (12g)
@@ -34,7 +34,8 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 HOST="${PLAUDON_E2E_HOST:-devshell@192.168.0.100}"
-REMOTE_ROOT="${PLAUDON_E2E_REMOTE_ROOT:-/tmp}"
+# /tmp on MARS is a small tmpfs; scratch lives under the home disk instead.
+REMOTE_ROOT="${PLAUDON_E2E_REMOTE_ROOT:-/home/devshell/.plaudon-e2e}"
 CPUS="${PLAUDON_E2E_CPUS:-8}"
 MEMORY="${PLAUDON_E2E_MEMORY:-12g}"
 RESULTS_DIR="${PLAUDON_E2E_RESULTS:-$REPO_ROOT/target/e2e-results}"
@@ -77,7 +78,9 @@ run_id="$(od -An -N6 -tx1 /dev/urandom | tr -d ' \n')"
 REMOTE_DIR="$REMOTE_ROOT/plaudon-e2e-$run_id"
 CONTAINER="plaudon-e2e-$run_id"
 REMOTE_TARBALL="$REMOTE_ROOT/$CONTAINER-artifacts.tar.gz"
-CACHE_DIR="$REMOTE_ROOT/plaudon-e2e-cache"
+# A named Docker volume lives on the large docker data disk; the scratch
+# parent (/home/devshell/.plaudon-e2e) is a small tmpfs on MARS and a cargo target cache filled it.
+CACHE_VOLUME="${PLAUDON_E2E_CACHE_VOLUME:-plaudon-e2e-cache}"
 
 cleanup() {
   local status=$?
@@ -110,6 +113,7 @@ fi
 echo "==> host=$HOST image=$IMAGE cpus=$CPUS memory=$MEMORY"
 echo "==> remote dir $REMOTE_DIR (removed on exit)"
 
+ssh "${SSH_OPTS[@]}" "$HOST" "mkdir -p $(printf '%q' "$REMOTE_ROOT")"
 rsync -a --delete \
   --exclude '.git/' \
   --exclude 'target/' \
@@ -172,7 +176,7 @@ $command_line"
       docker_mounts=()
       docker_env+=(-e CARGO_HOME=/work/.cargo-home -e CARGO_TARGET_DIR=/work/target)
     else
-      docker_mounts=(-v "$CACHE_DIR:/cache")
+      docker_mounts=(-v "$CACHE_VOLUME:/cache")
     fi
     ;;
 esac
@@ -189,8 +193,6 @@ done
 status=0
 ssh "${SSH_OPTS[@]}" "$HOST" "bash -s" <<EOF || status=$?
 set -euo pipefail
-mkdir -p $(printf '%q' "$CACHE_DIR")
-chmod g+rwX $(printf '%q' "$CACHE_DIR") 2>/dev/null || true
 docker run --rm --name $(printf '%q' "$CONTAINER") \
   --cpus $(printf '%q' "$CPUS") --memory $(printf '%q' "$MEMORY") --shm-size=2g \
  $env_args \
