@@ -135,6 +135,8 @@ regenerated baseline is committed **with the change that caused it**, never on i
 | Shell interaction and accessibility suite (O1.3) | locally for logic, MARS for pixels | `cargo test -p plaudon-ui --test shell_kittest` |
 | Window wiring and state persistence (O1.3) | anywhere (software raster) | `cargo test -p plaudon-egui --test shell_app` |
 | `plaudon-ui` screen and copy tests (devices, sources) | anywhere (software raster) | `cargo test -p plaudon-ui` |
+| Library, inbox, search and recording detail (O1.4) | anywhere (software raster); MARS for pixels | `cargo test -p plaudon-ui --test library_screen` |
+| Library 10,000-row scale case (O1.4) | anywhere for the ratio, MARS for the millisecond figure | `cargo test -p plaudon-ui --test library_perf -- --nocapture` |
 | kittest interaction tests | locally for logic, MARS for pixels | `cargo test -p plaudon-egui --test spike_kittest` |
 | AI workflow panels (O2.2): consent, claim review, stale/regenerate, Local-only refusal | anywhere, no GPU | `cargo test -p plaudon-ui --test ai_workflows --test ai_review --test ai_summarize` |
 | Settings sections, onboarding and the settings screen (O2.4) | anywhere (software raster) | `cargo test -p plaudon-ui --test settings_screen --test settings_privacy_group --test settings_engines_group --test settings_backup --test onboarding` |
@@ -150,3 +152,43 @@ The resource policy is part of the test strategy: heavy or renderer-dependent ru
 There are none yet, and none may be invented. `docs/benchmarks/README.md` forbids quoting a target
 before a measured baseline. The first measured UI numbers come from the MARS runs of the O1.4 library
 and O1.5 player suites; the budgets are written here then, with the run that produced them.
+
+### 6.1 The library's scale case (O1.4, #202)
+
+`crates/ui/tests/library_perf.rs` holds the 10,000-row case. Two of its assertions need no budget,
+because they are machine-independent:
+
+| Assertion | Why it is safe to assert anywhere |
+| --- | --- |
+| fewer than 100 of 10,000 rows are laid out per frame | a count taken from the AccessKit tree, identical on every machine |
+| a 10,000-row frame costs less than 3× a 100-row frame | a ratio measured on the machine running it, so it catches a quadratic implementation however fast the host is |
+
+The absolute mean frame cost is **printed, not asserted**, and the millisecond budget belongs here,
+next to the MARS run that produced it:
+
+```sh
+PLAUDON_E2E_APT_PACKAGES=libdbus-1-dev scripts/e2e-remote.sh shell \
+  'cargo test -p plaudon-ui --test library_perf -- --nocapture'
+```
+
+**Measured 2026-10-12 on MARS** (`rust:1-bookworm`, 8 CPUs, mesa/lavapipe software raster, `test`
+profile), with the library's own fixtures:
+
+| Rows | Mean frame cost |
+| --- | --- |
+| 100 | 4.930 ms |
+| 10,000 | 5.848 ms |
+
+**Budget: 10 ms per frame for 10,000 rows.** The measurement with headroom, enforced only where it
+was measured — `PLAUDON_PERF=1`, which `scripts/e2e-remote.sh` runs set:
+
+```sh
+PLAUDON_E2E_APT_PACKAGES=libdbus-1-dev scripts/e2e-remote.sh shell \
+  'PLAUDON_PERF=1 cargo test -p plaudon-ui --test library_perf -- --nocapture'
+```
+
+Raising the number is a decision, not a fix: a frame that grows past it means the table stopped
+being virtualized, which the two machine-independent assertions above are there to localise.
+
+The committed baselines `crates/ui/tests/visual/library_empty.png` and
+`crates/ui/tests/visual/library_100_rows.png` were produced in the same run.
