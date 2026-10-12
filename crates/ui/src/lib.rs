@@ -12,4 +12,5 @@
 #![deny(missing_docs)]
 
 pub mod player;
+pub mod screens;
 pub mod transcript;

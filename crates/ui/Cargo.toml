@@ -12,6 +12,7 @@ workspace = true
 
 [dependencies]
 egui = { workspace = true }
+plaudon-app = { workspace = true }
 plaudon-domain = { workspace = true }
 plaudon-transcript-doc = { workspace = true }
 # The workspace entry carries `default-features = false`, which keeps cpal out
@@ -22,4 +23,5 @@ plaudon-audio-playback = { workspace = true }
 
 [dev-dependencies]
 egui_kittest = { workspace = true }
+plaudon-ui-testkit = { workspace = true }
 tempfile = { workspace = true }
