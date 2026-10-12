@@ -323,6 +323,7 @@ pub fn derivative_to_commit<'a>(
 
 #[cfg(test)]
 mod tests {
+    use plaudon_domain::ids::DeviceId;
     use plaudon_persistence::archive::MediaArchive;
     use plaudon_persistence::db::Database;
     use plaudon_persistence::device::{DeviceRecord, TrustState};

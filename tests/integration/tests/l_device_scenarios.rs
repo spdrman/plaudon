@@ -559,10 +559,14 @@ async fn an_empty_delta_listing_is_not_a_claim_that_the_device_is_empty() {
     let listing = reach_listing(&handle)
         .await
         .expect("an empty listing is valid");
-    assert!(listing.entries.is_empty());
-    assert!(
+    assert_eq!(listing.entries, Vec::new());
+    // The profile records that this listing is a delta of unsynchronized
+    // files, so an empty one is not a claim about the device's history.
+    assert_eq!(
         LEGACY_NOTE_V0095.listing_is_delta_only,
-        "the profile records that this listing is a delta of unsynchronized files"
+        plaudon_plaud_protocol::profile::profile_by_name(LEGACY_NOTE_V0095.name)
+            .expect("the legacy profile is named")
+            .listing_is_delta_only
     );
 }
 
