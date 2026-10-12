@@ -177,12 +177,7 @@ fn watched_app(data_dir: &Path, hooks: HostHooks, watch: &EgressWatch) -> Plaudo
             ])
             .shared()])
             .with_text_model(
-                ScriptedTextModel::new(serde_json::json!({
-                    "decisions": [],
-                    "action_items": [],
-                    "open_questions": [],
-                    "risks": []
-                }))
+                ScriptedTextModel::new(serde_json::Value::Null)
                 .shared(),
             ),
     )
