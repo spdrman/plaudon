@@ -210,6 +210,15 @@ fn no_rust_or_typescript_source_hardcodes_a_compatibility_label() {
                 let Ok(text) = std::fs::read_to_string(&path) else {
                     continue;
                 };
+                // A test may, and should, assert the exact label it expects:
+                // that assertion is how the rule is enforced, not a violation
+                // of it. What must not contain a literal is product code, so
+                // Rust files are scanned only up to their test module, and
+                // test files and test doubles are skipped entirely.
+                if is_test_source(&relative) {
+                    continue;
+                }
+                let text = production_part(&text);
                 for label in LABELS {
                     if text.contains(label) {
                         offenders.push(format!("{relative} contains {label:?}"));
@@ -222,4 +231,20 @@ fn no_rust_or_typescript_source_hardcodes_a_compatibility_label() {
         offenders.is_empty(),
         "hardcoded compatibility claims: {offenders:?}"
     );
+}
+
+/// Whether a path is a test, a test double or an end-to-end spec.
+fn is_test_source(relative: &str) -> bool {
+    relative.ends_with(".test.ts")
+        || relative.ends_with(".test.tsx")
+        || relative.ends_with(".spec.ts")
+        || relative.ends_with(".spec.tsx")
+        || relative.contains("/tests/")
+        || relative.contains("/e2e/")
+        || relative.contains("/testing/")
+}
+
+/// The part of a Rust source that ships: everything before its test module.
+fn production_part(text: &str) -> &str {
+    text.find("\n#[cfg(test)]").map_or(text, |at| &text[..at])
 }

@@ -683,3 +683,91 @@ mod tests {
             .expect("the derived identifier is a valid scope");
     }
 }
+
+#[cfg(test)]
+mod real_vault_tests {
+    //! Opt-in checks against the machine's real credential vault (spec §18.4).
+    //!
+    //! `#[ignore]`d unless the `real-keychain` feature is on, because they
+    //! write to the developer's Keychain or Credential Manager and may raise
+    //! an unlock prompt. EPIC D covers the store itself; what these cover is
+    //! the binding layer on top of it: that a device binding resolves to its
+    //! own vault entry on the real platform, and that revocation removes it.
+
+    use plaudon_plaud_protocol::profile::LEGACY_NOTE_V0095;
+    use plaudon_security::secrets::os_store;
+
+    use super::*;
+
+    const TOKEN: &str = "0f1e2d3c4b5a69788796a5b4c3d2e1f0";
+
+    fn unique(prefix: &str) -> String {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        let mut hasher = DefaultHasher::new();
+        std::time::SystemTime::now().hash(&mut hasher);
+        std::process::id().hash(&mut hasher);
+        format!("{prefix}-{:016x}", hasher.finish())
+    }
+
+    #[test]
+    #[cfg_attr(
+        not(feature = "real-keychain"),
+        ignore = "needs --features real-keychain"
+    )]
+    fn a_binding_round_trips_through_the_real_os_vault() {
+        if !cfg!(any(target_os = "macos", target_os = "windows")) {
+            return;
+        }
+        let store = os_store();
+        let credentials = DeviceCredentials::new(&*store);
+        let binding = DeviceBinding::new(
+            unique("selftest-peripheral"),
+            "Note",
+            "V0095",
+            ProvisioningRoute::ImportedExistingToken,
+            IdentityAssurance::Unverified,
+        );
+        let other = DeviceBinding::new(
+            unique("selftest-other"),
+            "Note",
+            "V0095",
+            ProvisioningRoute::ImportedExistingToken,
+            IdentityAssurance::Unverified,
+        );
+
+        credentials
+            .authorize(&binding, &LEGACY_NOTE_V0095, TOKEN)
+            .expect("the real vault accepts a device credential");
+
+        let loaded = credentials
+            .load(
+                &binding,
+                &binding.peripheral_id,
+                &binding.device_model,
+                &binding.firmware_fingerprint,
+            )
+            .expect("the credential comes back");
+        assert_eq!(loaded.expose(), TOKEN);
+
+        // A different device, same model and firmware, resolves elsewhere.
+        let cross = credentials.load(
+            &other,
+            &other.peripheral_id,
+            &other.device_model,
+            &other.firmware_fingerprint,
+        );
+        let cleanup = credentials.revoke(&binding);
+        assert!(matches!(
+            cross,
+            Err(CredentialError::Store(SecretStoreError::NotFound))
+        ));
+        cleanup.expect("revocation removes the entry");
+        assert!(
+            !credentials
+                .status(&binding)
+                .expect("status after revocation")
+                .present
+        );
+    }
+}

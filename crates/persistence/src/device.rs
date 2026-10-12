@@ -460,6 +460,56 @@ impl DeviceRepository {
         ))
     }
 
+    /// Record the outcome of a non-destructive audit for one profile.
+    ///
+    /// Spec §7.9 and §17.3A: automatic nearby sync stays disabled until an
+    /// audit passes for the profile, and the result belongs to the
+    /// compatibility cell rather than to one session, so it survives a
+    /// restart. Stored in `compatibility_evidence`, which is the table that
+    /// already exists for exactly this kind of claim.
+    pub async fn record_audit(
+        &self,
+        profile_key: &str,
+        host_os: &str,
+        firmware: Option<&str>,
+        outcome_code: &str,
+        notes: &str,
+        at: Timestamp,
+    ) -> PersistenceResult<()> {
+        sqlx::query(
+            "INSERT INTO compatibility_evidence
+                 (id, profile_key, evidence_level, test_run_id, host_os, firmware,
+                  recorded_at, notes)
+             VALUES (?1, ?2, 'non_destructive_audit', ?3, ?4, ?5, ?6, ?7)",
+        )
+        .bind(uuid::Uuid::now_v7().to_string())
+        .bind(profile_key)
+        .bind(outcome_code)
+        .bind(host_os)
+        .bind(firmware)
+        .bind(at.as_millis())
+        .bind(notes)
+        .execute(self.db.pool())
+        .await?;
+        Ok(())
+    }
+
+    /// The most recent audit outcome code for a profile, if any.
+    ///
+    /// Absence is not a pass: a caller with `None` must treat the profile as
+    /// unaudited and leave automatic sync off.
+    pub async fn latest_audit(&self, profile_key: &str) -> PersistenceResult<Option<String>> {
+        let row: Option<(String,)> = sqlx::query_as(
+            "SELECT test_run_id FROM compatibility_evidence
+             WHERE profile_key = ?1 AND evidence_level = 'non_destructive_audit'
+             ORDER BY recorded_at DESC, rowid DESC LIMIT 1",
+        )
+        .bind(profile_key)
+        .fetch_optional(self.db.pool())
+        .await?;
+        Ok(row.map(|(code,)| code))
+    }
+
     /// Record the opaque vault reference for a device credential.
     ///
     /// Only the service and account strings are stored; the credential itself
@@ -710,6 +760,52 @@ mod tests {
                 .unwrap()
                 .map(|c| c.verified_bytes),
             Some(320)
+        );
+        db.close().await;
+    }
+
+    #[tokio::test]
+    async fn an_audit_outcome_is_recorded_per_profile_and_the_latest_one_wins() {
+        let (_dir, db) = fresh().await;
+        let repository = DeviceRepository::new(db.clone());
+        let profile = "plaud-note-legacy-v0095";
+        assert_eq!(repository.latest_audit(profile).await.unwrap(), None);
+
+        repository
+            .record_audit(
+                profile,
+                "macos",
+                Some("V0095"),
+                "LISTING_CHANGED",
+                "REC0001 disappeared after a read",
+                Timestamp::from_millis(1_760_000_000_000),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            repository.latest_audit(profile).await.unwrap().as_deref(),
+            Some("LISTING_CHANGED")
+        );
+
+        repository
+            .record_audit(
+                profile,
+                "macos",
+                Some("V0095"),
+                "UNCHANGED",
+                "two identical passes",
+                Timestamp::from_millis(1_760_000_100_000),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            repository.latest_audit(profile).await.unwrap().as_deref(),
+            Some("UNCHANGED")
+        );
+        assert_eq!(
+            repository.latest_audit("plaud-note-future").await.unwrap(),
+            None,
+            "an unaudited profile is unaudited, not passing"
         );
         db.close().await;
     }
