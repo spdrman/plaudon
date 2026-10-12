@@ -1,5 +1,9 @@
 # ADR-0013: A single Rust-owned egress gate, enforced by an unforgeable ticket
 
+- **Status:** Accepted
+- **Date:** 2026-10-11
+- **Spec:** SPEC v1.3 (see "Spec references")
+
 ## Status
 
 Accepted — 2026-10-11. Implemented in `crates/security/src/outbound.rs`
@@ -73,20 +77,20 @@ The only enforceable control over it is whether it runs at all.
   through the gate. Until the real HTTP transport exists, that is open finding
   F-011.
 
-## Alternatives considered
+## Rejected alternatives
 
-* **Per-subsystem policy checks.** Rejected: unverifiable, and the first
+- **Per-subsystem policy checks.** Rejected: unverifiable, and the first
   subsystem to forget silently breaks a release gate.
-* **A boolean `local_only` flag read at call sites.** Rejected: it makes the
+- **A boolean `local_only` flag read at call sites.** Rejected: it makes the
   deny path a convention and cannot distinguish purposes (download vs
   telemetry vs inference) or record a reason.
-* **An OS firewall rule or a network namespace.** Rejected as the primary
+- **An OS firewall rule or a network namespace.** Rejected as the primary
   control: it is not portable to macOS and Windows user installs, it cannot
   distinguish our purposes, and it would let us claim an assurance level we
   cannot deliver on an ordinary desktop. Retained as a *test* fixture only.
-* **Letting the cloud CLI run but blocking its traffic.** Rejected: we cannot
+- **Letting the cloud CLI run but blocking its traffic.** Rejected: we cannot
   constrain another process's stack, and §16.2A requires non-invocation.
-* **A proxy process that all traffic must route through.** Rejected for V1: it
+- **A proxy process that all traffic must route through.** Rejected for V1: it
   adds a privileged long-running component, which §6.2 explicitly avoids, for
   assurance we can largely obtain from the ticket design plus the monitor
   fixture.

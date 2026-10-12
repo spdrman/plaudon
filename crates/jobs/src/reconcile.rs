@@ -222,6 +222,12 @@ impl Reconciler {
                     }
                 }
                 ReconcileOutcome::OrphanRemoved(path) => report.orphans_removed.push(path),
+                ReconcileOutcome::Deferred { intent_id, .. } => {
+                    report.journal_unrecoverable.push(intent_id.to_string());
+                    if let Some(job) = owners.get(&intent_id) {
+                        self.mark_retryable(*job, report).await?;
+                    }
+                }
             }
         }
         Ok(())
