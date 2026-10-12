@@ -26,6 +26,7 @@ export function destinationOf(route) {
             return "templates";
         case "settings":
         case "settings.activity":
+        case "settings.sources":
             return "settings";
         default: {
             const never = route;
@@ -51,6 +52,8 @@ export function formatRoute(route) {
             return "#/settings";
         case "settings.activity":
             return "#/settings/activity";
+        case "settings.sources":
+            return "#/settings/sources";
         default: {
             const never = route;
             throw new Error(`unhandled route ${JSON.stringify(never)}`);
@@ -73,7 +76,11 @@ export function parseRoute(hash) {
         case "templates":
             return { name: "templates" };
         case "settings":
-            return tail === "activity" ? { name: "settings.activity" } : { name: "settings" };
+            if (tail === "activity")
+                return { name: "settings.activity" };
+            if (tail === "sources")
+                return { name: "settings.sources" };
+            return { name: "settings" };
         default:
             return DEFAULT_ROUTE;
     }
@@ -84,5 +91,7 @@ export function routeTitle(route) {
         return "Recording";
     if (route.name === "settings.activity")
         return "Activity history";
+    if (route.name === "settings.sources")
+        return "PLAUD and sources";
     return DESTINATION_LABELS[destinationOf(route)];
 }

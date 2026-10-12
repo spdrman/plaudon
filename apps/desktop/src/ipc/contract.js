@@ -131,7 +131,23 @@ export const SPEC_COMMANDS = [
 ];
 /** Additions reviewed in ADR-0020 because §15.2 has no read path for them. */
 export const ADR_0020_COMMANDS = ["list_activity", "complete_onboarding"];
-export const ALL_COMMANDS = [...SPEC_COMMANDS, ...ADR_0020_COMMANDS];
+/** EPIC K source commands, quoted from the §15.2 table. */
+export const EPIC_K_COMMANDS = [
+    "plaud_probe",
+    "plaud_connect",
+    "plaud_disconnect",
+    "plaud_list",
+    "plaud_import",
+    "source_add_folder",
+    "source_sync",
+    "source_reconcile",
+    "list_source_artifacts",
+];
+export const ALL_COMMANDS = [
+    ...SPEC_COMMANDS,
+    ...ADR_0020_COMMANDS,
+    ...EPIC_K_COMMANDS,
+];
 /* ----------------------------------------------------------------- events */
 /**
  * §15.3 event names, plus `ui.activation_requested` (ADR-0020) which the Rust
@@ -147,6 +163,8 @@ export const EVENT_KINDS = [
     "tool.completed",
     "model.availability_changed",
     "consent.required",
+    "source.auth_required",
+    "source.sync_finished",
     "library.changed",
     "activity.added",
     "ui.activation_requested",

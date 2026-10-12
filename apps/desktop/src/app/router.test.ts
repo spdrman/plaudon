@@ -17,6 +17,7 @@ const ROUTES: Route[] = [
   { name: "templates" },
   { name: "settings" },
   { name: "settings.activity" },
+  { name: "settings.sources" },
 ];
 
 describe("router", () => {

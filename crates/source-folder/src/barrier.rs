@@ -300,9 +300,8 @@ impl CompletionBarrier {
 
         // The file may have been rewritten while we hashed it. Re-stat and
         // throw the digest away rather than import bytes nobody ever had.
-        let after = match std::fs::metadata(path) {
-            Ok(after) => after,
-            Err(_) => return BarrierOutcome::Defer(DeferReason::Vanished),
+        let Ok(after) = std::fs::metadata(path) else {
+            return BarrierOutcome::Defer(DeferReason::Vanished);
         };
         if after.len() != size_bytes || mtime_ms(&after) != mtime_ms(&metadata) {
             self.restart(path, &after, now_ms);
@@ -421,5 +420,16 @@ fn digest_file(path: &Path) -> std::io::Result<String> {
         hasher.update(&buffer[..read]);
     }
     let digest = hasher.finalize();
-    Ok(digest.iter().map(|byte| format!("{byte:02x}")).collect())
+    Ok(hex_lower(&digest))
+}
+
+/// Lowercase hex, without allocating a `String` per byte.
+fn hex_lower(bytes: &[u8]) -> String {
+    const DIGITS: &[u8; 16] = b"0123456789abcdef";
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        out.push(char::from(DIGITS[usize::from(byte >> 4)]));
+        out.push(char::from(DIGITS[usize::from(byte & 0x0f)]));
+    }
+    out
 }

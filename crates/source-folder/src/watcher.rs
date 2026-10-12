@@ -11,7 +11,7 @@
 //! sweep picks the work back up; neither is treated as "nothing happened".
 
 use std::path::{Path, PathBuf};
-use std::sync::mpsc::{channel, Receiver, TryRecvError};
+use std::sync::mpsc::{channel, Receiver};
 
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 
@@ -95,11 +95,8 @@ impl NotifyWatcher {
 impl FsEventSource for NotifyWatcher {
     fn drain_hints(&mut self) -> Vec<FsHint> {
         let mut hints = Vec::new();
-        loop {
-            match self.hints.try_recv() {
-                Ok(hint) => hints.push(hint),
-                Err(TryRecvError::Empty | TryRecvError::Disconnected) => break,
-            }
+        while let Ok(hint) = self.hints.try_recv() {
+            hints.push(hint);
         }
         hints
     }
@@ -188,5 +185,5 @@ pub fn pump(
 }
 
 fn is_regular_file(path: &Path) -> bool {
-    std::fs::metadata(path).map(|meta| meta.is_file()).unwrap_or(false)
+    std::fs::metadata(path).is_ok_and(|meta| meta.is_file())
 }

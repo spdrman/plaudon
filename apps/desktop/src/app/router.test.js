@@ -9,6 +9,7 @@ const ROUTES = [
     { name: "templates" },
     { name: "settings" },
     { name: "settings.activity" },
+    { name: "settings.sources" },
 ];
 describe("router", () => {
     it("round-trips every route through the hash", () => {

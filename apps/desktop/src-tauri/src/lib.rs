@@ -2,7 +2,7 @@
 //!
 //! The shell owns three things and delegates everything else:
 //!
-//! * [`commands`] — sixteen narrow IPC commands (spec §15.2) that validate
+//! * [`commands`] — narrow IPC commands (spec §15.2) that validate
 //!   their arguments in Rust and answer with typed DTOs or the §15.4 error
 //!   envelope;
 //! * [`events`] — the §15.3 UI event stream, sequenced after the database
@@ -35,7 +35,7 @@ use crate::backend::LocalBackend;
 use crate::events::{EventSink, TauriEventSink};
 use crate::ports::{
     ActivityPort, CapabilitiesPort, ExportPort, ImportPort, JobsPort, LibraryPort, SettingsPort,
-    TranscriptPort,
+    SourcesPort, TranscriptPort,
 };
 use crate::secrets::{KeyringSecretStore, SecretStore};
 
@@ -58,6 +58,8 @@ pub struct AppPorts {
     pub settings: Arc<dyn SettingsPort>,
     /// Transcript export.
     pub export: Arc<dyn ExportPort>,
+    /// The PLAUD cloud connector and watched folders.
+    pub sources: Arc<dyn SourcesPort>,
     /// OS keychain storage.
     pub secrets: Arc<dyn SecretStore>,
     /// The UI event stream, shared with the notification activation route.
@@ -115,6 +117,7 @@ pub async fn build_ports(
         activity: Arc::clone(&backend) as Arc<dyn ActivityPort>,
         import: Arc::clone(&backend) as Arc<dyn ImportPort>,
         settings: Arc::clone(&backend) as Arc<dyn SettingsPort>,
+        sources: Arc::clone(&backend) as Arc<dyn SourcesPort>,
         export: backend as Arc<dyn ExportPort>,
         secrets,
         events,

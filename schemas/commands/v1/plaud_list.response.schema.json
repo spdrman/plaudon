@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/plaud_list.response.schema.json",
+  "title": "plaud_list.response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "source_id",
+    "items",
+    "next_cursor",
+    "completeness",
+    "empty_account_advisory"
+  ],
+  "properties": {
+    "source_id": {
+      "type": "string"
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/item"
+      }
+    },
+    "next_cursor": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "completeness": {
+      "enum": [
+        "complete",
+        "possibly_incomplete"
+      ]
+    },
+    "empty_account_advisory": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "$defs": {
+    "item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "external_id",
+        "display_name",
+        "captured_at",
+        "duration_ms",
+        "declared_byte_length",
+        "imported_recording_id"
+      ],
+      "properties": {
+        "external_id": {
+          "type": "string"
+        },
+        "display_name": {
+          "type": "string"
+        },
+        "captured_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "duration_ms": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "declared_byte_length": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "imported_recording_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    }
+  }
+}

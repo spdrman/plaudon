@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/source_add_folder.response.schema.json",
+  "title": "source_add_folder.response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "source_id",
+    "rule",
+    "recursive"
+  ],
+  "properties": {
+    "source_id": {
+      "type": "string"
+    },
+    "rule": {
+      "enum": [
+        "import_only",
+        "import_and_queue_local_stt",
+        "ask_before_cloud"
+      ]
+    },
+    "recursive": {
+      "type": "boolean"
+    }
+  }
+}

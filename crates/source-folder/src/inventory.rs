@@ -107,7 +107,7 @@ pub fn sweep(
             continue;
         }
         seen.insert(path.clone());
-        match queue.offer(path, clock.now_ms()) {
+        match queue.offer_if_absent(path, clock.now_ms()) {
             crate::queue::OfferOutcome::Overflowed => report.overflowed += 1,
             crate::queue::OfferOutcome::Queued | crate::queue::OfferOutcome::Coalesced => {
                 report.enqueued += 1;
@@ -150,5 +150,5 @@ pub fn list_candidates(config: &WatchedFolderConfig) -> Vec<PathBuf> {
 /// Whether a path still exists as a readable file.
 #[must_use]
 pub fn still_present(path: &Path) -> bool {
-    std::fs::metadata(path).map(|meta| meta.is_file()).unwrap_or(false)
+    std::fs::metadata(path).is_ok_and(|meta| meta.is_file())
 }

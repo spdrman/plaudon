@@ -8,6 +8,7 @@
 
 pub mod fakes;
 pub mod spikes;
+pub mod watcher;
 
 /// Cargo package name of this crate, used by the workspace layout conformance test.
 pub const PACKAGE_NAME: &str = "plaudon-integration-tests";

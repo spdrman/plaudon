@@ -42,3 +42,4 @@ and why, and the consequences we accept.
 ## Sources and ingestion (0040-0049)
 
 - [ADR-0040: The PLAUD Cloud CLI connector is version-locked and ships with an empty compatibility table](ADR-0040-plaud-cli-compatibility-table.md) — Accepted, 2026-10-11 (spec §2.1, §7.1, §7.2, §7.6)
+- [ADR-0041: A filesystem event authorises nothing; a completion barrier and a content digest do](ADR-0041-watched-folder-completion-barrier-and-source-identity.md) — Accepted, 2026-10-11 (spec §4.3, §7.5, §7.10, App. A.2, App. A.4)

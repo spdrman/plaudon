@@ -169,6 +169,12 @@ pub struct WatchedFolderService {
     clock: Arc<dyn Clock>,
     local_work: Arc<dyn LocalWorkSink>,
     folder_id: Uuid,
+    /// Serialises the commit half of an import for this folder.
+    ///
+    /// Probing stays concurrent; committing does not. Two passes reaching the
+    /// same ready candidate at the same instant would otherwise each create a
+    /// recording before either could see the other's source association.
+    import_lock: Arc<tokio::sync::Mutex<()>>,
 }
 
 impl WatchedFolderService {
@@ -267,6 +273,7 @@ impl WatchedFolderService {
             clock,
             local_work: Arc::new(NoLocalWork),
             folder_id,
+            import_lock: Arc::new(tokio::sync::Mutex::new(())),
             config,
         })
     }
@@ -380,6 +387,9 @@ impl WatchedFolderService {
                 .await?;
         }
 
+        // Label only: a watched-folder path is user data (§16.6).
+        tracing::debug!(reason = reason.label(), "watched folder candidate deferred");
+
         let candidate_state = if matches!(reason, DeferReason::CloudPlaceholder(_)) {
             FolderCandidateState::CloudPlaceholder
         } else {
@@ -420,13 +430,56 @@ impl WatchedFolderService {
             remote_version: None,
             attach_to_recording: None,
         };
+        // From here on exactly one pass per folder may be committing.
+        let _commit = self.import_lock.lock().await;
+        let source_id = self.imports.source_id(&request.identity, at).await?;
+        if let Some(existing) = self
+            .imports
+            .sources()
+            .find_by_identity(source_id, &request.identity)
+            .await?
+        {
+            if !self
+                .imports
+                .recordings()
+                .is_tombstoned(existing.recording_id)
+                .await?
+            {
+                self.barrier.forget(path);
+                return Ok(CandidateOutcome::AlreadyImported {
+                    recording_id: existing.recording_id,
+                });
+            }
+        }
 
         let mut file = File::open(path).map_err(|error| FolderError::io(path, error))?;
-        let outcome = self.imports.import(&request, &mut file, at).await?;
+        let import = self.imports.import(&request, &mut file, at).await;
         drop(file);
 
+        // Two passes can reach a ready candidate at the same moment — a
+        // watcher hint and an inventory sweep, say. The loser hits the
+        // `(source_id, external_id)` uniqueness constraint, which means the
+        // winner already created exactly the record this pass wanted.
+        let outcome = match import {
+            Ok(outcome) => outcome,
+            Err(plaudon_persistence::error::PersistenceError::Conflict) => {
+                let source_id = self.imports.source_id(&request.identity, at).await?;
+                let existing = self
+                    .imports
+                    .sources()
+                    .find_by_identity(source_id, &request.identity)
+                    .await?
+                    .ok_or(plaudon_persistence::error::PersistenceError::Conflict)?;
+                ImportOutcome::AlreadyImported {
+                    recording_id: existing.recording_id,
+                    source_item_id: existing.id,
+                }
+            }
+            Err(error) => return Err(error.into()),
+        };
+
         // §22(11): prove the file we read is exactly as we found it.
-        let preserved = self.verify_source_preserved(path, &ready);
+        let preserved = Self::verify_source_preserved(path, &ready);
         self.metrics
             .increment(WatcherMetric::SourcePreservationChecks);
         if !preserved {
@@ -494,8 +547,13 @@ impl WatchedFolderService {
         }
     }
 
-    /// Size, mtime and digest must all match what the barrier measured.
-    fn verify_source_preserved(&self, path: &Path, ready: &ReadyCandidate) -> bool {
+    /// Size and modification time must match what the barrier measured.
+    ///
+    /// This is the cheap check that runs on every import; the fixture suite
+    /// re-hashes the whole file instead, because a metric that costs a third
+    /// full read of every recording would not survive contact with a large
+    /// library.
+    fn verify_source_preserved(path: &Path, ready: &ReadyCandidate) -> bool {
         let Ok(metadata) = std::fs::metadata(path) else {
             return false;
         };

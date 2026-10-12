@@ -1304,6 +1304,9 @@ pub struct PlaudItemSummary {
 /// Response of `plaud_list`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlaudListResponse {
+    /// The library source row for this connector; the handle `source_sync` and
+    /// `source_reconcile` accept.
+    pub source_id: String,
     /// Recordings on this page.
     pub items: Vec<PlaudItemSummary>,
     /// Cursor of the next page, or `null`.
@@ -1350,6 +1353,197 @@ pub enum PlaudImportOutcome {
 pub struct PlaudImportResponse {
     /// One outcome per requested ID, in request order.
     pub results: Vec<PlaudImportOutcome>,
+}
+
+/// What a watched folder does with the audio it imports (spec §4.3(7)).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WatchedFolderRule {
+    /// Import the audio and stop there.
+    ImportOnly,
+    /// Import and queue local transcription; no egress.
+    ImportAndQueueLocalStt,
+    /// Import, and refuse every background cloud dispatch without consent.
+    AskBeforeCloud,
+}
+
+impl WatchedFolderRule {
+    /// Stable wire string, equal to the stored column value.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::ImportOnly => "import_only",
+            Self::ImportAndQueueLocalStt => "import_and_queue_local_stt",
+            Self::AskBeforeCloud => "ask_before_cloud",
+        }
+    }
+}
+
+/// `source_add_folder` request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SourceAddFolderRequest {
+    /// Folder obtained from the OS directory picker.
+    pub path: String,
+    /// Whether subdirectories are included.
+    pub recursive: bool,
+    /// What the folder may do with imported audio.
+    pub rule: WatchedFolderRule,
+}
+
+/// `source_add_folder` response.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SourceAddFolderResponse {
+    /// The watched folder's source ID.
+    pub source_id: String,
+    /// Rule now in force.
+    pub rule: WatchedFolderRule,
+    /// Whether subdirectories are included.
+    pub recursive: bool,
+}
+
+/// Why a sync was started.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SyncTrigger {
+    /// The user pressed a sync control.
+    Manual,
+    /// The periodic scheduler (watched folders only; the PLAUD cloud never
+    /// syncs unattended, spec §7.1).
+    Background,
+}
+
+/// `source_sync` request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SourceSyncRequest {
+    /// A watched folder ID or the `source_id` from `plaud_list`.
+    pub source_id: String,
+    /// Why the sync runs.
+    pub trigger: SyncTrigger,
+}
+
+/// `source_reconcile` request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SourceReconcileRequest {
+    /// A watched folder ID or the `source_id` from `plaud_list`.
+    pub source_id: String,
+}
+
+/// What kind of source a sync or reconcile ran against.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SyncedSourceKind {
+    /// A watched folder.
+    WatchedFolder,
+    /// The PLAUD cloud connector.
+    PlaudCloud,
+}
+
+/// Counts from one watched-folder pass.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FolderSyncCounts {
+    /// Entries the bounded sweep inspected.
+    pub scanned: u32,
+    /// Whether the sweep saw the whole folder.
+    pub inventory_complete: bool,
+    /// Recordings newly committed.
+    pub imported: u32,
+    /// Files already in the library.
+    pub already_imported: u32,
+    /// Files still changing or not yet local.
+    pub deferred: u32,
+    /// Files the user deleted locally, not resurrected.
+    pub refused_tombstoned: u32,
+    /// Files that failed validation.
+    pub rejected: u32,
+    /// Known files that are no longer present (marked unavailable).
+    pub vanished: u32,
+}
+
+/// `source_sync` response.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SourceSyncResponse {
+    /// The job that recorded the sync.
+    pub job_id: JobId,
+    /// The synced source.
+    pub source_id: String,
+    /// Kind of source.
+    pub source_kind: SyncedSourceKind,
+    /// Terminal state of the job.
+    pub state: JobState,
+    /// Folder counts; `null` for the PLAUD cloud.
+    pub folder: Option<FolderSyncCounts>,
+    /// Recordings the PLAUD listing returned; `null` for a folder.
+    pub listed: Option<u32>,
+    /// Recordings the sync committed to the library.
+    pub imported_recording_ids: Vec<RecordingId>,
+}
+
+/// One reconciliation decision (spec §7.5, App. A.2), with stable names only.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReconcileDecisionSummary {
+    /// Vendor identifier of the item, when it has one.
+    pub external_id: Option<String>,
+    /// App. A.2 row, snake_case.
+    pub event: String,
+    /// Actions taken, snake_case.
+    pub actions: Vec<String>,
+}
+
+/// `source_reconcile` response.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SourceReconcileResponse {
+    /// The job that recorded the pass.
+    pub job_id: JobId,
+    /// The reconciled source.
+    pub source_id: String,
+    /// Kind of source.
+    pub source_kind: SyncedSourceKind,
+    /// Decisions for a PLAUD listing; empty for a folder, and empty for a
+    /// listing that may be partial (nothing is recorded in that case).
+    pub decisions: Vec<ReconcileDecisionSummary>,
+    /// Whether the PLAUD listing was known to be complete; `null` for a
+    /// folder. A partial listing cannot prove an item is gone, so it is not
+    /// reconciled (spec §7.5).
+    pub listing_complete: Option<bool>,
+    /// Folder counts; `null` for the PLAUD cloud.
+    pub folder: Option<FolderSyncCounts>,
+}
+
+/// `list_source_artifacts` request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ListSourceArtifactsRequest {
+    /// Recording whose vendor exports are listed.
+    pub recording_id: String,
+}
+
+/// One vendor export found alongside a recording, with its provenance.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SourceArtifactSummary {
+    /// Row identity.
+    pub artifact_id: String,
+    /// `transcript`, `summary` or `tags`.
+    pub kind: String,
+    /// Vendor that produced it, for example `plaud`.
+    pub source_vendor: String,
+    /// Digest of the original exported bytes.
+    pub content_sha256: String,
+    /// Length of those bytes.
+    pub byte_length: u64,
+    /// Name the export used. Metadata only.
+    pub original_filename: Option<String>,
+    /// When it became a transcript revision; `null` while only recorded.
+    pub imported_at: Option<String>,
+    /// Mode that applied when it was seen.
+    pub import_mode: String,
+    /// When the app first recorded it.
+    pub recorded_at: String,
+}
+
+/// `list_source_artifacts` response.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ListSourceArtifactsResponse {
+    /// Vendor exports, oldest first.
+    pub artifacts: Vec<SourceArtifactSummary>,
 }
 
 /* ------------------------------------------------------------------ events */

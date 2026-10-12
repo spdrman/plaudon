@@ -18,6 +18,7 @@ pub mod capabilities;
 pub mod export;
 pub mod import;
 pub mod jobs;
+pub mod sources;
 pub mod store;
 
 use std::collections::BTreeMap;
@@ -81,6 +82,7 @@ pub struct LocalBackend {
     notifications: NotificationService,
     secrets: Arc<dyn SecretStore>,
     approved_roots: Vec<PathBuf>,
+    source_runtime: sources::SourcesRuntime,
 }
 
 impl LocalBackend {
@@ -106,6 +108,7 @@ impl LocalBackend {
             notifications,
             secrets,
             approved_roots,
+            source_runtime: sources::SourcesRuntime::production(),
             store,
         };
         // The dispatcher starts with whatever the user last chose; nothing

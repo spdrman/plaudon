@@ -1,0 +1,9 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/plaud_disconnect.request.schema.json",
+  "title": "plaud_disconnect.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [],
+  "properties": {}
+}

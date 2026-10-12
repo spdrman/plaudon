@@ -93,6 +93,23 @@ impl CoalescingQueue {
         OfferOutcome::Queued
     }
 
+    /// Offer a path an inventory sweep observed.
+    ///
+    /// A sweep says "this file exists", not "this file just changed", so it
+    /// must not restart the debounce window of a path that is already waiting
+    /// — otherwise a sweep running on the same cadence as the drain would
+    /// keep the queue permanently un-drainable.
+    pub fn offer_if_absent(&self, path: impl Into<PathBuf>, now_ms: i64) -> OfferOutcome {
+        let path = path.into();
+        {
+            let inner = self.inner.lock();
+            if inner.pending.contains_key(&path) {
+                return OfferOutcome::Coalesced;
+            }
+        }
+        self.offer(path, now_ms)
+    }
+
     /// Remove and return every candidate whose debounce window has elapsed.
     ///
     /// A path that is still receiving hints stays in the queue, which is what

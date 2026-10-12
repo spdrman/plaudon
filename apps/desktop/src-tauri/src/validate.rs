@@ -590,6 +590,49 @@ pub fn plaud_external_ids(ids: &[String]) -> Result<Vec<String>, AppError> {
     Ok(ids.to_vec())
 }
 
+/// Validate a user-picked watched folder (spec §4.3, §16.5).
+///
+/// The path is canonicalized, must resolve to a directory and must stay inside
+/// an approved root, exactly like [`validate_import_path`] does for files.
+pub fn validate_folder_path(
+    requested: &str,
+    approved_roots: &[PathBuf],
+) -> Result<PathBuf, AppError> {
+    if requested.is_empty() {
+        return Err(invalid_argument("folder path is empty"));
+    }
+    if requested.contains('\0') {
+        return Err(invalid_argument("folder path contains a NUL byte"));
+    }
+    let resolved = std::fs::canonicalize(requested).map_err(|err| {
+        AppError::new(
+            AppErrorCode::ArchivePathRejected,
+            format!("cannot resolve folder path ({requested}): {err}"),
+        )
+    })?;
+    if !is_inside_approved_root(&resolved, approved_roots)? {
+        return Err(AppError::new(
+            AppErrorCode::ArchivePathRejected,
+            format!(
+                "resolved folder {} is outside every approved root",
+                resolved.display()
+            ),
+        ));
+    }
+    if !resolved.is_dir() {
+        return Err(AppError::new(
+            AppErrorCode::ArchivePathRejected,
+            format!("{} is not a directory", resolved.display()),
+        ));
+    }
+    Ok(resolved)
+}
+
+/// Parse the `source_id` of `source_sync` / `source_reconcile`.
+pub fn source_id(raw: &str) -> Result<uuid::Uuid, AppError> {
+    uuid::Uuid::parse_str(raw).map_err(|_| invalid_argument("source_id is not a canonical UUID"))
+}
+
 #[cfg(test)]
 mod tests {
     use std::fs;
@@ -903,7 +946,9 @@ mod source_tests {
         assert!(plaud_external_ids(&[]).is_err());
         assert!(plaud_external_ids(&["rec_1".to_owned(), "rec_1".to_owned()]).is_err());
         assert!(plaud_external_ids(&["rec\u{0}1".to_owned()]).is_err());
-        let many: Vec<String> = (0..=MAX_PLAUD_IMPORT_IDS).map(|i| format!("r{i}")).collect();
+        let many: Vec<String> = (0..=MAX_PLAUD_IMPORT_IDS)
+            .map(|i| format!("r{i}"))
+            .collect();
         assert!(plaud_external_ids(&many).is_err());
     }
 }

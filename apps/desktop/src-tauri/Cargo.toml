@@ -15,6 +15,15 @@ crate-type = ["lib", "cdylib", "staticlib"]
 name = "plaudon-desktop"
 path = "src/main.rs"
 
+# A scripted stand-in for the vendor CLI; never part of a release build.
+[[bin]]
+name = "mock_plaud"
+path = "src/bin/mock_plaud.rs"
+required-features = ["test-harness"]
+
+[features]
+test-harness = []
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
@@ -23,6 +32,11 @@ plaudon-domain = { workspace = true }
 plaudon-persistence = { workspace = true }
 plaudon-app-core = { workspace = true }
 plaudon-notifications = { workspace = true }
+plaudon-recording-sources = { workspace = true }
+plaudon-security = { workspace = true }
+plaudon-diagnostics = { workspace = true }
+plaudon-source-plaud-cli = { workspace = true }
+plaudon-source-folder = { workspace = true }
 async-trait = { workspace = true }
 hex = { workspace = true }
 serde = { workspace = true }
@@ -44,6 +58,10 @@ dirs = "6"
 sysinfo = "0.37"
 
 [dev-dependencies]
+# Enables the mock vendor CLI for this crate's own integration tests.
+plaudon-desktop = { path = ".", features = ["test-harness"] }
+# The hermetic harness switch: only test builds may accept a loopback origin.
+plaudon-source-plaud-cli = { workspace = true, features = ["test-harness"] }
 tempfile = { workspace = true }
 serde_json = { workspace = true }
 jsonschema = { workspace = true }

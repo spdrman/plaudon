@@ -24,7 +24,8 @@ write path in that table:
 
 ## Decision
 
-The desktop exposes exactly 16 commands: the 14 §15.2 commands used by Phase 2
+The desktop exposed exactly 16 commands at the end of EPIC E: the 14 §15.2
+commands used by Phase 2
 (`get_capabilities`, `list_recordings`, `import_files`, `get_recording`,
 `get_transcript`, `save_transcript_revision`, `list_jobs`, `cancel_job`,
 `retry_job`, `export_recording`, `set_notification_settings`,
@@ -36,6 +37,44 @@ additions:
 
 Both are read/write paths for state the spec already mandates; neither widens
 the trust boundary: they accept no paths, no URLs and no free-form commands.
+
+**Amended by EPIC K (2026-10-11), source and connector commands.** EPIC K adds
+nine commands, all of which are already in the §15.2 table, so the amendment
+widens the implemented surface without widening the *proposed* one:
+
+| Command | Request | Response |
+|---|---|---|
+| `plaud_probe` | none | `PlaudConnectorSnapshot` (status, diagnostics, disconnect copy) |
+| `plaud_connect` | user intent | `PlaudConnectorSnapshot` |
+| `plaud_disconnect` | none | disconnect variant + snapshot |
+| `plaud_list` | cursor | items, cursor, completeness, empty-account advisory |
+| `plaud_import` | external ids | per-item outcome, job id, recording id |
+| `source_add_folder` | OS-approved path, recursive, rule | source id and stored policy |
+| `source_sync` | source id, trigger | job id, source state, counts |
+| `source_reconcile` | source id | job id, decisions, listing completeness |
+| `list_source_artifacts` | recording id | vendor exports with provenance |
+
+Three properties hold for all nine:
+
+- They accept no URL and no free-form command. `source_add_folder` is the only
+  one that takes a path, and it takes one the OS picker already approved and
+  canonicalizes it through `plaudon_security::fsguard` before storing it.
+- `plaud_import` is not a general fetch: it refuses any external id that was
+  not in the caller's most recent `plaud_list` page, so the IPC boundary cannot
+  be used to name an arbitrary remote asset.
+- Nothing in a response carries vendor text. Connector copy comes from
+  `plaudon_source_plaud_cli::diagnostics`, which composes from a stable error
+  code, so §7.6 ("no raw vendor error payloads") is enforced by the data that
+  exists rather than by a rule the frontend has to follow.
+
+`plaud_disconnect` is the one command whose *wording* is load-bearing: §4.2.7
+forbids claiming to have revoked a PLAUD session we cannot revoke, so it
+returns a `DisconnectCopy` variant and the frontend renders that label and body
+verbatim.
+
+EPIC K also emits three further §15.3 events — `source.auth_required`,
+`source.sync_finished` and `recording.source_updated` — all of which are in the
+published §15.3 list.
 
 Commands reachable from JavaScript are enumerated in one
 `tauri::generate_handler!` list, and a test fails the build if a registered
@@ -65,8 +104,9 @@ command and still not express the one-shot nature of an activation.
 ## Consequences
 
 - The frontend contract (`apps/desktop/src/ipc/contract.ts`) and the versioned
-  JSON schemas under `schemas/commands/v1/` enumerate the same 16 commands;
-  drift fails CI on both sides.
+  JSON schemas under `schemas/commands/v1/` enumerate the same commands as the
+  Rust allowlist — 16 after EPIC E, 25 after EPIC K's amendment; drift fails CI
+  on both sides.
 - Later EPICs that need device, cloud, model, consent, usage, tool, backup or
   restore commands add them from the §15.2 table; they must not reuse these two
   additions as a general-purpose escape hatch.
