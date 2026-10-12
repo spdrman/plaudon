@@ -115,7 +115,7 @@ test_files = ["crates/jobs/src/state.rs"]
 [[transitions]]
 id = "jobs::any_to_cancelled"
 spec = "14.7"
-positive_test = "every_non_terminal_state_can_reach_cancellation"
+positive_test = "every_cancellable_state_can_reach_cancellation"
 negative_test = "terminal_states_have_no_outgoing_edges"
 crash_recovery_test = "recovery_is_idempotent_across_repeated_restarts"
 test_files = [
