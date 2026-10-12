@@ -20,7 +20,6 @@ use serde::{Deserialize, Serialize};
 use tokio_util::sync::CancellationToken;
 
 use crate::error::DispatchRefusal;
-use crate::journal::is_app_owned_staging_file;
 use crate::scheduler::WaitReason;
 use crate::state::JobState;
 
@@ -91,7 +90,7 @@ pub struct CancellationAck {
 }
 
 /// Registry of live cooperative cancellation tokens.
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct CancellationRegistry {
     tokens: Arc<Mutex<HashMap<JobId, CancellationToken>>>,
 }
@@ -234,7 +233,11 @@ impl InterruptionCause {
     pub const fn wait_reason(self) -> WaitReason {
         match self {
             InterruptionCause::OsSleep => WaitReason::SystemSuspend,
-            InterruptionCause::UserLogout => WaitReason::UserDecisionRequired,
+            // A logout and a busy accelerator both need the user to decide
+            // whether to keep waiting or stop.
+            InterruptionCause::UserLogout | InterruptionCause::GpuBusy => {
+                WaitReason::UserDecisionRequired
+            }
             InterruptionCause::KeychainLocked => WaitReason::KeychainLocked,
             InterruptionCause::BluetoothLost | InterruptionCause::SourceDisconnected => {
                 WaitReason::SourceUnavailable
@@ -242,7 +245,6 @@ impl InterruptionCause {
             InterruptionCause::NetworkLost => WaitReason::NetworkUnavailable,
             InterruptionCause::ModelAssetRemoved => WaitReason::ModelAssetMissing,
             InterruptionCause::ConsentRevoked => WaitReason::ConsentRequired,
-            InterruptionCause::GpuBusy => WaitReason::UserDecisionRequired,
         }
     }
 
@@ -270,12 +272,12 @@ impl InterruptionCause {
 ///
 /// The gate records *attempted* dispatches so the "consent revoked mid-queue ⇒
 /// zero subsequent dispatch attempts" property is directly observable.
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct ConsentGate {
     inner: Arc<ConsentGateInner>,
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 struct ConsentGateInner {
     grants: Mutex<HashMap<String, GrantState>>,
     authorized: AtomicU64,
@@ -382,6 +384,38 @@ impl ConsentGate {
     }
 }
 
+/// `true` when `path` is inside the app-owned staging directory and therefore
+/// eligible for orphan cleanup (§13.3A "remove only app-owned orphaned staging
+/// files"; §13.4 layout `temp/imports/<job-uuid>.part`).
+///
+/// Both paths are compared after canonicalising the *staging root* only; the
+/// candidate is canonicalised lexically against that root so a non-existent
+/// file can still be judged, and any `..` component disqualifies it.
+pub fn is_app_owned_staging_file(staging_root: &Path, candidate: &Path) -> bool {
+    if candidate
+        .components()
+        .any(|c| matches!(c, std::path::Component::ParentDir))
+    {
+        return false;
+    }
+    let Ok(root) = staging_root.canonicalize() else {
+        return false;
+    };
+    let candidate_dir = match candidate.parent() {
+        Some(parent) => parent.canonicalize(),
+        None => return false,
+    };
+    let Ok(candidate_dir) = candidate_dir else {
+        return false;
+    };
+    if !candidate_dir.starts_with(&root) {
+        return false;
+    }
+    candidate
+        .extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("part"))
+}
+
 /// Remove incomplete derivatives belonging to a cancelled or abandoned job.
 ///
 /// Only app-owned `*.part` files beneath `staging_root` are ever touched. A
@@ -452,7 +486,11 @@ mod tests {
     fn interruption_wait_state_mapping_table() {
         use InterruptionCause as C;
         let expected = [
-            (C::OsSleep, JobState::WaitingForUser, WaitReason::SystemSuspend),
+            (
+                C::OsSleep,
+                JobState::WaitingForUser,
+                WaitReason::SystemSuspend,
+            ),
             (
                 C::UserLogout,
                 JobState::WaitingForUser,
@@ -563,11 +601,9 @@ mod tests {
         let source = root.path().join("original.wav");
         std::fs::write(&source, b"user audio").expect("write");
 
-        let removed = discard_incomplete_derivatives(
-            &staging,
-            &[derivative.clone(), source.clone()],
-        )
-        .expect("discard");
+        let removed =
+            discard_incomplete_derivatives(&staging, &[derivative.clone(), source.clone()])
+                .expect("discard");
 
         assert_eq!(removed, vec![derivative.clone()]);
         assert!(!derivative.exists());
@@ -579,9 +615,33 @@ mod tests {
         let root = tempfile::tempdir().expect("tempdir");
         let staging = root.path().join("imports");
         std::fs::create_dir_all(&staging).expect("mkdir");
-        let removed =
-            discard_incomplete_derivatives(&staging, &[staging.join("gone.part")]).expect("discard");
-        assert!(removed.is_empty());
+        let removed = discard_incomplete_derivatives(&staging, &[staging.join("gone.part")])
+            .expect("discard");
+        assert_eq!(removed.len(), 0);
+    }
+
+    #[test]
+    fn only_part_files_under_the_staging_root_are_app_owned() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let staging = root.path().join("imports");
+        std::fs::create_dir_all(&staging).expect("mkdir");
+
+        assert!(is_app_owned_staging_file(
+            &staging,
+            &staging.join("1f0c.part")
+        ));
+        assert!(!is_app_owned_staging_file(
+            &staging,
+            &staging.join("1f0c.wav")
+        ));
+        assert!(!is_app_owned_staging_file(
+            &staging,
+            &root.path().join("elsewhere.part")
+        ));
+        assert!(!is_app_owned_staging_file(
+            &staging,
+            &staging.join("../elsewhere.part")
+        ));
     }
 
     #[test]
