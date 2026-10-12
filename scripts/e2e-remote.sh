@@ -213,6 +213,8 @@ $command_line"
       -e CARGO_HOME=/cache/cargo
       -e CARGO_TARGET_DIR=/cache/target
       -e CARGO_BUILD_JOBS="$CPUS"
+      -e CARGO_PROFILE_DEV_DEBUG=0
+      -e CARGO_PROFILE_TEST_DEBUG=0
       -e HOME="$CONTAINER_HOME"
       -e LIBGL_ALWAYS_SOFTWARE=1
       -e GALLIUM_DRIVER=llvmpipe
