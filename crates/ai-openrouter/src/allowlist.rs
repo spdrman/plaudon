@@ -21,7 +21,9 @@ const MANIFEST_JSON: &str = include_str!("../allowlist/v1.json");
 pub const ALLOWLIST_SCHEMA_VERSION: u32 = 1;
 
 /// Which stage a pinned model is a candidate for.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum ModelTask {
     /// Speech-to-text.

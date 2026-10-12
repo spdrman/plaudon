@@ -55,7 +55,12 @@ impl RetryPolicy {
     /// is a pure function and the bounds can be property-tested; production
     /// passes a random sample.
     #[must_use]
-    pub fn decide(&self, attempt: u32, error: &OpenRouterError, jitter_ratio: f64) -> RetryDecision {
+    pub fn decide(
+        &self,
+        attempt: u32,
+        error: &OpenRouterError,
+        jitter_ratio: f64,
+    ) -> RetryDecision {
         match error.retriability() {
             Retriability::Terminal => return RetryDecision::Stop,
             Retriability::RetryNeedsCostAcknowledgement => return RetryDecision::AskUser,

@@ -174,13 +174,12 @@ async fn settling_an_attempt_records_usage_without_turning_unknown_into_zero() {
     .await
     .expect("usage rows");
     assert_eq!(confidences.len(), 2);
-    assert!(confidences.iter().any(|(c, _, actual)| c == "finalized"
-        && actual.is_some()));
     assert!(confidences
         .iter()
-        .any(|(c, estimated, actual)| c == "unknown"
-            && estimated.is_none()
-            && actual.is_none()));
+        .any(|(c, _, actual)| c == "finalized" && actual.is_some()));
+    assert!(confidences
+        .iter()
+        .any(|(c, estimated, actual)| c == "unknown" && estimated.is_none() && actual.is_none()));
 
     let summary = cloud
         .usage(Timestamp::from_millis(0), Timestamp::now())
@@ -244,7 +243,7 @@ async fn a_recording_override_never_changes_the_task_default() {
     let override_choice = ModelChoice::new("openrouter", Some("openai/whisper-1".to_owned()));
     cloud
         .store()
-        .set_recording_override(&"rec-1".to_owned(), Stage::Transcribe, &override_choice, at)
+        .set_recording_override("rec-1", Stage::Transcribe, &override_choice, at)
         .await
         .expect("override");
 
@@ -317,7 +316,12 @@ async fn a_catalog_only_probe_cannot_verify_a_model() {
     };
     cloud
         .store()
-        .record_probe(ModelTask::Transcription, &record, "fixture", Timestamp::from_millis(1))
+        .record_probe(
+            ModelTask::Transcription,
+            &record,
+            "fixture",
+            Timestamp::from_millis(1),
+        )
         .await
         .expect("record");
 
@@ -448,11 +452,7 @@ async fn a_stored_budget_round_trips_and_blocks_an_over_limit_dispatch() {
         .month_to_date(Timestamp::now())
         .await
         .expect("month to date");
-    let decision = evaluate_budget(
-        &loaded,
-        MoneyEstimate::Estimated(usd(600_000_000)),
-        &month,
-    );
+    let decision = evaluate_budget(&loaded, MoneyEstimate::Estimated(usd(600_000_000)), &month);
     assert_eq!(
         decision,
         BudgetDecision::Block {

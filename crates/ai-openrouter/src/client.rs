@@ -38,8 +38,8 @@ use plaudon_domain::capability::{CapabilityStatus, Known, Tri};
 use plaudon_domain::locale::LanguageTag;
 use plaudon_domain::model::{EngineId, ModelIdentity};
 use plaudon_domain::transcript::{Confidence, ConfidenceScale};
-use plaudon_security::consent::DispatchApproval;
 use plaudon_security::consent::ContentType;
+use plaudon_security::consent::DispatchApproval;
 use plaudon_security::outbound::http::GatedHttpClientFactory;
 use plaudon_security::outbound::{EgressPurpose, PayloadClass, Subsystem};
 
@@ -188,7 +188,12 @@ impl CloudDispatcher {
     }
 
     /// Dispatch one request, with ledger-before-send and bounded retries.
-    async fn dispatch(
+    ///
+    /// Public so the capability smoke test ([`crate::smoke`]) can use exactly
+    /// the same path as a production transcription: same gates, same ledger,
+    /// same retry rules. It still cannot be called without an
+    /// [`AttemptIntent`], so the ledger obligation holds.
+    pub async fn dispatch(
         &self,
         path: &str,
         content_type: ContentType,
@@ -280,9 +285,7 @@ impl CloudDispatcher {
             .with_header("Accept", "application/json")
             .with_body(body.bytes.clone());
 
-        if let Err(error) = self.record(&attempt_id, AttemptUpdate::Sending).await {
-            return Err(error);
-        }
+        self.record(&attempt_id, AttemptUpdate::Sending).await?;
 
         // 4. Transmit.
         let response = match self.transport.send(request).await {
@@ -348,7 +351,7 @@ impl CloudDispatcher {
     }
 
     /// Settle a ledger row after a decoded response.
-    async fn settle_attempt(
+    pub async fn settle_attempt(
         &self,
         attempt_id: &AttemptId,
         provider_request_id: Option<String>,
@@ -528,7 +531,7 @@ impl OpenRouterSpeechToText {
                 audio,
                 input.locale_hint.as_ref(),
             )
-            .map_err(build_error)?
+            .map_err(|error| build_error(&error))?
             .encode(&multipart_boundary(&self.boundary_nonce)),
             RequestFamily::AudioChat => AudioChatRequest::build(
                 RequestFamily::AudioChat,
@@ -539,7 +542,7 @@ impl OpenRouterSpeechToText {
                 limit_bytes,
                 audio,
             )
-            .map_err(build_error)?
+            .map_err(|error| build_error(&error))?
             .encode(),
             // Unreachable thanks to the guard above; kept explicit so adding a
             // family forces a decision here rather than silently falling back.
@@ -580,14 +583,14 @@ impl OpenRouterSpeechToText {
 
         let (draft, usage) = match self.card.request_family {
             RequestFamily::MultipartStt => {
-                let decoded: TranscriptionResponse = serde_json::from_slice(&success.body)
-                    .map_err(|_| SttError::MalformedOutput)?;
+                let decoded: TranscriptionResponse =
+                    serde_json::from_slice(&success.body).map_err(|_| SttError::MalformedOutput)?;
                 let draft = self.draft_from_transcription(&decoded, &input)?;
                 (draft, decoded.usage.clone())
             }
             _ => {
-                let decoded: ChatCompletionResponse = serde_json::from_slice(&success.body)
-                    .map_err(|_| SttError::MalformedOutput)?;
+                let decoded: ChatCompletionResponse =
+                    serde_json::from_slice(&success.body).map_err(|_| SttError::MalformedOutput)?;
                 let text = decoded
                     .first_content()
                     .ok_or(SttError::MalformedOutput)?
@@ -669,12 +672,11 @@ impl OpenRouterSpeechToText {
                 segment.text.clone(),
             );
             if let Some(confidence) = segment.confidence {
-                draft_segment = draft_segment
-                    .with_confidence(Confidence::new(
-                        EngineId::new(OPENROUTER_ENGINE_ID),
-                        ConfidenceScale::VendorDefined,
-                        confidence,
-                    ));
+                draft_segment = draft_segment.with_confidence(Confidence::new(
+                    EngineId::new(OPENROUTER_ENGINE_ID),
+                    ConfidenceScale::VendorDefined,
+                    confidence,
+                ));
             }
             segments.push(draft_segment);
         }
@@ -686,9 +688,14 @@ impl OpenRouterSpeechToText {
             segments,
         );
         draft.locale = locale;
-        draft.duration_ms = response.duration.map(seconds_to_millis).or(input.duration_ms);
+        draft.duration_ms = response
+            .duration
+            .map(seconds_to_millis)
+            .or(input.duration_ms);
         draft.chunking_strategy = input.chunking_strategy.clone();
-        draft.normalization_profile = input.normalization_profile.clone();
+        draft
+            .normalization_profile
+            .clone_from(&input.normalization_profile);
         draft
             .engine_params
             .insert("request_family".to_owned(), "multipart_stt".to_owned());
@@ -720,7 +727,9 @@ impl OpenRouterSpeechToText {
         );
         draft.duration_ms = input.duration_ms;
         draft.chunking_strategy = input.chunking_strategy.clone();
-        draft.normalization_profile = input.normalization_profile.clone();
+        draft
+            .normalization_profile
+            .clone_from(&input.normalization_profile);
         draft.engine_params.insert(
             "request_family".to_owned(),
             match self.card.request_family {
@@ -749,7 +758,7 @@ fn seconds_to_millis(seconds: f64) -> u64 {
     (seconds * 1000.0).round() as u64
 }
 
-fn build_error(error: crate::request::RequestBuildError) -> SttError {
+fn build_error(error: &crate::request::RequestBuildError) -> SttError {
     use crate::request::RequestBuildError;
     match error {
         RequestBuildError::NoBuilderForFamily { .. } => SttError::Unavailable,
@@ -790,10 +799,8 @@ impl SpeechToText for OpenRouterSpeechToText {
         } else {
             CapabilityStatus::Unknown
         };
-        let mut capabilities = SttCapabilities::unknown(
-            EngineId::new(OPENROUTER_ENGINE_ID),
-            self.model_identity(),
-        );
+        let mut capabilities =
+            SttCapabilities::unknown(EngineId::new(OPENROUTER_ENGINE_ID), self.model_identity());
         capabilities.status = status;
         capabilities.request_family = self.card.request_family;
         capabilities.offline = Tri::No;
@@ -910,7 +917,9 @@ impl OpenRouterTextModel {
             &format!("plaudon_{}", request.schema_version),
             request.output_schema.clone(),
             self.supports_structured_output == Tri::Yes,
-            request.max_output_tokens.and_then(|v| u32::try_from(v).ok()),
+            request
+                .max_output_tokens
+                .and_then(|v| u32::try_from(v).ok()),
         )
         .map_err(|_| TextModelError::EngineFailure)?;
         let body = built.encode();
@@ -969,7 +978,10 @@ impl OpenRouterTextModel {
             response: StructuredResponse {
                 body: value,
                 repair_attempts: 0,
-                usage: decoded.usage.as_ref().and_then(|u| serde_json::to_value(u).ok()),
+                usage: decoded
+                    .usage
+                    .as_ref()
+                    .and_then(|u| serde_json::to_value(u).ok()),
             },
             cost,
             attempt_id: success.attempt_id,

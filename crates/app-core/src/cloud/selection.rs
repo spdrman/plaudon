@@ -254,7 +254,10 @@ mod tests {
         )
         .expect("resolved");
         assert_eq!(resolved.source, ChoiceSource::OneShot);
-        assert_eq!(resolved.choice.model_id.as_deref(), Some("openai/gpt-audio"));
+        assert_eq!(
+            resolved.choice.model_id.as_deref(),
+            Some("openai/gpt-audio")
+        );
     }
 
     #[test]

@@ -489,7 +489,9 @@ mod tests {
         .expect("builds");
         let encoded = request.encode(&multipart_boundary("test"));
         let text = String::from_utf8_lossy(&encoded.bytes);
-        assert!(encoded.content_type.starts_with("multipart/form-data; boundary="));
+        assert!(encoded
+            .content_type
+            .starts_with("multipart/form-data; boundary="));
         assert_eq!(text.matches("AUDIOBYTES").count(), 1);
         assert!(text.contains("name=\"model\""));
         assert!(text.contains("openai/whisper-1"));

@@ -309,7 +309,8 @@ impl StoredEstimate {
         else {
             return MoneyEstimate::Unknown;
         };
-        super::usage::money_from_string(raw, currency).map_or(MoneyEstimate::Unknown, MoneyEstimate::Estimated)
+        super::usage::money_from_string(raw, currency)
+            .map_or(MoneyEstimate::Unknown, MoneyEstimate::Estimated)
     }
 }
 
@@ -363,11 +364,7 @@ impl AttemptLedger for InferenceLedger {
         Ok(AttemptId::committed(id))
     }
 
-    async fn update(
-        &self,
-        id: &AttemptId,
-        update: AttemptUpdate,
-    ) -> Result<(), LedgerUnavailable> {
+    async fn update(&self, id: &AttemptId, update: AttemptUpdate) -> Result<(), LedgerUnavailable> {
         let now = Timestamp::now().as_millis();
         let state = update.dispatch_state();
         let state_label = dispatch_label(state);

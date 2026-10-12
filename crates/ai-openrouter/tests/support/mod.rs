@@ -301,10 +301,26 @@ pub fn verified_card(model_id: &str, family: RequestFamily) -> ModelCard {
 pub struct Harness {
     /// The bound client.
     pub client: OpenRouterSpeechToText,
+    /// The dispatcher the client was built over.
+    pub dispatcher: CloudDispatcher,
+    /// The job binding the client was built with.
+    pub binding: JobBinding,
     /// The transport that would have carried the request.
     pub transport: Arc<FixtureTransport>,
     /// The ledger the dispatch had to write to first.
     pub ledger: Arc<RecordingLedger>,
+}
+
+impl Harness {
+    /// The dispatcher behind the client, for the capability smoke test.
+    pub fn dispatcher(&self) -> &CloudDispatcher {
+        &self.dispatcher
+    }
+
+    /// The job binding the harness used.
+    pub fn binding(&self) -> JobBinding {
+        self.binding.clone()
+    }
 }
 
 /// Build a speech client over a fixture transport.
@@ -334,21 +350,20 @@ pub fn harness(
         max_delay: std::time::Duration::from_millis(2),
         max_retry_after: std::time::Duration::from_millis(5),
     });
-    let client = OpenRouterSpeechToText::new(
-        card,
-        dispatcher,
-        JobBinding {
+    let binding = JobBinding {
             job_id: "job-1".to_owned(),
             recording_id: "recording-1".to_owned(),
             consent_id: "consent-1".to_owned(),
             privacy_snapshot: "relay=openrouter;model=m;provider=OpenAI;content=audio_bytes;retention=unknown;source=unresolved".to_owned(),
             route_label: Some("openrouter|m|OpenAI".to_owned()),
-        },
-    )
-    .with_boundary_nonce("contract")
-    .with_now_unix(NOW_UNIX);
+    };
+    let client = OpenRouterSpeechToText::new(card, dispatcher.clone(), binding.clone())
+        .with_boundary_nonce("contract")
+        .with_now_unix(NOW_UNIX);
     Harness {
         client,
+        dispatcher,
+        binding,
         transport,
         ledger,
     }

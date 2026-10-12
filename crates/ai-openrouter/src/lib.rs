@@ -26,6 +26,7 @@ pub mod privacy;
 pub mod registry;
 pub mod request;
 pub mod retry;
+pub mod smoke;
 pub mod transport;
 pub mod wire;
 
@@ -40,12 +41,13 @@ pub use discovery::{CatalogClient, DegradedReason, Discovered};
 pub use error::{classify_http_status, OpenRouterError, Retriability};
 pub use ledger::{AttemptId, AttemptIntent, AttemptLedger, AttemptUpdate, LedgerUnavailable};
 pub use pricing::{CostEstimate, CostOrigin, PricingUnits, SettledCost};
-pub use privacy::{PrivacyResolution, PrivacyRefusal, ZERO_RETENTION_CAVEAT};
+pub use privacy::{PrivacyRefusal, PrivacyResolution, ZERO_RETENTION_CAVEAT};
 pub use registry::{ModelCard, ModelRegistry, NotVerifiedReason, Verification};
 pub use request::{
     AudioChatRequest, MultipartSttRequest, RequestBuildError, TextGenerationRequest,
 };
 pub use retry::{RetryDecision, RetryPolicy};
+pub use smoke::{CapabilitySmokeTest, SmokeTestOutcome};
 pub use transport::{AsyncHttpTransport, TransportFailure};
 
 /// The model catalog path (spec 10.1).

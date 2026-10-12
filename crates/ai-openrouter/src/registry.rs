@@ -362,7 +362,10 @@ impl ModelRegistry {
 
     /// Attach a resolved destination to a card.
     pub fn apply_privacy(&mut self, task: ModelTask, resolution: PrivacyResolution) {
-        if let Some(card) = self.cards.get_mut(&(task, resolution.route.model_id.clone())) {
+        if let Some(card) = self
+            .cards
+            .get_mut(&(task, resolution.route.model_id.clone()))
+        {
             card.privacy = Some(resolution);
         }
     }

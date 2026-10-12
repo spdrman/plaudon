@@ -788,6 +788,29 @@ export interface StartProcessingResponse {
   blocked_reason: string | null;
 }
 
+/** The two request builders a capability check can exercise (§8.6, §10.3). */
+export type VerificationTask = "transcription" | "text_generation";
+
+/**
+ * ADR-0022: `verified` requires an observed exchange, so the only way a model
+ * can become verified is to actually send it a short bundled fixture clip.
+ * That is a real, consented, billable request — never a silent background one.
+ */
+export interface VerifyModelRequest {
+  model_id: string;
+  task: VerificationTask;
+  /** The check costs money, so it is never run without explicit approval. */
+  cost_acknowledged: boolean;
+}
+
+export interface VerifyModelResponse {
+  /** The model after the exchange; `verified` only when the check passed. */
+  model: ModelCard;
+  /** What the check itself cost; `unknown` when no cost could be derived. */
+  cost: CostValue;
+  provider_request_id: string | null;
+}
+
 /* ------------------------------------------------------------ command map */
 
 export interface CommandMap {
@@ -820,6 +843,7 @@ export interface CommandMap {
   revoke_cloud_consent: { req: { consent_id: string }; res: StatusResponse };
   set_model_preference: { req: SetModelPreferenceRequest; res: SetModelPreferenceResponse };
   start_processing: { req: StartProcessingRequest; res: StartProcessingResponse };
+  verify_model: { req: VerifyModelRequest; res: VerifyModelResponse };
 }
 
 export type CommandName = keyof CommandMap;
@@ -851,19 +875,22 @@ export const SPEC_COMMANDS: readonly CommandName[] = [
 export const ADR_0020_COMMANDS: readonly CommandName[] = ["list_activity", "complete_onboarding"];
 
 /**
- * EPIC G additions: §15.2 lists no write path for the local spending budget or
- * for the per-task default model, yet §10.2 and §10.4 require both to be set
- * from the UI. They are named here so the drift test still covers them.
+ * EPIC G additions. §15.2 lists no write path for the local spending budget,
+ * for the per-task default model, or for the capability check that is the only
+ * thing able to make a model `verified` at all (ADR-0022) — yet §10.2, §10.4
+ * and §8.6A all require them. They are named here so the drift test still
+ * covers them.
  */
-export const CLOUD_PREFERENCE_COMMANDS: readonly CommandName[] = [
+export const CLOUD_ADDED_COMMANDS: readonly CommandName[] = [
   "set_cloud_budget",
   "set_model_preference",
+  "verify_model",
 ];
 
 export const ALL_COMMANDS: readonly CommandName[] = [
   ...SPEC_COMMANDS,
   ...ADR_0020_COMMANDS,
-  ...CLOUD_PREFERENCE_COMMANDS,
+  ...CLOUD_ADDED_COMMANDS,
 ];
 
 /* ----------------------------------------------------------------- events */

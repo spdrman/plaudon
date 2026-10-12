@@ -66,7 +66,8 @@ async fn a_multipart_transcription_with_segments_yields_native_alignment() {
     let h = harness(
         verified_card(MODEL, RequestFamily::MultipartStt),
         transport,
-        PreflightAuthority::allowing(MODEL, ContentType::AudioBytes) as Arc<dyn CloudDispatchAuthority>,
+        PreflightAuthority::allowing(MODEL, ContentType::AudioBytes)
+            as Arc<dyn CloudDispatchAuthority>,
         Arc::new(RecordingLedger::new()),
     );
 
@@ -97,7 +98,8 @@ async fn a_text_only_response_never_claims_a_timeline() {
     let h = harness(
         verified_card(MODEL, RequestFamily::MultipartStt),
         FixtureTransport::replaying("transcription-success-text-only"),
-        PreflightAuthority::allowing(MODEL, ContentType::AudioBytes) as Arc<dyn CloudDispatchAuthority>,
+        PreflightAuthority::allowing(MODEL, ContentType::AudioBytes)
+            as Arc<dyn CloudDispatchAuthority>,
         Arc::new(RecordingLedger::new()),
     );
 
@@ -146,7 +148,8 @@ async fn a_response_without_usage_leaves_the_cost_unknown() {
     let h = harness(
         verified_card(MODEL, RequestFamily::MultipartStt),
         FixtureTransport::replaying("transcription-success-segments"),
-        PreflightAuthority::allowing(MODEL, ContentType::AudioBytes) as Arc<dyn CloudDispatchAuthority>,
+        PreflightAuthority::allowing(MODEL, ContentType::AudioBytes)
+            as Arc<dyn CloudDispatchAuthority>,
         Arc::new(RecordingLedger::new()),
     );
     let outcome = h
@@ -173,7 +176,8 @@ async fn an_unverified_model_sends_zero_bytes() {
     let h = harness(
         card,
         FixtureTransport::replaying("transcription-success-segments"),
-        PreflightAuthority::allowing(MODEL, ContentType::AudioBytes) as Arc<dyn CloudDispatchAuthority>,
+        PreflightAuthority::allowing(MODEL, ContentType::AudioBytes)
+            as Arc<dyn CloudDispatchAuthority>,
         ledger.clone(),
     );
 
@@ -228,7 +232,8 @@ async fn an_unaccepted_format_is_rejected_locally() {
     let h = harness(
         verified_card(MODEL, RequestFamily::MultipartStt),
         FixtureTransport::replaying("transcription-success-segments"),
-        PreflightAuthority::allowing(MODEL, ContentType::AudioBytes) as Arc<dyn CloudDispatchAuthority>,
+        PreflightAuthority::allowing(MODEL, ContentType::AudioBytes)
+            as Arc<dyn CloudDispatchAuthority>,
         Arc::new(RecordingLedger::new()),
     );
     assert_eq!(
@@ -249,7 +254,8 @@ async fn an_oversize_payload_is_rejected_before_any_byte_leaves() {
     let h = harness(
         card,
         FixtureTransport::replaying("transcription-success-segments"),
-        PreflightAuthority::allowing(MODEL, ContentType::AudioBytes) as Arc<dyn CloudDispatchAuthority>,
+        PreflightAuthority::allowing(MODEL, ContentType::AudioBytes)
+            as Arc<dyn CloudDispatchAuthority>,
         Arc::new(RecordingLedger::new()),
     );
     assert_eq!(
@@ -270,7 +276,8 @@ async fn an_over_duration_input_is_rejected_before_any_byte_leaves() {
     let h = harness(
         card,
         FixtureTransport::replaying("transcription-success-segments"),
-        PreflightAuthority::allowing(MODEL, ContentType::AudioBytes) as Arc<dyn CloudDispatchAuthority>,
+        PreflightAuthority::allowing(MODEL, ContentType::AudioBytes)
+            as Arc<dyn CloudDispatchAuthority>,
         Arc::new(RecordingLedger::new()),
     );
     assert_eq!(
@@ -340,7 +347,8 @@ async fn the_ledger_row_is_committed_before_the_request_is_sent() {
     let h = harness(
         verified_card(MODEL, RequestFamily::MultipartStt),
         FixtureTransport::replaying("transcription-success-segments"),
-        PreflightAuthority::allowing(MODEL, ContentType::AudioBytes) as Arc<dyn CloudDispatchAuthority>,
+        PreflightAuthority::allowing(MODEL, ContentType::AudioBytes)
+            as Arc<dyn CloudDispatchAuthority>,
         ledger.clone(),
     );
     let sha = media.input.media_sha256.to_hex();
@@ -374,7 +382,8 @@ async fn an_unavailable_ledger_prevents_the_dispatch() {
     let h = harness(
         verified_card(MODEL, RequestFamily::MultipartStt),
         FixtureTransport::replaying("transcription-success-segments"),
-        PreflightAuthority::allowing(MODEL, ContentType::AudioBytes) as Arc<dyn CloudDispatchAuthority>,
+        PreflightAuthority::allowing(MODEL, ContentType::AudioBytes)
+            as Arc<dyn CloudDispatchAuthority>,
         ledger,
     );
     let error = h
@@ -428,7 +437,8 @@ async fn a_rate_limit_is_retried_after_the_provider_named_delay() {
     let h = harness(
         verified_card(MODEL, RequestFamily::MultipartStt),
         transport,
-        PreflightAuthority::allowing(MODEL, ContentType::AudioBytes) as Arc<dyn CloudDispatchAuthority>,
+        PreflightAuthority::allowing(MODEL, ContentType::AudioBytes)
+            as Arc<dyn CloudDispatchAuthority>,
         Arc::new(RecordingLedger::new()),
     );
     // The fixture asks for 30s, above the harness's 5ms ceiling, so the job is
@@ -452,7 +462,8 @@ async fn a_provider_outage_is_retried_automatically() {
     let h = harness(
         verified_card(MODEL, RequestFamily::MultipartStt),
         transport,
-        PreflightAuthority::allowing(MODEL, ContentType::AudioBytes) as Arc<dyn CloudDispatchAuthority>,
+        PreflightAuthority::allowing(MODEL, ContentType::AudioBytes)
+            as Arc<dyn CloudDispatchAuthority>,
         Arc::new(RecordingLedger::new()),
     );
     let outcome = h
@@ -475,7 +486,8 @@ async fn a_lost_response_after_upload_is_never_retried() {
     let h = harness(
         verified_card(MODEL, RequestFamily::MultipartStt),
         transport,
-        PreflightAuthority::allowing(MODEL, ContentType::AudioBytes) as Arc<dyn CloudDispatchAuthority>,
+        PreflightAuthority::allowing(MODEL, ContentType::AudioBytes)
+            as Arc<dyn CloudDispatchAuthority>,
         ledger.clone(),
     );
     let error = h
@@ -512,7 +524,8 @@ async fn a_failure_before_transmission_is_safe_to_retry() {
     let h = harness(
         verified_card(MODEL, RequestFamily::MultipartStt),
         transport,
-        PreflightAuthority::allowing(MODEL, ContentType::AudioBytes) as Arc<dyn CloudDispatchAuthority>,
+        PreflightAuthority::allowing(MODEL, ContentType::AudioBytes)
+            as Arc<dyn CloudDispatchAuthority>,
         ledger.clone(),
     );
     h.client
@@ -521,9 +534,7 @@ async fn a_failure_before_transmission_is_safe_to_retry() {
         .expect("retried");
     assert_eq!(h.transport.attempts(), 2);
     assert_eq!(ledger.intents().len(), 2, "each attempt gets its own row");
-    assert!(ledger
-        .states()
-        .contains(&DispatchState::FailedBeforeSend));
+    assert!(ledger.states().contains(&DispatchState::FailedBeforeSend));
 }
 
 #[tokio::test]
@@ -536,7 +547,8 @@ async fn a_truncated_response_asks_the_user_instead_of_retrying() {
     let h = harness(
         verified_card(MODEL, RequestFamily::MultipartStt),
         transport,
-        PreflightAuthority::allowing(MODEL, ContentType::AudioBytes) as Arc<dyn CloudDispatchAuthority>,
+        PreflightAuthority::allowing(MODEL, ContentType::AudioBytes)
+            as Arc<dyn CloudDispatchAuthority>,
         Arc::new(RecordingLedger::new()),
     );
     let error = h
@@ -557,7 +569,8 @@ async fn an_unsafe_redirect_is_refused_and_not_followed() {
     let h = harness(
         verified_card(MODEL, RequestFamily::MultipartStt),
         transport,
-        PreflightAuthority::allowing(MODEL, ContentType::AudioBytes) as Arc<dyn CloudDispatchAuthority>,
+        PreflightAuthority::allowing(MODEL, ContentType::AudioBytes)
+            as Arc<dyn CloudDispatchAuthority>,
         Arc::new(RecordingLedger::new()),
     );
     let error = h
@@ -575,7 +588,8 @@ async fn a_body_that_is_not_the_documented_shape_fails_closed() {
     let h = harness(
         verified_card(MODEL, RequestFamily::MultipartStt),
         FixtureTransport::replaying("malformed-json"),
-        PreflightAuthority::allowing(MODEL, ContentType::AudioBytes) as Arc<dyn CloudDispatchAuthority>,
+        PreflightAuthority::allowing(MODEL, ContentType::AudioBytes)
+            as Arc<dyn CloudDispatchAuthority>,
         Arc::new(RecordingLedger::new()),
     );
     assert_eq!(
@@ -595,7 +609,8 @@ async fn a_response_with_no_timing_at_all_degrades_to_text_only() {
     let h = harness(
         verified_card(MODEL, RequestFamily::MultipartStt),
         FixtureTransport::replaying("transcription-success-text-only"),
-        PreflightAuthority::allowing(MODEL, ContentType::AudioBytes) as Arc<dyn CloudDispatchAuthority>,
+        PreflightAuthority::allowing(MODEL, ContentType::AudioBytes)
+            as Arc<dyn CloudDispatchAuthority>,
         Arc::new(RecordingLedger::new()),
     );
     let outcome = h
@@ -612,7 +627,8 @@ async fn a_mix_of_timed_and_untimed_segments_is_refused() {
     let h = harness(
         verified_card(MODEL, RequestFamily::MultipartStt),
         FixtureTransport::replaying("transcription-partial-segment"),
-        PreflightAuthority::allowing(MODEL, ContentType::AudioBytes) as Arc<dyn CloudDispatchAuthority>,
+        PreflightAuthority::allowing(MODEL, ContentType::AudioBytes)
+            as Arc<dyn CloudDispatchAuthority>,
         Arc::new(RecordingLedger::new()),
     );
     assert_eq!(
@@ -654,7 +670,8 @@ async fn the_api_key_appears_only_in_the_authorization_header() {
     let h = harness(
         verified_card(MODEL, RequestFamily::MultipartStt),
         FixtureTransport::replaying("transcription-success-segments"),
-        PreflightAuthority::allowing(MODEL, ContentType::AudioBytes) as Arc<dyn CloudDispatchAuthority>,
+        PreflightAuthority::allowing(MODEL, ContentType::AudioBytes)
+            as Arc<dyn CloudDispatchAuthority>,
         ledger.clone(),
     );
     let outcome = h
@@ -682,7 +699,8 @@ async fn a_cancelled_job_never_dispatches() {
     let h = harness(
         verified_card(MODEL, RequestFamily::MultipartStt),
         FixtureTransport::replaying("transcription-success-segments"),
-        PreflightAuthority::allowing(MODEL, ContentType::AudioBytes) as Arc<dyn CloudDispatchAuthority>,
+        PreflightAuthority::allowing(MODEL, ContentType::AudioBytes)
+            as Arc<dyn CloudDispatchAuthority>,
         Arc::new(RecordingLedger::new()),
     );
     let context = ctx();
@@ -695,4 +713,110 @@ async fn a_cancelled_job_never_dispatches() {
         SttError::Cancelled
     );
     assert_eq!(h.transport.transmitted_bytes(), 0);
+}
+
+// ---------------------------------------------------------------------------
+// Capability smoke test (G1.2: what makes a model `Verified`)
+// ---------------------------------------------------------------------------
+
+mod smoke {
+    use super::*;
+    use plaudon_ai_openrouter::catalog::{ProbeEvidence, TimestampSupport};
+    use plaudon_ai_openrouter::pricing::PricingUnits;
+    use plaudon_ai_openrouter::registry::{ModelRegistry, Verification};
+    use plaudon_ai_openrouter::smoke::CapabilitySmokeTest;
+    use plaudon_ai_openrouter::{Allowlist, CapabilitySmokeTest as _Alias, ModelTask};
+
+    fn smoke_test(
+        family: RequestFamily,
+        transport: Arc<FixtureTransport>,
+        ledger: Arc<RecordingLedger>,
+    ) -> CapabilitySmokeTest {
+        let h = harness(
+            verified_card(MODEL, family),
+            transport,
+            PreflightAuthority::allowing(MODEL, ContentType::AudioBytes)
+                as Arc<dyn CloudDispatchAuthority>,
+            ledger,
+        );
+        // Reuse the harness's dispatcher by rebuilding the test over the same
+        // pieces: the smoke test is the only caller that may run against an
+        // unverified card, because it is what verifies it.
+        let _ = &h.client;
+        CapabilitySmokeTest::new(
+            MODEL,
+            family,
+            PricingUnits::unknown(),
+            h.dispatcher().clone(),
+            h.binding(),
+            "2026-10-11",
+        )
+    }
+
+    #[tokio::test]
+    async fn a_successful_exchange_records_what_it_observed_and_nothing_more() {
+        let ledger = Arc::new(RecordingLedger::new());
+        let test = smoke_test(
+            RequestFamily::MultipartStt,
+            FixtureTransport::replaying("transcription-success-words"),
+            ledger.clone(),
+        );
+        let outcome = test.run(ctx()).await.expect("smoke test runs");
+
+        assert_eq!(outcome.record.evidence, ProbeEvidence::ObservedExchange);
+        assert_eq!(outcome.record.timestamps, TimestampSupport::ObservedWords);
+        assert_eq!(
+            outcome.record.diarization,
+            plaudon_domain::capability::Tri::Yes
+        );
+        assert_eq!(
+            outcome.record.language_detection,
+            plaudon_domain::capability::Tri::Yes
+        );
+        // The clip proves nothing about the real size ceiling.
+        assert!(!outcome.record.max_input_bytes.is_known());
+        assert_eq!(ledger.intents().len(), 1, "the smoke test is ledgered too");
+
+        let mut registry = ModelRegistry::from_allowlist(&Allowlist::embedded().expect("manifest"));
+        registry.apply_probe(
+            ModelTask::Transcription,
+            &outcome.record,
+            "capability-check",
+        );
+        let card = registry
+            .card(MODEL, ModelTask::Transcription)
+            .expect("card");
+        assert!(matches!(card.verification, Verification::Verified { .. }));
+        assert!(card.is_selectable());
+    }
+
+    #[tokio::test]
+    async fn a_failed_exchange_leaves_the_model_unverified() {
+        let ledger = Arc::new(RecordingLedger::new());
+        let test = smoke_test(
+            RequestFamily::MultipartStt,
+            FixtureTransport::new(vec![Ok(response_from("error-404-unknown-model"))]),
+            ledger,
+        );
+        assert!(test.run(ctx()).await.is_err());
+
+        let registry = ModelRegistry::from_allowlist(&Allowlist::embedded().expect("manifest"));
+        let card = registry
+            .card(MODEL, ModelTask::Transcription)
+            .expect("card");
+        assert!(!card.verification.is_verified());
+    }
+
+    #[tokio::test]
+    async fn a_family_with_no_builder_is_never_smoke_tested() {
+        let ledger = Arc::new(RecordingLedger::new());
+        let transport = FixtureTransport::replaying("transcription-success-segments");
+        let test = smoke_test(RequestFamily::Unknown, transport.clone(), ledger.clone());
+        assert_eq!(
+            test.run(ctx()).await.expect_err("refused"),
+            SttError::Unavailable
+        );
+        assert_eq!(transport.transmitted_bytes(), 0);
+        assert!(ledger.intents().is_empty());
+    }
 }

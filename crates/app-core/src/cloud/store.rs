@@ -59,8 +59,9 @@ impl CloudStore {
         } else {
             (None, None)
         };
-        let json = serde_json::to_string(record)
-            .map_err(|error| PersistenceError::Migration(format!("cloud settings encoding failed: {error}")))?;
+        let json = serde_json::to_string(record).map_err(|error| {
+            PersistenceError::Migration(format!("cloud settings encoding failed: {error}"))
+        })?;
 
         sqlx::query(
             "INSERT INTO model_capability_records \
@@ -172,13 +173,11 @@ impl CloudStore {
         recording_id: &str,
         stage: Stage,
     ) -> PersistenceResult<()> {
-        sqlx::query(
-            "DELETE FROM recording_model_overrides WHERE recording_id = ?1 AND stage = ?2",
-        )
-        .bind(recording_id)
-        .bind(stage.as_str())
-        .execute(self.db.pool())
-        .await?;
+        sqlx::query("DELETE FROM recording_model_overrides WHERE recording_id = ?1 AND stage = ?2")
+            .bind(recording_id)
+            .bind(stage.as_str())
+            .execute(self.db.pool())
+            .await?;
         Ok(())
     }
 
@@ -243,7 +242,7 @@ impl CloudStore {
 
     /// Every documented policy.
     pub async fn route_policies(&self) -> PersistenceResult<Vec<DocumentedPolicy>> {
-        let rows: Vec<(String, Option<String>, String, String, Option<i64>)> = sqlx::query_as(
+        let rows: Vec<PolicyRow> = sqlx::query_as(
             "SELECT model_id, downstream_provider, content_type, posture, retention_days \
              FROM route_privacy_policies",
         )
@@ -251,23 +250,21 @@ impl CloudStore {
         .await?;
         Ok(rows
             .into_iter()
-            .filter_map(
-                |(model_id, provider, content_type, posture, days)| {
-                    Some(DocumentedPolicy {
-                        model_id,
-                        downstream_provider: provider,
-                        content_type: parse_content(&content_type)?,
-                        posture: match posture.as_str() {
-                            "zero_retention" => RetentionPosture::ZeroRetention,
-                            "limited_retention" => RetentionPosture::LimitedRetention {
-                                days: u32::try_from(days.unwrap_or(0)).ok()?,
-                            },
-                            "provider_default" => RetentionPosture::ProviderDefault,
-                            _ => return None,
+            .filter_map(|(model_id, provider, content_type, posture, days)| {
+                Some(DocumentedPolicy {
+                    model_id,
+                    downstream_provider: provider,
+                    content_type: parse_content(&content_type)?,
+                    posture: match posture.as_str() {
+                        "zero_retention" => RetentionPosture::ZeroRetention,
+                        "limited_retention" => RetentionPosture::LimitedRetention {
+                            days: u32::try_from(days.unwrap_or(0)).ok()?,
                         },
-                    })
-                },
-            )
+                        "provider_default" => RetentionPosture::ProviderDefault,
+                        _ => return None,
+                    },
+                })
+            })
             .collect())
     }
 
@@ -301,19 +298,18 @@ impl CloudStore {
 
     /// Store the local budget.
     pub async fn set_budget(&self, budget: &CloudBudget) -> PersistenceResult<()> {
-        let currency = budget
-            .per_job_limit
-            .or(budget.monthly_limit)
-            .map_or_else(|| Currency::USD.as_str().to_owned(), |m| {
-                m.currency.as_str().to_owned()
-            });
+        let currency = budget.per_job_limit.or(budget.monthly_limit).map_or_else(
+            || Currency::USD.as_str().to_owned(),
+            |m| m.currency.as_str().to_owned(),
+        );
         let stored = StoredBudget {
             per_job_limit: budget.per_job_limit.map(money_to_string),
             monthly_limit: budget.monthly_limit.map(money_to_string),
             currency,
         };
-        let json = serde_json::to_string(&stored)
-            .map_err(|error| PersistenceError::Migration(format!("cloud settings encoding failed: {error}")))?;
+        let json = serde_json::to_string(&stored).map_err(|error| {
+            PersistenceError::Migration(format!("cloud settings encoding failed: {error}"))
+        })?;
         sqlx::query(
             "INSERT INTO app_preferences (key, version, value_json) VALUES (?1, ?2, ?3) \
              ON CONFLICT(key) DO UPDATE SET version = excluded.version, \
@@ -343,6 +339,9 @@ impl CloudStore {
         Ok(updated)
     }
 }
+
+/// One `route_privacy_policies` row as read back.
+type PolicyRow = (String, Option<String>, String, String, Option<i64>);
 
 #[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
 struct StoredBudget {

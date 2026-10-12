@@ -162,8 +162,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_covering_grant_authorizes_one_dispatch() {
-        let authority =
-            ConsentAuthority::new(permitted(), vec![grant("m")], context(), NOW);
+        let authority = ConsentAuthority::new(permitted(), vec![grant("m")], context(), NOW);
         let approval = authority
             .authorize(ContentType::AudioBytes, "m")
             .await
@@ -204,8 +203,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_grant_for_another_model_does_not_cover_this_route() {
-        let authority =
-            ConsentAuthority::new(permitted(), vec![grant("other")], context(), NOW);
+        let authority = ConsentAuthority::new(permitted(), vec![grant("other")], context(), NOW);
         assert_eq!(
             authority
                 .authorize(ContentType::AudioBytes, "m")
@@ -245,7 +243,10 @@ mod tests {
             context,
             NOW,
         );
-        assert!(authority.authorize(ContentType::AudioBytes, "m").await.is_ok());
+        assert!(authority
+            .authorize(ContentType::AudioBytes, "m")
+            .await
+            .is_ok());
     }
 
     #[tokio::test]

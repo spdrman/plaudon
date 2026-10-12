@@ -22,9 +22,7 @@
 
 use std::collections::BTreeMap;
 
-use plaudon_security::consent::{
-    ContentType, ProviderRoute, RetentionPosture, RELAY_OPENROUTER,
-};
+use plaudon_security::consent::{ContentType, ProviderRoute, RetentionPosture, RELAY_OPENROUTER};
 use serde::{Deserialize, Serialize};
 
 /// One route as reported by the endpoints metadata.

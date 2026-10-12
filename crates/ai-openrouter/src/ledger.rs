@@ -136,11 +136,7 @@ pub trait AttemptLedger: Send + Sync + fmt::Debug {
     async fn open(&self, intent: &AttemptIntent) -> Result<AttemptId, LedgerUnavailable>;
 
     /// Record a state change for an open attempt.
-    async fn update(
-        &self,
-        id: &AttemptId,
-        update: AttemptUpdate,
-    ) -> Result<(), LedgerUnavailable>;
+    async fn update(&self, id: &AttemptId, update: AttemptUpdate) -> Result<(), LedgerUnavailable>;
 }
 
 /// An in-memory ledger for tests and for the opt-in probe harness.
@@ -213,11 +209,7 @@ impl AttemptLedger for RecordingLedger {
         Ok(id)
     }
 
-    async fn update(
-        &self,
-        id: &AttemptId,
-        update: AttemptUpdate,
-    ) -> Result<(), LedgerUnavailable> {
+    async fn update(&self, id: &AttemptId, update: AttemptUpdate) -> Result<(), LedgerUnavailable> {
         if self.fail {
             return Err(LedgerUnavailable {
                 detail: "test ledger is unavailable".to_owned(),

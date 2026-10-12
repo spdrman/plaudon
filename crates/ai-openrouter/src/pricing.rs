@@ -80,9 +80,7 @@ impl PricingUnits {
     /// The basis this model is charged on, as far as the catalog shows.
     #[must_use]
     pub fn basis(&self) -> Known<PricingBasis> {
-        if self.audio_input_per_token.is_known() {
-            Known::Known(PricingBasis::PerToken)
-        } else if self.prompt_per_token.is_known() {
+        if self.audio_input_per_token.is_known() || self.prompt_per_token.is_known() {
             Known::Known(PricingBasis::PerToken)
         } else if self.per_request.is_known() {
             Known::Known(PricingBasis::PerRequest)
@@ -473,10 +471,7 @@ mod tests {
         );
         assert_eq!(derived.origin, CostOrigin::DerivedFromReportedUsage);
         assert!(!derived.amount.is_finalized());
-        assert_eq!(
-            derived.amount.amount(),
-            Some(usd(10_000_000 + 10_000_000))
-        );
+        assert_eq!(derived.amount.amount(), Some(usd(10_000_000 + 10_000_000)));
     }
 
     #[test]
