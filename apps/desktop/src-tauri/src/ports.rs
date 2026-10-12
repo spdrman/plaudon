@@ -202,3 +202,65 @@ pub trait ExportPort: Send + Sync {
     /// Run the export as a job and return it.
     async fn export_recording(&self, request: ValidatedExport) -> Result<JobId, AppError>;
 }
+
+/// Original-audio and sanitized-derivative export (`export_media`, spec §4.6,
+/// §7.8).
+#[async_trait]
+pub trait MediaExportPort: Send + Sync {
+    /// Copy the stored bytes into a user-chosen folder, verifying the digest.
+    async fn export_media(
+        &self,
+        recording_id: RecordingId,
+        media_asset_id: Option<plaudon_domain::ids::MediaAssetId>,
+        destination: crate::validate::ValidatedDirectory,
+        include_sanitized_derivative: bool,
+    ) -> Result<crate::dto::ExportMediaResponse, AppError>;
+}
+
+/// Deletion with disclosure and durable tombstones (spec §4.6, §7.10).
+#[async_trait]
+pub trait DeletionPort: Send + Sync {
+    /// Exactly what a deletion would remove, and what it cannot reach.
+    async fn deletion_disclosure(
+        &self,
+        recording_id: RecordingId,
+    ) -> Result<crate::dto::DeletionDisclosureDto, AppError>;
+
+    /// Delete the recording, given the confirmation token of the disclosure
+    /// the user actually saw.
+    async fn delete_recording(
+        &self,
+        recording_id: RecordingId,
+        confirmation_token: String,
+    ) -> Result<crate::dto::DeleteRecordingResponse, AppError>;
+}
+
+/// The portable archive (`create_portable_backup`, `inspect_restore_archive`,
+/// `restore_portable_archive`, spec §13.6, §13.8).
+#[async_trait]
+pub trait ArchivePort: Send + Sync {
+    /// Write a complete, restorable archive of the library.
+    async fn create_portable_backup(
+        &self,
+        destination: crate::validate::ValidatedDirectory,
+        password: Option<String>,
+        sensitive_profile: bool,
+    ) -> Result<crate::dto::CreateBackupResponse, AppError>;
+
+    /// Validate an archive and report what it holds, writing nothing.
+    async fn inspect_restore_archive(
+        &self,
+        archive: crate::validate::ValidatedArchiveFile,
+        password: Option<String>,
+    ) -> Result<crate::dto::InspectArchiveResponse, AppError>;
+
+    /// Restore an archive into this library.
+    async fn restore_portable_archive(
+        &self,
+        archive: crate::validate::ValidatedArchiveFile,
+        password: Option<String>,
+        mode: crate::dto::RestoreModeDto,
+        on_conflict: crate::dto::ConflictPolicyDto,
+        restore_tombstoned: bool,
+    ) -> Result<crate::dto::RestoreArchiveResponse, AppError>;
+}

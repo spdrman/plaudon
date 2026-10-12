@@ -6,6 +6,7 @@
 //! or the §15.4 error envelope. The allowlist test at the bottom of this file
 //! fails if a handler outside the published list is ever registered.
 
+pub mod archive;
 pub mod import;
 pub mod jobs;
 pub mod library;
@@ -15,13 +16,16 @@ pub mod transcript;
 use tauri::State;
 
 use crate::dto::{
-    ActivityPage, CancelJobRequest, Capabilities, CompleteOnboardingRequest, EmptyRequest,
+    ActivityPage, CancelJobRequest, Capabilities, CompleteOnboardingRequest, CreateBackupRequest,
+    CreateBackupResponse, DeleteRecordingRequest, DeleteRecordingResponse, DeletionDisclosureDto,
+    DeletionDisclosureRequest, EmptyRequest, ExportMediaRequest, ExportMediaResponse,
     ExportRecordingRequest, ExportRecordingResponse, GetRecordingRequest, GetTranscriptRequest,
-    ImportFilesRequest, ImportFilesResponse, JobPage, JobSummary, ListActivityRequest,
-    ListJobsRequest, ListRecordingsRequest, LocalOnlyModeResponse, NotificationSettingsResponse,
-    Preferences, RecordingDetail, RecordingPage, RetryJobRequest, SaveTranscriptRevisionRequest,
-    SaveTranscriptRevisionResponse, SetLocalOnlyModeRequest, SetNotificationSettingsRequest,
-    SetOpenRouterKeyRequest, StatusResponse, TranscriptPage,
+    ImportFilesRequest, ImportFilesResponse, InspectArchiveRequest, InspectArchiveResponse,
+    JobPage, JobSummary, ListActivityRequest, ListJobsRequest, ListRecordingsRequest,
+    LocalOnlyModeResponse, NotificationSettingsResponse, Preferences, RecordingDetail,
+    RecordingPage, RestoreArchiveRequest, RestoreArchiveResponse, RetryJobRequest,
+    SaveTranscriptRevisionRequest, SaveTranscriptRevisionResponse, SetLocalOnlyModeRequest,
+    SetNotificationSettingsRequest, SetOpenRouterKeyRequest, StatusResponse, TranscriptPage,
 };
 use crate::error::{to_command_result, CommandResult};
 use crate::AppState;
@@ -39,6 +43,12 @@ pub const COMMAND_ALLOWLIST: &[&str] = &[
     "cancel_job",
     "retry_job",
     "export_recording",
+    "export_media",
+    "get_deletion_disclosure",
+    "delete_recording",
+    "create_portable_backup",
+    "inspect_restore_archive",
+    "restore_portable_archive",
     "set_notification_settings",
     "set_local_only_mode",
     "set_openrouter_key",
@@ -62,6 +72,12 @@ pub fn handler<R: tauri::Runtime>() -> impl Fn(tauri::ipc::Invoke<R>) -> bool + 
         cancel_job,
         retry_job,
         export_recording,
+        export_media,
+        get_deletion_disclosure,
+        delete_recording,
+        create_portable_backup,
+        inspect_restore_archive,
+        restore_portable_archive,
         set_notification_settings,
         set_local_only_mode,
         set_openrouter_key,
@@ -197,6 +213,54 @@ pub async fn complete_onboarding(
     request: CompleteOnboardingRequest,
 ) -> CommandResult<Preferences> {
     to_command_result(settings::complete_onboarding(&state.ports, request).await)
+}
+
+#[tauri::command]
+pub async fn export_media(
+    state: State<'_, AppState>,
+    request: ExportMediaRequest,
+) -> CommandResult<ExportMediaResponse> {
+    to_command_result(archive::export_media(&state.ports, request).await)
+}
+
+#[tauri::command]
+pub async fn get_deletion_disclosure(
+    state: State<'_, AppState>,
+    request: DeletionDisclosureRequest,
+) -> CommandResult<DeletionDisclosureDto> {
+    to_command_result(archive::get_deletion_disclosure(&state.ports, request).await)
+}
+
+#[tauri::command]
+pub async fn delete_recording(
+    state: State<'_, AppState>,
+    request: DeleteRecordingRequest,
+) -> CommandResult<DeleteRecordingResponse> {
+    to_command_result(archive::delete_recording(&state.ports, request).await)
+}
+
+#[tauri::command]
+pub async fn create_portable_backup(
+    state: State<'_, AppState>,
+    request: CreateBackupRequest,
+) -> CommandResult<CreateBackupResponse> {
+    to_command_result(archive::create_portable_backup(&state.ports, request).await)
+}
+
+#[tauri::command]
+pub async fn inspect_restore_archive(
+    state: State<'_, AppState>,
+    request: InspectArchiveRequest,
+) -> CommandResult<InspectArchiveResponse> {
+    to_command_result(archive::inspect_restore_archive(&state.ports, request).await)
+}
+
+#[tauri::command]
+pub async fn restore_portable_archive(
+    state: State<'_, AppState>,
+    request: RestoreArchiveRequest,
+) -> CommandResult<RestoreArchiveResponse> {
+    to_command_result(archive::restore_portable_archive(&state.ports, request).await)
 }
 
 #[cfg(test)]

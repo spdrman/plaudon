@@ -3406,6 +3406,7 @@ dependencies = [
  "keyring",
  "plaudon-app-core",
  "plaudon-domain",
+ "plaudon-export",
  "plaudon-notifications",
  "plaudon-persistence",
  "serde",

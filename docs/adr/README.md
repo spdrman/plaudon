@@ -3,8 +3,8 @@
 Numbers **0001-0012** are reserved by spec §21 and their meanings are fixed
 there; do not reuse them. Later ranges are allocated per work stream so two
 authors never mint the same number: 0013-0019 security and privacy, 0020-0029
-desktop shell, 0030-0039 job engine, 0040+ unallocated — claim a range in this
-file before using it.
+desktop shell, 0030-0039 job engine, 0040-0049 AI adapters, 0050-0059 export, backup and
+deletion, 0060+ unallocated — claim a range in this file before using it.
 
 Every record states context, the decision, the alternatives that were rejected
 and why, and the consequences we accept.
@@ -38,3 +38,9 @@ and why, and the consequences we accept.
 ## Job engine (0030-0039)
 
 - [ADR-0030: Job engine durability, idempotency and crash recovery](0030-job-engine-durability.md) — Accepted, 2026-10-11 (spec §14)
+
+## Export, backup and deletion (0050-0059)
+
+- [ADR-0050: An explicitly versioned `.recording-archive` container, not a ZIP](ADR-0050-recording-archive-container.md) — Accepted, 2026-10-11 (spec §13.6, §13.8, §16.5)
+- [ADR-0051: Argon2id plus STREAM XChaCha20-Poly1305 for encrypted backups](ADR-0051-argon2id-stream-aead-backups.md) — Accepted, 2026-10-11 (spec §13.7, §13.8)
+- [ADR-0052: Deletion is a journalled operation with a confirmed disclosure](ADR-0052-deletion-disclosure-and-tombstones.md) — Accepted, 2026-10-11 (spec §4.6, §7.10, §13.5)

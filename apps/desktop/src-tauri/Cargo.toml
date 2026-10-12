@@ -19,9 +19,10 @@ path = "src/main.rs"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-plaudon-domain = { workspace = true }
-plaudon-persistence = { workspace = true }
 plaudon-app-core = { workspace = true }
+plaudon-domain = { workspace = true }
+plaudon-export = { workspace = true }
+plaudon-persistence = { workspace = true }
 plaudon-notifications = { workspace = true }
 async-trait = { workspace = true }
 hex = { workspace = true }

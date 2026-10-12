@@ -925,6 +925,36 @@ pub enum ExportFormat {
     Markdown,
     /// JSON.
     Json,
+    /// SubRip captions. Available only when the revision has real timestamps.
+    Srt,
+    /// WebVTT captions. Available only when the revision has real timestamps.
+    Vtt,
+}
+
+impl ExportFormat {
+    /// The `crates/export` format this DTO selects.
+    #[must_use]
+    pub const fn to_export(self) -> plaudon_export::ExportFormat {
+        match self {
+            Self::Txt => plaudon_export::ExportFormat::Txt,
+            Self::Markdown => plaudon_export::ExportFormat::Markdown,
+            Self::Json => plaudon_export::ExportFormat::Json,
+            Self::Srt => plaudon_export::ExportFormat::Srt,
+            Self::Vtt => plaudon_export::ExportFormat::Vtt,
+        }
+    }
+
+    /// Stable wire string, also used for `export_events.format`.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        self.to_export().as_str()
+    }
+
+    /// Whether this format needs real segment times (spec §4.6, §8.6A).
+    #[must_use]
+    pub const fn needs_timestamps(self) -> bool {
+        matches!(self, Self::Srt | Self::Vtt)
+    }
 }
 
 /// `export_recording` request.
@@ -945,6 +975,274 @@ pub struct ExportRecordingRequest {
 pub struct ExportRecordingResponse {
     /// The export job.
     pub job_id: JobId,
+}
+
+
+/* -------------------------------------------------- audio export (J1.3) */
+
+/// `export_media` request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExportMediaRequest {
+    /// Recording whose audio to export.
+    pub recording_id: String,
+    /// Candidate to export. Defaults to the preferred one.
+    pub media_asset_id: Option<String>,
+    /// Folder chosen through the OS folder picker.
+    pub destination_directory: String,
+    /// Also produce a sanitized derivative, on explicit request (spec §7.8).
+    #[serde(default)]
+    pub include_sanitized_derivative: bool,
+}
+
+/// One file an audio export produced.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExportedMediaFile {
+    /// File name written into the chosen folder.
+    pub file_name: String,
+    /// Digest of the written bytes.
+    pub sha256: String,
+    /// Size in bytes.
+    pub byte_length: u64,
+    /// Whether this is the immutable original or a produced derivative.
+    pub is_original: bool,
+    /// Honest, source-relative description of what the file is.
+    pub label: String,
+    /// Metadata chunks removed, for a sanitized derivative.
+    pub stripped_metadata: Vec<String>,
+}
+
+/// `export_media` response.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExportMediaResponse {
+    /// The exported original.
+    pub original: ExportedMediaFile,
+    /// The sanitized derivative, when one was requested and possible.
+    pub sanitized: Option<ExportedMediaFile>,
+    /// Why no derivative was produced, when one was requested.
+    pub sanitized_refusal: Option<String>,
+}
+
+/* ------------------------------------------------------ deletion (J1.4) */
+
+/// One media blob a deletion will or will not remove.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeletionMediaDto {
+    /// Digest of the stored bytes.
+    pub sha256: String,
+    /// Size in bytes.
+    pub byte_length: u64,
+    /// Honest fidelity label.
+    pub quality_label: String,
+    /// Whether another recording also references these exact bytes.
+    pub shared_with_other_recordings: bool,
+    /// Whether the bytes themselves will be removed from disk.
+    pub bytes_will_be_removed: bool,
+}
+
+/// One category of rows a deletion will remove.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeletionCategoryDto {
+    /// User-facing category name.
+    pub label: String,
+    /// How many rows will be removed.
+    pub count: u64,
+}
+
+/// `get_deletion_disclosure` response: exactly what deletion will remove.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeletionDisclosureDto {
+    /// Disclosure contract version.
+    pub disclosure_version: String,
+    /// Recording identity.
+    pub recording_id: String,
+    /// Title as currently stored.
+    pub title: String,
+    /// Whether a user note will be removed.
+    pub has_annotation: bool,
+    /// Audio that will be removed, or kept because it is shared.
+    pub media: Vec<DeletionMediaDto>,
+    /// Row counts by category, in display order.
+    pub categories: Vec<DeletionCategoryDto>,
+    /// Bytes that will actually be freed.
+    pub bytes_to_free: u64,
+    /// What this deletion cannot reach.
+    pub limits: Vec<String>,
+    /// Digest the confirmation must carry back.
+    pub confirmation_token: String,
+}
+
+/// `get_deletion_disclosure` request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeletionDisclosureRequest {
+    /// Recording identity.
+    pub recording_id: String,
+}
+
+/// `delete_recording` request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeleteRecordingRequest {
+    /// Recording identity.
+    pub recording_id: String,
+    /// The `confirmation_token` from the disclosure the user saw.
+    pub confirmation_token: String,
+}
+
+/// `delete_recording` response.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeleteRecordingResponse {
+    /// Journal identity of the deletion.
+    pub deletion_id: String,
+    /// Blobs unlinked from the archive.
+    pub blobs_removed: u64,
+    /// Blobs kept because another recording references them.
+    pub blobs_retained_shared: u64,
+    /// Bytes freed.
+    pub bytes_freed: u64,
+    /// Whether a durable tombstone exists.
+    pub tombstoned: bool,
+}
+
+/* ----------------------------------------------- portable archive (J2.x) */
+
+/// `create_portable_backup` request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CreateBackupRequest {
+    /// Folder chosen through the OS folder picker.
+    pub destination_directory: String,
+    /// Password. Absent means a plaintext archive, which the UI must disclose.
+    pub password: Option<String>,
+    /// Use the heavier Argon2id profile.
+    #[serde(default)]
+    pub sensitive_profile: bool,
+}
+
+/// `create_portable_backup` response.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CreateBackupResponse {
+    /// File name written into the chosen folder.
+    pub file_name: String,
+    /// Whether the body is encrypted.
+    pub encrypted: bool,
+    /// The sentence the UI must show about protection (spec §13.6).
+    pub protection_disclosure: String,
+    /// Number of entries, excluding the manifest.
+    pub entry_count: u64,
+    /// Sum of entry byte lengths.
+    pub total_byte_length: u64,
+    /// Archive file size.
+    pub file_byte_length: u64,
+    /// Manifest integrity digest.
+    pub integrity_digest: String,
+    /// What the digest proves, and what it does not.
+    pub integrity_note: String,
+    /// Manifest schema version.
+    pub manifest_schema_version: String,
+    /// Settings that do not travel with the archive.
+    pub nonportable_settings: Vec<String>,
+}
+
+/// `inspect_restore_archive` request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InspectArchiveRequest {
+    /// Archive chosen through the OS open dialog.
+    pub archive_path: String,
+    /// Password, when the archive is encrypted.
+    pub password: Option<String>,
+}
+
+/// One restore conflict.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RestoreConflictDto {
+    /// Archive entry path.
+    pub entry_path: String,
+    /// Why it would be skipped.
+    pub reason: String,
+}
+
+/// `inspect_restore_archive` response: a dry run that writes nothing.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InspectArchiveResponse {
+    /// Whether the body is encrypted.
+    pub encrypted: bool,
+    /// Manifest schema version.
+    pub manifest_schema_version: String,
+    /// Container format version.
+    pub format_version: u32,
+    /// When the archive was produced.
+    pub created_at: String,
+    /// Operating system the archive was produced on.
+    pub source_os: String,
+    /// Entry counts by namespace.
+    pub entries_by_namespace: Vec<DeletionCategoryDto>,
+    /// Sum of entry byte lengths.
+    pub total_byte_length: u64,
+    /// Whether every payload digest matched the manifest.
+    pub payloads_verified: bool,
+    /// Manifest integrity digest.
+    pub integrity_digest: String,
+    /// What the digest proves, and what it does not.
+    pub integrity_note: String,
+    /// Settings that did not travel with the archive.
+    pub nonportable_settings: Vec<String>,
+    /// Records that already exist in this library.
+    pub conflicts: Vec<RestoreConflictDto>,
+    /// Whether this library currently has no recordings.
+    pub target_is_empty: bool,
+}
+
+/// How a restore should treat the target library.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RestoreModeDto {
+    /// Refuse unless the library has no recordings.
+    NewLibrary,
+    /// Add to this library, reporting conflicts.
+    Merge,
+}
+
+/// What a restore should do about an existing record.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ConflictPolicyDto {
+    /// Keep the library's version and report the conflict.
+    Skip,
+    /// Abort the whole restore without changing the library.
+    Fail,
+}
+
+/// `restore_portable_archive` request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RestoreArchiveRequest {
+    /// Archive chosen through the OS open dialog.
+    pub archive_path: String,
+    /// Password, when the archive is encrypted.
+    pub password: Option<String>,
+    /// New library or merge.
+    pub mode: RestoreModeDto,
+    /// What to do about existing records.
+    pub on_conflict: ConflictPolicyDto,
+    /// Whether a recording the user deleted locally may be restored.
+    #[serde(default)]
+    pub restore_tombstoned: bool,
+}
+
+/// `restore_portable_archive` response.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RestoreArchiveResponse {
+    /// Recordings inserted.
+    pub recordings_restored: u64,
+    /// Transcript revisions inserted.
+    pub transcripts_restored: u64,
+    /// Generated outputs inserted.
+    pub outputs_restored: u64,
+    /// Sources inserted.
+    pub sources_restored: u64,
+    /// Media blobs committed into the archive.
+    pub media_committed: u64,
+    /// Media blobs already present and reused.
+    pub media_reused: u64,
+    /// Records that were not applied.
+    pub conflicts: Vec<RestoreConflictDto>,
 }
 
 /* ----------------------------------------------------- settings / activity */

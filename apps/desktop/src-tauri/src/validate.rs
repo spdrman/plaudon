@@ -393,6 +393,111 @@ pub fn validate_destination(destination: &str) -> Result<ValidatedDestination, A
     Ok(ValidatedDestination { path: resolved })
 }
 
+/// A folder the user chose through the OS folder picker.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ValidatedDirectory {
+    /// Canonical, existing directory an export or backup will be written into.
+    pub path: PathBuf,
+}
+
+/// Validate a folder chosen through the OS folder picker.
+///
+/// The folder must already exist: we never create a tree the user did not
+/// choose, and we resolve it once so a path swapped afterwards cannot
+/// redirect the write.
+pub fn validate_directory(directory: &str) -> Result<ValidatedDirectory, AppError> {
+    if directory.is_empty() {
+        return Err(invalid_argument("directory is empty"));
+    }
+    if directory.contains('\0') {
+        return Err(invalid_argument("directory contains a NUL byte"));
+    }
+    let path = Path::new(directory);
+    if !path.is_absolute() {
+        return Err(AppError::new(
+            AppErrorCode::ExportDestinationRejected,
+            "the folder must be an absolute path chosen by the user",
+        ));
+    }
+    let resolved = std::fs::canonicalize(path).map_err(|err| {
+        AppError::new(
+            AppErrorCode::ExportDestinationRejected,
+            format!("the folder could not be opened: {err}"),
+        )
+    })?;
+    if !resolved.is_dir() {
+        return Err(AppError::new(
+            AppErrorCode::ExportDestinationRejected,
+            "the chosen path is not a folder",
+        ));
+    }
+    Ok(ValidatedDirectory { path: resolved })
+}
+
+/// A `.recording-archive` file the user chose through the OS open dialog.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ValidatedArchiveFile {
+    /// Canonical path of an existing regular file.
+    pub path: PathBuf,
+}
+
+/// Validate an archive file chosen through the OS open dialog.
+pub fn validate_archive_file(archive: &str) -> Result<ValidatedArchiveFile, AppError> {
+    if archive.is_empty() {
+        return Err(invalid_argument("archive path is empty"));
+    }
+    if archive.contains('\0') {
+        return Err(invalid_argument("archive path contains a NUL byte"));
+    }
+    let path = Path::new(archive);
+    if !path.is_absolute() {
+        return Err(AppError::new(
+            AppErrorCode::ArchivePathRejected,
+            "the archive must be an absolute path chosen by the user",
+        ));
+    }
+    let resolved = std::fs::canonicalize(path).map_err(|err| {
+        AppError::new(
+            AppErrorCode::ArchiveRejected,
+            format!("the archive could not be opened: {err}"),
+        )
+    })?;
+    let metadata = std::fs::metadata(&resolved).map_err(|err| {
+        AppError::new(
+            AppErrorCode::ArchiveRejected,
+            format!("the archive could not be read: {err}"),
+        )
+    })?;
+    if !is_regular_file(&metadata) {
+        return Err(AppError::new(
+            AppErrorCode::ArchiveRejected,
+            "the chosen path is not a regular file",
+        ));
+    }
+    Ok(ValidatedArchiveFile { path: resolved })
+}
+
+/// Longest archive password we accept. Long enough for a passphrase, short
+/// enough that a pathological input cannot be used to stall key derivation.
+pub const MAX_PASSWORD_BYTES: usize = 1024;
+
+/// Validate an archive password.
+///
+/// An empty password is rejected rather than silently producing a plaintext
+/// archive: choosing no encryption is a separate, disclosed decision.
+pub fn validate_password(password: Option<&str>) -> Result<Option<String>, AppError> {
+    match password {
+        None => Ok(None),
+        Some(value) if value.is_empty() => Err(invalid_argument(
+            "an empty password is not a password; omit it to create a plaintext archive",
+        )),
+        Some(value) if value.len() > MAX_PASSWORD_BYTES => {
+            Err(invalid_argument("the password is too long"))
+        }
+        Some(value) => Ok(Some(value.to_owned())),
+    }
+}
+
 /* ------------------------------------------------------- validated requests */
 
 /// Validated `list_recordings` arguments.

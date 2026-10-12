@@ -14,6 +14,7 @@
 //! UI.
 
 pub mod activity;
+pub mod archive;
 pub mod capabilities;
 pub mod export;
 pub mod import;
