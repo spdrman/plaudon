@@ -40,6 +40,10 @@ const SUGGESTION: &str =
     "a pending decision about a diarization run; runs are never archived, so a restored library has nothing to attach one to and re-running matching recomputes it (VP-078)";
 const CONSENT_JOURNAL: &str =
     "the local consent and deletion journal; it is evidence about what happened in this library, not library content, and it must not follow a profile onto another machine (VP-079)";
+const MATCH_EMBEDDING: &str =
+    "sealed cluster embeddings, the embed stage's scratch for one matching job; they are biometric material with no owner yet — enrolment is what promotes an embedding to an exemplar — and the executor discards them when the job settles, so no archive has anything to carry (VP-020, VP-022, VP-078)";
+const MATCH_REPORT: &str =
+    "the match stage's scratch for one matching job: scores and bands against a diarization run that is itself never archived, discarded when the job settles and recomputed by re-running matching (VP-020, VP-102)";
 
 #[allow(clippy::too_many_lines)]
 fn decisions() -> Vec<(&'static str, Vec<(&'static str, Decision)>)> {
@@ -1086,6 +1090,31 @@ fn decisions() -> Vec<(&'static str, Vec<(&'static str, Decision)>)> {
                 ("model_id", Excluded(SUGGESTION)),
                 ("model_version", Excluded(SUGGESTION)),
                 ("created_at", Excluded(SUGGESTION)),
+            ],
+        ),
+        (
+            "speaker_match_cluster_embeddings",
+            vec![
+                ("job_id", Excluded(MATCH_EMBEDDING)),
+                ("diarization_run_id", Excluded(MATCH_EMBEDDING)),
+                ("cluster_key", Excluded(MATCH_EMBEDDING)),
+                ("speech_ms", Excluded(MATCH_EMBEDDING)),
+                ("model_id", Excluded(MATCH_EMBEDDING)),
+                ("model_version", Excluded(MATCH_EMBEDDING)),
+                ("embedding_dim", Excluded(MATCH_EMBEDDING)),
+                ("embedding_cipher", Excluded(MATCH_EMBEDDING)),
+                ("embedding_nonce", Excluded(MATCH_EMBEDDING)),
+                ("created_at", Excluded(MATCH_EMBEDDING)),
+            ],
+        ),
+        (
+            "speaker_match_reports",
+            vec![
+                ("job_id", Excluded(MATCH_REPORT)),
+                ("diarization_run_id", Excluded(MATCH_REPORT)),
+                ("cluster_key", Excluded(MATCH_REPORT)),
+                ("report_json", Excluded(MATCH_REPORT)),
+                ("created_at", Excluded(MATCH_REPORT)),
             ],
         ),
         (

@@ -19,6 +19,13 @@
 #     fuzz targets. They contain synthetic secrets on purpose; they are the
 #     material the redactor is proven against, not an artefact of running it.
 #
+#   * tests/fixtures/**/target/**   — build output, not a committed fixture.
+#     scripts/ci-selftest.sh compiles the deliberately-broken crates under
+#     tests/fixtures/ci-selftest/, and a cargo target directory is full of
+#     dependency files and cache tags whose hashes read as device tokens.
+#     Build *logs* under the workspace target/ are still scanned below: those
+#     are a scan target, because a log is where a secret leaks.
+#
 # Documented false positives (values that genuinely have a secret's shape but
 # are not credentials, e.g. SHA-256 content digests) live in
 # tests/fixtures/secret-scan/allowlist.json. An allowlist entry that matches
@@ -92,6 +99,7 @@ set +e
   --format "$FORMAT" \
   --allowlist "$ALLOWLIST" \
   --exclude '**/fuzz-corpus/**' \
+  --exclude '**/fixtures/**/target/**' \
   "${targets[@]}"
 status=$?
 set -e
