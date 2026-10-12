@@ -5,6 +5,7 @@
 //! `INCOMPATIBLE_VERSION`. Transitions are total and explicit: an event that
 //! does not apply leaves the state unchanged rather than silently advancing.
 
+use plaudon_domain::error::{AppError, AppErrorCode};
 use plaudon_recording_sources::source::SourceError;
 use serde::{Deserialize, Serialize};
 
@@ -129,6 +130,88 @@ impl ConnectorState {
             Self::Error => Some(SourceError::SourceUnavailable),
             Self::CliDetected | Self::Authenticated | Self::Enumerating | Self::Ready => None,
         }
+    }
+}
+
+/// The persisted, UI-observable connector status (spec 7.1, 4.2, 15.3).
+///
+/// Everything here is either our own text or a stable code. There is no field
+/// that can carry vendor stdout or stderr, which is how spec 7.6's "we will
+/// not leak raw vendor error payloads" is enforced for the status surface
+/// rather than merely intended.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ConnectorStatus {
+    /// Contract version of this payload.
+    pub payload_version: u32,
+    /// Lifecycle state.
+    pub state: ConnectorState,
+    /// Version string the tool reported, when it was readable.
+    pub detected_version: Option<String>,
+    /// Whether the detected version is in the committed compatibility table.
+    pub version_validated: bool,
+    /// Where the executable was found, as a stable label.
+    pub program_origin: Option<String>,
+    /// Last stable error, as a code only.
+    pub last_error: Option<AppErrorCode>,
+    /// Whether the last listing may be a partial view of the account.
+    pub listing_possibly_incomplete: bool,
+    /// Whether the active parser scrapes a human-readable layout (spec 7.2).
+    pub scraping_warning: bool,
+    /// When this status was last written, in milliseconds since the epoch.
+    pub updated_at_ms: i64,
+}
+
+impl ConnectorStatus {
+    /// Contract version understood by this build.
+    pub const SUPPORTED_PAYLOAD_VERSION: u32 = 1;
+
+    /// Preference key the status is persisted under.
+    pub const PREFERENCE_KEY: &'static str = "source.plaud_cloud_cli.status";
+
+    /// The status of a connector nobody has configured yet.
+    #[must_use]
+    pub const fn unconfigured(at_ms: i64) -> Self {
+        Self {
+            payload_version: Self::SUPPORTED_PAYLOAD_VERSION,
+            state: ConnectorState::Unconfigured,
+            detected_version: None,
+            version_validated: false,
+            program_origin: None,
+            last_error: None,
+            listing_possibly_incomplete: false,
+            scraping_warning: false,
+            updated_at_ms: at_ms,
+        }
+    }
+
+    /// Apply an event and record when it happened.
+    #[must_use]
+    pub fn apply(mut self, event: ConnectorEvent, at_ms: i64) -> Self {
+        self.state = self.state.apply(event);
+        self.updated_at_ms = at_ms;
+        if matches!(event, ConnectorEvent::Disconnected | ConnectorEvent::CliMissing) {
+            self.detected_version = None;
+            self.version_validated = false;
+            self.program_origin = None;
+            self.listing_possibly_incomplete = false;
+            self.scraping_warning = false;
+        }
+        self.last_error = self.state.as_source_error().map(|error| AppError::from(error).code());
+        self
+    }
+
+    /// Record a classified failure without changing the lifecycle state.
+    #[must_use]
+    pub fn with_error(mut self, error: SourceError, at_ms: i64) -> Self {
+        self.last_error = Some(AppError::from(error).code());
+        self.updated_at_ms = at_ms;
+        self
+    }
+
+    /// Whether a payload decoded from storage is usable by this build.
+    #[must_use]
+    pub const fn is_supported_payload(&self) -> bool {
+        self.payload_version == Self::SUPPORTED_PAYLOAD_VERSION
     }
 }
 

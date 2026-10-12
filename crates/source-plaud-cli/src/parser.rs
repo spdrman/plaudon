@@ -534,7 +534,9 @@ fn split_columns(line: &str) -> Vec<&str> {
     if start <= line.len() {
         cells.push(&line[start..]);
     }
-    cells.retain(|cell| !cell.is_empty() || cells.len() == 1);
+    if cells.len() > 1 {
+        cells.retain(|cell| !cell.is_empty());
+    }
     cells
 }
 

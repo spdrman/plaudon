@@ -245,40 +245,22 @@ impl CliRunner {
         let mut stdout_pipe = child.stdout.take().ok_or(RunError::StartFailed)?;
         let mut stderr_pipe = child.stderr.take().ok_or(RunError::StartFailed)?;
 
+        // Both pipes are drained concurrently, and the first overflow aborts
+        // the pair: waiting for the other stream would mean waiting on a child
+        // that is still writing into a pipe nobody is reading.
         let collect = async {
-            let (stdout, stderr, status) = tokio::join!(
-                read_capped(&mut stdout_pipe, stdout_cap),
-                read_capped(&mut stderr_pipe, stderr_cap),
-                child.wait(),
-            );
-            (stdout, stderr, status)
+            let (stdout, stderr) = tokio::try_join!(
+                read_capped(&mut stdout_pipe, stdout_cap, "stdout"),
+                read_capped(&mut stderr_pipe, stderr_cap, "stderr"),
+            )?;
+            let status = child.wait().await;
+            Ok::<_, RunError>((stdout, stderr, status))
         };
 
-        let Ok((stdout, stderr, status)) = tokio::time::timeout(timeout, collect).await else {
-            // `kill_on_drop` handles the process, but we ask explicitly so the
-            // kill is ordered before we report, not at an arbitrary later drop.
-            let _ = child.start_kill();
-            let _ = child.wait().await;
-            tracing::warn!(
-                target: "plaudon::plaud_cli",
-                command = command.label(),
-                timeout_secs = timeout.as_secs(),
-                "the vendor cloud CLI was killed after exceeding its time budget"
-            );
-            return Err(RunError::Timeout);
-        };
-
-        let stdout = stdout.map_err(|limit| RunError::OutputTooLarge {
-            stream: "stdout",
-            limit_bytes: limit,
-        });
-        let stderr = stderr.map_err(|limit| RunError::OutputTooLarge {
-            stream: "stderr",
-            limit_bytes: limit,
-        });
-        let (stdout, stderr) = match (stdout, stderr) {
-            (Ok(out), Ok(err)) => (out, err),
-            (Err(error), _) | (_, Err(error)) => {
+        let settled = tokio::time::timeout(timeout, collect).await;
+        let (stdout, stderr, status) = match settled {
+            Ok(Ok(parts)) => parts,
+            Ok(Err(error)) => {
                 let _ = child.start_kill();
                 let _ = child.wait().await;
                 tracing::warn!(
@@ -287,6 +269,20 @@ impl CliRunner {
                     "the vendor cloud CLI exceeded its output cap and was killed"
                 );
                 return Err(error);
+            }
+            Err(_elapsed) => {
+                // `kill_on_drop` handles the process, but we ask explicitly so
+                // the kill is ordered before we report rather than at an
+                // arbitrary later drop.
+                let _ = child.start_kill();
+                let _ = child.wait().await;
+                tracing::warn!(
+                    target: "plaudon::plaud_cli",
+                    command = command.label(),
+                    timeout_secs = timeout.as_secs(),
+                    "the vendor cloud CLI was killed after exceeding its time budget"
+                );
+                return Err(RunError::Timeout);
             }
         };
 
@@ -336,7 +332,11 @@ const fn egress_purpose(command: &CliCommand) -> EgressPurpose {
 /// Reads one byte past the limit on purpose: a stream that stops exactly at the
 /// cap is complete, and one that has more to give is an overflow. The error
 /// carries the limit so the caller can name it.
-async fn read_capped<R>(reader: &mut R, limit: usize) -> Result<Vec<u8>, usize>
+async fn read_capped<R>(
+    reader: &mut R,
+    limit: usize,
+    stream: &'static str,
+) -> Result<Vec<u8>, RunError>
 where
     R: tokio::io::AsyncRead + Unpin,
 {
@@ -352,7 +352,10 @@ where
             return Ok(buffer);
         }
         if buffer.len() + read > limit {
-            return Err(limit);
+            return Err(RunError::OutputTooLarge {
+                stream,
+                limit_bytes: limit,
+            });
         }
         buffer.extend_from_slice(&chunk[..read]);
     }
@@ -463,29 +466,30 @@ mod tests {
 
     #[cfg(unix)]
     #[tokio::test]
-    async fn the_child_environment_is_scrubbed() {
+    async fn the_child_environment_carries_no_secret_or_loader_variable() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let program = fake_cli(
-            dir.path(),
-            "#!/bin/sh\nprintf '%s|%s|%s\\n' \"${OPENROUTER_API_KEY:-absent}\" \"${HTTPS_PROXY:-absent}\" \"${PLAUD_TOKEN:-absent}\"\n",
-        );
-        // Set them in our own environment; the scrub must drop them anyway.
-        // SAFETY: single-threaded test setup before any spawn observes it.
-        unsafe {
-            std::env::set_var("OPENROUTER_API_KEY", "sk-or-v1-leak");
-            std::env::set_var("HTTPS_PROXY", "http://127.0.0.1:9");
-            std::env::set_var("PLAUD_TOKEN", "tok-leak");
-        }
+        // Dump the child's whole environment and check every name against the
+        // security crate's predicate. Asserting on the *result* rather than on
+        // an injected variable keeps the test from mutating process state that
+        // other tests in this binary share.
+        let program = fake_cli(dir.path(), "#!/bin/sh\nenv\n");
         let output = permitted_runner()
             .run(&program, &CliCommand::Version, RunLimits::PROBE, &intent())
             .await
             .expect("ran");
-        unsafe {
-            std::env::remove_var("OPENROUTER_API_KEY");
-            std::env::remove_var("HTTPS_PROXY");
-            std::env::remove_var("PLAUD_TOKEN");
+        let names: Vec<&str> = output
+            .stdout
+            .lines()
+            .filter_map(|line| line.split_once('='))
+            .map(|(name, _)| name)
+            .collect();
+        assert!(!names.is_empty(), "the child must inherit something");
+        for name in names {
+            assert!(
+                !plaudon_security::outbound::subprocess::is_stripped_env(name),
+                "{name} reached the child"
+            );
         }
-        assert_eq!(output.stdout.trim(), "absent|absent|absent");
     }
 
     #[cfg(unix)]
@@ -637,8 +641,14 @@ mod tests {
     #[tokio::test]
     async fn read_capped_accepts_exactly_the_limit() {
         let mut data = &b"0123456789"[..];
-        assert_eq!(read_capped(&mut data, 10).await.unwrap().len(), 10);
+        assert_eq!(read_capped(&mut data, 10, "stdout").await.unwrap().len(), 10);
         let mut data = &b"0123456789"[..];
-        assert_eq!(read_capped(&mut data, 9).await.unwrap_err(), 9);
+        assert_eq!(
+            read_capped(&mut data, 9, "stdout").await.unwrap_err(),
+            RunError::OutputTooLarge {
+                stream: "stdout",
+                limit_bytes: 9
+            }
+        );
     }
 }

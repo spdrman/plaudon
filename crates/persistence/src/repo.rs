@@ -1,6 +1,8 @@
 //! Repositories over the core identity tables.
 
-use plaudon_domain::ids::{MediaAssetId, RecordingId, SourceId, SourceItemId};
+use plaudon_domain::ids::{
+    MediaAssetId, RecordingId, SourceId, SourceItemId, TranscriptRevisionId,
+};
 use plaudon_domain::media::{
     MediaAsset, MediaIdentity, QualityClass, Sha256Digest, VerificationState,
 };
@@ -11,6 +13,7 @@ use plaudon_domain::source::{
 };
 use plaudon_domain::time::Timestamp;
 use sqlx::Row;
+use uuid::Uuid;
 
 use crate::db::Database;
 use crate::error::{PersistenceError, PersistenceResult};
@@ -162,6 +165,23 @@ impl MediaAssetRepository {
         )
         .bind(identity.sha256.to_hex())
         .bind(i64::try_from(identity.byte_length).unwrap_or(i64::MAX))
+        .fetch_optional(self.db.pool())
+        .await?;
+        row.map(|row| Self::from_row(&row)).transpose()
+    }
+
+    /// Look up an asset by content digest alone.
+    ///
+    /// A reconciliation pass learns a digest from a listing before it knows
+    /// the byte length, and the digest is already unique in practice because
+    /// `ux_media_sha` keys on `(sha256, byte_length)`.
+    pub async fn find_by_sha256(&self, sha256: &str) -> PersistenceResult<Option<MediaAsset>> {
+        let row = sqlx::query(
+            "SELECT id, sha256, byte_length, relative_path, codec, quality_class,
+                    verification_state, verified_at
+             FROM media_assets WHERE sha256 = ?1 ORDER BY byte_length LIMIT 1",
+        )
+        .bind(sha256)
         .fetch_optional(self.db.pool())
         .await?;
         row.map(|row| Self::from_row(&row)).transpose()
@@ -474,6 +494,24 @@ impl RecordingRepository {
         .fetch_optional(self.db.pool())
         .await?;
         Ok(row.is_some())
+    }
+
+    /// Lift a recording tombstone, for one recording, on explicit user action.
+    ///
+    /// Spec 7.10: resurrection is a user decision. Nothing in a sync pass may
+    /// call this; the only caller is the Reimport command.
+    pub async fn clear_tombstone(&self, id: RecordingId) -> PersistenceResult<()> {
+        let mut tx = self.db.pool().begin().await?;
+        sqlx::query("UPDATE recordings SET deleted_at = NULL WHERE id = ?1")
+            .bind(id.to_string())
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("DELETE FROM tombstones WHERE entity_type = 'recording' AND entity_id = ?1")
+            .bind(id.to_string())
+            .execute(&mut *tx)
+            .await?;
+        tx.commit().await?;
+        Ok(())
     }
 
     /// Fill in a duration the source reported, but never overwrite one.
@@ -980,139 +1018,94 @@ impl MediaRevisionRepository {
     }
 }
 
-/// One row of `transcript_revisions`, in column form.
+/// Provenance of one transcript revision, as far as reconciliation cares.
 ///
-/// The domain's `TranscriptRevision` carries engine, model and locale value
-/// objects that a vendor export cannot populate honestly, so the persistence
-/// boundary keeps the columns as written. `source_vendor` is `None` for
-/// anything this application produced (spec 7.5).
+/// [`crate::transcript::TranscriptRepository`] (EPIC F) owns writing revisions
+/// and reading their engine detail. This view adds the two facts that decide
+/// whether a vendor export may touch anything: who produced the revision, and
+/// whether a human corrected it (spec 7.5, App. A.2).
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TranscriptRevisionRow {
-    /// Row identity.
+pub struct RevisionProvenance {
+    /// Revision identity.
     pub id: TranscriptRevisionId,
-    /// Recording the revision transcribes.
-    pub recording_id: RecordingId,
-    /// Revision this one was derived from, for user edits.
-    pub parent_id: Option<TranscriptRevisionId>,
     /// `machine`, `human_edit`, `derived_alignment` or `overlap_reconciliation`.
     pub origin: String,
-    /// Digest of the exact input the revision was produced from.
-    pub input_sha256: String,
-    /// Engine label.
-    pub engine: String,
-    /// Model identifier.
-    pub model_id: String,
-    /// BCP-47 locale, when known.
-    pub locale: Option<String>,
-    /// `native`, `derived` or `none`.
-    pub alignment_origin: String,
-    /// `complete`, `needs_review` or `partial`.
-    pub status: String,
-    /// Normalisation profile label.
-    pub normalization_profile: String,
-    /// Chunking strategy label.
-    pub chunking_strategy: String,
-    /// Vendor that produced the revision; `None` means produced locally.
+    /// Vendor that produced it; `None` means produced locally.
     pub source_vendor: Option<String>,
-    /// When the row was written.
+    /// When the revision was written.
     pub created_at: Timestamp,
 }
 
-/// Reads and writes for `transcript_revisions` and their segments.
+impl RevisionProvenance {
+    /// Whether a human corrected this revision.
+    pub fn is_human_edit(&self) -> bool {
+        self.origin == "human_edit"
+    }
+
+    /// Whether this revision came out of a vendor export rather than a local
+    /// or configured engine.
+    pub fn is_vendor(&self) -> bool {
+        self.source_vendor.is_some()
+    }
+}
+
+/// Vendor provenance over the `transcript_revisions` rows EPIC F writes.
 #[derive(Debug, Clone)]
-pub struct TranscriptRepository {
+pub struct TranscriptProvenanceRepository {
     db: Database,
 }
 
-impl TranscriptRepository {
+impl TranscriptProvenanceRepository {
     /// Wrap a database handle.
     pub fn new(db: Database) -> Self {
         Self { db }
     }
 
-    /// Insert one revision. Revisions are immutable once written.
-    pub async fn insert(&self, row: &TranscriptRevisionRow) -> PersistenceResult<()> {
-        sqlx::query(
-            "INSERT INTO transcript_revisions
-                 (id, recording_id, parent_id, origin, input_sha256, engine, model_id,
-                  locale, alignment_origin, status, normalization_profile, chunking_strategy,
-                  source_vendor, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+    /// Tag an already-written revision as produced by a vendor export.
+    ///
+    /// Spec 7.5: vendor content is identified, never disguised as ours. The
+    /// tag is write-once; re-tagging a revision with a different vendor is a
+    /// conflict rather than a silent relabel.
+    pub async fn set_source_vendor(
+        &self,
+        id: TranscriptRevisionId,
+        vendor: &str,
+    ) -> PersistenceResult<()> {
+        let result = sqlx::query(
+            "UPDATE transcript_revisions SET source_vendor = ?2
+             WHERE id = ?1 AND (source_vendor IS NULL OR source_vendor = ?2)",
         )
-        .bind(row.id.to_string())
-        .bind(row.recording_id.to_string())
-        .bind(row.parent_id.map(|id| id.to_string()))
-        .bind(&row.origin)
-        .bind(&row.input_sha256)
-        .bind(&row.engine)
-        .bind(&row.model_id)
-        .bind(row.locale.as_deref())
-        .bind(&row.alignment_origin)
-        .bind(&row.status)
-        .bind(&row.normalization_profile)
-        .bind(&row.chunking_strategy)
-        .bind(row.source_vendor.as_deref())
-        .bind(row.created_at.as_millis())
+        .bind(id.to_string())
+        .bind(vendor)
         .execute(self.db.pool())
         .await?;
-        Ok(())
-    }
-
-    /// Store the text of a revision verbatim, one segment per supplied line.
-    ///
-    /// The revision's `alignment_origin` decides whether times are permitted;
-    /// an imported artifact without timings stores none rather than inventing
-    /// them (spec 8.6A).
-    pub async fn insert_segments(
-        &self,
-        revision_id: TranscriptRevisionId,
-        alignment_origin: &str,
-        texts: &[String],
-    ) -> PersistenceResult<()> {
-        let mut tx = self.db.pool().begin().await?;
-        for (index, text) in texts.iter().enumerate() {
-            sqlx::query(
-                "INSERT INTO transcript_segments
-                     (id, transcript_revision_id, seq_index, text, alignment_origin)
-                 VALUES (?1, ?2, ?3, ?4, ?5)",
-            )
-            .bind(Uuid::now_v7().to_string())
-            .bind(revision_id.to_string())
-            .bind(i64::try_from(index).unwrap_or(i64::MAX))
-            .bind(text)
-            .bind(alignment_origin)
-            .execute(&mut *tx)
-            .await?;
+        if result.rows_affected() == 0 {
+            return Err(PersistenceError::Conflict);
         }
-        tx.commit().await?;
         Ok(())
     }
 
-    /// Segment texts of one revision, in order.
-    pub async fn segment_texts(
+    /// Vendor recorded for one revision, if any.
+    pub async fn source_vendor(
         &self,
-        revision_id: TranscriptRevisionId,
-    ) -> PersistenceResult<Vec<String>> {
-        let rows = sqlx::query(
-            "SELECT text FROM transcript_segments WHERE transcript_revision_id = ?1
-             ORDER BY seq_index",
-        )
-        .bind(revision_id.to_string())
-        .fetch_all(self.db.pool())
-        .await?;
-        Ok(rows.iter().map(|row| row.get::<String, _>("text")).collect())
+        id: TranscriptRevisionId,
+    ) -> PersistenceResult<Option<String>> {
+        let row = sqlx::query("SELECT source_vendor FROM transcript_revisions WHERE id = ?1")
+            .bind(id.to_string())
+            .fetch_optional(self.db.pool())
+            .await?
+            .ok_or(PersistenceError::RecordNotFound)?;
+        Ok(row.get("source_vendor"))
     }
 
-    /// Every revision of a recording, oldest first.
+    /// Provenance of every revision of a recording, oldest first.
     pub async fn list_for_recording(
         &self,
         recording_id: RecordingId,
-    ) -> PersistenceResult<Vec<TranscriptRevisionRow>> {
+    ) -> PersistenceResult<Vec<RevisionProvenance>> {
         let rows = sqlx::query(
-            "SELECT id, recording_id, parent_id, origin, input_sha256, engine, model_id, locale,
-                    alignment_origin, status, normalization_profile, chunking_strategy,
-                    source_vendor, created_at
-             FROM transcript_revisions WHERE recording_id = ?1 ORDER BY created_at, id",
+            "SELECT id, origin, source_vendor, created_at FROM transcript_revisions
+             WHERE recording_id = ?1 ORDER BY created_at, id",
         )
         .bind(recording_id.to_string())
         .fetch_all(self.db.pool())
@@ -1137,22 +1130,20 @@ impl TranscriptRepository {
 
     /// The revision a reader should be shown.
     ///
-    /// Precedence is fixed and is the reason a vendor import can never demote
+    /// Precedence is fixed, and it is the reason a vendor import cannot demote
     /// anything: newest human edit, else newest locally produced revision,
     /// else newest vendor revision.
     pub async fn preferred(
         &self,
         recording_id: RecordingId,
-    ) -> PersistenceResult<Option<TranscriptRevisionRow>> {
+    ) -> PersistenceResult<Option<RevisionProvenance>> {
         let row = sqlx::query(
-            "SELECT id, recording_id, parent_id, origin, input_sha256, engine, model_id, locale,
-                    alignment_origin, status, normalization_profile, chunking_strategy,
-                    source_vendor, created_at
-             FROM transcript_revisions WHERE recording_id = ?1
+            "SELECT id, origin, source_vendor, created_at FROM transcript_revisions
+             WHERE recording_id = ?1
              ORDER BY CASE
-                          WHEN origin = 'human_edit'    THEN 0
-                          WHEN source_vendor IS NULL    THEN 1
-                          ELSE                               2
+                          WHEN origin = 'human_edit' THEN 0
+                          WHEN source_vendor IS NULL THEN 1
+                          ELSE                            2
                       END,
                       created_at DESC, id DESC
              LIMIT 1",
@@ -1163,30 +1154,13 @@ impl TranscriptRepository {
         row.as_ref().map(Self::from_row).transpose()
     }
 
-    fn from_row(row: &sqlx::sqlite::SqliteRow) -> PersistenceResult<TranscriptRevisionRow> {
-        Ok(TranscriptRevisionRow {
+    fn from_row(row: &sqlx::sqlite::SqliteRow) -> PersistenceResult<RevisionProvenance> {
+        Ok(RevisionProvenance {
             id: row
                 .get::<String, _>("id")
                 .parse()
                 .map_err(|_| PersistenceError::Migration("corrupt revision id".into()))?,
-            recording_id: row
-                .get::<String, _>("recording_id")
-                .parse()
-                .map_err(|_| PersistenceError::Migration("corrupt recording id".into()))?,
-            parent_id: row
-                .get::<Option<String>, _>("parent_id")
-                .map(|raw| raw.parse())
-                .transpose()
-                .map_err(|_| PersistenceError::Migration("corrupt parent id".into()))?,
             origin: row.get("origin"),
-            input_sha256: row.get("input_sha256"),
-            engine: row.get("engine"),
-            model_id: row.get("model_id"),
-            locale: row.get("locale"),
-            alignment_origin: row.get("alignment_origin"),
-            status: row.get("status"),
-            normalization_profile: row.get("normalization_profile"),
-            chunking_strategy: row.get("chunking_strategy"),
             source_vendor: row.get("source_vendor"),
             created_at: Timestamp::from_millis(row.get::<i64, _>("created_at")),
         })

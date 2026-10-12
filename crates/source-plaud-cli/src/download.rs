@@ -142,6 +142,11 @@ impl UrlContract {
 }
 
 /// The fetch policy applied to every signed URL.
+///
+/// One field is private on purpose: [`DownloadPolicy::loopback_http_allowed`]
+/// can only be turned on by the `test-harness` feature's constructor, so the
+/// struct cannot be literal-constructed outside this module and a release
+/// build has no path to a policy that accepts a loopback destination.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DownloadPolicy {
     /// Hosts we will fetch from.
@@ -152,6 +157,10 @@ pub struct DownloadPolicy {
     pub max_body_bytes: u64,
     /// Content types we accept on the final response.
     pub accepted_content_types: Vec<String>,
+    /// Whether plain-HTTP loopback destinations are accepted.
+    ///
+    /// Always `false` outside the hermetic test harness.
+    loopback_http_allowed: bool,
 }
 
 impl Default for DownloadPolicy {
@@ -174,6 +183,7 @@ impl Default for DownloadPolicy {
                 "audio/flac".to_owned(),
                 "application/octet-stream".to_owned(),
             ],
+            loopback_http_allowed: false,
         }
     }
 }
@@ -186,6 +196,28 @@ impl DownloadPolicy {
             allowed_hosts: hosts.iter().map(|h| (*h).to_ascii_lowercase()).collect(),
             ..Self::default()
         }
+    }
+
+    /// A policy that accepts a plain-HTTP loopback origin.
+    ///
+    /// Exists so the end-to-end acquisition test can serve bytes from an
+    /// in-process listener without a certificate authority. Spec 18.3 requires
+    /// the suite to be hermetic; spec 7.3 requires production to refuse this,
+    /// which `the_harness_switch_is_absent_from_every_production_constructor`
+    /// asserts.
+    #[cfg(feature = "test-harness")]
+    #[must_use]
+    pub fn loopback_harness(hosts: &[&str]) -> Self {
+        Self {
+            loopback_http_allowed: true,
+            ..Self::with_hosts(hosts)
+        }
+    }
+
+    /// Whether this policy accepts a plain-HTTP loopback origin.
+    #[must_use]
+    pub const fn loopback_http_allowed(&self) -> bool {
+        self.loopback_http_allowed
     }
 
     /// Check a URL, including every hop of an observed redirect chain.
@@ -216,19 +248,22 @@ impl DownloadPolicy {
         let scheme = url
             .split_once(':')
             .map(|(scheme, _)| scheme.to_ascii_lowercase());
+        let scheme_ok = |scheme: &str| {
+            scheme == "https" || (self.loopback_http_allowed && scheme == "http")
+        };
         match scheme.as_deref() {
-            Some("https") => {}
+            Some(scheme) if scheme_ok(scheme) => {}
             Some(_) => return Err(DownloadRejection::SchemeNotHttps),
             None => return Err(DownloadRejection::Unparseable),
         }
         let parsed = ParsedUrl::parse(url).ok_or(DownloadRejection::Unparseable)?;
-        if parsed.scheme != "https" {
+        if !scheme_ok(&parsed.scheme) {
             return Err(DownloadRejection::SchemeNotHttps);
         }
         if parsed.has_userinfo {
             return Err(DownloadRejection::EmbeddedCredential);
         }
-        if is_private_host(&parsed.host) {
+        if is_private_host(&parsed.host) && !self.loopback_http_allowed {
             return Err(DownloadRejection::PrivateAddress);
         }
         if !self
