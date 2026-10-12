@@ -82,6 +82,12 @@ fs4 = "1"
 chacha20poly1305 = { version = "0.10", features = ["stream"] }
 flate2 = "1"
 hex = "0.4"
+# PNG encoding for the demo capture (`apps/plaudon-egui/tests/demo_capture.rs`),
+# which writes the frames `scripts/make-demo-gif.sh` assembles. Already in the
+# graph at this version through `egui_kittest`'s snapshot feature, so naming it
+# adds no package; `default-features = false` keeps the other decoders and
+# `rayon` out.
+image = { version = "0.25", default-features = false, features = ["png"] }
 jsonschema = { version = "0.26", default-features = false }
 libc = "0.2"
 # The macOS application menu (parity row S8). Already in the graph: the tray
