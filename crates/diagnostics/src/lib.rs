@@ -25,6 +25,7 @@
 //! because redaction is not a proof.
 
 pub mod crash;
+pub mod device_metrics;
 pub mod logging;
 pub mod notification;
 pub mod patterns;
@@ -33,6 +34,10 @@ pub mod redact;
 pub mod scan;
 
 pub use crash::{install_crash_hook, redact_panic_payload};
+pub use device_metrics::{
+    DeviceMetricsCollector, DeviceMetricsReport, EtaEstimate, FidelityEntry, LatencySummary,
+    MediaFidelity, Metric, ProfileEligibility, Tally, Throughput,
+};
 pub use logging::{
     build_subscriber, init_logging, LogFormat, LoggingConfig, LoggingError, LoggingHandle,
     WirePayloadLogging,
