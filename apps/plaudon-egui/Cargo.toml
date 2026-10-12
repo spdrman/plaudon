@@ -102,6 +102,8 @@ eframe = { workspace = true, features = ["x11", "wayland"] }
 # recording HTTPS transport. All four are already in the graph through
 # `plaudon-app`.
 async-trait = { workspace = true }
+# PNG encoding for the demo capture (`tests/demo_capture.rs`).
+image = { workspace = true }
 # The scripted speech and text engines the processing tests run against.
 plaudon-app = { workspace = true, features = ["test-support"] }
 plaudon-ai-openrouter = { workspace = true }
