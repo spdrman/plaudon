@@ -1304,6 +1304,7 @@ dependencies = [
  "plaudon-recording-sources",
  "proptest",
  "serde_json",
+ "sqlx",
  "tempfile",
  "tokio",
  "tokio-util",
@@ -1325,6 +1326,7 @@ version = "0.1.0"
 dependencies = [
  "hex",
  "libc",
+ "plaudon-ai-contracts",
  "plaudon-domain",
  "proptest",
  "serde",

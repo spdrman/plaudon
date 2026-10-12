@@ -1,3 +1,5 @@
+#![allow(clippy::await_holding_lock)] // see `EngineGate`
+
 //! Offline local speech-to-text, end to end (spec §8, §12, §19 Phase 3).
 //!
 //! These are the tests that prove EPIC F's headline claim: a recording is
