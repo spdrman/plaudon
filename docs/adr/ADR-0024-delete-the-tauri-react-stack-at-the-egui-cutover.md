@@ -140,3 +140,53 @@ We accept these, including the ones that are not comfortable:
 - **Git history is the only record of the deleted code.** That is accepted: the
   tree was 26,366 lines of shell plus its React frontend, and a directory kept
   "just in case" is a directory that stops compiling and then lies.
+
+## Amendment, 2026-10-12: the Windows deliverable is a WiX `.msi`, and the licence reasoning that chose NSIS was wrong about WiX
+
+**What changes.** `apps/plaudon-egui/packaging/windows/plaudon-egui.nsi` is deleted and replaced by
+`plaudon-egui.wxs`, a WiX v5 source producing a per-user `Plaudon-<version>-x64.msi` (task O2.10,
+#250). `scripts/package-windows-egui.ps1` drives `wix build` instead of `makensis`, and
+`apps/plaudon-egui/tests/packaging.rs` parses the `.wxs` against
+`plaudon_platform::associations::windows_registry_script` with the same strictness it applied to the
+`.nsi`, plus assertions the NSIS file had no equivalent of: every registry row names `HKCU`
+explicitly, the package is `Scope="perUser"`, the `UpgradeCode` is the constant it must stay, every
+component carries a written-out GUID, and the package contains no custom action, no `Binary` row and
+no sequence override. The record above is unchanged in substance — "no bundler kept for packaging"
+still holds, and the two scripts are still the packaging path — but one sentence in it, "an NSIS
+script we already have", now names a file that no longer exists.
+
+**The licence reasoning is corrected, not quietly dropped.** The `.nsi` header and
+`docs/licensing/third-party-register.md` said NSIS was chosen over WiX because NSIS's zlib/libpng
+licence is permissive and the WiX Toolset is MS-RL, a reciprocal licence "we do not want in the
+artifact path". The comparison was not like for like. NSIS's stub really is in the artifact path:
+a `setup.exe` is an executable containing NSIS's own code, which makes its licence a redistribution
+question and earned it a `NOTICE` entry. An `.msi` is a database that Windows' own installer service
+interprets; it contains our files and our table rows and no WiX code at all. MS-RL constrains what
+is distributed, so it binds no one here: WiX belongs in the same row as `signtool`, `codesign` and
+`notarytool` — tools that stay on the build machine. The register row and the `NOTICE` entry have
+been rewritten to say exactly that, and the NSIS notice was removed rather than left to imply that
+something of NSIS still ships.
+
+**Why change at all, if the NSIS installer worked.** Because the release workflow added in the same
+task publishes to users, and what Windows expects from a published application is an `.msi`: install,
+upgrade (`MajorUpgrade` against a fixed `UpgradeCode`, instead of a hand-written "uninstall the old
+one first"), repair, and an uninstall performed by the operating system, with the Programs and
+Features entry written by the system rather than by eleven `WriteRegStr` lines of ours. It is also
+less of our code in the privileged position: the `.msi` runs nothing of ours at install time, where
+the NSIS script ran its own `System::Call` into `shell32`.
+
+**What this costs, stated rather than glossed over.** The package no longer broadcasts
+`SHCNE_ASSOCCHANGED`, because that needs a custom action and a custom action is executable code
+inside an installer; Explorer therefore picks the `.plaudon` association up on its own refresh
+instead of immediately. There is no directory page; `msiexec /i … INSTALLFOLDER="…"` is the
+override. And the install location is expressed as a conditional `SetDirectory` rather than a named
+directory tree, because `wix build` canonicalises every `Directory/@Name` through a Windows-only
+path routine — written the WiX-idiomatic way, the file could not be compiled, and therefore could
+not be checked, anywhere but Windows.
+
+**What is still unverified.** Everything about the `.msi` that needs Windows: WiX binds the database
+through `msi.dll`, so no `.msi` has been produced on this workstation, and installing, upgrading and
+uninstalling one has not been done on real hardware. The Linux container proves only that the `.wxs`
+compiles and links, and `.github/workflows/release.yml`'s `windows` job is where the package itself
+is built. The consequence "the Windows leg is type-checked, not run, outside CI" above applies to
+this change in full.
