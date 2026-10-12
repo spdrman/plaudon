@@ -6,6 +6,7 @@
 # honestly. It transcribes nothing unless you pass an audio file.
 #
 #   scripts/probe-apple.sh [audio-file] [locale]
+#   scripts/probe-apple.sh --json --locale en-US --audio fixture.wav
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -14,16 +15,15 @@ if [ "$(uname -s)" != "Darwin" ]; then
   exit 1
 fi
 
-scripts/build-apple-bridge.sh build >/dev/null
-BRIDGE_DIR="$(pwd)/native/apple-bridge/build"
-
 echo "host: $(sw_vers -productName) $(sw_vers -productVersion) ($(sw_vers -buildVersion))"
 echo "cpu:  $(sysctl -n machdep.cpu.brand_string)"
 echo
 
-RUSTFLAGS="-L $BRIDGE_DIR" cargo run -q -p plaudon-ai-apple --features apple-bridge \
+# The crate's build script compiles and links the Swift library itself; no
+# RUSTFLAGS and no prebuilt directory are needed.
+cargo run -q -p plaudon-ai-apple --features apple-bridge \
   --bin plaud-apple-probe -- "$@"
 
 echo
-echo "Record the result in docs/spikes/A1.3-apple-availability.md and, if a"
-echo "transcription succeeded, in compatibility.yaml with a test_run_id."
+echo "Add --json to emit an evidence record for the release bundle, and record"
+echo "the result in docs/benchmarks/apple-native-ai.md with a test_run_id."

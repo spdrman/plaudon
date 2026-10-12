@@ -1,0 +1,30 @@
+[package]
+name = "plaudon-hardware-tests"
+description = "Opt-in tests that require physical hardware or a real platform runtime."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+build = "build.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+plaudon-ai-apple = { workspace = true }
+plaudon-ai-contracts = { workspace = true }
+plaudon-app-core = { workspace = true }
+plaudon-domain = { workspace = true }
+serde = { workspace = true }
+hex = { workspace = true }
+sha2 = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+
+[features]
+# Links the Swift bridge so the Apple cells can be measured. Without it the
+# suite still runs and reports every cell as unmeasured, which is the honest
+# answer on a machine with no Swift toolchain.
+apple-bridge = ["plaudon-ai-apple/apple-bridge"]

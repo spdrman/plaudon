@@ -1,13 +1,29 @@
-//! The macOS-only foreign function boundary (spec 11.2).
+//! The macOS-only foreign function boundary (spec 11.2, 11.6 — task H1.4).
 //!
-//! Compiled only with the `apple-bridge` feature on macOS. Every string the
-//! library returns is released through the library's own deallocator, never
-//! through `free` or a Rust allocator, because the two heaps are different.
+//! Compiled only with the `apple-bridge` feature on macOS. This is the single
+//! module in the workspace that contains `unsafe`, and it exists so that no
+//! other module has to.
+//!
+//! The contract it implements is stated in
+//! `native/apple-bridge/include/plaudon_apple_bridge.h`. Three of its rules
+//! shape the code here:
+//!
+//! * Every returned buffer is released with `plaudon_apple_string_free`,
+//!   never with `free` or a Rust allocator, because the two sides do not
+//!   share a heap.
+//! * Every input string is borrowed for the duration of the call, so the
+//!   `CString` temporaries must outlive the call and are named rather than
+//!   inlined.
+//! * Progress callbacks arrive on a library-owned thread. A Rust panic must
+//!   not unwind into Swift, so the trampoline catches it.
 
 use std::ffi::{c_char, c_void, CStr, CString};
+use std::panic::{catch_unwind, AssertUnwindSafe};
 
-use crate::probe::{BridgeDocument, ProbeDocument, TranscriptionDocument};
-use crate::EXPECTED_ABI_VERSION;
+use crate::bridge::{AppleBridge, FfiError, ProgressSink};
+use crate::envelope::{BridgeOp, ProgressEvent};
+
+type ProgressFn = unsafe extern "C" fn(*mut c_void, *const c_char);
 
 // The declarations themselves are unsafe by nature; each call site carries
 // its own safety argument.
@@ -16,108 +32,53 @@ use crate::EXPECTED_ABI_VERSION;
 unsafe extern "C" {
     fn plaudon_apple_bridge_abi_version() -> i32;
     fn plaudon_apple_string_free(value: *mut c_char);
-    fn plaudon_apple_probe_speech(locale: *const c_char) -> *mut c_char;
-    fn plaudon_apple_probe_foundation_model() -> *mut c_char;
+    fn plaudon_apple_probe_speech(request: *const c_char) -> *mut c_char;
+    fn plaudon_apple_probe_foundation_model(request: *const c_char) -> *mut c_char;
+    fn plaudon_apple_install_speech_assets(
+        request: *const c_char,
+        progress: Option<ProgressFn>,
+        context: *mut c_void,
+    ) -> *mut c_char;
     fn plaudon_apple_transcribe_file(
-        path: *const c_char,
-        locale: *const c_char,
-        cancel_token: u64,
-        timeout_ms: u64,
-        progress: Option<unsafe extern "C" fn(*mut c_void, f64)>,
+        request: *const c_char,
+        progress: Option<ProgressFn>,
         context: *mut c_void,
     ) -> *mut c_char;
     fn plaudon_apple_generate_text(
-        prompt: *const c_char,
-        cancel_token: u64,
-        timeout_ms: u64,
+        request: *const c_char,
+        progress: Option<ProgressFn>,
+        context: *mut c_void,
     ) -> *mut c_char;
     fn plaudon_apple_new_cancel_token() -> u64;
     fn plaudon_apple_cancel(cancel_token: u64);
     fn plaudon_apple_release_cancel_token(cancel_token: u64);
+    fn plaudon_apple_cancel_token_is_cancelled(cancel_token: u64) -> i32;
+    fn plaudon_apple_live_cancel_token_count() -> u64;
 }
 
-/// Why a bridge call could not be made.
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-pub enum FfiError {
-    /// The library reports an ABI version this build does not understand.
-    #[error("the Apple bridge reports ABI version {found}, expected {expected}")]
-    AbiMismatch {
-        /// Version the library reports.
-        found: i32,
-        /// Version this build expects.
-        expected: i32,
-    },
-    /// An argument contained an interior NUL and could not cross the boundary.
-    #[error("an argument contains an interior NUL byte")]
-    InvalidArgument,
-    /// The library returned a null pointer, which its contract forbids.
-    #[error("the Apple bridge returned a null document")]
-    NullDocument,
-}
-
-/// A cancellation token owned by the Swift side.
+/// Receives progress documents and forwards them to a Rust sink.
 ///
-/// Dropping the handle releases the token, so a forgotten cancel cannot leak
-/// an entry in the library's registry.
-#[derive(Debug)]
-pub struct CancelToken(u64);
-
-impl CancelToken {
-    /// Allocate a token.
-    #[must_use]
-    pub fn new() -> Self {
-        // SAFETY: the library allocates and owns the token; we only hold the
-        // integer handle and release it in `Drop`.
-        #[allow(unsafe_code)]
-        Self(unsafe { plaudon_apple_new_cancel_token() })
+/// Invoked on a library-owned thread. The library guarantees no delivery
+/// after the owning call returns or after cancellation completes, so the
+/// `context` pointer is valid for every invocation that can reach here.
+#[allow(unsafe_code)]
+unsafe extern "C" fn progress_trampoline(context: *mut c_void, document: *const c_char) {
+    if context.is_null() || document.is_null() {
+        return;
     }
-
-    /// Request cancellation. Safe to call from any thread, and idempotent.
-    pub fn cancel(&self) {
-        // SAFETY: the handle is valid until `Drop`, and the library documents
-        // `plaudon_apple_cancel` as thread safe and idempotent.
-        #[allow(unsafe_code)]
-        unsafe {
-            plaudon_apple_cancel(self.0);
+    // A panic crossing back into Swift is undefined behaviour; a dropped
+    // progress update is not (spec 6.5).
+    let _ = catch_unwind(AssertUnwindSafe(|| {
+        // SAFETY: `context` is the address of the `&ProgressSink` local in
+        // `call_with_progress`, which outlives the bridge call.
+        let sink: &&ProgressSink<'_> = unsafe { &*context.cast::<&ProgressSink<'_>>() };
+        // SAFETY: the library documents the buffer as a NUL-terminated UTF-8
+        // string valid for the duration of this call.
+        let text = unsafe { CStr::from_ptr(document) }.to_string_lossy();
+        if let Some(event) = ProgressEvent::parse(&text) {
+            sink(event);
         }
-    }
-
-    /// The raw handle, for passing into a bridge call.
-    #[must_use]
-    pub const fn raw(&self) -> u64 {
-        self.0
-    }
-}
-
-impl Default for CancelToken {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl Drop for CancelToken {
-    fn drop(&mut self) {
-        // SAFETY: released exactly once, from the owning handle.
-        #[allow(unsafe_code)]
-        unsafe {
-            plaudon_apple_release_cancel_token(self.0);
-        }
-    }
-}
-
-/// Verify that the linked library speaks the ABI this build expects.
-pub fn check_abi() -> Result<(), FfiError> {
-    // SAFETY: a parameterless call returning a plain integer.
-    #[allow(unsafe_code)]
-    let found = unsafe { plaudon_apple_bridge_abi_version() };
-    if found == EXPECTED_ABI_VERSION {
-        Ok(())
-    } else {
-        Err(FfiError::AbiMismatch {
-            found,
-            expected: EXPECTED_ABI_VERSION,
-        })
-    }
+    }));
 }
 
 /// Take ownership of a document the library returned, releasing it correctly.
@@ -135,96 +96,241 @@ unsafe fn take_document(pointer: *mut c_char) -> Result<String, FfiError> {
         .to_string_lossy()
         .into_owned();
     // SAFETY: released through the library's own deallocator, exactly once.
+    // `text` already owns a copy, so the pointer is dead after this line.
     unsafe { plaudon_apple_string_free(pointer) };
     Ok(text)
 }
 
-/// Probe speech availability.
-pub fn probe_speech(locale: Option<&str>) -> Result<BridgeDocument<ProbeDocument>, FfiError> {
-    check_abi()?;
-    let locale = locale
-        .map(CString::new)
-        .transpose()
-        .map_err(|_| FfiError::InvalidArgument)?;
-    let pointer = locale
-        .as_ref()
-        .map_or(std::ptr::null(), |value| value.as_ptr());
-    // SAFETY: `pointer` is borrowed for the duration of the call only.
-    #[allow(unsafe_code)]
-    let raw = unsafe { plaudon_apple_probe_speech(pointer) };
-    // SAFETY: `raw` came from the library and is freed inside.
-    #[allow(unsafe_code)]
-    let document = unsafe { take_document(raw) }?;
-    Ok(BridgeDocument::parse(&document))
+/// The linked Swift library, as an [`AppleBridge`].
+///
+/// `Send + Sync` is sound because the library documents every entry point as
+/// callable from any thread and serializes what the platform requires; the
+/// struct itself holds no state.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct LinkedBridge;
+
+impl LinkedBridge {
+    /// A handle to the linked library.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self
+    }
 }
 
-/// Probe on-device language model availability.
-pub fn probe_foundation_model() -> Result<BridgeDocument<ProbeDocument>, FfiError> {
-    check_abi()?;
-    // SAFETY: a parameterless call returning an owned string.
-    #[allow(unsafe_code)]
-    let raw = unsafe { plaudon_apple_probe_foundation_model() };
-    // SAFETY: `raw` came from the library and is freed inside.
-    #[allow(unsafe_code)]
-    let document = unsafe { take_document(raw) }?;
-    Ok(BridgeDocument::parse(&document))
+impl AppleBridge for LinkedBridge {
+    fn abi_version(&self) -> Result<i32, FfiError> {
+        // SAFETY: a parameterless call returning a plain integer.
+        #[allow(unsafe_code)]
+        Ok(unsafe { plaudon_apple_bridge_abi_version() })
+    }
+
+    fn new_cancel_token(&self) -> u64 {
+        // SAFETY: the library owns the token; we hold only the integer.
+        #[allow(unsafe_code)]
+        unsafe {
+            plaudon_apple_new_cancel_token()
+        }
+    }
+
+    fn cancel(&self, token: u64) {
+        // SAFETY: documented as thread safe and idempotent for any value.
+        #[allow(unsafe_code)]
+        unsafe {
+            plaudon_apple_cancel(token);
+        }
+    }
+
+    fn release_cancel_token(&self, token: u64) {
+        // SAFETY: documented as idempotent for any value.
+        #[allow(unsafe_code)]
+        unsafe {
+            plaudon_apple_release_cancel_token(token);
+        }
+    }
+
+    fn is_cancelled(&self, token: u64) -> bool {
+        // SAFETY: a diagnostics query, valid for any value.
+        #[allow(unsafe_code)]
+        unsafe {
+            plaudon_apple_cancel_token_is_cancelled(token) != 0
+        }
+    }
+
+    fn live_token_count(&self) -> u64 {
+        // SAFETY: a parameterless diagnostics query.
+        #[allow(unsafe_code)]
+        unsafe {
+            plaudon_apple_live_cancel_token_count()
+        }
+    }
+
+    fn call(
+        &self,
+        op: BridgeOp,
+        request: &str,
+        progress: Option<&ProgressSink<'_>>,
+    ) -> Result<String, FfiError> {
+        let request = CString::new(request).map_err(|_| FfiError::InvalidArgument)?;
+
+        // The sink reference must have a stable address for the duration of
+        // the call, because that address is what crosses as `context`.
+        let mut sink_slot: Option<&ProgressSink<'_>> = progress;
+        let (callback, context): (Option<ProgressFn>, *mut c_void) = match &mut sink_slot {
+            Some(sink) => (
+                Some(progress_trampoline),
+                std::ptr::from_mut(sink).cast::<c_void>(),
+            ),
+            None => (None, std::ptr::null_mut()),
+        };
+
+        // SAFETY: `request` is borrowed for the duration of the call; the
+        // progress context outlives it because `sink_slot` is a local that is
+        // not moved, and the library delivers no callback after returning.
+        #[allow(unsafe_code)]
+        let raw = unsafe {
+            match op {
+                BridgeOp::ProbeSpeech => plaudon_apple_probe_speech(request.as_ptr()),
+                BridgeOp::ProbeFoundationModel => {
+                    plaudon_apple_probe_foundation_model(request.as_ptr())
+                }
+                BridgeOp::InstallSpeechAssets => {
+                    plaudon_apple_install_speech_assets(request.as_ptr(), callback, context)
+                }
+                BridgeOp::TranscribeFile => {
+                    plaudon_apple_transcribe_file(request.as_ptr(), callback, context)
+                }
+                BridgeOp::GenerateText => {
+                    plaudon_apple_generate_text(request.as_ptr(), callback, context)
+                }
+            }
+        };
+        // SAFETY: `raw` came from the library and is freed inside.
+        #[allow(unsafe_code)]
+        unsafe {
+            take_document(raw)
+        }
+    }
 }
 
-/// Transcribe a file.
-pub fn transcribe_file(
-    path: &str,
-    locale: Option<&str>,
-    cancel: &CancelToken,
-    timeout: std::time::Duration,
-) -> Result<BridgeDocument<TranscriptionDocument>, FfiError> {
-    check_abi()?;
-    let path = CString::new(path).map_err(|_| FfiError::InvalidArgument)?;
-    let locale = locale
-        .map(CString::new)
-        .transpose()
-        .map_err(|_| FfiError::InvalidArgument)?;
-    let locale_pointer = locale
-        .as_ref()
-        .map_or(std::ptr::null(), |value| value.as_ptr());
-    // SAFETY: both strings are borrowed for the duration of the call, and no
-    // progress callback is registered.
-    #[allow(unsafe_code)]
-    let raw = unsafe {
-        plaudon_apple_transcribe_file(
-            path.as_ptr(),
-            locale_pointer,
-            cancel.raw(),
-            u64::try_from(timeout.as_millis()).unwrap_or(u64::MAX),
-            None,
-            std::ptr::null_mut(),
-        )
-    };
-    // SAFETY: `raw` came from the library and is freed inside.
-    #[allow(unsafe_code)]
-    let document = unsafe { take_document(raw) }?;
-    Ok(BridgeDocument::parse(&document))
-}
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
 
-/// Generate text with the on-device model.
-pub fn generate_text(
-    prompt: &str,
-    cancel: &CancelToken,
-    timeout: std::time::Duration,
-) -> Result<String, FfiError> {
-    check_abi()?;
-    let prompt = CString::new(prompt).map_err(|_| FfiError::InvalidArgument)?;
-    // SAFETY: the prompt is borrowed for the duration of the call.
-    #[allow(unsafe_code)]
-    let raw = unsafe {
-        plaudon_apple_generate_text(
-            prompt.as_ptr(),
-            cancel.raw(),
-            u64::try_from(timeout.as_millis()).unwrap_or(u64::MAX),
-        )
-    };
-    // SAFETY: `raw` came from the library and is freed inside.
-    #[allow(unsafe_code)]
-    unsafe {
-        take_document(raw)
+    use parking_lot::Mutex;
+
+    use super::*;
+    use crate::bridge::CancelGuard;
+    use crate::envelope::{encode_request, ProbeRequest, EXPECTED_ABI_VERSION};
+
+    /// The handle registry is process-global, so the tests that assert on its
+    /// count run one at a time. Everything else in the suite stays parallel.
+    static REGISTRY: Mutex<()> = Mutex::new(());
+
+    #[test]
+    fn the_linked_library_speaks_the_expected_abi() {
+        assert_eq!(LinkedBridge.abi_version(), Ok(EXPECTED_ABI_VERSION));
+    }
+
+    #[test]
+    fn a_probe_returns_a_well_formed_document() {
+        let request = encode_request(BridgeOp::ProbeSpeech, &ProbeRequest { locale: None });
+        let document = LinkedBridge
+            .call(BridgeOp::ProbeSpeech, &request, None)
+            .expect("the library always returns a document");
+        assert!(document.contains("\"abi_version\":2"), "{document}");
+        assert!(document.contains("\"op\":\"probe_speech\""), "{document}");
+    }
+
+    #[test]
+    fn an_interior_nul_is_refused_before_crossing() {
+        let error = LinkedBridge
+            .call(BridgeOp::ProbeSpeech, "{\0}", None)
+            .unwrap_err();
+        assert_eq!(error, FfiError::InvalidArgument);
+    }
+
+    #[test]
+    fn token_handles_are_balanced_across_thousands_of_cycles() {
+        let _serial = REGISTRY.lock();
+        let baseline = LinkedBridge.live_token_count();
+        for index in 0..5_000u64 {
+            let token = LinkedBridge.new_cancel_token();
+            if index % 3 == 0 {
+                LinkedBridge.cancel(token);
+            }
+            LinkedBridge.release_cancel_token(token);
+        }
+        assert_eq!(LinkedBridge.live_token_count(), baseline);
+    }
+
+    #[test]
+    fn a_dropped_guard_releases_its_handle_in_the_library() {
+        let _serial = REGISTRY.lock();
+        let bridge: Arc<dyn AppleBridge> = Arc::new(LinkedBridge);
+        let baseline = bridge.live_token_count();
+        {
+            let guard = CancelGuard::new(bridge.clone());
+            assert_eq!(bridge.live_token_count(), baseline + 1);
+            guard.cancel();
+            assert!(guard.is_cancelled());
+        }
+        assert_eq!(bridge.live_token_count(), baseline);
+    }
+
+    #[test]
+    fn cancelling_before_a_call_refuses_without_delivering_progress() {
+        let bridge: Arc<dyn AppleBridge> = Arc::new(LinkedBridge);
+        let guard = CancelGuard::new(bridge.clone());
+        guard.cancel();
+
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let sink = {
+            let seen = seen.clone();
+            move |event: ProgressEvent| seen.lock().push(event)
+        };
+        let request = encode_request(
+            BridgeOp::GenerateText,
+            &crate::envelope::GenerateRequest {
+                prompt: "hello".into(),
+                instructions: None,
+                schema: None,
+                cancel_token: guard.token(),
+                timeout_ms: 30_000,
+                max_output_tokens: None,
+                temperature: None,
+            },
+        );
+        let document = bridge
+            .call(BridgeOp::GenerateText, &request, Some(&sink))
+            .expect("a document is always returned");
+        assert!(document.contains("cancelled"), "{document}");
+        assert!(
+            seen.lock().is_empty(),
+            "a call cancelled before start must deliver no progress"
+        );
+    }
+
+    #[test]
+    fn a_one_millisecond_budget_never_hangs() {
+        let request = encode_request(
+            BridgeOp::TranscribeFile,
+            &crate::envelope::TranscribeRequest {
+                path: "/nonexistent/plaudon/fixture.wav".into(),
+                locale: None,
+                cancel_token: 0,
+                timeout_ms: 1,
+                allow_asset_download: false,
+                want_word_timestamps: false,
+            },
+        );
+        let started = std::time::Instant::now();
+        let document = LinkedBridge
+            .call(BridgeOp::TranscribeFile, &request, None)
+            .expect("a document is always returned");
+        assert!(document.contains("\"ok\":false"), "{document}");
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(5),
+            "a bounded call must not hang"
+        );
     }
 }

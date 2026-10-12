@@ -12,6 +12,7 @@ apps/desktop/dist/
 apps/desktop/src-tauri/gen/
 apps/desktop/test-results/
 apps/desktop/playwright-report/
+target/hardware-evidence/
 
 # tsc emit must never land beside sources
 apps/desktop/src/**/*.js

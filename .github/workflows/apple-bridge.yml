@@ -1,0 +1,151 @@
+name: Apple bridge
+
+# Gates for EPIC H (spec §11, §18.4). Three jobs, three different questions:
+#
+#   hermetic   Does the decision logic hold with no Apple framework anywhere?
+#              Runs on Linux, which is the strongest form of that question.
+#   no-apple   Does a non-macOS artifact really contain nothing Apple? Checked
+#              by inspecting the binary, not by trusting the cfg attributes.
+#   macos      Does the real Swift library behave? Builds it, links it, runs
+#              the bridge tests and the ASan/UBSan/TSan ABI suite.
+#
+# None of them needs Apple Intelligence, an installed speech model or real
+# hardware. The opt-in hardware suite under tests/hardware/ is the only thing
+# that does, and it never runs here (spec §18.3A, §22(17)).
+
+on:
+  push:
+    paths:
+      - "crates/ai-apple/**"
+      - "crates/app-core/src/chunking.rs"
+      - "crates/app-core/src/engine_policy.rs"
+      - "native/apple-bridge/**"
+      - "schemas/apple-bridge-envelope.v1.schema.json"
+      - "tests/fixtures/apple-bridge/**"
+      - "tests/integration/tests/h_apple_bridge.rs"
+      - "tests/chaos/tests/apple_bridge_stress.rs"
+      - "tests/hardware/**"
+      - ".github/workflows/apple-bridge.yml"
+  pull_request:
+    paths:
+      - "crates/ai-apple/**"
+      - "crates/app-core/src/chunking.rs"
+      - "crates/app-core/src/engine_policy.rs"
+      - "native/apple-bridge/**"
+      - "schemas/apple-bridge-envelope.v1.schema.json"
+      - "tests/fixtures/apple-bridge/**"
+      - "tests/integration/tests/h_apple_bridge.rs"
+      - "tests/chaos/tests/apple_bridge_stress.rs"
+      - "tests/hardware/**"
+      - ".github/workflows/apple-bridge.yml"
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+
+jobs:
+  hermetic:
+    name: Hermetic (no Apple framework)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Capability mapping, envelope decoding, adapters against the fake
+        run: cargo test -p plaudon-ai-apple --all-targets
+
+      - name: Chunker and engine policy
+        run: cargo test -p plaudon-app-core --all-targets
+
+      - name: Cross-crate integration suite
+        run: cargo test -p plaudon-integration-tests --test h_apple_bridge
+
+      - name: Bridge stress and interruption suite
+        run: cargo test -p plaudon-chaos-tests --test apple_bridge_stress
+
+      - name: Lints
+        run: cargo clippy -p plaudon-ai-apple -p plaudon-app-core --all-targets
+
+      - name: The apple-bridge feature refuses a non-macOS target
+        # A silently stubbed bridge is the failure mode this check exists for
+        # (task H1.2 acceptance). Enabling the feature off macOS must fail the
+        # build with an actionable message, not produce a library-shaped
+        # nothing.
+        run: |
+          if cargo check -p plaudon-ai-apple --features apple-bridge 2>build.log; then
+            echo "the apple-bridge feature built on Linux, which it must not" >&2
+            exit 1
+          fi
+          grep -q "can only be enabled for a macOS target" build.log
+
+  no-apple-symbols:
+    name: Non-macOS artifact contains nothing Apple
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build the default (Apple-free) library
+        run: cargo build -p plaudon-ai-apple --release
+
+      - name: Inspect the artifact
+        run: |
+          shopt -s nullglob
+          artifacts=(target/release/libplaudon_ai_apple.rlib target/release/deps/libplaudon_ai_apple-*.rlib)
+          if [ "${#artifacts[@]}" -eq 0 ]; then
+            echo "no plaudon-ai-apple artifact was produced" >&2
+            exit 1
+          fi
+          scripts/check-no-apple-symbols.sh "${artifacts[@]}"
+
+  macos:
+    name: macOS Swift bridge
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Swift toolchain
+        run: swiftc --version
+
+      - name: Build the static library and list its entry points
+        run: scripts/build-apple-bridge.sh build
+
+      - name: Deployment target and weak linking
+        # The product supports Macs older than Apple's AI floor, so the
+        # binary must load on them. A hard framework reference would make
+        # dyld refuse to launch the whole application (task H1.2).
+        run: |
+          clang -O1 -mmacosx-version-min=13.0 \
+            -Inative/apple-bridge/include \
+            -o /tmp/link-probe native/apple-bridge/tests/abi_stress.c \
+            native/apple-bridge/build/libPlaudonAppleBridge.a \
+            -L/usr/lib/swift -Wl,-rpath,/usr/lib/swift \
+            -framework Foundation -framework AVFoundation -framework CoreMedia \
+            -weak_framework Speech -weak_framework FoundationModels
+          otool -l /tmp/link-probe | grep -A3 LC_BUILD_VERSION | grep -q "minos 13.0"
+          otool -l /tmp/link-probe | grep -A2 LC_LOAD_WEAK_DYLIB | grep -q "Speech.framework"
+          otool -l /tmp/link-probe | grep -A2 LC_LOAD_WEAK_DYLIB | grep -q "FoundationModels.framework"
+
+      - name: Bridge tests against the linked library
+        env:
+          PLAUDON_APPLE_BRIDGE_LIB_DIR: ${{ github.workspace }}/native/apple-bridge/build
+        run: cargo test -p plaudon-ai-apple --features apple-bridge --all-targets
+
+      - name: Fuzz, stress and sanitizer suite
+        # Hermetic: no audio fixture is passed, so the transcription paths are
+        # skipped and the runner needs no Apple Intelligence and no models.
+        run: scripts/apple-bridge-sanitizers.sh
+
+      - name: Hardware suite stays opt-in
+        # Proves the gate rather than the hardware: without the opt-in
+        # variable every hardware test must report itself as skipped.
+        run: |
+          cargo test -p plaudon-hardware-tests --test apple_compatibility -- --nocapture \
+            | tee hardware.log
+          grep -q "PLAUDON_APPLE_HARDWARE_TESTS" hardware.log

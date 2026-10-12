@@ -42,10 +42,15 @@ and why, and the consequences we accept.
 
 - [ADR-0030: Job engine durability, idempotency and crash recovery](0030-job-engine-durability.md) — Accepted, 2026-10-11 (spec §14)
 
+## AI adapters (0040-0049)
+
+- [ADR-0040: Apple bridge envelopes, and a load floor far below the feature floor](ADR-0040-apple-bridge-envelopes-and-a-low-load-floor.md) — Accepted, 2026-10-11 (spec §6.6, §11.2, §11.3, §11.6, §12)
+
 ## Sources and ingestion (0050-0059)
 
 - [ADR-0050: The PLAUD Cloud CLI connector is version-locked and ships with an empty compatibility table](ADR-0050-plaud-cli-compatibility-table.md) — Accepted, 2026-10-11 (spec §2.1, §7.1, §7.2, §7.6)
 - [ADR-0051: A filesystem event authorises nothing; a completion barrier and a content digest do](ADR-0051-watched-folder-completion-barrier-and-source-identity.md) — Accepted, 2026-10-11 (spec §4.3, §7.5, §7.10, App. A.2, App. A.4)
+
 ## Transcript tools and automation (0400-0499)
 
 - [ADR-0400: Diarization runtime and licensing](ADR-0400-diarization-runtime-and-licensing.md) — Accepted, 2026-10-11 (spec §8.7, §3.1, §17.4)

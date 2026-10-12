@@ -3400,11 +3400,19 @@ checksum = "f6b464fbc74e149a392436b17d523f769e057cb6877f6a5c4618bc6f11800548"
 name = "plaudon-ai-apple"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
+ "jsonschema",
+ "parking_lot",
  "plaudon-ai-contracts",
  "plaudon-domain",
+ "proptest",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror 2.0.21",
+ "tokio",
+ "tokio-util",
+ "tracing",
 ]
 
 [[package]]
@@ -3585,6 +3593,7 @@ name = "plaudon-chaos-tests"
 version = "0.1.0"
 dependencies = [
  "hex",
+ "plaudon-ai-apple",
  "plaudon-ai-contracts",
  "plaudon-ai-openrouter",
  "plaudon-domain",
@@ -3606,6 +3615,7 @@ dependencies = [
  "hex",
  "jsonschema",
  "keyring",
+ "plaudon-ai-apple",
  "plaudon-ai-contracts",
  "plaudon-ai-diarization",
  "plaudon-ai-openrouter",
@@ -3704,12 +3714,28 @@ name = "plaudon-export"
 version = "0.1.0"
 
 [[package]]
+name = "plaudon-hardware-tests"
+version = "0.1.0"
+dependencies = [
+ "hex",
+ "plaudon-ai-apple",
+ "plaudon-ai-contracts",
+ "plaudon-app-core",
+ "plaudon-domain",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tokio",
+]
+
+[[package]]
 name = "plaudon-integration-tests"
 version = "0.1.0"
 dependencies = [
  "async-trait",
  "hex",
  "jsonschema",
+ "plaudon-ai-apple",
  "plaudon-ai-contracts",
  "plaudon-ai-openrouter",
  "plaudon-ai-whisper",

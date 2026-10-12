@@ -6,22 +6,36 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+build = "build.rs"
+# Declared so a dependent build script can read DEP_PLAUDON_AI_APPLE_LINK_ARGS
+# and DEP_PLAUDON_AI_APPLE_LIB_DIR instead of restating the linker flags.
+links = "PlaudonAppleBridge"
 
 [lints]
 workspace = true
 
 [features]
-# Links the Swift static library built by scripts/build-apple-bridge.sh.
-# Off by default so the workspace builds and tests on every platform without
-# a Swift toolchain, and so a Windows build links nothing Apple (spec 11.1).
+# Builds and links the Swift static library from native/apple-bridge.
+# Off by default so the workspace builds and tests on every platform without a
+# Swift toolchain, and so a Windows build links nothing Apple (spec 11.1).
 apple-bridge = []
 
 [dependencies]
 plaudon-ai-contracts = { workspace = true }
 plaudon-domain = { workspace = true }
+async-trait = { workspace = true }
+jsonschema = { workspace = true }
+parking_lot = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+tempfile = { workspace = true }
 
 [[bin]]
 name = "plaud-apple-probe"

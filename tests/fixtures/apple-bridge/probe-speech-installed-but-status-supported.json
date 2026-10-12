@@ -1,0 +1,1 @@
+{"envelope_version":1,"abi_version":2,"op":"probe_speech","ok":true,"result":{"available":true,"is_transcriber":true,"supports_on_device":true,"asset_status":"supported","locale_installed":true,"installed_locales":["en_US"],"supported_locales":["en_US"],"resolved_locale":"en_US","max_concurrent_locales":5,"supports_word_timestamps":true,"os_build":"26A434"}}

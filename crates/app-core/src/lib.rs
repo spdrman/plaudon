@@ -4,8 +4,10 @@
 //! import deduplicates blobs without merging logical meetings, and how a
 //! repeated import of the same source item stays idempotent.
 
+pub mod chunking;
 pub mod dedup;
 pub mod diarization;
+pub mod engine_policy;
 pub mod import;
 pub mod library;
 pub mod models;
@@ -16,8 +18,16 @@ pub mod stt;
 pub mod transcript_tools;
 pub mod vendor_artifacts;
 
+pub use chunking::{
+    plan_chunks, Chunk, ChunkError, ChunkPlan, ChunkPolicy, ContextBudget, ContextOrigin, Coverage,
+    SegmentExtent, UnknownContext,
+};
 pub use dedup::{BlobDecision, DedupPolicy};
 pub use diarization::{reconcile, Reconciliation, SegmentAssignment};
+pub use engine_policy::{
+    candidate_from_probe, degrade, explain, select_text_model, CorrectiveAction, Degradation,
+    TextEngineCandidate, TextEngineDecision, TextRequirements, UnavailabilityExplanation,
+};
 pub use import::{ImportOutcome, ImportRequest, ImportService};
 pub use library::{LibraryOrder, LibraryPage, LibraryService, RecordingSummary, TranscriptExport};
 pub use models::{ModelError, ModelId, ModelInstaller, ModelPack, ModelRegistry};
