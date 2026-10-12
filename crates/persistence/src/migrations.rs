@@ -43,8 +43,9 @@ impl Migration {
 /// Version ranges are allocated per EPIC so two branches cannot renumber each
 /// other, and because [`MigrationRunner`] refuses a version below the applied
 /// head: 0001-0099 EPIC B (core), 0100-0199 EPIC C (job engine), 0200-0299
-/// EPIC F (audio/STT), 0300-0399 the desktop shell, 0400-0499 EPIC M
-/// (transcript tools), 0500-0599 EPIC I (meeting intelligence).
+/// EPIC F (audio/STT), 0300-0399 the desktop shell, 0400-0499 transcript tools
+/// and automation, 0500-0599 direct-device import, 0600-0699 EPIC I (meeting
+/// intelligence).
 pub const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 1,
@@ -76,9 +77,9 @@ pub const MIGRATIONS: &[Migration] = &[
     },
     // Meeting intelligence and source grounding. Owned by EPIC I.
     Migration {
-        version: 500,
+        version: 600,
         name: "meeting_intelligence",
-        sql: include_str!("../migrations/0500_meeting_intelligence.sql"),
+        sql: include_str!("../migrations/0600_meeting_intelligence.sql"),
     },
 ];
 
