@@ -1,0 +1,12 @@
+# CI self-test fixture: this crate MUST fail `cargo clippy -- -D warnings`.
+# It is excluded from the workspace so it never builds in a normal run.
+[package]
+name = "plaudon-selftest-clippy-violation"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }

@@ -148,7 +148,9 @@ pub fn package_bytes(version: Version) -> Vec<u8> {
     let mut bytes = format!("plaudon-test-only application payload v{version}\n").into_bytes();
     // Pad to a fixed length with a version-derived pattern so truncation and
     // byte-flip fixtures have room to differ well away from the header.
-    let filler = u8::try_from(version.minor % 251).unwrap_or(0).wrapping_add(1);
+    let filler = u8::try_from(version.minor % 251)
+        .unwrap_or(0)
+        .wrapping_add(1);
     bytes.resize(512, filler);
     bytes
 }
@@ -234,9 +236,7 @@ pub fn build_artifact(flaw: FixtureFlaw, version: Version, floor: Version) -> Ar
         package_url: format!("https://updates.plaudon.app/stable/plaudon-{version}.pkg"),
         package_sha256: sha256(&honest_package),
         package_size: honest_package.len() as u64,
-        package_signature: DetachedSignature::from_bytes(
-            key.sign(&honest_package).to_bytes(),
-        ),
+        package_signature: DetachedSignature::from_bytes(key.sign(&honest_package).to_bytes()),
     };
 
     // Sign the *exact* text that will sit in the envelope's `manifest`
@@ -326,7 +326,10 @@ mod tests {
             base64::engine::general_purpose::STANDARD.encode(key.verifying_key().to_bytes())
         };
         assert_eq!(encode(&test_signing_key()), TEST_KEY_PUBLIC_BASE64);
-        assert_eq!(encode(&foreign_signing_key()), FOREIGN_TEST_KEY_PUBLIC_BASE64);
+        assert_eq!(
+            encode(&foreign_signing_key()),
+            FOREIGN_TEST_KEY_PUBLIC_BASE64
+        );
     }
 
     #[test]

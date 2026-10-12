@@ -8,10 +8,10 @@
 
 use plaudon_desktop::commands::{import, jobs, library, settings, transcript};
 use plaudon_desktop::dto::{
-    DuplicatePolicy, ExportFormat, ExportRecordingRequest, GetTranscriptRequest, ImportFilesRequest,
-    ImportOutcome, JobState, ListActivityRequest, ListJobsRequest, ListRecordingsRequest,
-    RecordingFilter, RecordingSort, RecordingSortField, SaveTranscriptRevisionRequest, SegmentEdit,
-    SortDirection,
+    DuplicatePolicy, ExportFormat, ExportRecordingRequest, GetTranscriptRequest,
+    ImportFilesRequest, ImportOutcome, JobState, ListActivityRequest, ListJobsRequest,
+    ListRecordingsRequest, RecordingFilter, RecordingSort, RecordingSortField,
+    SaveTranscriptRevisionRequest, SegmentEdit, SortDirection,
 };
 use plaudon_e2e::{EgressWatch, Harness, LocalStt};
 use plaudon_notifications::testing::RecordingNotifier;
@@ -288,7 +288,8 @@ async fn scenario_14_restart_mid_job_recovers_the_queue() {
 /// in-app activity entry with privacy-safe text.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn scenario_24_denied_os_notice_still_records_activity() {
-    let harness = Harness::with_notifier(RecordingNotifier::with_permission(OsPermission::Denied)).await;
+    let harness =
+        Harness::with_notifier(RecordingNotifier::with_permission(OsPermission::Denied)).await;
     let path = harness.stage_fixture("valid/tone-mono-16k.wav", "client-call.wav");
     import::import_files(
         &harness.ports,

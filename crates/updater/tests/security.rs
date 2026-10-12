@@ -191,11 +191,11 @@ fn the_valid_fixture_installs_and_becomes_launchable() {
     let mut installer = bootstrapped(root.path(), verifier());
     let update = load(FixtureFlaw::None.fixture_name());
 
-    let installed = installer
+    let outcome = installer
         .install(update.envelope.as_bytes(), &update.package)
         .expect("the valid fixture installs");
 
-    assert_eq!(installed, UPDATE_VERSION);
+    assert_eq!(outcome, UPDATE_VERSION);
     let state = installer.launchable().expect("launchable");
     assert_eq!(state.version, UPDATE_VERSION);
     assert_eq!(

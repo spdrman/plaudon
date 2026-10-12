@@ -16,9 +16,12 @@ use std::io::Cursor;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-use plaudon_domain::ids::{ImportIntentId, RecordingId, SourceId, SourceItemId, TranscriptRevisionId};
-use plaudon_domain::recording::{Recording, RecordingMedia};
+use plaudon_domain::ids::{
+    ImportIntentId, RecordingId, SourceId, SourceItemId, TranscriptRevisionId,
+};
 use plaudon_domain::media::MediaAsset;
+use plaudon_domain::media::VerificationState;
+use plaudon_domain::recording::{Recording, RecordingMedia};
 use plaudon_domain::source::{
     ExternalRecordingId, ImportStatus, RemoteState, SourceAccountScope, SourceAssociation,
     SourceIdentityKey, SourceKind,
@@ -28,7 +31,6 @@ use plaudon_persistence::error::{PersistenceError, PersistenceResult};
 use plaudon_persistence::migrations::MigrationRunner;
 use plaudon_persistence::repo::{MediaAssetRepository, RecordingRepository, SourceRepository};
 use plaudon_persistence::Database;
-use plaudon_domain::media::VerificationState;
 use serde::Serialize;
 
 use crate::{DatasetSpec, SyntheticLibrary, SyntheticRecording};
@@ -153,21 +155,21 @@ pub async fn build(root: &Path, spec: DatasetSpec) -> PersistenceResult<ScaleFix
             .await?;
 
         let scope = SourceAccountScope::new(recording.account_scope.clone());
-        let source_id = match sources.get(&(recording.source_kind, recording.account_scope.clone()))
+        let source_id = if let Some(id) =
+            sources.get(&(recording.source_kind, recording.account_scope.clone()))
         {
-            Some(id) => *id,
-            None => {
-                let id = source_repo
-                    .ensure_source(
-                        recording.source_kind,
-                        &scope,
-                        recording.source_kind.provenance_label(),
-                        recording.created_at,
-                    )
-                    .await?;
-                sources.insert((recording.source_kind, recording.account_scope.clone()), id);
-                id
-            }
+            *id
+        } else {
+            let id = source_repo
+                .ensure_source(
+                    recording.source_kind,
+                    &scope,
+                    recording.source_kind.provenance_label(),
+                    recording.created_at,
+                )
+                .await?;
+            sources.insert((recording.source_kind, recording.account_scope.clone()), id);
+            id
         };
         source_repo
             .insert_item(
@@ -196,7 +198,7 @@ pub async fn build(root: &Path, spec: DatasetSpec) -> PersistenceResult<ScaleFix
     }
 
     let marathon_recording = library.recording(spec.marathon_index());
-    let database_bytes = std::fs::metadata(db.path()).map(|meta| meta.len()).unwrap_or(0);
+    let database_bytes = std::fs::metadata(db.path()).map_or(0, |meta| meta.len());
 
     let stats = LoadStats {
         recordings: spec.total_recordings(),

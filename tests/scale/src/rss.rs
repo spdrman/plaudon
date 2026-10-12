@@ -99,13 +99,18 @@ mod platform {
 
     pub(super) fn sample() -> Option<RssSample> {
         // SAFETY: a zeroed `mach_task_basic_info` is valid because every field
-        // is an integer. `mach_task_self()` reads an immutable global port
-        // handle for this task. `task_info` writes at most `count` 32-bit
-        // words into the out-parameter, and `count` is the constant the
-        // kernel defines for exactly this struct, so the write stays inside
-        // `info`. The pointer cast is the documented calling convention of
-        // the flavoured `task_info` API.
-        #[allow(unsafe_code)]
+        // is an integer. `mach_task_self_` is an immutable global port handle
+        // for this task. `task_info` writes at most `count` 32-bit words into
+        // the out-parameter, and `count` is the constant the kernel defines
+        // for exactly this struct, so the write stays inside `info`. The
+        // pointer cast is the documented calling convention of the flavoured
+        // `task_info` API.
+        //
+        // `libc` deprecates its mach bindings in favour of the `mach2` crate.
+        // Two symbols do not justify a new dependency in a test-only crate,
+        // and the ABI of `task_info` is stable; the deprecation is allowed
+        // here rather than worked around.
+        #[allow(unsafe_code, deprecated)]
         let (status, info) = unsafe {
             let mut info: libc::mach_task_basic_info = std::mem::zeroed();
             let mut count = libc::MACH_TASK_BASIC_INFO_COUNT;

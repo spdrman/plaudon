@@ -1,4 +1,7 @@
 //! Shared loading of the committed fixtures in `tests/fixtures/updater/`.
+//!
+//! Each integration test binary uses a different subset of these helpers.
+#![allow(dead_code)]
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -7,13 +10,18 @@ use plaudon_updater::install::Installer;
 use plaudon_updater::testkeys::{test_trusted_keys, Artifact, BASE_FIXTURE_NAME, FIXTURE_TARGET};
 use plaudon_updater::verify::{Ed25519Verifier, UpdateVerifier};
 
-/// Absolute path of the committed fixture directory.
-pub fn fixtures_dir() -> PathBuf {
+/// Absolute path of the repository root.
+pub fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .ancestors()
         .nth(2)
         .expect("repository root")
-        .join("tests/fixtures/updater")
+        .to_path_buf()
+}
+
+/// Absolute path of the committed fixture directory.
+pub fn fixtures_dir() -> PathBuf {
+    repo_root().join("tests/fixtures/updater")
 }
 
 /// Load a committed fixture pair by base name.

@@ -43,9 +43,9 @@ use plaudon_domain::ids::JobId;
 use plaudon_domain::transcript::AlignmentOrigin;
 use plaudon_notifications::testing::RecordingNotifier;
 use plaudon_notifications::{Dispatcher, NotificationSettings as CrateSettings, Notifier};
-use plaudon_security::outbound::{EgressObserver,
-    EgressPurpose, EgressRequest, Destination, OutboundPolicy, PayloadClass, RecordingObserver,
-    Subsystem,
+use plaudon_security::outbound::{
+    Destination, EgressObserver, EgressPurpose, EgressRequest, OutboundPolicy, PayloadClass,
+    RecordingObserver, Subsystem,
 };
 
 /// Cargo package name, used by the workspace layout conformance test.
@@ -142,8 +142,13 @@ impl Harness {
     pub fn stage_fixture(&self, relative: &str, as_name: &str) -> String {
         let source = fixture(relative);
         let destination = self.sources.path().join(as_name);
-        std::fs::copy(&source, &destination)
-            .unwrap_or_else(|e| panic!("copy {} -> {}: {e}", source.display(), destination.display()));
+        std::fs::copy(&source, &destination).unwrap_or_else(|e| {
+            panic!(
+                "copy {} -> {}: {e}",
+                source.display(),
+                destination.display()
+            )
+        });
         destination.to_string_lossy().into_owned()
     }
 
@@ -186,8 +191,7 @@ impl EgressWatch {
     #[must_use]
     pub fn local_only() -> Self {
         let observer = Arc::new(RecordingObserver::new(64));
-        let policy =
-            OutboundPolicy::local_only().with_observer(Arc::clone(&observer) as Arc<_>);
+        let policy = OutboundPolicy::local_only().with_observer(Arc::clone(&observer) as Arc<_>);
         Self { policy, observer }
     }
 
@@ -354,11 +358,7 @@ impl LocalStt {
                 .segments
                 .iter()
                 .map(|segment| {
-                    MachineSegment::timed(
-                        &segment.text,
-                        segment.start_ms,
-                        segment.end_ms,
-                    )
+                    MachineSegment::timed(&segment.text, segment.start_ms, segment.end_ms)
                 })
                 .collect(),
             engine_id: transcript.engine_id.clone().into(),

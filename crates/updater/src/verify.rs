@@ -65,9 +65,11 @@ impl TrustedKeys {
 
     /// Look a key id up, rejecting anything unpinned (§16.5).
     pub fn get(&self, key_id: &str) -> Result<&VerifyingKey, VerifyError> {
-        self.keys.get(key_id).ok_or_else(|| VerifyError::UnknownKey {
-            key_id: key_id.to_owned(),
-        })
+        self.keys
+            .get(key_id)
+            .ok_or_else(|| VerifyError::UnknownKey {
+                key_id: key_id.to_owned(),
+            })
     }
 
     /// Ids in the set, sorted. Shown in diagnostics; never the key bytes.

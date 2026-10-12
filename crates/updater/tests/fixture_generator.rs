@@ -58,9 +58,8 @@ fn the_committed_fixtures_match_the_committed_generator() {
                 manifest_path.display()
             )
         });
-        let committed_package = std::fs::read(&package_path).unwrap_or_else(|e| {
-            panic!("missing fixture {}: {e}", package_path.display())
-        });
+        let committed_package = std::fs::read(&package_path)
+            .unwrap_or_else(|e| panic!("missing fixture {}: {e}", package_path.display()));
 
         assert_eq!(
             committed_manifest, envelope,

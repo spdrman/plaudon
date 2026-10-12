@@ -56,6 +56,10 @@
     "copyright": "",
     "category": "Productivity",
     "shortDescription": "Local-first recording library",
-    "longDescription": "Plaudon imports, transcribes and reviews recordings locally; cloud AI is opt-in."
+    "longDescription": "Plaudon imports, transcribes and reviews recordings locally; cloud AI is opt-in.",
+    "macOS": {
+      "entitlements": "entitlements.plist",
+      "minimumSystemVersion": "13.0"
+    }
   }
 }

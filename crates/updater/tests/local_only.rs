@@ -103,7 +103,7 @@ fn disabled_updates_also_suppress_without_a_request() {
             reason: SuppressionReason::AutomaticUpdatesDisabled
         }
     ));
-    assert!(checker.transport().requested().is_empty());
+    assert_eq!(checker.transport().requested(), Vec::<String>::new());
 }
 
 #[test]
@@ -118,7 +118,10 @@ fn a_suppressed_download_fails_closed_after_a_mode_change() {
         panic!("the valid fixture must be offered as available");
     };
     assert_eq!(manifest.version(), UPDATE_VERSION);
-    assert_eq!(allowed.transport().requested(), vec![UPDATE_MANIFEST_ENDPOINT]);
+    assert_eq!(
+        allowed.transport().requested(),
+        vec![UPDATE_MANIFEST_ENDPOINT]
+    );
 
     let suppressed = checker(
         EgressPolicy::LocalOnly,
@@ -131,8 +134,9 @@ fn a_suppressed_download_fails_closed_after_a_mode_change() {
         error,
         UpdateError::Suppressed(SuppressionReason::LocalOnlyMode)
     ));
-    assert!(
-        suppressed.transport().requested().is_empty(),
+    assert_eq!(
+        suppressed.transport().requested(),
+        Vec::<String>::new(),
         "no package byte may be requested in Local-only Mode"
     );
 }
@@ -145,7 +149,10 @@ fn an_allowed_check_contacts_exactly_the_pinned_endpoint_once() {
         RecordingTransport::serving(update.envelope.into_bytes()),
     );
     checker.check_for_update().expect("check");
-    assert_eq!(checker.transport().requested(), vec![UPDATE_MANIFEST_ENDPOINT]);
+    assert_eq!(
+        checker.transport().requested(),
+        vec![UPDATE_MANIFEST_ENDPOINT]
+    );
 }
 
 #[test]
@@ -155,7 +162,10 @@ fn the_suppression_explanation_is_user_facing_and_endpoint_free() {
         SuppressionReason::AutomaticUpdatesDisabled,
     ] {
         let text = reason.explanation();
-        assert!(text.contains("Settings"), "{reason} must tell the user where to go");
+        assert!(
+            text.contains("Settings"),
+            "{reason} must tell the user where to go"
+        );
         assert!(!text.contains("https://"), "no URL in UI copy");
     }
 }

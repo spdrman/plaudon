@@ -11,8 +11,9 @@ members = [
     "tests/egress/scenario",
     "tests/egress/harness",
 ]
-# `fuzz/` is a standalone cargo-fuzz package built with a nightly toolchain.
-exclude = ["fuzz"]
+# `fuzz/` is a standalone cargo-fuzz package; the ci-selftest fixtures are
+# deliberately broken crates that must fail their gates (scripts/ci-selftest.sh).
+exclude = ["fuzz", "tests/fixtures/ci-selftest"]
 
 [workspace.package]
 version = "0.1.0"

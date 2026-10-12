@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Keys merged into the bundle's Info.plist (spec 18.3A: macOS requires an
+  app-bundle Bluetooth usage description before a BLE scan is permitted).
+
+  Each string says what the capability is for in the user's terms. No key is
+  present for a capability the product does not use: there is no microphone,
+  camera, contacts or location usage description, because nothing in the
+  application asks for them.
+-->
+<plist version="1.0">
+<dict>
+    <key>NSBluetoothAlwaysUsageDescription</key>
+    <string>Plaudon connects directly to a compatible PLAUD recorder over Bluetooth to copy recordings you select. It only reads; it never deletes or changes anything on the device.</string>
+
+    <key>NSBluetoothPeripheralUsageDescription</key>
+    <string>Plaudon connects directly to a compatible PLAUD recorder over Bluetooth to copy recordings you select.</string>
+
+    <key>NSRemovableVolumesUsageDescription</key>
+    <string>Plaudon reads recordings from a PLAUD recorder mounted as a USB volume. It copies files and never writes to the device.</string>
+
+    <!-- The application is local-first; it declares no background modes. -->
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.productivity</string>
+</dict>
+</plist>

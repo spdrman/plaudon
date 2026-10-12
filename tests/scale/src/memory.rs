@@ -8,7 +8,9 @@
 //! binary allocated earlier, so observations can be taken in any order and the
 //! deliberately unbounded control cannot blind the ones after it.
 
-use crate::pcm::{decode_unbounded_observed, decode_windowed_observed, frames_for_minutes, ChunkWindow};
+use crate::pcm::{
+    decode_unbounded_observed, decode_windowed_observed, frames_for_minutes, ChunkWindow,
+};
 use crate::results::MemoryObservation;
 use crate::rss;
 use crate::thresholds::MemoryBudget;
@@ -17,7 +19,11 @@ use crate::SAMPLE_RATE_HZ;
 /// Peak growth a bounded run is allowed.
 #[must_use]
 pub fn allowed_growth_bytes(budget: MemoryBudget, window: ChunkWindow) -> u64 {
-    #[allow(clippy::cast_precision_loss, clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+    #[allow(
+        clippy::cast_precision_loss,
+        clippy::cast_sign_loss,
+        clippy::cast_possible_truncation
+    )]
     let scaled = (window.window_bytes() as f64 * budget.window_multiple) as u64;
     scaled.saturating_add(budget.slack_bytes)
 }

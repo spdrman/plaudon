@@ -287,7 +287,9 @@ mod tests {
             Version::new(1, 0, 0),
             Version::new(1, 0, 0),
         );
-        let outcome = checker.check_for_update().expect("suppression is not an error");
+        let outcome = checker
+            .check_for_update()
+            .expect("suppression is not an error");
         match outcome {
             UpdateCheck::Suppressed { reason } => {
                 assert_eq!(reason, SuppressionReason::LocalOnlyMode);

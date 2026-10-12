@@ -147,17 +147,65 @@ impl ConsentStatus {
     }
 }
 
+impl std::fmt::Display for ConsentStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 /// How the item's audio is identified.
 ///
 /// Media that cannot be redistributed is referenced by digest only; the runner
-/// never opens either form.
+/// never opens either form. The serialized form is a one-key mapping, either
+/// `path:` or `sha256:`; declaring both, or neither, is a parse error rather
+/// than a silent preference.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
+#[serde(try_from = "MediaReferenceDocument", into = "MediaReferenceDocument")]
 pub enum MediaReference {
     /// A path relative to the manifest directory.
     Path(PathBuf),
     /// A SHA-256 digest of the media bytes, held outside the repository.
     Sha256(Sha256Digest),
+}
+
+/// Serialized form of [`MediaReference`].
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct MediaReferenceDocument {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    path: Option<PathBuf>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    sha256: Option<Sha256Digest>,
+}
+
+impl TryFrom<MediaReferenceDocument> for MediaReference {
+    type Error = String;
+
+    fn try_from(document: MediaReferenceDocument) -> Result<Self, Self::Error> {
+        match (document.path, document.sha256) {
+            (Some(path), None) => Ok(Self::Path(path)),
+            (None, Some(digest)) => Ok(Self::Sha256(digest)),
+            (None, None) => Err("media must declare `path` or `sha256`".to_owned()),
+            (Some(_), Some(_)) => {
+                Err("media must declare exactly one of `path` or `sha256`".to_owned())
+            }
+        }
+    }
+}
+
+impl From<MediaReference> for MediaReferenceDocument {
+    fn from(reference: MediaReference) -> Self {
+        match reference {
+            MediaReference::Path(path) => Self {
+                path: Some(path),
+                sha256: None,
+            },
+            MediaReference::Sha256(digest) => Self {
+                path: None,
+                sha256: Some(digest),
+            },
+        }
+    }
 }
 
 impl MediaReference {
@@ -292,12 +340,6 @@ pub enum ClearanceRejection {
     MissingReferenceTranscript,
 }
 
-impl std::fmt::Display for ConsentStatus {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
-
 impl ClearanceRejection {
     /// Stable machine code, as published in the report.
     #[must_use]
@@ -352,7 +394,9 @@ pub enum CorpusError {
         source: std::io::Error,
     },
     /// The schema version is not the one this build understands.
-    #[error("corpus manifest schema version {found} is not supported (this build reads {supported})")]
+    #[error(
+        "corpus manifest schema version {found} is not supported (this build reads {supported})"
+    )]
     UnsupportedSchemaVersion {
         /// Version found in the document.
         found: u32,

@@ -106,10 +106,7 @@ impl Rng {
 
     /// Next 64 random bits.
     pub fn next_u64(&mut self) -> u64 {
-        let result = self.state[1]
-            .wrapping_mul(5)
-            .rotate_left(7)
-            .wrapping_mul(9);
+        let result = self.state[1].wrapping_mul(5).rotate_left(7).wrapping_mul(9);
         let t = self.state[1] << 17;
         self.state[2] ^= self.state[0];
         self.state[3] ^= self.state[1];
@@ -210,7 +207,11 @@ pub struct UnknownTier(pub String);
 
 impl fmt::Display for UnknownTier {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "unknown scale tier `{}`: expected `ci` or `full`", self.0)
+        write!(
+            f,
+            "unknown scale tier `{}`: expected `ci` or `full`",
+            self.0
+        )
     }
 }
 
@@ -448,11 +449,46 @@ const SPEAKER_NAMES: &[&str] = &[
 ];
 
 const WORDS: &[&str] = &[
-    "the", "we", "should", "probably", "move", "that", "deadline", "because", "the", "vendor",
-    "still", "has", "not", "confirmed", "delivery", "and", "I", "do", "not", "want", "another",
-    "surprise", "before", "the", "review", "meeting", "next", "week", "about", "storage",
-    "capacity", "latency", "budget", "transcript", "accuracy", "battery", "firmware", "consent",
-    "export", "retention",
+    "the",
+    "we",
+    "should",
+    "probably",
+    "move",
+    "that",
+    "deadline",
+    "because",
+    "the",
+    "vendor",
+    "still",
+    "has",
+    "not",
+    "confirmed",
+    "delivery",
+    "and",
+    "I",
+    "do",
+    "not",
+    "want",
+    "another",
+    "surprise",
+    "before",
+    "the",
+    "review",
+    "meeting",
+    "next",
+    "week",
+    "about",
+    "storage",
+    "capacity",
+    "latency",
+    "budget",
+    "transcript",
+    "accuracy",
+    "battery",
+    "firmware",
+    "consent",
+    "export",
+    "retention",
 ];
 
 const FIRST_SEGMENT_OPENERS: &[&str] = &[
@@ -496,7 +532,7 @@ impl SyntheticLibrary {
         let mut mixer = self
             .spec
             .seed
-            .wrapping_add(u64::from(index).wrapping_mul(0x1000_0000_1B3))
+            .wrapping_add(u64::from(index).wrapping_mul(0x0100_0000_01B3))
             .wrapping_add(purpose.wrapping_mul(0x9E37_79B9_7F4A_7C15));
         Rng::seeded(splitmix64(&mut mixer))
     }
@@ -711,8 +747,8 @@ impl SyntheticLibrary {
         if position % NEEDLE_PERIOD != 0 {
             return None;
         }
-        let slot = usize::try_from((position / NEEDLE_PERIOD) % SEARCH_NEEDLES.len() as u64)
-            .unwrap_or(0);
+        let slot =
+            usize::try_from((position / NEEDLE_PERIOD) % SEARCH_NEEDLES.len() as u64).unwrap_or(0);
         SEARCH_NEEDLES.get(slot).copied()
     }
 

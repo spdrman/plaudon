@@ -25,7 +25,7 @@ fn small_spec(seed: u64) -> DatasetSpec {
 
 #[test]
 fn two_generations_from_one_seed_are_identical() {
-    let spec = small_spec(0xD15EA5E);
+    let spec = small_spec(0x0D15_EA5E);
     let first = SyntheticLibrary::new(spec).fingerprint();
     let second = SyntheticLibrary::new(spec).fingerprint();
     assert_eq!(first, second, "the generator is not deterministic");
@@ -51,7 +51,10 @@ fn a_different_size_produces_a_different_fingerprint() {
 fn rows_are_generated_independently_of_the_order_they_are_asked_for() {
     let library = SyntheticLibrary::new(small_spec(0xBEEF));
     let forward: Vec<_> = (0..10).map(|index| library.recording(index)).collect();
-    let backward: Vec<_> = (0..10).rev().map(|index| library.recording(index)).collect();
+    let backward: Vec<_> = (0..10)
+        .rev()
+        .map(|index| library.recording(index))
+        .collect();
     for (index, recording) in forward.iter().enumerate() {
         let mirrored = &backward[9 - index];
         assert_eq!(recording, mirrored);
@@ -68,7 +71,7 @@ fn rows_are_generated_independently_of_the_order_they_are_asked_for() {
 
 #[test]
 fn identities_are_unique_across_the_library() {
-    let library = SyntheticLibrary::new(small_spec(0xC0FFEE));
+    let library = SyntheticLibrary::new(small_spec(0x00C0_FFEE));
     let spec = *library.spec();
     let mut recording_ids = BTreeSet::new();
     let mut media_ids = BTreeSet::new();
@@ -101,7 +104,7 @@ fn metadata_is_realistic_enough_for_the_queries_that_use_it() {
     let mut sources = BTreeSet::new();
     for index in 0..spec.recordings {
         let recording = library.recording(index);
-        assert!(!recording.title.is_empty());
+        assert_ne!(recording.title, "", "a recording must have a title");
         assert!(recording.captured_at < recording.created_at);
         assert!(recording.duration_ms > 0);
         locales.insert(recording.locale.as_str().to_owned());
@@ -118,7 +121,7 @@ fn metadata_is_realistic_enough_for_the_queries_that_use_it() {
                 "segments must not overlap on the timeline"
             );
             previous_end = segment.end_ms;
-            assert!(!segment.text.is_empty());
+            assert_ne!(segment.text, "", "a segment must have text");
             assert!((0.0..=1.0).contains(&segment.confidence));
             if let Some(slot) = segment.speaker_slot {
                 assert!(usize::from(slot) < recording.speakers.len());
@@ -181,7 +184,11 @@ fn the_prng_is_reproducible_and_bounded() {
         let ranged = rng.range(5, 9);
         assert!((5..=9).contains(&ranged));
     }
-    assert_eq!(seen.len(), 10, "`below` must reach every value in its range");
+    assert_eq!(
+        seen.len(),
+        10,
+        "`below` must reach every value in its range"
+    );
     assert_eq!(Rng::seeded(0).next_u64(), Rng::seeded(0).next_u64());
 }
 
@@ -189,10 +196,16 @@ fn the_prng_is_reproducible_and_bounded() {
 fn the_declared_tiers_match_the_sizes_the_spec_asks_for() {
     let ci = DatasetSpec::ci(1);
     assert_eq!(ci.tier, Tier::Ci);
-    assert!(ci.total_segments() >= 5_000, "the CI tier must still be a scale test");
+    assert!(
+        ci.total_segments() >= 5_000,
+        "the CI tier must still be a scale test"
+    );
 
     let full = DatasetSpec::full(1);
-    assert_eq!(full.recordings, 10_000, "spec 17.5 asks for 10,000 recordings");
+    assert_eq!(
+        full.recordings, 10_000,
+        "spec 17.5 asks for 10,000 recordings"
+    );
     assert_eq!(
         full.marathon_segments, 100_000,
         "spec 18.6A's UI row is a 100,000-segment transcript"
@@ -205,5 +218,8 @@ fn the_declared_tiers_match_the_sizes_the_spec_asks_for() {
     assert_eq!(full.total_recordings(), 10_001);
     assert_eq!(Tier::parse("full").unwrap(), Tier::Full);
     assert_eq!(Tier::parse("CI").unwrap(), Tier::Ci);
-    assert!(Tier::parse("huge").is_err(), "an unknown tier must not be guessed");
+    assert!(
+        Tier::parse("huge").is_err(),
+        "an unknown tier must not be guessed"
+    );
 }

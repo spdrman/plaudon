@@ -34,6 +34,10 @@ plaudon-release <command>
 
   compat-matrix [--out <file>] [--check]
       Generate docs/public/compatibility.md from compatibility.yaml.
+
+  compat-evidence --from <run-log> --out <dir>
+      Write one evidence record per Supported cell from a real run log.
+      Generate docs/public/compatibility.md from compatibility.yaml.
       --check fails when the committed file is stale.
 
   doc-lint
@@ -91,6 +95,7 @@ fn main() -> ExitCode {
         "scenarios" => scenario_gate(&root, &args),
         "coverage" => coverage_gate(&root, &args),
         "compat-matrix" => compat_matrix(&root, &args),
+        "compat-evidence" => compat_evidence(&root, &args),
         "doc-lint" => doc_lint(&root),
         "evidence" => match args.get(1).map(String::as_str) {
             Some("assemble") => evidence_assemble(&root, &args),
@@ -107,6 +112,83 @@ fn main() -> ExitCode {
         }
         other => fail(&format!("unknown command `{other}`\n\n{USAGE}")),
     }
+}
+
+/// Writes one evidence record per `Supported` compatibility cell, derived
+/// from the run that actually backs it (spec 22(17), 24).
+///
+/// The record names the test run, the log it came from and that log's
+/// SHA-256. It is written from a real file: without `--from`, nothing is
+/// emitted, because an unbacked record is exactly what the gate exists to
+/// catch.
+fn compat_evidence(root: &Path, args: &[String]) -> ExitCode {
+    let Some(from) = flag(args, "--from") else {
+        return fail("--from <run-log> is required: an evidence record must come from a run");
+    };
+    let Some(out) = flag(args, "--out") else {
+        return fail("--out <dir> is required");
+    };
+    let log = PathBuf::from(&from);
+    if !log.is_file() {
+        return fail(&format!(
+            "{from} does not exist; run the acceptance suite first"
+        ));
+    }
+    let digest = match plaudon_release_tools::sha256_file(&log) {
+        Ok(digest) => digest,
+        Err(error) => return fail(&format!("cannot hash {from}: {error}")),
+    };
+    let verdict = match std::fs::read_to_string(&log) {
+        Ok(text) if text.contains("test result: ok") => "pass",
+        Ok(_) => "fail",
+        Err(error) => return fail(&format!("cannot read {from}: {error}")),
+    };
+    let register = match compat::load(&root.join("compatibility.yaml")) {
+        Ok(register) => register,
+        Err(error) => return fail(&error.to_string()),
+    };
+    let out = PathBuf::from(out);
+    if let Err(error) = std::fs::create_dir_all(&out) {
+        return fail(&format!("cannot create {}: {error}", out.display()));
+    }
+    let mut written = 0_usize;
+    for cell in register.cells.iter().filter(|cell| cell.is_support_claim()) {
+        let Some(id) = cell.test_run_id.as_deref() else {
+            return fail(&format!(
+                "compatibility cell `{}` claims Supported with no test_run_id",
+                cell.route()
+            ));
+        };
+        if verdict != "pass" {
+            return fail(&format!(
+                "cell `{}` claims Supported but {from} does not record a passing run",
+                cell.route()
+            ));
+        }
+        let record = serde_json::json!({
+            "test_run_id": id,
+            "route": cell.route(),
+            "host_os": cell.host_os,
+            "os_version_range": cell.os_version_range,
+            "evidence_level": cell.evidence_level,
+            "verdict": verdict,
+            "source_log": from,
+            "source_log_sha256": digest,
+            "last_verified_at": cell.last_verified_at,
+        });
+        let path = out.join(format!("{id}.json"));
+        let mut json = serde_json::to_string_pretty(&record).expect("record serializes");
+        json.push('\n');
+        if let Err(error) = std::fs::write(&path, json) {
+            return fail(&format!("cannot write {}: {error}", path.display()));
+        }
+        written += 1;
+    }
+    println!(
+        "wrote {written} compatibility evidence record(s) to {}",
+        out.display()
+    );
+    ExitCode::SUCCESS
 }
 
 /// Verifies the bundle, then refuses any `Supported` compatibility claim that
@@ -288,10 +370,8 @@ fn compat_matrix(root: &Path, args: &[String]) -> ExitCode {
         Err(error) => return fail(&error.to_string()),
     };
     let rendered = compat::render_markdown(&register);
-    let out = flag(args, "--out").map_or_else(
-        || root.join("docs/public/compatibility.md"),
-        PathBuf::from,
-    );
+    let out = flag(args, "--out")
+        .map_or_else(|| root.join("docs/public/compatibility.md"), PathBuf::from);
     if has(args, "--check") {
         let committed = std::fs::read_to_string(&out).unwrap_or_default();
         if committed == rendered {

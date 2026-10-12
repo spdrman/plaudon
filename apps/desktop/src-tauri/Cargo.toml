@@ -23,6 +23,8 @@ plaudon-domain = { workspace = true }
 plaudon-persistence = { workspace = true }
 plaudon-app-core = { workspace = true }
 plaudon-notifications = { workspace = true }
+plaudon-security = { workspace = true }
+plaudon-updater = { workspace = true }
 async-trait = { workspace = true }
 hex = { workspace = true }
 serde = { workspace = true }
@@ -32,7 +34,7 @@ sqlx = { workspace = true }
 # `assetProtocol.enable` is false in tauri.conf.json (media is served by our
 # own `plaudon-media` scheme) and tauri-build rejects a feature/allowlist
 # mismatch, so the asset protocol feature stays off.
-tauri = { version = "2" }
+tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 thiserror = { workspace = true }
 time = { workspace = true }

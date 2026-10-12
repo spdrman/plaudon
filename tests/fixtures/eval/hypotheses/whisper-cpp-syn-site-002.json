@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "item_id": "syn-site-002",
+  "engine_id": "whisper.cpp",
+  "model_id": "ggml-small-q5_1",
+  "model_version": "2026-01-30",
+  "deployment": "local",
+  "alignment_origin": "derived",
+  "text": "The contract or poured 25 cubic yards of concrete on 2026-03-14",
+  "words": [],
+  "segment_boundaries_ms": [0, 3200],
+  "runtime": {
+    "audio_duration_ms": 600000,
+    "wall_clock_ms": 240000,
+    "time_to_first_result_ms": 2500,
+    "peak_rss_bytes": 629145600
+  }
+}

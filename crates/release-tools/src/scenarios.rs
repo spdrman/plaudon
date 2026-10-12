@@ -315,14 +315,18 @@ mod tests {
 
     #[test]
     fn a_complete_registry_validates() {
-        assert!(validate(&full_registry()).is_empty());
+        let errors = validate(&full_registry());
+        assert!(errors.is_empty(), "{errors:?}");
     }
 
     #[test]
     fn a_missing_scenario_is_reported() {
         let mut registry = full_registry();
         registry.scenarios.retain(|entry| entry.number != 27);
-        assert_eq!(validate(&registry), vec![RegistryError::MissingScenario(27)]);
+        assert_eq!(
+            validate(&registry),
+            vec![RegistryError::MissingScenario(27)]
+        );
     }
 
     #[test]

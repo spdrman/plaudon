@@ -69,10 +69,7 @@ impl fmt::Display for ThresholdError {
                 table,
                 key,
                 expected,
-            } => write!(
-                f,
-                "{THRESHOLDS_PATH}: [{table}] `{key}` is not {expected}"
-            ),
+            } => write!(f, "{THRESHOLDS_PATH}: [{table}] `{key}` is not {expected}"),
         }
     }
 }
@@ -184,10 +181,12 @@ impl Thresholds {
                 continue;
             }
             if let Some(rest) = line.strip_prefix('[') {
-                let name = rest.strip_suffix(']').ok_or_else(|| ThresholdError::Syntax {
-                    line: line_number,
-                    detail: "table header is not closed with `]`".to_owned(),
-                })?;
+                let name = rest
+                    .strip_suffix(']')
+                    .ok_or_else(|| ThresholdError::Syntax {
+                        line: line_number,
+                        detail: "table header is not closed with `]`".to_owned(),
+                    })?;
                 let name = name.trim();
                 if name.is_empty() || !name.chars().all(is_key_char) {
                     return Err(ThresholdError::Syntax {
@@ -353,10 +352,12 @@ fn strip_comment(line: &str) -> &str {
 
 fn parse_value(raw: &str, line: usize) -> Result<Value, ThresholdError> {
     if let Some(inner) = raw.strip_prefix('"') {
-        let text = inner.strip_suffix('"').ok_or_else(|| ThresholdError::Syntax {
-            line,
-            detail: "string value is not closed with `\"`".to_owned(),
-        })?;
+        let text = inner
+            .strip_suffix('"')
+            .ok_or_else(|| ThresholdError::Syntax {
+                line,
+                detail: "string value is not closed with `\"`".to_owned(),
+            })?;
         if text.contains('"') {
             return Err(ThresholdError::Syntax {
                 line,
@@ -400,7 +401,7 @@ mod tests {
         let policy = thresholds.policy().expect("policy table");
         assert_eq!(policy.schema_version, 1);
         assert!(policy.headroom_ratio > 0.0);
-        assert!(!policy.rule.is_empty());
+        assert_ne!(policy.rule, "", "the delta policy must be documented");
     }
 
     #[test]

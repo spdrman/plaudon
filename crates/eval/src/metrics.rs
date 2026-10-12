@@ -98,9 +98,7 @@ pub fn normalize_tokens(text: &str) -> Vec<String> {
         .split_whitespace()
         .map(|token| {
             token
-                .trim_matches(|c: char| {
-                    !c.is_alphanumeric() && !KEPT_EDGE_CHARACTERS.contains(&c)
-                })
+                .trim_matches(|c: char| !c.is_alphanumeric() && !KEPT_EDGE_CHARACTERS.contains(&c))
                 .to_owned()
         })
         .filter(|token| !token.is_empty())
@@ -287,10 +285,7 @@ impl DomainTermAccuracy {
     pub fn matched(&self) -> usize {
         self.terms
             .iter()
-            .map(|term| {
-                term.hypothesis_occurrences
-                    .min(term.reference_occurrences)
-            })
+            .map(|term| term.hypothesis_occurrences.min(term.reference_occurrences))
             .sum()
     }
 
@@ -336,7 +331,6 @@ impl DomainTermAccuracy {
     }
 }
 
-
 /// Count non-overlapping occurrences of a token sequence inside a stream.
 fn count_sequence(stream: &[String], needle: &[String]) -> usize {
     if needle.is_empty() || needle.len() > stream.len() {
@@ -361,7 +355,11 @@ fn count_sequence(stream: &[String], needle: &[String]) -> usize {
 /// multi-word term such as `slump test` is matched as a contiguous token
 /// sequence rather than as two independent words.
 #[must_use]
-pub fn domain_term_accuracy(reference: &str, hypothesis: &str, terms: &[String]) -> DomainTermAccuracy {
+pub fn domain_term_accuracy(
+    reference: &str,
+    hypothesis: &str,
+    terms: &[String],
+) -> DomainTermAccuracy {
     let reference_tokens = normalize_tokens(reference);
     let hypothesis_tokens = normalize_tokens(hypothesis);
     let mut outcomes = Vec::new();
@@ -488,9 +486,7 @@ fn canonical_numeric(token: &str) -> String {
         let is_group_separator = *character == ','
             && index > 0
             && characters[index - 1].is_ascii_digit()
-            && characters
-                .get(index + 1)
-                .is_some_and(char::is_ascii_digit);
+            && characters.get(index + 1).is_some_and(char::is_ascii_digit);
         if !is_group_separator {
             out.push(*character);
         }
@@ -759,8 +755,8 @@ impl TimestampError {
         sorted.sort_unstable();
         let total: u64 = sorted.iter().sum();
         let middle = sorted.len() / 2;
-        let median = if sorted.len() % 2 == 0 {
-            (sorted[middle - 1] as f64 + sorted[middle] as f64) / 2.0
+        let median = if sorted.len().is_multiple_of(2) {
+            f64::midpoint(sorted[middle - 1] as f64, sorted[middle] as f64)
         } else {
             sorted[middle] as f64
         };
@@ -872,7 +868,10 @@ mod tests {
             normalize_tokens("The  contractor, poured 25 cubic yards."),
             vec!["the", "contractor", "poured", "25", "cubic", "yards"]
         );
-        assert_eq!(normalize_tokens("isn't 2026-03-14!"), vec!["isn't", "2026-03-14"]);
+        assert_eq!(
+            normalize_tokens("isn't 2026-03-14!"),
+            vec!["isn't", "2026-03-14"]
+        );
         assert_eq!(normalize_tokens("(\"quoted\")"), vec!["quoted"]);
     }
 
@@ -981,10 +980,11 @@ mod tests {
 
     #[test]
     fn a_term_absent_from_the_reference_is_excluded_not_scored_as_a_miss() {
-        let accuracy = domain_term_accuracy("we poured concrete", "we poured concrete", &[
-            "concrete".to_owned(),
-            "caisson".to_owned(),
-        ]);
+        let accuracy = domain_term_accuracy(
+            "we poured concrete",
+            "we poured concrete",
+            &["concrete".to_owned(), "caisson".to_owned()],
+        );
         assert_eq!(accuracy.absent_from_reference, vec!["caisson".to_owned()]);
         assert_eq!(accuracy.expected(), 1);
         close(accuracy.recall().expect("recall"), 1.0);
@@ -1116,15 +1116,19 @@ mod tests {
             start_ms: 5_000,
             end_ms: 11_000,
         }];
-        let outcome =
-            silence_hallucination(&silence, &[word("pour", 100, 500)], SilencePolicy::default());
+        let outcome = silence_hallucination(
+            &silence,
+            &[word("pour", 100, 500)],
+            SilencePolicy::default(),
+        );
         assert_eq!(outcome.words_in_silence, 0);
         close(outcome.words_per_silent_minute().expect("rate"), 0.0);
     }
 
     #[test]
     fn a_reference_without_silence_has_no_silence_rate() {
-        let outcome = silence_hallucination(&[], &[word("pour", 100, 500)], SilencePolicy::default());
+        let outcome =
+            silence_hallucination(&[], &[word("pour", 100, 500)], SilencePolicy::default());
         assert!(outcome.words_per_silent_minute().is_none());
     }
 
@@ -1136,12 +1140,7 @@ mod tests {
             &[1_020, 2_050]
         )
         .is_none());
-        assert!(boundary_errors_ms(
-            HypothesisAlignment::Unavailable,
-            &[1_000],
-            &[1_000]
-        )
-        .is_none());
+        assert!(boundary_errors_ms(HypothesisAlignment::Unavailable, &[1_000], &[1_000]).is_none());
     }
 
     #[test]

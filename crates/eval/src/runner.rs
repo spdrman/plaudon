@@ -20,10 +20,10 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use plaudon_domain::media::Sha256Digest;
-
 use crate::corpus::{CorpusItem, CorpusManifest};
-use crate::hypothesis::{Deployment, HypothesisDocument, HypothesisSet, ReferenceTranscript, TranscriptError};
+use crate::hypothesis::{
+    Deployment, HypothesisDocument, HypothesisSet, ReferenceTranscript, TranscriptError,
+};
 use crate::metrics::{
     self, DomainTermAccuracy, EditCounts, NumericAccuracy, SilenceHallucination, SilencePolicy,
     TimestampError,
@@ -383,12 +383,6 @@ pub fn run(
     })
 }
 
-/// Content hash of the manifest, as cited by a gate.
-#[must_use]
-pub fn corpus_digest(manifest: &CorpusManifest) -> Sha256Digest {
-    manifest.digest()
-}
-
 fn check_model(
     engine_id: &str,
     document: &HypothesisDocument,
@@ -425,10 +419,7 @@ fn check_deployment(
     Ok(())
 }
 
-fn load_reference(
-    manifest_dir: &Path,
-    item: &CorpusItem,
-) -> Result<ReferenceTranscript, RunError> {
+fn load_reference(manifest_dir: &Path, item: &CorpusItem) -> Result<ReferenceTranscript, RunError> {
     let path = manifest_dir.join(&item.reference_transcript);
     let reference = ReferenceTranscript::load(&path).map_err(|source| RunError::Reference {
         item_id: item.id.clone(),
@@ -500,8 +491,12 @@ fn score_item(
                 accumulator.time_to_first_result_total += ttfr;
             }
             if let Some(rss) = runtime.peak_rss_bytes {
-                accumulator.runtime.peak_rss_bytes =
-                    Some(accumulator.runtime.peak_rss_bytes.map_or(rss, |e| e.max(rss)));
+                accumulator.runtime.peak_rss_bytes = Some(
+                    accumulator
+                        .runtime
+                        .peak_rss_bytes
+                        .map_or(rss, |e| e.max(rss)),
+                );
             }
         }
         None => accumulator.runtime.items_without_runtime += 1,
@@ -676,7 +671,11 @@ mod tests {
             std::fs::write(path, serde_json::to_string(reference).expect("json")).expect("write");
         }
 
-        fn run(&self, set: &HypothesisSet, context: &RunContext) -> Result<EvaluationReport, RunError> {
+        fn run(
+            &self,
+            set: &HypothesisSet,
+            context: &RunContext,
+        ) -> Result<EvaluationReport, RunError> {
             run(&self.manifest, self.dir.path(), set, "whisper.cpp", context)
         }
     }
@@ -718,7 +717,11 @@ mod tests {
         assert_eq!(report.metrics.runtime.real_time_factor, Some(0.5));
         assert_eq!(report.metrics.runtime.peak_rss_bytes, Some(1_024));
         assert_eq!(
-            report.metrics.timestamp_error.expect("alignment").max_abs_ms,
+            report
+                .metrics
+                .timestamp_error
+                .expect("alignment")
+                .max_abs_ms,
             100
         );
     }
@@ -731,7 +734,10 @@ mod tests {
         let documents = set(vec![document("a", "we tied rebar on 2026-03-15")]);
         let first = fixture.run(&documents, &context).expect("run");
         let second = fixture.run(&documents, &context).expect("run");
-        assert_eq!(first.to_json().expect("json"), second.to_json().expect("json"));
+        assert_eq!(
+            first.to_json().expect("json"),
+            second.to_json().expect("json")
+        );
         assert_eq!(first.digest(), second.digest());
     }
 
@@ -757,7 +763,10 @@ mod tests {
         let mut document = document("a", "we tied the rebar");
         document.alignment_origin = HypothesisAlignment::Unavailable;
         let report = fixture
-            .run(&set(vec![document]), &RunContext::new(environment(), "0.1.0"))
+            .run(
+                &set(vec![document]),
+                &RunContext::new(environment(), "0.1.0"),
+            )
             .expect("run");
         assert!(report.metrics.timestamp_error.is_none());
         assert!(report.metrics.silence_hallucination.is_none());
@@ -772,7 +781,10 @@ mod tests {
         let mut document = document("a", "we tied the rebar");
         document.engine_id = "apple.speech".to_owned();
         let error = fixture
-            .run(&set(vec![document]), &RunContext::new(environment(), "0.1.0"))
+            .run(
+                &set(vec![document]),
+                &RunContext::new(environment(), "0.1.0"),
+            )
             .expect_err("no hypotheses");
         assert!(matches!(
             error,
@@ -833,7 +845,10 @@ mod tests {
                 &RunContext::new(environment(), "0.1.0"),
             )
             .expect_err("nothing cleared");
-        assert!(matches!(error, RunError::NothingCleared { rejected: 1, .. }));
+        assert!(matches!(
+            error,
+            RunError::NothingCleared { rejected: 1, .. }
+        ));
     }
 
     fn cloud_document(id: &str, cost: Option<u64>) -> HypothesisDocument {
@@ -959,19 +974,6 @@ mod tests {
                 cost_cap_micro_usd: 5_000
             }
         );
-        assert!(CloudPolicy::Refused.permits_cloud().not_true());
-    }
-}
-
-/// Small readability helper for the policy test above.
-#[cfg(test)]
-trait NotTrue {
-    fn not_true(self) -> bool;
-}
-
-#[cfg(test)]
-impl NotTrue for bool {
-    fn not_true(self) -> bool {
-        !self
+        assert!(!CloudPolicy::Refused.permits_cloud());
     }
 }

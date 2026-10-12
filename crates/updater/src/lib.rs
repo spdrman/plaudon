@@ -23,14 +23,16 @@
 //!
 //! ```no_run
 //! use std::sync::Arc;
+//! use plaudon_updater::config::UPDATE_MANIFEST_ENDPOINT;
 //! use plaudon_updater::install::Installer;
+//! use plaudon_updater::manifest::Target;
 //! use plaudon_updater::policy::{EgressPolicy, UpdateCheck, UpdateChecker, UpdateTransport};
 //! use plaudon_updater::verify::Ed25519Verifier;
 //!
 //! # fn demo<T: UpdateTransport>(transport: T, root: &std::path::Path)
 //! # -> Result<(), plaudon_updater::error::UpdateError> {
-//! let verifier = Arc::new(Ed25519Verifier::embedded());
-//! let mut installer = Installer::open(root, verifier.clone())?;
+//! let host = Target::host();
+//! let mut installer = Installer::open(root, Arc::new(Ed25519Verifier::embedded()), host)?;
 //!
 //! let checker = UpdateChecker::new(
 //!     transport,
@@ -41,18 +43,26 @@
 //! );
 //!
 //! match checker.check_for_update()? {
+//!     // Local-only Mode: no request was made; show the reason in the UI.
 //!     UpdateCheck::Suppressed { reason } => println!("{}", reason.explanation()),
 //!     UpdateCheck::UpToDate { .. } => {}
 //!     UpdateCheck::Available(manifest) => {
 //!         let package = checker.download_package(&manifest)?;
-//!         let envelope = transport_envelope_bytes();
+//!         let envelope = checker.transport().fetch(UPDATE_MANIFEST_ENDPOINT)?;
 //!         installer.install(&envelope, &package)?;
 //!     }
 //! }
+//!
+//! // If the new build misbehaves, return to the retained version. Rollback
+//! // re-runs the identical verification path (§16.5).
+//! installer.rollback()?;
 //! # Ok(())
 //! # }
-//! # fn transport_envelope_bytes() -> Vec<u8> { Vec::new() }
 //! ```
+
+// Acceptance criterion for this slice: every public item carries its spec
+// citation, so an undocumented export is a build failure, not a review note.
+#![deny(missing_docs)]
 
 pub mod config;
 pub mod error;

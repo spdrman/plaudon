@@ -15,6 +15,7 @@
 //! sees "thresholds not frozen" rather than nothing at all.
 
 use std::collections::BTreeMap;
+use std::fmt::Write as _;
 
 use plaudon_domain::locale::LanguageTag;
 use plaudon_domain::media::Sha256Digest;
@@ -30,6 +31,16 @@ use crate::metrics::{
 
 /// Schema version of the evaluation report this build writes and reads.
 pub const REPORT_SCHEMA_VERSION: u32 = 1;
+
+/// Append one rendered line to the text report.
+///
+/// Formatting into a `String` cannot fail, so the `Result` is unwrapped once
+/// here instead of at every one of the rendering call sites.
+macro_rules! line {
+    ($out:expr, $($arg:tt)*) => {
+        writeln!($out, $($arg)*).expect("formatting into a String cannot fail")
+    };
+}
 
 /// Which engine and model the report describes.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -444,8 +455,7 @@ impl FrozenThresholds {
         Self {
             status: ThresholdStatus::Deferred,
             spec_reference: "17.6".to_owned(),
-            note: "Spec 17.6 defers numeric quality thresholds; this run asserts none."
-                .to_owned(),
+            note: "Spec 17.6 defers numeric quality thresholds; this run asserts none.".to_owned(),
             evidence_bundle: None,
             thresholds: Vec::new(),
         }
@@ -578,6 +588,7 @@ impl EvaluationReport {
     ///
     /// Unmeasured values render as `not measured`, never as `0`.
     #[must_use]
+    #[allow(clippy::too_many_lines)]
     pub fn render_text(&self) -> String {
         let mut out = String::new();
         let measured_on = self
@@ -585,12 +596,15 @@ impl EvaluationReport {
             .measured_on
             .to_rfc3339()
             .unwrap_or_else(|| format!("{}ms", self.environment.measured_on.as_millis()));
-        out.push_str(&format!(
-            "plaudon evaluation report v{} (tool {})\n",
-            self.schema_version, self.tool_version
-        ));
-        out.push_str(&format!(
-            "engine: {} / {}{} ({}{})\n",
+        line!(
+            out,
+            "plaudon evaluation report v{} (tool {})",
+            self.schema_version,
+            self.tool_version
+        );
+        line!(
+            out,
+            "engine: {} / {}{} ({}{})",
             self.engine.engine_id,
             self.engine.model_id,
             self.engine
@@ -603,48 +617,56 @@ impl EvaluationReport {
             } else {
                 ""
             }
-        ));
-        out.push_str(&format!(
-            "corpus: {} ({})\n",
+        );
+        line!(
+            out,
+            "corpus: {} ({})",
             self.corpus.corpus_id,
             self.corpus.manifest_sha256.to_hex()
-        ));
-        out.push_str(&format!(
-            "items: {} declared, {} cleared, {} evaluated\n",
-            self.corpus.items_declared, self.corpus.items_cleared, self.corpus.items_evaluated
-        ));
+        );
+        line!(
+            out,
+            "items: {} declared, {} cleared, {} evaluated",
+            self.corpus.items_declared,
+            self.corpus.items_cleared,
+            self.corpus.items_evaluated
+        );
         for rejection in &self.corpus.excluded {
             let reasons: Vec<&str> = rejection
                 .reasons
                 .iter()
                 .map(crate::corpus::ClearanceRejection::code)
                 .collect();
-            out.push_str(&format!(
-                "  excluded {}: {}\n",
+            line!(
+                out,
+                "  excluded {}: {}",
                 rejection.item_id,
                 reasons.join(", ")
-            ));
+            );
         }
         for missing in &self.corpus.missing_hypotheses {
-            out.push_str(&format!("  no hypothesis: {missing}\n"));
+            line!(out, "  no hypothesis: {missing}");
         }
-        out.push_str(&format!(
-            "sample: {} items, locales {}, buckets {}\n",
+        line!(
+            out,
+            "sample: {} items, locales {}, buckets {}",
             self.sample.evaluated_items,
             render_counts(&self.sample.locale_breakdown),
             render_counts(&self.sample.duration_bucket_breakdown)
-        ));
-        out.push_str(&format!(
-            "        {} multi-speaker, {} with overlap, audio {}\n",
+        );
+        line!(
+            out,
+            "        {} multi-speaker, {} with overlap, audio {}",
             self.sample.multi_speaker_items,
             self.sample.items_with_overlapping_speech,
             self.sample
                 .total_audio_ms
                 .map_or_else(|| "not recorded".to_owned(), |ms| format!("{ms} ms"))
-        ));
-        out.push_str(&format!("reference quality: {}\n", self.reference_quality));
-        out.push_str(&format!(
-            "host: {} {} / {} / {} / commit {} / measured {}\n",
+        );
+        line!(out, "reference quality: {}", self.reference_quality);
+        line!(
+            out,
+            "host: {} {} / {} / {} / commit {} / measured {}",
             self.environment.os,
             optional(self.environment.os_version.as_deref()),
             optional(self.environment.cpu.as_deref()),
@@ -653,56 +675,63 @@ impl EvaluationReport {
                 .map_or_else(|| "ram unknown".to_owned(), |bytes| format!("{bytes} B")),
             optional(self.environment.commit.as_deref()),
             measured_on
-        ));
-        out.push_str("metrics:\n");
-        out.push_str(&format!(
-            "  WER {} ({} edits over {} words)\n",
+        );
+        line!(out, "metrics:");
+        line!(
+            out,
+            "  WER {} ({} edits over {} words)",
             render_rate(self.metrics.word_error_rate.rate),
             self.metrics.word_error_rate.edits,
             self.metrics.word_error_rate.reference_length
-        ));
-        out.push_str(&format!(
-            "  CER {} ({} edits over {} characters)\n",
+        );
+        line!(
+            out,
+            "  CER {} ({} edits over {} characters)",
             render_rate(self.metrics.character_error_rate.rate),
             self.metrics.character_error_rate.edits,
             self.metrics.character_error_rate.reference_length
-        ));
-        out.push_str(&format!(
-            "  domain terms {} ({}/{})\n",
+        );
+        line!(
+            out,
+            "  domain terms {} ({}/{})",
             render_rate(self.metrics.domain_term_accuracy.recall),
             self.metrics.domain_term_accuracy.matched,
             self.metrics.domain_term_accuracy.expected
-        ));
-        out.push_str(&format!(
-            "  numbers/dates/amounts {} ({}/{}, {} invented)\n",
+        );
+        line!(
+            out,
+            "  numbers/dates/amounts {} ({}/{}, {} invented)",
             render_rate(self.metrics.numeric_accuracy.recall),
             self.metrics.numeric_accuracy.matched,
             self.metrics.numeric_accuracy.expected,
             self.metrics.numeric_accuracy.invented.len()
-        ));
+        );
         match &self.metrics.silence_hallucination {
-            Some(silence) => out.push_str(&format!(
-                "  silence hallucination {} words in {} ms of silence ({})\n",
+            Some(silence) => line!(
+                out,
+                "  silence hallucination {} words in {} ms of silence ({})",
                 silence.words_in_silence,
                 silence.silent_ms,
                 silence
                     .words_per_silent_minute
                     .map_or_else(|| "no rate".to_owned(), |rate| format!("{rate:.2}/min"))
-            )),
-            None => out.push_str("  silence hallucination: not measured\n"),
+            ),
+            None => line!(out, "  silence hallucination: not measured"),
         }
         match &self.metrics.timestamp_error {
-            Some(error) => out.push_str(&format!(
-                "  timestamp error mean {:.1} ms, median {:.1} ms, max {} ms over {} boundaries\n",
+            Some(error) => line!(
+                out,
+                "  timestamp error mean {:.1} ms, median {:.1} ms, max {} ms over {} boundaries",
                 error.mean_abs_ms,
                 error.median_abs_ms,
                 error.max_abs_ms,
                 error.compared_boundaries
-            )),
-            None => out.push_str("  timestamp error: not measured (no usable alignment)\n"),
+            ),
+            None => line!(out, "  timestamp error: not measured (no usable alignment)"),
         }
-        out.push_str(&format!(
-            "  real-time factor {}, time to first result {}, peak RSS {}\n",
+        line!(
+            out,
+            "  real-time factor {}, time to first result {}, peak RSS {}",
             self.metrics
                 .runtime
                 .real_time_factor
@@ -712,43 +741,49 @@ impl EvaluationReport {
                 .mean_time_to_first_result_ms
                 .map_or_else(
                     || "not recorded".to_owned(),
-                    |ms| format!("{ms:.0} ms (n={})", self.metrics.runtime.time_to_first_result_samples)
+                    |ms| format!(
+                        "{ms:.0} ms (n={})",
+                        self.metrics.runtime.time_to_first_result_samples
+                    )
                 ),
             self.metrics
                 .runtime
                 .peak_rss_bytes
                 .map_or_else(|| "not recorded".to_owned(), |bytes| format!("{bytes} B"))
-        ));
+        );
         if let Some(cost) = self.metrics.runtime.metered_cost_micro_usd {
-            out.push_str(&format!("  metered cost {cost} micro-USD\n"));
+            line!(out, "  metered cost {cost} micro-USD");
         }
-        out.push_str("per item:\n");
+        line!(out, "per item:");
         for item in &self.per_item {
-            out.push_str(&format!(
-                "  {} [{} {}] WER {} CER {} alignment {}\n",
+            line!(
+                out,
+                "  {} [{} {}] WER {} CER {} alignment {}",
                 item.item_id,
                 item.locale.as_str(),
                 item.duration_bucket,
                 render_rate(item.word_error_rate.rate),
                 render_rate(item.character_error_rate.rate),
                 item.alignment_origin.as_str()
-            ));
+            );
         }
-        out.push_str(&format!(
-            "frozen thresholds: {}\n",
+        line!(
+            out,
+            "frozen thresholds: {}",
             match self.frozen_thresholds.status {
                 ThresholdStatus::Deferred => "deferred (spec 17.6)".to_owned(),
                 ThresholdStatus::Frozen =>
                     format!("{} frozen", self.frozen_thresholds.thresholds.len()),
             }
-        ));
-        out.push_str(&format!("  {}\n", self.frozen_thresholds.note));
+        );
+        line!(out, "  {}", self.frozen_thresholds.note);
         if let Some(bundle) = &self.frozen_thresholds.evidence_bundle {
-            out.push_str(&format!("  evidence bundle: {bundle}\n"));
+            line!(out, "  evidence bundle: {bundle}");
         }
         for outcome in self.evaluate_thresholds() {
-            out.push_str(&format!(
-                "  {:?} {:?} {} => {}\n",
+            line!(
+                out,
+                "  {:?} {:?} {} => {}",
                 outcome.threshold.metric,
                 outcome.threshold.comparator,
                 outcome.threshold.value,
@@ -757,7 +792,7 @@ impl EvaluationReport {
                     Some(false) => format!("NOT met (measured {})", render_rate(outcome.measured)),
                     None => "not measured".to_owned(),
                 }
-            ));
+            );
         }
         out
     }
@@ -948,8 +983,8 @@ pub(crate) mod tests {
     fn thresholds_start_deferred_and_assert_nothing() {
         let report = sample_report();
         assert_eq!(report.frozen_thresholds.status, ThresholdStatus::Deferred);
-        assert!(report.frozen_thresholds.thresholds.is_empty());
-        assert!(report.evaluate_thresholds().is_empty());
+        assert_eq!(report.frozen_thresholds.thresholds, Vec::new());
+        assert_eq!(report.evaluate_thresholds(), Vec::new());
         assert_eq!(report.frozen_thresholds.spec_reference, "17.6");
     }
 
@@ -1025,7 +1060,7 @@ pub(crate) mod tests {
     #[test]
     fn missing_hardware_evidence_is_named_field_by_field() {
         let mut environment = sample_report().environment;
-        assert!(environment.missing_evidence().is_empty());
+        assert_eq!(environment.missing_evidence(), Vec::<&str>::new());
         environment.cpu = None;
         environment.commit = Some("  ".to_owned());
         assert_eq!(environment.missing_evidence(), vec!["cpu", "commit"]);

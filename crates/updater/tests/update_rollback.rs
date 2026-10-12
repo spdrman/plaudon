@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex};
 
 use plaudon_updater::error::{UpdateError, VerifyError};
 use plaudon_updater::install::Installer;
-use plaudon_updater::manifest::{Version, VerifiedManifest};
+use plaudon_updater::manifest::{VerifiedManifest, Version};
 use plaudon_updater::testkeys::{
     test_trusted_keys, FixtureFlaw, BASE_VERSION, FIXTURE_TARGET, UPDATE_VERSION,
 };
@@ -48,9 +48,12 @@ impl RecordingVerifier {
 impl UpdateVerifier for RecordingVerifier {
     fn verify_manifest(&self, envelope_bytes: &[u8]) -> Result<VerifiedManifest, VerifyError> {
         let outcome = self.inner.verify_manifest(envelope_bytes);
-        self.calls.lock().expect("not poisoned").push(Call::Manifest {
-            version: outcome.as_ref().ok().map(VerifiedManifest::version),
-        });
+        self.calls
+            .lock()
+            .expect("not poisoned")
+            .push(Call::Manifest {
+                version: outcome.as_ref().ok().map(VerifiedManifest::version),
+            });
         outcome
     }
 
@@ -59,10 +62,13 @@ impl UpdateVerifier for RecordingVerifier {
         manifest: &VerifiedManifest,
         package: &[u8],
     ) -> Result<(), VerifyError> {
-        self.calls.lock().expect("not poisoned").push(Call::Package {
-            version: manifest.version(),
-            bytes: package.len(),
-        });
+        self.calls
+            .lock()
+            .expect("not poisoned")
+            .push(Call::Package {
+                version: manifest.version(),
+                bytes: package.len(),
+            });
         self.inner.verify_package(manifest, package)
     }
 }
@@ -190,8 +196,12 @@ fn rollback_rejects_a_tampered_retained_artifact_with_the_same_strictness() {
         .any(|call| matches!(call, Call::Manifest { version: None })));
 
     // And a relaunch still comes up on the new version.
-    let reopened = Installer::open(root.path(), Arc::new(Ed25519Verifier::new(test_trusted_keys())), FIXTURE_TARGET)
-        .expect("reopen");
+    let reopened = Installer::open(
+        root.path(),
+        Arc::new(Ed25519Verifier::new(test_trusted_keys())),
+        FIXTURE_TARGET,
+    )
+    .expect("reopen");
     assert_eq!(
         reopened.launchable().expect("launchable").version,
         UPDATE_VERSION

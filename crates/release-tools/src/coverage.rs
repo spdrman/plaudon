@@ -386,7 +386,8 @@ mod tests {
 
     #[test]
     fn a_critical_module_with_no_data_fails_rather_than_silently_passing() {
-        let failures = enforce_thresholds(&policy(), &coverage(&[("crates/audio/src/lib.rs", 1, 1)]));
+        let failures =
+            enforce_thresholds(&policy(), &coverage(&[("crates/audio/src/lib.rs", 1, 1)]));
         assert_eq!(
             failures,
             vec![Failure::NoData {
@@ -402,7 +403,8 @@ mod tests {
             path_prefix: "crates/jobs/src".to_owned(),
             reason: "contradiction".to_owned(),
         });
-        let failures = enforce_thresholds(&policy, &coverage(&[("crates/jobs/src/state.rs", 99, 100)]));
+        let failures =
+            enforce_thresholds(&policy, &coverage(&[("crates/jobs/src/state.rs", 99, 100)]));
         assert_eq!(
             failures,
             vec![Failure::ContradictoryPolicy {
@@ -471,6 +473,7 @@ mod tests {
             crash_recovery_test: "it_recovers".to_owned(),
             test_files: vec!["tests.rs".to_owned()],
         });
-        assert!(enforce_transition_checklist(&policy, dir.path()).is_empty());
+        let failures = enforce_transition_checklist(&policy, dir.path());
+        assert!(failures.is_empty(), "{failures:?}");
     }
 }

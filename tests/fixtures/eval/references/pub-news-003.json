@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "item_id": "pub-news-003",
+  "text": "Die Baustelle wurde am 2026-03-14 um 9:30 Uhr geprüft.",
+  "domain_terms": ["Baustelle"],
+  "silence_spans_ms": [{ "start_ms": 12000, "end_ms": 18000 }],
+  "segment_boundaries_ms": [0, 6000],
+  "quality_note": "Broadcast archive transcript, corrected against the audio by one reviewer."
+}

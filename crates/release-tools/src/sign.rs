@@ -7,8 +7,8 @@
 //! Ed25519 seed. When it is absent, signing fails loudly rather than emitting
 //! an unsigned bundle that looks signed.
 
-use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
+use base64::Engine as _;
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 use serde::{Deserialize, Serialize};
 
@@ -116,8 +116,8 @@ pub fn verify(
     let public: [u8; 32] = public
         .try_into()
         .map_err(|_| SignError::MalformedKey("expected 32 public key bytes".to_owned()))?;
-    let verifying = VerifyingKey::from_bytes(&public)
-        .map_err(|e| SignError::MalformedKey(e.to_string()))?;
+    let verifying =
+        VerifyingKey::from_bytes(&public).map_err(|e| SignError::MalformedKey(e.to_string()))?;
     // The envelope cannot name one key and carry another.
     if key_id(&verifying) != signature.key_id {
         return Err(SignError::SignatureMismatch {

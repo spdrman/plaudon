@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "item_id": "syn-site-002",
+  "text": "The contractor poured 25 cubic yards of concrete on 2026-03-14.",
+  "domain_terms": ["contractor", "cubic yards"],
+  "silence_spans_ms": [],
+  "segment_boundaries_ms": [0, 3000],
+  "quality_note": "Reading-session script, verbatim; speaker turns checked against the session log."
+}

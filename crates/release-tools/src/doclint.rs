@@ -23,16 +23,12 @@ pub const FORBIDDEN_CLAIMS: &[(&str, &str)] = &[
     (
         "official plaud app",
         "spec 22(10): we are not the vendor application",
-        
     ),
     (
         "in partnership with plaud",
         "spec 22(10): no partnership exists",
     ),
-    (
-        "military-grade",
-        "spec 23: unmeasurable marketing claim",
-    ),
+    ("military-grade", "spec 23: unmeasurable marketing claim"),
     (
         "100% accurate",
         "spec 17.2: accuracy is measured and reported, never asserted",
@@ -62,30 +58,12 @@ pub const FORBIDDEN_CLAIMS: &[(&str, &str)] = &[
 /// A claim that must be present verbatim-ish in the public documentation set,
 /// because omitting it would mislead (spec 22(10), 23).
 pub const REQUIRED_DISCLOSURES: &[(&str, &str)] = &[
-    (
-        "docs/public/privacy-disclosure.md",
-        "app-initiated",
-    ),
-    (
-        "docs/public/privacy-disclosure.md",
-        "Local-only Mode",
-    ),
-    (
-        "docs/public/vendor-matrix.md",
-        "OpenRouter",
-    ),
-    (
-        "docs/public/vendor-matrix.md",
-        "official PLAUD Cloud CLI",
-    ),
-    (
-        "docs/public/vendor-matrix.md",
-        "unofficial",
-    ),
-    (
-        "docs/public/troubleshooting.md",
-        "backup",
-    ),
+    ("docs/public/privacy-disclosure.md", "app-initiated"),
+    ("docs/public/privacy-disclosure.md", "Local-only Mode"),
+    ("docs/public/vendor-matrix.md", "OpenRouter"),
+    ("docs/public/vendor-matrix.md", "official PLAUD Cloud CLI"),
+    ("docs/public/vendor-matrix.md", "unofficial"),
+    ("docs/public/troubleshooting.md", "backup"),
 ];
 
 /// One lint violation.
@@ -152,9 +130,7 @@ pub fn lint_public_docs(root: &Path) -> Vec<Violation> {
 
     for (file, phrase) in REQUIRED_DISCLOSURES {
         let path = root.join(file);
-        let present = std::fs::read_to_string(&path)
-            .map(|text| text.contains(phrase))
-            .unwrap_or(false);
+        let present = std::fs::read_to_string(&path).is_ok_and(|text| text.contains(phrase));
         if !present {
             violations.push(Violation {
                 file: (*file).to_owned(),
@@ -305,7 +281,8 @@ mod tests {
 
     #[test]
     fn link_targets_are_extracted_from_markdown() {
-        let targets = extract_link_targets("see [a](./a.md) and [b](../b.md#frag) and [c](https://x)");
+        let targets =
+            extract_link_targets("see [a](./a.md) and [b](../b.md#frag) and [c](https://x)");
         assert!(targets.contains("./a.md"));
         assert!(targets.contains("../b.md#frag"));
         assert!(targets.contains("https://x"));
@@ -318,7 +295,12 @@ mod tests {
         std::fs::create_dir_all(&docs).expect("mkdir");
         let file = docs.join("a.md");
         std::fs::write(&file, "[missing](./nope.md)\n").expect("write");
-        let violations = lint_links(dir.path(), &file, "docs/public/a.md", "[missing](./nope.md)\n");
+        let violations = lint_links(
+            dir.path(),
+            &file,
+            "docs/public/a.md",
+            "[missing](./nope.md)\n",
+        );
         assert_eq!(violations.len(), 1);
         assert!(violations[0].message.contains("broken relative link"));
     }

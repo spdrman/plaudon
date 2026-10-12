@@ -290,9 +290,10 @@ pub fn scan_for_secrets(path: &Path, relative: &str) -> Result<(), EvidenceError
 }
 
 fn evidence_id(relative: &str) -> String {
-    Path::new(relative)
-        .file_stem()
-        .map_or_else(|| relative.to_owned(), |stem| stem.to_string_lossy().into_owned())
+    Path::new(relative).file_stem().map_or_else(
+        || relative.to_owned(),
+        |stem| stem.to_string_lossy().into_owned(),
+    )
 }
 
 /// Assembles a manifest from a staging directory.
@@ -350,8 +351,7 @@ pub fn assemble(
                 })?;
                 entries.push(Entry {
                     category: category.id.to_owned(),
-                    sha256: crate::hash::sha256_file(entry.path())
-                        .map_err(io(entry.path()))?,
+                    sha256: crate::hash::sha256_file(entry.path()).map_err(io(entry.path()))?,
                     bytes: metadata.len(),
                     evidence_id: evidence_id(&relative),
                     path: relative,
@@ -387,7 +387,6 @@ pub fn assemble(
     })
 }
 
-
 /// Canonical bytes of a manifest: pretty JSON with a trailing newline, so the
 /// signed bytes are reproducible and reviewable.
 pub fn manifest_bytes(manifest: &Manifest) -> Vec<u8> {
@@ -420,11 +419,10 @@ pub fn write_bundle(
 pub fn verify_bundle(bundle: &Path, trusted: &[String]) -> Result<Manifest, EvidenceError> {
     let manifest_path = bundle.join(MANIFEST_FILENAME);
     let bytes = std::fs::read(&manifest_path).map_err(io(&manifest_path))?;
-    let manifest: Manifest =
-        serde_json::from_slice(&bytes).map_err(|e| EvidenceError::Parse {
-            path: manifest_path.display().to_string(),
-            detail: e.to_string(),
-        })?;
+    let manifest: Manifest = serde_json::from_slice(&bytes).map_err(|e| EvidenceError::Parse {
+        path: manifest_path.display().to_string(),
+        detail: e.to_string(),
+    })?;
 
     let signature_path = bundle.join(SIGNATURE_FILENAME);
     let signature_bytes = std::fs::read(&signature_path).map_err(io(&signature_path))?;
@@ -499,15 +497,15 @@ mod tests {
     #[test]
     fn a_complete_staging_directory_assembles_and_verifies() {
         let staging = populated_staging();
-        let manifest = assemble(staging.path(), "abc123", "0.1.0", "2026-10-11T00:00:00Z")
-            .expect("assembles");
+        let manifest =
+            assemble(staging.path(), "abc123", "0.1.0", "2026-10-11T00:00:00Z").expect("assembles");
         assert_eq!(
             manifest.entries.len(),
             CATEGORIES.iter().filter(|c| c.required).count()
         );
         let signature = write_bundle(staging.path(), &manifest, &key()).expect("writes");
-        let verified =
-            verify_bundle(staging.path(), &[signature.key_id.clone()]).expect("verifies");
+        let verified = verify_bundle(staging.path(), std::slice::from_ref(&signature.key_id))
+            .expect("verifies");
         assert_eq!(verified, manifest);
     }
 
@@ -570,8 +568,8 @@ mod tests {
         let signature = write_bundle(staging.path(), &manifest, &key()).expect("writes");
         std::fs::write(staging.path().join("sbom/record.json"), b"{\"ok\":false}\n")
             .expect("write");
-        let error =
-            verify_bundle(staging.path(), &[signature.key_id.clone()]).expect_err("must fail");
+        let error = verify_bundle(staging.path(), std::slice::from_ref(&signature.key_id))
+            .expect_err("must fail");
         assert!(matches!(error, EvidenceError::Corrupt { .. }));
     }
 
@@ -587,8 +585,8 @@ mod tests {
             manifest_bytes(&tampered),
         )
         .expect("write");
-        let error =
-            verify_bundle(staging.path(), &[signature.key_id.clone()]).expect_err("must fail");
+        let error = verify_bundle(staging.path(), std::slice::from_ref(&signature.key_id))
+            .expect_err("must fail");
         assert!(matches!(
             error,
             EvidenceError::Signature(crate::sign::SignError::SignatureMismatch { .. })
@@ -600,8 +598,8 @@ mod tests {
         let staging = populated_staging();
         let manifest = assemble(staging.path(), "abc", "0.1.0", "t").expect("assembles");
         write_bundle(staging.path(), &manifest, &key()).expect("writes");
-        let error = verify_bundle(staging.path(), &["0000000000000000".to_owned()])
-            .expect_err("must fail");
+        let error =
+            verify_bundle(staging.path(), &["0000000000000000".to_owned()]).expect_err("must fail");
         assert!(matches!(
             error,
             EvidenceError::Signature(crate::sign::SignError::UnknownKey { .. })

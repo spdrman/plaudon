@@ -7,8 +7,19 @@
 //! missing any identifying field is written with a prominent warning and must
 //! not be quoted as a cross-machine claim.
 
+use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+
+/// Append a formatted fragment to the document under construction.
+///
+/// Writing to a `String` is infallible; the macro exists so the builder reads
+/// as a sequence of fragments without a `Result` at every line.
+macro_rules! md {
+    ($out:expr, $($arg:tt)*) => {
+        write!($out, $($arg)*).expect("writing to a String cannot fail")
+    };
+}
 
 use serde::Serialize;
 
@@ -253,12 +264,13 @@ impl RunReport {
                  and dataset size, so it may be cited — for this machine.\n\n",
             );
         } else {
-            out.push_str(&format!(
+            md!(
+                out,
                 "> **Not citable.** The following identifying fields were not established: {}. \
                  Per `docs/benchmarks/README.md`, a result whose host is not identified is \
                  evidence of nothing.\n\n",
                 self.host.missing_fields().join(", ")
-            ));
+            );
         }
 
         out.push_str("## Protocol\n\n");
@@ -266,69 +278,81 @@ impl RunReport {
 
         out.push_str("\n## Machine\n\n");
         out.push_str("| Field | Value |\n|---|---|\n");
-        push_row(&mut out, "Hardware model", opt(self.host.hardware_model.as_ref()));
-        push_row(&mut out, "CPU", opt(self.host.cpu.as_ref()));
+        push_row(
+            &mut out,
+            "Hardware model",
+            &opt(self.host.hardware_model.as_ref()),
+        );
+        push_row(&mut out, "CPU", &opt(self.host.cpu.as_ref()));
         push_row(
             &mut out,
             "Logical CPUs",
-            self.host
+            &self
+                .host
                 .logical_cpus
                 .map_or_else(|| "not established".to_owned(), |value| value.to_string()),
         );
-        push_row(&mut out, "OS", opt(self.host.os.as_ref()));
-        push_row(&mut out, "OS build", opt(self.host.os_build.as_ref()));
-        push_row(&mut out, "Architecture", self.host.arch.clone());
-        push_row(&mut out, "Toolchain", opt(self.host.toolchain.as_ref()));
-        push_row(&mut out, "Commit", opt(self.host.commit.as_ref()));
+        push_row(&mut out, "OS", &opt(self.host.os.as_ref()));
+        push_row(&mut out, "OS build", &opt(self.host.os_build.as_ref()));
+        push_row(&mut out, "Architecture", &self.host.arch);
+        push_row(&mut out, "Toolchain", &opt(self.host.toolchain.as_ref()));
+        push_row(&mut out, "Commit", &opt(self.host.commit.as_ref()));
         push_row(
             &mut out,
             "Working tree",
-            self.host.working_tree_dirty.map_or_else(
-                || "not established".to_owned(),
-                |dirty| {
-                    if dirty {
-                        "dirty (uncommitted changes present)".to_owned()
-                    } else {
-                        "clean".to_owned()
-                    }
-                },
-            ),
+            match self.host.working_tree_dirty {
+                None => "not established",
+                Some(true) => "dirty (uncommitted changes present)",
+                Some(false) => "clean",
+            },
         );
-        push_row(&mut out, "Run finished", self.generated_at.clone());
+        push_row(&mut out, "Run finished", &self.generated_at);
 
         let dataset = &self.dataset;
         out.push_str("\n## Dataset\n\n");
         out.push_str("| Field | Value |\n|---|---|\n");
-        push_row(&mut out, "Tier", dataset.tier.clone());
-        push_row(&mut out, "Seed", dataset.seed.to_string());
-        push_row(&mut out, "Recordings", dataset.recordings.to_string());
-        push_row(&mut out, "Transcript segments", dataset.segments.to_string());
+        push_row(&mut out, "Tier", &dataset.tier);
+        push_row(&mut out, "Seed", &dataset.seed.to_string());
+        push_row(&mut out, "Recordings", &dataset.recordings.to_string());
+        push_row(
+            &mut out,
+            "Transcript segments",
+            &dataset.segments.to_string(),
+        );
         push_row(
             &mut out,
             "Marathon transcript segments",
-            dataset.marathon_segments.to_string(),
+            &dataset.marathon_segments.to_string(),
         );
-        push_row(&mut out, "Dataset fingerprint", format!("`{}`", dataset.fingerprint));
+        push_row(
+            &mut out,
+            "Dataset fingerprint",
+            &format!("`{}`", dataset.fingerprint),
+        );
         push_row(
             &mut out,
             "Media archive",
-            format!(
+            &format!(
                 "{} blobs, {}",
                 dataset.load.media_assets,
                 bytes_human(dataset.load.archive_bytes)
             ),
         );
-        push_row(&mut out, "SQLite file", bytes_human(dataset.load.database_bytes));
+        push_row(
+            &mut out,
+            "SQLite file",
+            &bytes_human(dataset.load.database_bytes),
+        );
         push_row(
             &mut out,
             "Load wall time",
-            format!(
+            &format!(
                 "{} (of which {} in the media archive)",
                 millis_human(dataset.load.load_wall_ms),
                 millis_human(dataset.load.archive_wall_ms)
             ),
         );
-        push_row(&mut out, "Speaker rows", dataset.load.speakers.to_string());
+        push_row(&mut out, "Speaker rows", &dataset.load.speakers.to_string());
 
         out.push_str("\n## Latency results\n\n");
         out.push_str(
@@ -342,7 +366,8 @@ impl RunReport {
         );
         for verdict in &self.benchmarks {
             let measurement = &verdict.measurement;
-            out.push_str(&format!(
+            md!(
+                out,
                 "| `{}` | {} | {} | {:.3} | {:.3} | {:.3} | {:.3} | {:.0}% | {} |\n",
                 measurement.name,
                 measurement.samples,
@@ -353,62 +378,68 @@ impl RunReport {
                 verdict.budget.p95_ms,
                 verdict.worst_budget_fraction * 100.0,
                 if verdict.passed() { "pass" } else { "**FAIL**" },
-            ));
+            );
         }
         for verdict in self.failures() {
-            out.push_str(&format!("\n- **{}**\n", verdict.failure_report()));
+            md!(out, "\n- **{}**\n", verdict.failure_report());
         }
 
         out.push_str("\n## Memory bound\n\n");
         match &self.memory {
-            None => out.push_str(
-                "The memory harness did not run in this invocation.\n",
-            ),
+            None => out.push_str("The memory harness did not run in this invocation.\n"),
             Some(memory) => {
-                out.push_str(&format!("RSS source: `{}`.\n\n", memory.rss_source));
+                md!(out, "RSS source: `{}`.\n\n", memory.rss_source);
                 if let Some(reason) = &memory.skipped_reason {
-                    out.push_str(&format!(
+                    md!(
+                        out,
                         "**Skipped on this host:** {reason}. No memory figure is published for \
-                         this platform.\n",
-                    ));
+                         this platform.\n"
+                    );
                 } else {
-                    out.push_str(&format!(
+                    md!(
+                        out,
                         "Active chunk window: {}. Allowed peak growth: {}.\n\n",
                         bytes_human(memory.window_bytes),
                         bytes_human(memory.allowed_growth_bytes)
-                    ));
+                    );
                     out.push_str(
                         "| audio | full decode would hold | observed peak RSS growth |\n\
                          |--:|--:|--:|\n",
                     );
                     for observation in &memory.observations {
-                        out.push_str(&format!(
+                        md!(
+                            out,
                             "| {} min | {} | {} |\n",
                             observation.audio_minutes,
                             bytes_human(observation.total_pcm_bytes),
                             bytes_human(observation.peak_growth_bytes)
-                        ));
+                        );
                     }
                     if let (Some(growth), Some(total)) =
                         (memory.control_growth_bytes, memory.control_total_pcm_bytes)
                     {
-                        out.push_str(&format!(
+                        md!(
+                            out,
                             "\nControl (deliberately unbounded decode, {} of PCM retained): peak \
                              growth {}. The control exists so the bound above is known to be a \
                              detectable property and not a vacuous one.\n",
                             bytes_human(total),
                             bytes_human(growth)
-                        ));
+                        );
                     }
                 }
             }
         }
 
         out.push_str("\n## Threshold delta policy\n\n");
-        out.push_str(&format!(
+        md!(
+            out,
             "- Budget file: `tests/scale/thresholds.toml`, schema version {}.\n\
              - Budgets are set about {:.0}% above a healthy reference measurement; that headroom \
-             absorbs ordinary machine noise.\n\
+             absorbs machine noise and the gap between this workstation and a slower hosted \
+             runner. It is deliberately too coarse to catch a 20% slowdown and deliberately \
+             sharp enough to catch a lost index or an N+1 query, which move these numbers by an \
+             order of magnitude.\n\
              - A single commit may raise one budget by at most {:.0}%. A larger raise needs an \
              ADR explaining what got slower and why that is acceptable.\n\
              - Rule: {}\n",
@@ -416,21 +447,27 @@ impl RunReport {
             self.policy.headroom_ratio * 100.0,
             self.policy.max_single_raise_ratio * 100.0,
             self.policy.rule
-        ));
+        );
 
         out.push_str("\n## Reproducing this run\n\n");
-        out.push_str(&format!(
+        md!(
+            out,
             "```sh\n\
              # CI tier (the default; this is what `cargo test` runs)\n\
              cargo test -p plaudon-scale-tests\n\n\
-             # Full spec §17.5 tier: 10,000 recordings, 180,000 segments\n\
+             # Full spec 17.5 tier: 10,000 recordings, 180,000 segments.\n\
+             # Results land in target/scale-results/ as N1.4-scale.json and .md.\n\
              PLAUDON_SCALE_TIER=full \\\n  \
              PLAUDON_SCALE_SEED={} \\\n  \
-             PLAUDON_SCALE_RESULTS_DIR=docs/benchmarks \\\n  \
-             cargo test -p plaudon-scale-tests --release -- --nocapture\n\
-             ```\n",
+             cargo test -p plaudon-scale-tests --test scale_benchmarks -- --nocapture\n\n\
+             # Publishing a new reference run replaces this document with the generated one:\n\
+             cp target/scale-results/N1.4-scale.md docs/benchmarks/N1.4-scale.md\n\
+             ```\n\n\
+             The dataset is reproducible from the seed above, so a later run on the same \
+             machine measures the same library. A run on a different machine is a different \
+             data point, never a comparison, unless the machine rows match.\n",
             dataset.seed
-        ));
+        );
 
         out.push_str("\n## Machine-readable appendix\n\n");
         out.push_str(
@@ -481,6 +518,17 @@ unparsable tier or seed is a hard error, never a silent downgrade.
    candidates, archive presence and segment count, as an export would gather
    them.
 
+**What the schema gives these queries.** Migrations 0001 and 0002 index
+`transcript_segments(transcript_revision_id, start_ms)` and declare
+`UNIQUE (transcript_revision_id, seq_index)`, so the viewport fetch is an
+index range scan whatever offset it starts at. `recordings` has no index on
+`captured_at`, so the library sort is performed at query time; that is why the
+suite measures offset and keyset pagination at identical depths rather than
+assuming either is cheap. `transcript_segments.text` has no full-text index,
+so cross-recording search is a scan of every segment — the measured number is
+the cost of that scan at the dataset size, and it is the number to compare
+against if an FTS5 index is ever proposed.
+
 **How it judges.** Each benchmark records a latency distribution and is
 compared against `tests/scale/thresholds.toml` on p50, p95 and max at once. A
 breach fails the test run and names the file to edit. Latency budgets are
@@ -498,12 +546,14 @@ platform with no RSS source the harness skips and prints the reason; it never
 estimates a number.
 ";
 
-fn push_row(out: &mut String, field: &str, value: String) {
-    out.push_str(&format!("| {field} | {value} |\n"));
+fn push_row(out: &mut String, field: &str, value: &str) {
+    md!(out, "| {field} | {value} |\n");
 }
 
 fn opt(value: Option<&String>) -> String {
-    value.cloned().unwrap_or_else(|| "not established".to_owned())
+    value
+        .cloned()
+        .unwrap_or_else(|| "not established".to_owned())
 }
 
 /// Human-readable byte count, exact value preserved in the JSON appendix.
@@ -533,7 +583,7 @@ pub fn millis_human(millis: u64) -> String {
     let seconds = millis / 1_000;
     let remainder = millis % 1_000;
     if seconds < 60 {
-        return format!("{seconds}.{:03} s", remainder);
+        return format!("{seconds}.{remainder:03} s");
     }
     format!("{} min {} s", seconds / 60, seconds % 60)
 }
@@ -634,7 +684,11 @@ fn os_build() -> Option<String> {
     {
         run(
             "powershell",
-            &["-NoProfile", "-Command", "[System.Environment]::OSVersion.Version.ToString()"],
+            &[
+                "-NoProfile",
+                "-Command",
+                "[System.Environment]::OSVersion.Version.ToString()",
+            ],
         )
     }
     #[cfg(not(any(target_vendor = "apple", target_os = "linux", windows)))]
@@ -655,10 +709,14 @@ pub fn results_directory() -> PathBuf {
             return PathBuf::from(dir);
         }
     }
+    // `tests/scale` -> workspace root, without a `..` in the printed path.
     Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../target/scale-results")
-        .components()
-        .collect()
+        .parent()
+        .and_then(Path::parent)
+        .map_or_else(
+            || PathBuf::from("target/scale-results"),
+            |root| root.join("target/scale-results"),
+        )
 }
 
 #[cfg(test)]

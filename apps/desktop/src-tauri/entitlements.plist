@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Hardened-runtime entitlements for the signed macOS bundle (spec 16.5, 2.4).
+
+  Least privilege: the application is local-first. It gets user-selected file
+  access and Bluetooth (for the conditional direct-device track), and nothing
+  else. There is no JIT, no unsigned executable memory, no dyld environment
+  override, no camera, no microphone capture entitlement — the product imports
+  existing recordings, it does not record — and no network server entitlement.
+-->
+<plist version="1.0">
+<dict>
+    <key>com.apple.security.app-sandbox</key>
+    <false/>
+
+    <!-- Imports read user-selected files and write user-selected exports. -->
+    <key>com.apple.security.files.user-selected.read-write</key>
+    <true/>
+
+    <!--
+      Outbound client connections only, and only when the user has left
+      Local-only Mode. The OutboundPolicy gate decides; this entitlement merely
+      makes the capability possible (spec 16.2A).
+    -->
+    <key>com.apple.security.network.client</key>
+    <true/>
+
+    <!-- Direct-device BLE acquisition, conditional on the device track (spec 7.7). -->
+    <key>com.apple.security.device.bluetooth</key>
+    <true/>
+
+    <!-- Legacy USB mass-storage import, where the model supports it (spec 7.8). -->
+    <key>com.apple.security.device.usb</key>
+    <true/>
+</dict>
+</plist>

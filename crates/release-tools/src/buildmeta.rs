@@ -172,12 +172,13 @@ pub fn collect(
         .unwrap_or_else(|| "unknown".to_owned());
 
     let toolchain_path = repo_root.join("rust-toolchain.toml");
-    let toolchain: toml::Value = read_to_string(&toolchain_path)?.parse().map_err(|e| {
-        BuildMetadataError::Parse {
-            path: toolchain_path.display().to_string(),
-            detail: format!("{e}"),
-        }
-    })?;
+    let toolchain: toml::Value =
+        read_to_string(&toolchain_path)?
+            .parse()
+            .map_err(|e| BuildMetadataError::Parse {
+                path: toolchain_path.display().to_string(),
+                detail: format!("{e}"),
+            })?;
     let toolchain_channel = toolchain
         .get("toolchain")
         .and_then(|t| t.get("channel"))
@@ -290,7 +291,10 @@ mod tests {
     #[test]
     fn an_unparsable_epoch_falls_back_to_the_clock_rather_than_a_fake_date() {
         let stamped = built_at_from(Some("not-a-number"));
-        assert!(stamped.ends_with('Z'), "expected RFC 3339 UTC, got {stamped}");
+        assert!(
+            stamped.ends_with('Z'),
+            "expected RFC 3339 UTC, got {stamped}"
+        );
         assert_ne!(stamped, "2023-11-14T22:13:20Z");
     }
 }

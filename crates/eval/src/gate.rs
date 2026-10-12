@@ -414,7 +414,7 @@ mod tests {
         let decision =
             evaluate_claim(&request(Claim::Supported), Some(&stored)).expect("capability claim");
         assert!(decision.quality_evidence.is_none());
-        assert!(decision.threshold_outcomes.is_empty());
+        assert_eq!(decision.threshold_outcomes, Vec::new());
     }
 
     #[test]
@@ -568,7 +568,7 @@ mod tests {
     fn a_deferred_threshold_section_grants_the_claim_on_evidence_alone() {
         let decision = evaluate_claim(&request(Claim::Recommended), Some(&report()))
             .expect("deferred thresholds assert nothing");
-        assert!(decision.threshold_outcomes.is_empty());
+        assert_eq!(decision.threshold_outcomes, Vec::new());
     }
 
     #[test]

@@ -300,9 +300,9 @@ impl Installer {
         package: &[u8],
     ) -> Result<Self, UpdateError> {
         let root = root.into();
-        let verified = verifier.verify_manifest(envelope)?;
-        verified.document().check_target(host)?;
-        verifier.verify_package(&verified, package)?;
+        let shipped = verifier.verify_manifest(envelope)?;
+        shipped.document().check_target(host)?;
+        verifier.verify_package(&shipped, package)?;
 
         fs::create_dir_all(root.join(SLOTS_DIR)).map_err(|e| UpdateError::io("create root", e))?;
         write_slot(&root, Slot::A, envelope, package)?;
@@ -310,11 +310,11 @@ impl Installer {
             schema_version: JOURNAL_SCHEMA_VERSION,
             active: SlotRecord {
                 slot: Slot::A,
-                version: verified.version(),
+                version: shipped.version(),
                 package_sha256: sha256(package),
             },
             previous: None,
-            floor: verified.document().minimum_supported_version,
+            floor: shipped.document().minimum_supported_version,
             pending: None,
         };
         write_journal(&root, &journal)?;
@@ -586,12 +586,7 @@ fn slot_dir(root: &Path, slot: Slot) -> PathBuf {
     root.join(SLOTS_DIR).join(slot.as_str())
 }
 
-fn write_slot(
-    root: &Path,
-    slot: Slot,
-    envelope: &[u8],
-    package: &[u8],
-) -> Result<(), UpdateError> {
+fn write_slot(root: &Path, slot: Slot, envelope: &[u8], package: &[u8]) -> Result<(), UpdateError> {
     let dir = slot_dir(root, slot);
     remove_dir_if_present(&dir, "clear slot")?;
     fs::create_dir_all(&dir).map_err(|e| UpdateError::io("create slot", e))?;
@@ -613,7 +608,8 @@ fn remove_dir_if_present(dir: &Path, context: &'static str) -> Result<(), Update
 
 fn write_file_durable(path: &Path, bytes: &[u8], context: &'static str) -> Result<(), UpdateError> {
     let mut file = fs::File::create(path).map_err(|e| UpdateError::io(context, e))?;
-    file.write_all(bytes).map_err(|e| UpdateError::io(context, e))?;
+    file.write_all(bytes)
+        .map_err(|e| UpdateError::io(context, e))?;
     file.sync_all().map_err(|e| UpdateError::io(context, e))?;
     Ok(())
 }
@@ -642,7 +638,10 @@ fn read_journal(root: &Path) -> Result<Journal, UpdateError> {
             journal.schema_version
         )));
     }
-    if journal.previous.is_some_and(|p| p.slot == journal.active.slot) {
+    if journal
+        .previous
+        .is_some_and(|p| p.slot == journal.active.slot)
+    {
         return Err(UpdateError::JournalCorrupt(
             "active and previous name the same slot".to_owned(),
         ));
@@ -676,7 +675,10 @@ mod tests {
 
     #[test]
     fn every_interrupt_point_renders_a_distinct_name() {
-        let mut names: Vec<String> = InterruptPoint::ALL.iter().map(ToString::to_string).collect();
+        let mut names: Vec<String> = InterruptPoint::ALL
+            .iter()
+            .map(ToString::to_string)
+            .collect();
         names.sort_unstable();
         let total = names.len();
         names.dedup();
@@ -736,11 +738,11 @@ mod tests {
         assert_eq!(installer.installed_version(), V1);
 
         let update = artifact(FixtureFlaw::None, V2);
-        let installed = installer
+        let outcome = installer
             .install(update.envelope.as_bytes(), &update.package)
             .expect("a validly signed update installs");
 
-        assert_eq!(installed, V2);
+        assert_eq!(outcome, V2);
         assert_eq!(installer.installed_version(), V2);
         assert_eq!(installer.retained_version(), Some(V1));
         assert!(installer.journal().pending.is_none());
@@ -785,7 +787,10 @@ mod tests {
         assert!(installer.journal().pending.is_none());
         assert!(!root.path().join(STAGING_DIR).exists());
         assert!(!slot_dir(root.path(), Slot::B).exists());
-        assert_eq!(installer.launchable().expect("still launchable").version, V1);
+        assert_eq!(
+            installer.launchable().expect("still launchable").version,
+            V1
+        );
     }
 
     /// Crash recovery (§14.6, §18.6A "Archive" row): the process is killed at
@@ -827,7 +832,11 @@ mod tests {
                 .unwrap_or_else(|e| panic!("a kill at {point} left no launchable version: {e}"));
 
             // The only two acceptable outcomes are "previous" and "new".
-            let expected = if point.is_rollback() { [V2, V1] } else { [V1, V2] };
+            let expected = if point.is_rollback() {
+                [V2, V1]
+            } else {
+                [V1, V2]
+            };
             assert!(
                 expected.contains(&state.version),
                 "a kill at {point} left version {}, expected one of {expected:?}",
@@ -901,7 +910,11 @@ mod tests {
             ),
             "expected a digest mismatch, got {error:?}"
         );
-        assert_eq!(installer.installed_version(), V2, "active slot must not move");
+        assert_eq!(
+            installer.installed_version(),
+            V2,
+            "active slot must not move"
+        );
         assert_eq!(installer.launchable().expect("launchable").version, V2);
     }
 
@@ -909,7 +922,11 @@ mod tests {
     fn a_substituted_rollback_artifact_cannot_bypass_the_floor() {
         let root = tempfile::tempdir().expect("tempdir");
         // Ship 1.2.0 with a floor of 1.2.0, then update to 1.3.0.
-        let shipped = build_artifact(FixtureFlaw::None, Version::new(1, 2, 0), Version::new(1, 2, 0));
+        let shipped = build_artifact(
+            FixtureFlaw::None,
+            Version::new(1, 2, 0),
+            Version::new(1, 2, 0),
+        );
         let mut installer = Installer::bootstrap(
             root.path(),
             verifier(),
@@ -918,19 +935,28 @@ mod tests {
             &shipped.package,
         )
         .expect("bootstrap");
-        let update =
-            build_artifact(FixtureFlaw::None, Version::new(1, 3, 0), Version::new(1, 2, 0));
+        let update = build_artifact(
+            FixtureFlaw::None,
+            Version::new(1, 3, 0),
+            Version::new(1, 2, 0),
+        );
         installer
             .install(update.envelope.as_bytes(), &update.package)
             .expect("install");
         assert_eq!(installer.journal().floor, Version::new(1, 2, 0));
 
         // Swap the retained slot for a *validly signed* but ancient release.
-        let ancient =
-            build_artifact(FixtureFlaw::None, Version::new(0, 9, 0), Version::new(0, 9, 0));
+        let ancient = build_artifact(
+            FixtureFlaw::None,
+            Version::new(0, 9, 0),
+            Version::new(0, 9, 0),
+        );
         let slot = installer.journal().previous.expect("retained").slot;
-        fs::write(slot_dir(root.path(), slot).join(PAYLOAD_FILE), &ancient.package)
-            .expect("write payload");
+        fs::write(
+            slot_dir(root.path(), slot).join(PAYLOAD_FILE),
+            &ancient.package,
+        )
+        .expect("write payload");
         fs::write(
             slot_dir(root.path(), slot).join(MANIFEST_FILE),
             ancient.envelope.as_bytes(),

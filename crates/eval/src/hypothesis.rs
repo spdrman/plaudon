@@ -379,7 +379,7 @@ mod tests {
     fn an_unavailable_alignment_hides_any_times_the_document_carries() {
         let mut doc = document("a", "whisper");
         doc.alignment_origin = HypothesisAlignment::Unavailable;
-        assert!(doc.timed_words().is_empty());
+        assert_eq!(doc.timed_words(), Vec::new());
         assert_eq!(document("a", "whisper").timed_words().len(), 1);
     }
 
@@ -406,7 +406,7 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         for (name, item) in [("b.json", "two"), ("a.json", "one"), ("skip.txt", "x")] {
             let path = dir.path().join(name);
-            if name.ends_with(".json") {
+            if Path::new(name).extension().is_some_and(|ext| ext == "json") {
                 std::fs::write(
                     &path,
                     serde_json::to_string(&document(item, "whisper")).expect("json"),

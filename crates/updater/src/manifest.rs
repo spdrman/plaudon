@@ -264,7 +264,11 @@ impl FromStr for Sha256Digest {
     type Err = DigestParseError;
 
     fn from_str(text: &str) -> Result<Self, Self::Err> {
-        if text.len() != DIGEST_LEN * 2 || !text.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit()) {
+        if text.len() != DIGEST_LEN * 2
+            || !text
+                .bytes()
+                .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit())
+        {
             return Err(DigestParseError);
         }
         let mut bytes = [0u8; DIGEST_LEN];
@@ -483,8 +487,11 @@ impl<'a> SignedManifestEnvelope<'a> {
             .as_deref()
             .filter(|s| !s.is_empty())
             .ok_or(VerifyError::UnsignedManifest)?;
-        text.parse()
-            .map_err(|_| VerifyError::MalformedManifest("manifest_signature is not a base64 ed25519 signature".to_owned()))
+        text.parse().map_err(|_| {
+            VerifyError::MalformedManifest(
+                "manifest_signature is not a base64 ed25519 signature".to_owned(),
+            )
+        })
     }
 }
 
@@ -539,13 +546,24 @@ mod tests {
 
     #[test]
     fn versions_have_exactly_one_spelling() {
-        for bad in ["1.2", "1.2.3.4", "01.2.3", "1.2.3-beta", "v1.2.3", "", "1.2.x"] {
+        for bad in [
+            "1.2",
+            "1.2.3.4",
+            "01.2.3",
+            "1.2.3-beta",
+            "v1.2.3",
+            "",
+            "1.2.x",
+        ] {
             assert!(
                 bad.parse::<Version>().is_err(),
                 "`{bad}` must not parse as a version"
             );
         }
-        assert_eq!("1.2.3".parse::<Version>().expect("parses").to_string(), "1.2.3");
+        assert_eq!(
+            "1.2.3".parse::<Version>().expect("parses").to_string(),
+            "1.2.3"
+        );
     }
 
     #[test]
@@ -573,7 +591,8 @@ mod tests {
     #[test]
     fn a_missing_or_empty_signature_is_unsigned() {
         let missing = br#"{"schema_version":1,"manifest":{},"signing_key_id":"k"}"#;
-        let empty = br#"{"schema_version":1,"manifest":{},"signing_key_id":"k","manifest_signature":""}"#;
+        let empty =
+            br#"{"schema_version":1,"manifest":{},"signing_key_id":"k","manifest_signature":""}"#;
         for raw in [missing.as_slice(), empty.as_slice()] {
             let envelope = SignedManifestEnvelope::parse(raw).expect("parses");
             assert_eq!(

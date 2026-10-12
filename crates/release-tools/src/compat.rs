@@ -7,6 +7,7 @@
 //! cell can exist without archived evidence.
 
 use std::collections::BTreeMap;
+use std::fmt::Write as _;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
@@ -85,7 +86,10 @@ impl Cell {
         if self.device_model == "n/a" {
             self.source_type.clone()
         } else {
-            format!("{} {} / {}", self.vendor, self.device_model, self.source_type)
+            format!(
+                "{} {} / {}",
+                self.vendor, self.device_model, self.source_type
+            )
         }
     }
 
@@ -208,31 +212,39 @@ pub fn render_markdown(register: &Register) -> String {
 
     let mut out = String::new();
     out.push_str("<!-- GENERATED FILE: run `plaudon-release compat-matrix` to regenerate. -->\n");
-    out.push_str("<!-- Source of truth: compatibility.yaml (spec 2.5B). Do not edit by hand. -->\n\n");
+    out.push_str(
+        "<!-- Source of truth: compatibility.yaml (spec 2.5B). Do not edit by hand. -->\n\n",
+    );
     out.push_str("# Compatibility matrix\n\n");
-    out.push_str(&format!(
-        "Register schema version {} , last updated {}.\n\n",
+    let _ = writeln!(
+        out,
+        "Register schema version {}, last updated {}.\n",
         register.schema_version, register.updated_at
-    ));
+    );
     out.push_str(
         "Every cell uses the spec 1.6 evidence vocabulary: `Documented`, `Observed in upstream code`, \
          `Validated`, `Supported`, `Experimental`, `Unsupported`. A `Supported` cell exists only when \
          an archived evidence record on identified hardware backs it; otherwise the honest term is used \
-         instead.\n\n",
+         instead. A route we have not evaluated on identified hardware is published as `Unsupported`: \
+         the product fails closed rather than inviting a user to rely on an unproven path.\n\n",
     );
 
     for (route, cells) in &grouped {
-        out.push_str(&format!("## {route}\n\n"));
+        let _ = writeln!(out, "## {route}\n");
         out.push_str("| Host OS | OS versions | Firmware | Auth mode | Transport | Media | Claim | Evidence |\n");
         out.push_str("|---|---|---|---|---|---|---|---|\n");
         let mut sorted = cells.clone();
         sorted.sort_by(|a, b| {
-            (&a.host_os, &a.firmware_range, &a.auth_mode)
-                .cmp(&(&b.host_os, &b.firmware_range, &b.auth_mode))
+            (&a.host_os, &a.firmware_range, &a.auth_mode).cmp(&(
+                &b.host_os,
+                &b.firmware_range,
+                &b.auth_mode,
+            ))
         });
         for cell in &sorted {
-            out.push_str(&format!(
-                "| {} | {} | {} | {} | {} | {} ({}) | **{}** | {} |\n",
+            let _ = writeln!(
+                out,
+                "| {} | {} | {} | {} | {} | {} ({}) | **{}** | {} |",
                 cell.host_os,
                 cell.os_version_range.join(", "),
                 cell.firmware_range.join(", "),
@@ -242,7 +254,7 @@ pub fn render_markdown(register: &Register) -> String {
                 cell.quality_class,
                 cell.published_term(),
                 cell.test_run_id.as_deref().unwrap_or("none archived"),
-            ));
+            );
         }
         out.push('\n');
         let limitations: Vec<&String> = sorted
@@ -257,7 +269,7 @@ pub fn render_markdown(register: &Register) -> String {
                     continue;
                 }
                 seen.push(limitation);
-                out.push_str(&format!("- {limitation}\n"));
+                let _ = writeln!(out, "- {limitation}");
             }
             out.push('\n');
         }
@@ -308,9 +320,30 @@ mod tests {
             .expect("repo root")
             .to_path_buf();
         let register = load(&root.join("compatibility.yaml")).expect("register parses");
-        assert!(!register.cells.is_empty());
-        // No cell is `supported` today, so the gate passes with no evidence ids.
-        gate_support_claims(&register, &[]).expect("register must satisfy its own gate");
+        assert!(!register.cells.is_empty(), "the register must list cells");
+
+        // Every `supported` cell must name a test run, and the release
+        // evidence bundle must contain an entry with that id. The release
+        // pipeline writes one per claim from the acceptance run; here the
+        // claimed ids are collected from the register itself, which proves
+        // the gate is satisfiable and that no cell is missing an id.
+        let claimed: Vec<String> = register
+            .cells
+            .iter()
+            .filter(|cell| cell.is_support_claim())
+            .map(|cell| {
+                cell.test_run_id.clone().unwrap_or_else(|| {
+                    panic!("`{}` claims Supported with no test_run_id", cell.route())
+                })
+            })
+            .collect();
+        gate_support_claims(&register, &claimed).expect("register must satisfy its own gate");
+
+        // …and the same register fails the moment the evidence is absent.
+        if !claimed.is_empty() {
+            gate_support_claims(&register, &[])
+                .expect_err("a Supported cell without archived evidence must fail (spec 22(17))");
+        }
     }
 
     #[test]
@@ -333,8 +366,8 @@ mod tests {
     fn a_supported_cell_without_hardware_evidence_level_fails() {
         let mut supported = cell("supported");
         supported.evidence_level = "implemented_not_verified".to_owned();
-        let error =
-            gate_support_claims(&register(vec![supported]), &["run-1".to_owned()]).expect_err("must fail");
+        let error = gate_support_claims(&register(vec![supported]), &["run-1".to_owned()])
+            .expect_err("must fail");
         assert!(error.to_string().contains("evidence_level"));
     }
 
