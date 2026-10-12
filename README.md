@@ -276,6 +276,19 @@ scripts/make-demo-gif.sh
 
 Artifacts land in `target/e2e-results`. `PLAUDON_E2E_HOST=local` forces the local container.
 
+Two suites never run by themselves, because they need something only you can provide. Both are
+`#[ignore]` *and* gated on an environment variable, so neither a plain `cargo test` nor
+`cargo test -- --ignored` can start them by accident.
+
+```sh
+# the official PLAUD CLI you installed, against your own account: it reads, it never signs you
+# in or out, and it imports into a throwaway library rather than your real one
+PLAUDON_PLAUD_CLI_TESTS=1 cargo test -p plaudon-app --test plaud_real_cli -- --ignored --nocapture
+```
+
+Real PLAUD hardware has its own runner and its own evidence record; see
+[`docs/hardware/macos-apple-silicon.md`](docs/hardware/macos-apple-silicon.md).
+
 ---
 
 ## Architecture

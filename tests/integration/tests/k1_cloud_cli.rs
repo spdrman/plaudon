@@ -244,6 +244,23 @@ fn connector(runner: CliRunner) -> PlaudCloudCliConnector {
     .with_table(fixture_table())
 }
 
+/// A connector driven by the table the application actually ships, so the
+/// committed row for `@plaud-ai/cli` 0.3.15 is exercised end to end rather
+/// than only through its golden snapshot.
+fn shipped_connector(runner: CliRunner) -> PlaudCloudCliConnector {
+    let policy = Arc::new(DownloadPolicy::loopback_harness(&["127.0.0.1"]));
+    let fetcher = Arc::new(ReqwestFetcher::new(Arc::clone(&policy)).expect("fetcher"));
+    let pipeline =
+        AcquisitionPipeline::new(policy, fetcher, UrlContract::undocumented("127.0.0.1"));
+    PlaudCloudCliConnector::new(
+        CliDiscovery::new(),
+        runner,
+        pipeline,
+        SourceAccountScope::new("plaud:eu:account-a"),
+        0,
+    )
+}
+
 fn intent() -> UserInitiated {
     UserInitiated::new("connect_plaud_account", 1_760_000_000_000)
 }
@@ -390,8 +407,14 @@ fn negative_fixtures_never_produce_a_partial_listing() {
     let table = VersionedParser::candidate(
         CliVersion::new("1.2.0"),
         ListingFormat::DelimitedTable,
-        scope,
+        scope.clone(),
         false,
+    );
+    let plaud = VersionedParser::candidate(
+        CliVersion::new("0.3.15"),
+        ListingFormat::PlaudTable03,
+        scope,
+        true,
     );
     let negative = fixture_root().join("negative");
 
@@ -402,6 +425,15 @@ fn negative_fixtures_never_produce_a_partial_listing() {
         ("truncated.stdout", &array),
         ("empty.stdout", &table),
         ("table-row-shape.stdout", &table),
+        // The 0.3.x layout: a declared count the rows do not meet, a duration
+        // shape the release never prints, a missing `Page N` footer, the same
+        // recording twice, and an identifier we could not pass back as an
+        // argument. None of them may produce a listing.
+        ("plaud-table-count-mismatch.stdout", &plaud),
+        ("plaud-table-bad-duration.stdout", &plaud),
+        ("plaud-table-missing-footer.stdout", &plaud),
+        ("plaud-table-duplicate-ids.stdout", &plaud),
+        ("plaud-table-hostile-id.stdout", &plaud),
     ] {
         let stdout = std::fs::read_to_string(negative.join(file)).expect("fixture");
         let error = parser
@@ -420,12 +452,13 @@ fn negative_fixtures_never_produce_a_partial_listing() {
 }
 
 #[test]
-fn the_shipped_table_is_not_the_fixture_table() {
-    // The fixtures describe synthetic releases. If they ever leaked into the
-    // committed table, the application would claim to support a CLI nobody
-    // has run (spec 2.1, 2.5B).
+fn the_shipped_table_carries_only_the_release_that_was_exercised() {
+    // The fixtures under `v1.x` describe synthetic releases. If they ever
+    // leaked into the committed table, the application would claim to support
+    // a CLI nobody has run (spec 2.1, 2.5B). The one shipped row is
+    // `@plaud-ai/cli` 0.3.15, exercised on macOS arm64 on 2026-10-12.
     let committed = CliCompatibilityTable::committed();
-    assert_eq!(committed.usable_versions(), Vec::<&str>::new());
+    assert_eq!(committed.usable_versions(), ["0.3.15"]);
     for row in &fixture_table().versions {
         assert!(
             !committed
@@ -436,6 +469,46 @@ fn the_shipped_table_is_not_the_fixture_table() {
             row.version
         );
     }
+}
+
+#[test]
+fn the_shipped_table_matches_its_committed_golden_fixtures() {
+    // Same contract as the fixture-table golden test, applied to the table
+    // the application actually ships: the recorded digest, the recorded
+    // format and the parser must all still agree with the captured layout.
+    let committed = CliCompatibilityTable::committed();
+    let mut covered = 0usize;
+    for row in &committed.versions {
+        let (meta, stdout, expected) = load_fixture(&row.fixture_id);
+        assert_eq!(meta.version, row.version, "fixture/table version drift");
+        assert_eq!(meta.listing_format, row.listing_format);
+        assert_eq!(
+            sha256_hex(stdout.as_bytes()),
+            row.fixture_sha256,
+            "captured stdout for {} no longer matches the recorded digest",
+            row.version
+        );
+        let parser = VersionedParser::for_row(row, SourceAccountScope::new(&meta.account_scope));
+        let page = parser.parse_listing(&stdout).expect("golden parses");
+        assert_eq!(page.items.len(), expected.items.len());
+        for (item, want) in page.items.iter().zip(&expected.items) {
+            assert_eq!(
+                item.identity.external_id.as_ref().map(|id| id.as_str()),
+                Some(want.external_id.as_str())
+            );
+            assert_eq!(item.display_name, want.display_name);
+            assert_eq!(item.duration_ms, want.duration_ms);
+            assert_eq!(item.captured_at_ms, want.captured_at_ms);
+            assert_eq!(item.declared_byte_length, want.declared_byte_length);
+            assert_eq!(
+                item.vendor_transcript_available,
+                want.vendor_transcript_available
+            );
+        }
+        assert_eq!(page.next_cursor, expected.next_cursor);
+        covered += 1;
+    }
+    assert_eq!(covered, 1, "the shipped table must keep its golden fixture");
 }
 
 // ------------------------------------------------- K1.1/K1.2/K1.3 end to end
@@ -473,7 +546,7 @@ async fn an_untested_cli_version_blocks_enumeration_and_keeps_manual_import() {
         SourceError::CliUnsupported
     );
     let invocations = mock.invocations();
-    assert_eq!(invocations, vec![vec!["--version".to_owned()]]);
+    assert_eq!(invocations, vec![vec!["version".to_owned()]]);
 }
 
 #[tokio::test]
@@ -607,6 +680,96 @@ async fn pagination_is_followed_only_for_a_release_that_observed_it() {
         .invocations()
         .iter()
         .any(|argv| argv.first().is_some_and(|a| a == "logout")));
+}
+
+/// An empty page in the 0.3.x layout, which is how that release says "no more
+/// recordings": a declared count of zero, the header, the rule and the footer.
+fn plaud_empty_page(page: u32) -> String {
+    let header = format!("  {:<36}{:<38}{:<14}DURATION", "ID", "NAME", "DATE");
+    let rule = format!("  {}", "\u{2500}".repeat(98));
+    format!("\nFiles on this page: 0\n\n{header}\n{rule}\n\nPage {page}\n")
+}
+
+#[tokio::test]
+async fn the_shipped_release_is_enumerated_by_numbered_pages() {
+    // The committed row for `@plaud-ai/cli` 0.3.15, driven through the whole
+    // connector against the captured layout: `version` rather than
+    // `--version`, numbered paging with an explicit page size, and an empty
+    // page ending enumeration.
+    let (_, page_one, _) = load_fixture("v0.3.15-plaud-table");
+    let mock = MockCli::install(&serde_json::json!({
+        "version": { "stdout": "plaud 0.3.15\ncommit  0fa20ec\nbuilt   2026-10-08T07:14:57.467Z\n" },
+        "files": { "stdout": page_one },
+        "files_page_2": { "stdout": plaud_empty_page(2) },
+        "record_invocations": true,
+        "unknown_exit_code": 64,
+    }));
+    let connector = shipped_connector(permitted_runner());
+    let status = connector
+        .connect(Some(&mock.discovered()), &intent())
+        .await
+        .expect("connected");
+    assert!(status.version_validated);
+    assert_eq!(status.detected_version.as_deref(), Some("0.3.15"));
+    // The listing is scraped, so the compatibility warning stays on; paging
+    // was observed, so the listing is not labelled partial.
+    assert!(status.scraping_warning);
+    assert!(!status.listing_possibly_incomplete);
+
+    let first = connector.enumerate(None, &intent()).await.expect("listed");
+    assert_eq!(first.page.items.len(), 3);
+    assert_eq!(first.completeness, ListingCompleteness::Complete);
+    assert_eq!(first.page.next_cursor.as_deref(), Some("2"));
+    assert_eq!(
+        first.page.items[0]
+            .identity
+            .external_id
+            .as_ref()
+            .map(|id| id.as_str()),
+        Some("of_1a2b3c4d5e6f708192a3b4c5d6e7f801")
+    );
+    assert_eq!(first.page.items[0].duration_ms, Some(2_467_000));
+    // Day-precision dates are not turned into capture instants.
+    assert!(first
+        .page
+        .items
+        .iter()
+        .all(|item| item.captured_at.is_none()));
+
+    let second = connector
+        .enumerate(Some("2"), &intent())
+        .await
+        .expect("listed");
+    assert!(second.page.items.is_empty());
+    assert_eq!(second.page.next_cursor, None);
+
+    let files_calls: Vec<Vec<String>> = mock
+        .invocations()
+        .into_iter()
+        .filter(|argv| argv.first().is_some_and(|a| a == "files"))
+        .collect();
+    assert_eq!(
+        files_calls,
+        vec![
+            vec![
+                "files".to_owned(),
+                "-p".to_owned(),
+                "1".to_owned(),
+                "-s".to_owned(),
+                "20".to_owned()
+            ],
+            vec![
+                "files".to_owned(),
+                "-p".to_owned(),
+                "2".to_owned(),
+                "-s".to_owned(),
+                "20".to_owned()
+            ]
+        ]
+    );
+
+    // Nothing was promised about signing the user out of the vendor session.
+    assert_eq!(connector.disconnect_copy(), DisconnectCopy::AssociationOnly);
 }
 
 #[tokio::test]

@@ -41,6 +41,10 @@ egui_kittest = { workspace = true }
 # The deletion disclosure's limit sentences are asserted verbatim against the
 # constant the service sends, so a reworded sentence fails the UI test too.
 plaudon-app-core = { workspace = true }
+# One Sources scenario renders the committed `@plaud-ai/cli` 0.3.15 capture
+# parsed by the shipped version-locked parser, so a parser or capture change
+# has to survive the screen that displays it.
+plaudon-source-plaud-cli = { workspace = true }
 plaudon-ui-testkit = { workspace = true }
 serde_json = { workspace = true }
 tempfile = { workspace = true }

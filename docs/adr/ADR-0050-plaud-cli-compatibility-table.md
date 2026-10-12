@@ -1,14 +1,17 @@
-# ADR-0050: The PLAUD Cloud CLI connector is version-locked and ships with an empty compatibility table
+# ADR-0050: The PLAUD Cloud CLI connector is version-locked to the releases in its compatibility table
 
 - **Status:** Accepted
-- **Date:** 2026-10-11
+- **Date:** 2026-10-11, updated 2026-10-12
 - **Spec:** SPEC v1.3 §2.1, §2.6, §7.1, §7.2, §7.6, §24 (see "Spec references")
 
 ## Status
 
-Accepted — 2026-10-11. Implemented in `crates/source-plaud-cli`
-(`compatibility.rs`, `cli-compatibility.yaml`, `parser.rs`, `connector.rs`),
-with golden fixtures under `tests/integration/fixtures/plaud-cli/`.
+Accepted — 2026-10-11. Updated 2026-10-12: the table is no longer empty. One
+release, `@plaud-ai/cli` 0.3.15, was exercised against a real PLAUD account on
+macOS 27.0 (arm64) and is the single committed row. Implemented in
+`crates/source-plaud-cli` (`compatibility.rs`, `cli-compatibility.yaml`,
+`parser.rs`, `invocation.rs`, `connector.rs`), with golden fixtures under
+`tests/integration/fixtures/plaud-cli/`.
 
 ## Context
 
@@ -26,11 +29,11 @@ automated enumeration while preserving manual import. It explicitly forbids
 treating brittle scraping as a permanently supported API, and forbids guessing
 pagination behaviour.
 
-Two facts about this build decide the rest. No release of the official CLI has
-been installed against it — the npm package listing declares no license, so we
-neither bundle nor redistribute it, and nobody has produced a captured
-`plaud files` transcript from an identified release. And §24 makes manual
-import a release blocker while the cloud connector is explicitly conditional.
+Two facts about this build decide the rest. Only one release has been
+installed against it — the npm package listing declares no license, so we
+neither bundle nor redistribute it, and every other release is a population we
+have no capture for. And §24 makes manual import a release blocker while the
+cloud connector is explicitly conditional.
 
 The failure mode we are designing against is a mis-read listing. If a future
 CLI release renames a column, reorders a table, changes a duration unit or
@@ -48,12 +51,15 @@ account as complete. None of those is detectable by the user.
    breaks between releases is the output contract, not a semantic-version
    ordering.
 
-2. **The table is data, compiled in, and currently empty.**
-   `crates/source-plaud-cli/cli-compatibility.yaml` is the single source of
-   truth, loaded with `include_str!` so the shipped table is the table the
-   tests validated. It has zero rows. That is a recorded finding, not an
-   omission: `the_committed_table_declares_no_usable_release_yet` asserts it,
-   so promoting a release is a deliberate edit with a test change.
+2. **The table is data, compiled in, and holds exactly the exercised
+   releases.** `crates/source-plaud-cli/cli-compatibility.yaml` is the single
+   source of truth, loaded with `include_str!` so the shipped table is the
+   table the tests validated. It has one row today, `0.3.15`.
+   `the_committed_table_declares_exactly_the_exercised_release` pins that
+   list, so adding a release is a deliberate edit with a test change. The
+   version probe that produces the string being matched is `plaud version`
+   (first output line, `plaud 0.3.15`); `plaud --version` is rejected by this
+   tool as an unknown option and is not used.
 
 3. **Promotion requires evidence.** `CliCompatibilityRow::validate` enforces
    that a row names an exact dotted release, a golden fixture directory, the
@@ -64,50 +70,74 @@ account as complete. None of those is detectable by the user.
    so parser drift, fixture drift and digest drift each fail CI separately.
 
 4. **Pagination only where observed.** A row carries either
-   `pagination: observed` with a cursor flag and page size that were seen in a
-   real session, or `not_observed`. In the second case the connector asks for
+   `pagination: observed` with the paging form that was seen in a real
+   session, or `not_observed`. In the second case the connector asks for
    exactly one page and labels the listing `PossiblyIncomplete`, with user-
-   facing copy that says so. A cursor flag must additionally match one of the
-   `SUPPORTED_CURSOR_FLAGS` constants, so a table row cannot introduce a new
-   command-line flag without a code change and a test.
+   facing copy that says so. Observed paging has two forms: a cursor, whose
+   flag must match one of `SUPPORTED_CURSOR_FLAGS`, and a numbered page, whose
+   page flag must match `SUPPORTED_PAGE_FLAGS` and whose page-size flag must
+   match `SUPPORTED_PAGE_SIZE_FLAGS` (all three constants live in
+   `crates/source-plaud-cli/src/invocation.rs`). A table row therefore cannot
+   introduce a new command-line flag without a code change and a test. The
+   0.3.15 row uses the numbered form, `-p <page>` with `-s <page-size>`, which
+   is what that release documents in `plaud files --help`; enumeration stops
+   when a page past the end reports zero files.
 
 5. **Scraping is permitted, under a lock and a warning.**
-   `ListingFormat::DelimitedTable` exists and is implemented, keyed on header
-   text rather than column position, with line and record caps. Any row whose
-   `machine_readable` is not `yes` sets `needs_scraping_warning`, which the
-   diagnostics panel renders verbatim.
+   `ListingFormat::PlaudTable03` (`plaud_table_0_3` in the table) is the
+   version-locked scrape of the 0.3.x human-readable listing: a count line, an
+   aligned `ID NAME DATE DURATION` header, a rule, padded rows and a page
+   footer. It is keyed on header text rather than column position, with line
+   and record caps. `ListingFormat::DelimitedTable` remains for other layouts.
+   0.3.15 offers no JSON mode, so its row sets `machine_readable: no`, which
+   sets `needs_scraping_warning` and the diagnostics panel renders it verbatim.
 
 6. **Fixture releases are structurally separable from shipped ones.** The test
    suite drives the connector through
    `tests/integration/fixtures/plaud-cli/cli-compatibility.fixture.yaml`, and
-   `the_shipped_table_is_not_the_fixture_table` asserts that no fixture version
-   appears in the committed table.
+   `the_shipped_table_carries_only_the_release_that_was_exercised` asserts
+   that the committed table is exactly `["0.3.15"]` and that no synthetic
+   fixture version appears in it.
 
 ### How to add a tested release
 
-1. Install the exact release and capture `plaud --version` and `plaud files`
+1. Install the exact release and capture `plaud version` and `plaud files`
    verbatim into `tests/integration/fixtures/plaud-cli/<fixture_id>/`
-   (`files.stdout`, `fixture.json`, `expected.json`).
+   (`files.stdout`, `fixture.json`, `expected.json`). Committed fixtures must
+   be sanitised before they land: the real layout, with synthetic identifiers,
+   no recording titles and no URLs. A capture straight from an account is
+   evidence for the person who took it, never a committed file.
 2. Record the capture's SHA-256 in a new row of
-   `crates/source-plaud-cli/cli-compatibility.yaml`, with the observed format,
-   observed pagination, `verified_on` and the host OSes it was exercised on.
+   `crates/source-plaud-cli/cli-compatibility.yaml`, with the observed listing
+   format, the observed paging form and its flags, `verified_on` and the host
+   OSes it was exercised on, then extend
+   `the_committed_table_declares_exactly_the_exercised_release` and
+   `the_shipped_table_carries_only_the_release_that_was_exercised` to the new
+   list.
 3. Record the download-URL observations required by §2.6 in a `UrlContract`
    and add the observed host to the `DownloadPolicy` allowlist. Until a host is
    recorded there, every download is refused — the default allowlist is empty.
-4. Update the `plaud_cloud_cli` row in `compatibility.yaml` from
-   `not_evaluated`, and expect
-   `the_committed_table_declares_no_usable_release_yet` to fail until it is
-   rewritten to assert the new, intended contents.
+4. Run the opt-in real-CLI test on the host being claimed and require it to
+   pass: `PLAUDON_PLAUD_CLI_TESTS=1 cargo test -p plaudon-app --test
+   plaud_real_cli -- --ignored`. It is ignored by default because it launches
+   the vendor tool against a real account.
+5. Update the `plaud_cloud_cli` row in `compatibility.yaml` for the host and
+   OS version actually exercised, with `last_verified_at`,
+   `verified_import_recorded` and a rewritten `known_limitations` list, then
+   regenerate `docs/public/compatibility.md` with
+   `plaudon-release compat-matrix`.
 
 ## Consequences
 
-- The connector is inert in this build: discovery and the version probe run,
-  and everything past them answers `CliUnsupported` with copy that points the
-  user at manual import. That is the §7.2(b) branch, chosen honestly rather
-  than by omission.
+- The connector works on exactly one release, `@plaud-ai/cli` 0.3.15, on
+  macOS: discovery, the `plaud version` probe, enumeration by numbered page
+  and a download all run, under a scraping warning that cannot be turned off
+  while the release reports no machine-readable mode. That is the §7.2(a)
+  branch for that release; everything else is still the §7.2(b) branch, with
+  copy that points the user at manual import.
 - Every piece of machinery the §7.2(a) branch needs is implemented and
-  exercised against recorded fixtures, so promoting a release is a data change
-  plus a capture, not a development project.
+  exercised against recorded fixtures, so promoting a further release is a
+  data change plus a capture, not a development project.
 - A user running a brand-new CLI release gets a clear, specific message naming
   their version instead of a corrupted import.
 

@@ -12,7 +12,7 @@
 //!   scripts/probe-plaud-cli.sh <output-directory>
 //!
 //! It never signs in for you, never writes to your PLAUD account and never
-//! runs anything outside `--version` and `files`.
+//! runs anything outside `version` and `files`.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -86,7 +86,7 @@ async fn main() -> std::process::ExitCode {
     {
         Ok(output) => output,
         Err(error) => {
-            eprintln!("`plaud --version` failed: {error}");
+            eprintln!("`plaud version` failed: {error}");
             return std::process::ExitCode::FAILURE;
         }
     };
@@ -125,7 +125,12 @@ async fn main() -> std::process::ExitCode {
         return std::process::ExitCode::FAILURE;
     }
 
-    if let Err(error) = write_bundle(&output_dir, &version, &files_output.stdout) {
+    if let Err(error) = write_bundle(
+        &output_dir,
+        &version,
+        &version_output.stdout,
+        &files_output.stdout,
+    ) {
         eprintln!("could not write the capture bundle: {error}");
         return std::process::ExitCode::FAILURE;
     }
@@ -137,8 +142,10 @@ async fn main() -> std::process::ExitCode {
     println!("Still to record by hand before promoting this release (spec 2.6):");
     for item in [
         "whether `files` output is a documented machine-readable format or a scraped table",
-        "whether pagination exists, which flag carries the cursor, and the page size",
-        "the exit codes observed for: signed out, unknown id, rate limit, network loss",
+        "whether pagination exists, which flags carry the page or cursor, and the page size",
+        "what a page past the end of the account returns, and with which exit code",
+        "the exit codes and bracketed error codes observed for: signed out, unknown id, \
+         rate limit, network loss",
         "whether a Google/Apple PLAUD login works with this release",
         "whether vendor transcripts/summaries are exposed through a supported path",
         "the download URL host, scheme, redirect chain, expiry, content type, checksum \
@@ -156,12 +163,23 @@ async fn main() -> std::process::ExitCode {
 /// `expected.json` is deliberately *not* generated: writing the expectation
 /// from the parser's own output would make the snapshot test tautological. It
 /// is written by hand from reading the capture.
-fn write_bundle(dir: &Path, version: &CliVersion, files_stdout: &str) -> std::io::Result<()> {
+///
+/// Neither is the capture sanitised for you. It carries the account's real
+/// recording names; a committed fixture must reproduce the *layout* with
+/// synthetic values, which is a human judgement.
+fn write_bundle(
+    dir: &Path,
+    version: &CliVersion,
+    version_stdout: &str,
+    files_stdout: &str,
+) -> std::io::Result<()> {
     std::fs::create_dir_all(dir)?;
+    std::fs::write(dir.join("version.stdout"), version_stdout)?;
     std::fs::write(dir.join("files.stdout"), files_stdout)?;
     let fixture = serde_json::json!({
         "version": version.as_str(),
-        "listing_format": "FILL IN: json_lines | json_array | delimited_table",
+        "listing_format":
+            "FILL IN: json_lines | json_array | delimited_table | plaud_table_0_3",
         "pagination_observed": false,
         "account_scope": "FILL IN: a non-secret account discriminator, e.g. plaud:eu:account-a",
         "captured_on": "FILL IN: YYYY-MM-DD",

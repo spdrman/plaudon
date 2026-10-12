@@ -294,6 +294,43 @@ fn a_listing_that_may_be_partial_is_never_reconciled_from() {
 }
 
 #[test]
+fn the_real_0_3_15_listing_renders_without_inventing_anything() {
+    // The committed capture of `@plaud-ai/cli` 0.3.15, parsed by the shipped
+    // version-locked parser and handed to the screen. Three properties matter:
+    // the vendor's own truncation survives as display text, the durations are
+    // reformatted into the application's own spelling, and the listing's
+    // day-precision date never becomes a capture time the screen could show.
+    let mut app = SourcesApp::new();
+    app.state
+        .applied(SourceOutcome::Snapshot(fixtures::ready_connector()));
+    let listing = fixtures::plaud_0_3_15_listing();
+    assert_eq!(listing.items.len(), 3);
+    assert_eq!(listing.completeness, PlaudListingCompleteness::Complete);
+    assert_eq!(listing.next_cursor.as_deref(), Some("2"));
+    assert!(listing.items.iter().all(|item| item.captured_at.is_none()));
+    assert!(listing
+        .items
+        .iter()
+        .all(|item| item.declared_byte_length.is_none()));
+    app.state.applied(SourceOutcome::Listed(listing));
+    let mut harness = harness(app);
+    harness.run();
+
+    // 41m07s and 1h15m as the release printed them, in the application's own
+    // format.
+    assert!(says(&harness, "41:07"));
+    assert!(says(&harness, "1:15:00"));
+    assert!(!says(&harness, "Duration unknown"));
+    // The vendor truncates a long name at 35 characters; that is display text
+    // and the screen shows it rather than guessing the rest.
+    assert!(says(&harness, "Synthetic fixture recording with a\u{2026}"));
+    assert!(says(&harness, "Complete"));
+    // A scraped listing still carries the compatibility warning the snapshot
+    // was built with, and no identifier is ever shown as a title.
+    assert!(!says(&harness, "of_1a2b3c4d5e6f708192a3b4c5d6e7f801"));
+}
+
+#[test]
 fn a_recording_without_a_duration_does_not_claim_zero() {
     let mut app = SourcesApp::new();
     app.state
