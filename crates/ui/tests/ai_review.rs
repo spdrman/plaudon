@@ -16,7 +16,7 @@ use egui_kittest::Harness;
 use plaudon_app::command::AppCommand;
 use plaudon_domain::transcript::AlignmentOrigin;
 use plaudon_ui::ai::{
-    AiIntent, AiOutput, OutputsViewer, RecordingContext, ReviewPanel, SeekRequest, SeekSink,
+    AiIntent, AiOutput, OutputsViewer, RecordingContext, ReviewPanel, SeekRequest,
 };
 
 /// A window tall enough that no control of a panel is clipped.

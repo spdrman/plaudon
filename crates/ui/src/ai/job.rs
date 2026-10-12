@@ -49,7 +49,7 @@ impl JobCard {
                 if let Some(stage) = job.stage.as_deref() {
                     fact(ui, "Stage", stage);
                 }
-                self.progress(ui, job, presentation.label);
+                Self::progress(ui, job, presentation.label);
                 fact(
                     ui,
                     "Elapsed",
@@ -71,7 +71,7 @@ impl JobCard {
                     fact(ui, "Provider request id", request_id);
                 }
 
-                self.failure(ui, job, &mut output);
+                Self::failure(ui, job, &mut output);
                 self.controls(ui, job, &job_id, &mut output);
             });
         });
@@ -79,7 +79,7 @@ impl JobCard {
         output
     }
 
-    fn progress(&self, ui: &mut Ui, job: &JobSummary, state_label: &str) {
+    fn progress(ui: &mut Ui, job: &JobSummary, state_label: &str) {
         match job_progress(job.state, job.progress) {
             JobProgress::Fraction(fraction) => {
                 let percent = (fraction * 100.0).round() as u32;
@@ -100,7 +100,7 @@ impl JobCard {
         }
     }
 
-    fn failure(&self, ui: &mut Ui, job: &JobSummary, output: &mut AiOutput) {
+    fn failure(ui: &mut Ui, job: &JobSummary, output: &mut AiOutput) {
         let Some(envelope) = job.error.as_ref() else {
             return;
         };
@@ -124,7 +124,7 @@ impl JobCard {
                             output.command(AppCommand::RetryJob(RetryJobRequest {
                                 job_id: job.job_id.to_string(),
                                 cost_acknowledged: false,
-                            }))
+                            }));
                         }
                         // "Keep queued" is the absence of an action: the job is
                         // left exactly as it is, which is why it dispatches

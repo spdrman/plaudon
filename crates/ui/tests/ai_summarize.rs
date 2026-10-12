@@ -155,7 +155,10 @@ fn local_only_mode_blocks_the_cloud_model_in_the_summary_panel_too() {
     harness.get_by_label("Vendor Whisper Large").click();
     harness.run();
     harness.run();
-    assert!(harness.state().collected.start_processing.is_empty());
+    assert_eq!(
+        harness.state().collected.start_processing,
+        [] as [plaudon_app::dto::StartProcessingRequest; 0]
+    );
 }
 
 /* ------------------------------------------------------------ model picker */
@@ -255,7 +258,10 @@ fn an_unverified_model_offers_a_capability_check_behind_consent_and_a_cost_confi
         text.contains("Running the check sends about 5 seconds of bundled test audio"),
         "{text}"
     );
-    assert!(harness.state().collected.verifications.is_empty());
+    assert_eq!(
+        harness.state().collected.verifications,
+        [] as [plaudon_app::dto::VerifyModelRequest; 0]
+    );
 
     harness
         .get_by_label("Send the test clip and accept the cost")

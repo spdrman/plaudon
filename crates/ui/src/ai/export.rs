@@ -119,7 +119,7 @@ fn exported_file(ui: &mut Ui, heading: &str, file: &plaudon_app::dto::ExportedMe
     ui.label(egui::RichText::new(format!("{heading}: {}", file.label)).strong());
     fact(ui, "File", &file.file_name);
     fact(ui, "Bytes", &file.byte_length.to_string());
-    fact(ui, "SHA-256", &file.sha256.to_string());
+    fact(ui, "SHA-256", &file.sha256.clone());
     if file.stripped_metadata.is_empty() {
         fact(ui, "Removed metadata", "None");
     } else {

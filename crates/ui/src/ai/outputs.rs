@@ -104,17 +104,16 @@ impl OutputsViewer {
                             .ui(ui);
                     }
 
-                    let slot = match self
+                    let slot = if let Some(index) = self
                         .speaker_edits
                         .iter()
                         .position(|(id, _)| *id == speaker_id)
                     {
-                        Some(index) => index,
-                        None => {
-                            self.speaker_edits
-                                .push((speaker_id.clone(), speaker.label.clone()));
-                            self.speaker_edits.len() - 1
-                        }
+                        index
+                    } else {
+                        self.speaker_edits
+                            .push((speaker_id.clone(), speaker.label.clone()));
+                        self.speaker_edits.len() - 1
                     };
                     ui.horizontal(|ui| {
                         let name_label = ui.label("Speaker name");

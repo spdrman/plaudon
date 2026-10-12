@@ -188,16 +188,16 @@ impl ReviewPanel {
                         .ui(ui);
                 }
                 for (index, anchor) in claim.anchors.iter().enumerate() {
-                    self.anchor(ui, context, claim, index, anchor, output);
+                    Self::anchor(ui, context, claim, index, anchor, output);
                 }
 
-                let slot = match self.notes.iter().position(|(id, _)| *id == claim_id) {
-                    Some(index) => index,
-                    None => {
+                let slot =
+                    if let Some(index) = self.notes.iter().position(|(id, _)| *id == claim_id) {
+                        index
+                    } else {
                         self.notes.push((claim_id.clone(), String::new()));
                         self.notes.len() - 1
-                    }
-                };
+                    };
                 let note_label = ui.label("Review note (optional)");
                 ui.add(egui::TextEdit::singleline(&mut self.notes[slot].1).desired_width(320.0))
                     .labelled_by(note_label.id);
@@ -224,7 +224,6 @@ impl ReviewPanel {
     }
 
     fn anchor(
-        &self,
         ui: &mut Ui,
         context: RecordingContext<'_>,
         claim: &ClaimDto,
