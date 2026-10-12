@@ -41,7 +41,7 @@ pub const DETAIL_EVENTS: [EventKind; 3] = [
 /// implementation decides what is in them. A host that has no widget for one
 /// of them yet says so in that panel — the container never draws a
 /// placeholder on its behalf.
-pub trait DetailPanels {
+pub trait DetailPanels: std::fmt::Debug {
     /// Playback controls and waveform.
     fn player(&mut self, ui: &mut Ui, detail: &RecordingDetail);
     /// Transcript, revisions and editing.
