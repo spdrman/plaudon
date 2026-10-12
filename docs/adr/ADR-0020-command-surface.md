@@ -135,9 +135,11 @@ arms are all expanded from a single macro table in `crates/app/src/command.rs`,
 so a command cannot be registered in one place and forgotten in another, and
 the generic-execution pattern test (`^exec`, `^run_`, `^shell`, `^http_`,
 `^read_file$`, `^write_file$`) runs against that table rather than against a
-`tauri::generate_handler!` list. The surface is 78 published names, each
+`tauri::generate_handler!` list. The surface is 79 published names, each
 appearing exactly once: the Tauri allowlist listed the six archive commands
-twice, and the duplication was not carried forward.
+twice, and the duplication was not carried forward. The latest addition is
+`set_segment_speaker` (P1.1, `docs/specs/VOICE_PROFILES_SPEC.md` §4.1), which is
+egui-only and obeys the same prefix guard.
 
 **Events.** The §15.3 events, including `ui.activation_requested`, are
 `AppEvent::Ui` values on the same bounded, coalescing channel. The rule they

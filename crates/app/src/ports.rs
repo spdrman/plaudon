@@ -405,6 +405,29 @@ pub trait SpeakersPort: Send + Sync {
         recording_id: plaudon_domain::ids::RecordingId,
         speaker_id: plaudon_domain::ids::SpeakerId,
     ) -> Result<plaudon_app_core::speakers::Speaker, AppError>;
+
+    /// Attribute one segment of a revision to a speaker row, or to nobody
+    /// (spec §4.1, VP-031).
+    ///
+    /// The assignment is the user's, never the machine's: this writes what a
+    /// human picked and infers nothing from the audio.
+    async fn set_segment_speaker(
+        &self,
+        recording_id: plaudon_domain::ids::RecordingId,
+        revision_id: plaudon_domain::ids::TranscriptRevisionId,
+        seq_index: u32,
+        speaker_id: Option<plaudon_domain::ids::SpeakerId>,
+    ) -> Result<SegmentSpeakerAssignment, AppError>;
+}
+
+/// What a segment is attributed to after [`SpeakersPort::set_segment_speaker`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SegmentSpeakerAssignment {
+    /// Speaker row the segment now points at, `None` when the attribution was
+    /// cleared.
+    pub speaker_id: Option<plaudon_domain::ids::SpeakerId>,
+    /// That row's current label, resolved for display.
+    pub speaker_label: Option<String>,
 }
 
 /// Cloud AI over OpenRouter BYOK (spec §10, ADR-0022): model catalogue, usage
