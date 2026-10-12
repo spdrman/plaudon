@@ -1,48 +1,226 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://plaudon.app/schemas/commands/v1/list_outputs.response.json",
+  "$id": "https://plaudon.app/schemas/commands/v1/list_outputs.response.schema.json",
+  "title": "list_outputs.response",
   "type": "object",
-  "required": ["outputs"],
   "additionalProperties": false,
+  "required": ["outputs"],
   "properties": {
     "outputs": {
       "type": "array",
       "items": {
-        "type": "object",
-        "required": ["output_id", "recording_id", "transcript_revision_id", "output_type", "template_id", "template_version", "pipeline_version", "status", "coverage", "created_at", "claims"],
-        "properties": {
-          "output_id": {"type": "string"},
-          "recording_id": {"type": "string"},
-          "transcript_revision_id": {"type": "string"},
-          "output_type": {"type": "string"},
-          "template_id": {"type": "string"},
-          "template_version": {"type": "string"},
-          "pipeline_version": {"type": "string"},
-          "status": {"type": "string", "enum": ["complete", "needs_review"]},
-          "coverage": {
-            "type": "object",
-            "required": ["state"],
-            "properties": {
-              "state": {"type": "string", "enum": ["full", "model_reported_partial"]},
-              "chunks": {"type": "array", "items": {"type": "number"}}
-            }
-          },
-          "stale": {
-            "type": "object",
-            "required": ["stale_at", "reason"],
-            "properties": {
-              "stale_at": {"type": "string", "format": "date-time"},
-              "reason": {"type": "string"}
-            }
-          },
-          "created_at": {"type": "string", "format": "date-time"},
-          "claims": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "required": ["claim_id", "item_path", "text", "state", "review_required", "review_reasons", "entailment", "category", "fields", "anchors"]
-            }
+        "$ref": "#/$defs/output"
+      }
+    }
+  },
+  "$defs": {
+    "output": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "output_id",
+        "recording_id",
+        "transcript_revision_id",
+        "output_type",
+        "template_id",
+        "template_version",
+        "pipeline_version",
+        "status",
+        "coverage",
+        "created_at",
+        "claims"
+      ],
+      "properties": {
+        "output_id": {"type": "string"},
+        "recording_id": {"type": "string"},
+        "transcript_revision_id": {"type": "string"},
+        "output_type": {"type": "string"},
+        "template_id": {"type": "string"},
+        "template_version": {"type": "string"},
+        "pipeline_version": {"type": "string"},
+        "status": {"type": "string"},
+        "coverage": {"$ref": "#/$defs/coverage"},
+        "stale": {
+          "oneOf": [
+            {"$ref": "#/$defs/stale"},
+            {"type": "null"}
+          ]
+        },
+        "created_at": {"type": "string"},
+        "claims": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/claim"}
+        }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state"],
+      "properties": {
+        "state": {"type": "string"},
+        "chunks": {
+          "oneOf": [
+            {
+              "type": "array",
+              "items": {"type": "number"}
+            },
+            {"type": "null"}
+          ]
+        }
+      }
+    },
+    "stale": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stale_at", "reason"],
+      "properties": {
+        "stale_at": {"type": "string"},
+        "reason": {"type": "string"}
+      }
+    },
+    "claim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "claim_id",
+        "item_path",
+        "text",
+        "state",
+        "review_required",
+        "review_reasons",
+        "entailment",
+        "category",
+        "fields",
+        "anchors"
+      ],
+      "properties": {
+        "claim_id": {"type": "string"},
+        "item_path": {"type": "string"},
+        "text": {"type": "string"},
+        "state": {"type": "string"},
+        "review_required": {"type": "boolean"},
+        "review_reasons": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "entailment": {"type": "string"},
+        "category": {"type": "string"},
+        "fields": {"$ref": "#/$defs/rendered_claim_fields"},
+        "anchors": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/anchor"}
+        }
+      }
+    },
+    "rendered_claim_fields": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "properties": {
+            "kind": {"const": "summary_statement"}
           }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "statement", "participants", "time_reference", "assertion"],
+          "properties": {
+            "kind": {"const": "decision"},
+            "statement": {"type": "string"},
+            "participants": {
+              "type": "array",
+              "items": {"type": "string"}
+            },
+            "time_reference": {"type": "string"},
+            "assertion": {"type": "string"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "verb", "description", "owner", "due_date", "status", "assertion"],
+          "properties": {
+            "kind": {"const": "action_item"},
+            "verb": {"type": "string"},
+            "description": {"type": "string"},
+            "owner": {"type": "string"},
+            "due_date": {"type": "string"},
+            "status": {"type": "string"},
+            "assertion": {"type": "string"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "description", "consequence", "mitigation"],
+          "properties": {
+            "kind": {"const": "risk"},
+            "description": {"type": "string"},
+            "consequence": {"type": "string"},
+            "mitigation": {"type": "string"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "question", "owner"],
+          "properties": {
+            "kind": {"const": "question"},
+            "question": {"type": "string"},
+            "owner": {"type": "string"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "heading", "first_segment", "last_segment"],
+          "properties": {
+            "kind": {"const": "topic"},
+            "heading": {"type": "string"},
+            "first_segment": {"type": "number"},
+            "last_segment": {"type": "number"}
+          }
+        }
+      ]
+    },
+    "anchor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "seq_index",
+        "char_start",
+        "char_end",
+        "excerpt",
+        "verified",
+        "alignment_origin"
+      ],
+      "properties": {
+        "seq_index": {"type": "number"},
+        "char_start": {"type": "number"},
+        "char_end": {"type": "number"},
+        "excerpt": {"type": "string"},
+        "verified": {"type": "boolean"},
+        "rejection_code": {
+          "oneOf": [
+            {"type": "string"},
+            {"type": "null"}
+          ]
+        },
+        "matched_text": {
+          "oneOf": [
+            {"type": "string"},
+            {"type": "null"}
+          ]
+        },
+        "alignment_origin": {"type": "string"},
+        "seek_ms": {
+          "oneOf": [
+            {"type": "number"},
+            {"type": "null"}
+          ]
         }
       }
     }

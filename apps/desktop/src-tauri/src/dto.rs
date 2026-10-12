@@ -20,7 +20,7 @@ use std::collections::BTreeMap;
 
 use plaudon_domain::capability::CapabilityStatus;
 use plaudon_domain::error::ErrorEnvelope;
-use plaudon_domain::ids::{JobId, OutputId, RecordingId, TranscriptRevisionId};
+use plaudon_domain::ids::{ClaimId, JobId, OutputId, RecordingId, TranscriptRevisionId};
 use plaudon_domain::media::Sha256Digest;
 use plaudon_domain::transcript::AlignmentOrigin;
 use serde::{Deserialize, Serialize};
@@ -1235,8 +1235,6 @@ pub struct UiEvent {
     pub payload: serde_json::Map<String, serde_json::Value>,
 }
 
-#[cfg(test)]
-
 /* --------------------------------------------------------------- outputs */
 
 /// Request for outputs of a recording.
@@ -1463,6 +1461,7 @@ pub struct RegenerateOutputResponse {
     pub job_id: JobId,
 }
 
+#[cfg(test)]
 mod tests {
     use super::*;
 

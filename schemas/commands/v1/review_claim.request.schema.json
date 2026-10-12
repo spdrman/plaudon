@@ -1,23 +1,29 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://plaudon.app/schemas/commands/v1/review_claim.request.json",
+  "$id": "https://plaudon.app/schemas/commands/v1/review_claim.request.schema.json",
+  "title": "review_claim.request",
   "type": "object",
-  "required": ["output_id", "claim_id", "accepted"],
   "additionalProperties": false,
+  "required": [
+    "output_id",
+    "claim_id",
+    "accepted"
+  ],
   "properties": {
     "output_id": {
-      "type": "string",
-      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+      "type": "string"
     },
     "claim_id": {
-      "type": "string",
-      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+      "type": "string"
     },
     "accepted": {
       "type": "boolean"
     },
     "note": {
-      "type": "string"
+      "oneOf": [
+        {"type": "string"},
+        {"type": "null"}
+      ]
     }
   }
 }

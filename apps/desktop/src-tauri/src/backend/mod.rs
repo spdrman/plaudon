@@ -18,6 +18,7 @@ pub mod capabilities;
 pub mod export;
 pub mod import;
 pub mod jobs;
+pub mod outputs;
 pub mod store;
 
 use std::collections::BTreeMap;

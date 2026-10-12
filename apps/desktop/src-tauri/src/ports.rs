@@ -5,15 +5,13 @@
 //! `crates/jobs` replace the implementations in [`crate::backend`] by swapping
 //! what [`crate::build_ports`] constructs — no command and no UI change.
 
-
 use std::path::PathBuf;
 
 use async_trait::async_trait;
 use plaudon_domain::claim::{Claim, ClaimState};
 use plaudon_domain::error::AppError;
-use plaudon_domain::ids::{ClaimId, JobId, OutputId, RecordingId, TranscriptRevisionId};
-use plaudon_domain::media::Sha256Digest;
-use plaudon_domain::transcript::{AlignmentOrigin, TranscriptRevisionDraft};
+use plaudon_domain::ids::{ClaimId, JobId, OutputId, RecordingId};
+use plaudon_domain::transcript::AlignmentOrigin;
 use plaudon_persistence::intelligence::OutputHeader;
 
 use crate::dto::{
@@ -211,7 +209,10 @@ pub trait ExportPort: Send + Sync {
 #[async_trait]
 pub trait OutputsPort: Send + Sync {
     /// Every generated output of a recording, with its claims.
-    async fn list_outputs(&self, recording_id: RecordingId) -> Result<Vec<OutputWithClaims>, AppError>;
+    async fn list_outputs(
+        &self,
+        recording_id: RecordingId,
+    ) -> Result<Vec<crate::dto::OutputDto>, AppError>;
 
     /// Record a human review decision, returning the updated claim state.
     async fn review_claim(

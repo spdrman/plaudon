@@ -1,13 +1,15 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://plaudon.app/schemas/commands/v1/review_claim.response.json",
+  "$id": "https://plaudon.app/schemas/commands/v1/review_claim.response.schema.json",
+  "title": "review_claim.response",
   "type": "object",
-  "required": ["state"],
   "additionalProperties": false,
+  "required": [
+    "state"
+  ],
   "properties": {
     "state": {
-      "type": "string",
-      "enum": ["human_confirmed", "unverified"]
+      "type": "string"
     }
   }
 }

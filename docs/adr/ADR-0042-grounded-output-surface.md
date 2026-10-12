@@ -1,4 +1,4 @@
-# ADR-0041: Grounded output surface — three commands for actions, decisions and review
+# ADR-0042: Grounded output surface — three commands for actions, decisions and review
 
 - **Status:** accepted
 - **Date:** 2026-10-11

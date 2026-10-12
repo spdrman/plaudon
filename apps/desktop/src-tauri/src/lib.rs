@@ -32,10 +32,11 @@ use std::sync::Arc;
 use plaudon_domain::error::AppError;
 
 use crate::backend::LocalBackend;
-use crate::events::{EventSink, TauriEventSink};
+use crate::events::EventSink;
+use crate::events::TauriEventSink;
 use crate::ports::{
-    ActivityPort, CapabilitiesPort, ExportPort, ImportPort, JobsPort, LibraryPort, SettingsPort,
-    TranscriptPort,
+    ActivityPort, CapabilitiesPort, ExportPort, ImportPort, JobsPort, LibraryPort, OutputsPort,
+    SettingsPort, TranscriptPort,
 };
 use crate::secrets::{KeyringSecretStore, SecretStore};
 
@@ -58,6 +59,8 @@ pub struct AppPorts {
     pub settings: Arc<dyn SettingsPort>,
     /// Transcript export.
     pub export: Arc<dyn ExportPort>,
+    /// Generated outputs and claim review.
+    pub outputs: Arc<dyn OutputsPort>,
     /// OS keychain storage.
     pub secrets: Arc<dyn SecretStore>,
     /// The UI event stream, shared with the notification activation route.
@@ -115,7 +118,8 @@ pub async fn build_ports(
         activity: Arc::clone(&backend) as Arc<dyn ActivityPort>,
         import: Arc::clone(&backend) as Arc<dyn ImportPort>,
         settings: Arc::clone(&backend) as Arc<dyn SettingsPort>,
-        export: backend as Arc<dyn ExportPort>,
+        export: Arc::clone(&backend) as Arc<dyn ExportPort>,
+        outputs: Arc::clone(&backend) as Arc<dyn OutputsPort>,
         secrets,
         events,
     })

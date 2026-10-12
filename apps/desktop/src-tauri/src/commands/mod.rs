@@ -9,6 +9,7 @@
 pub mod import;
 pub mod jobs;
 pub mod library;
+pub mod outputs;
 pub mod settings;
 pub mod transcript;
 
@@ -18,8 +19,10 @@ use crate::dto::{
     ActivityPage, CancelJobRequest, Capabilities, CompleteOnboardingRequest, EmptyRequest,
     ExportRecordingRequest, ExportRecordingResponse, GetRecordingRequest, GetTranscriptRequest,
     ImportFilesRequest, ImportFilesResponse, JobPage, JobSummary, ListActivityRequest,
-    ListJobsRequest, ListRecordingsRequest, LocalOnlyModeResponse, NotificationSettingsResponse,
-    Preferences, RecordingDetail, RecordingPage, RetryJobRequest, SaveTranscriptRevisionRequest,
+    ListJobsRequest, ListOutputsRequest, ListOutputsResponse, ListRecordingsRequest,
+    LocalOnlyModeResponse, NotificationSettingsResponse, Preferences, RecordingDetail,
+    RecordingPage, RegenerateOutputRequest, RegenerateOutputResponse, RetryJobRequest,
+    ReviewClaimRequest, ReviewClaimResponse, SaveTranscriptRevisionRequest,
     SaveTranscriptRevisionResponse, SetLocalOnlyModeRequest, SetNotificationSettingsRequest,
     SetOpenRouterKeyRequest, StatusResponse, TranscriptPage,
 };
@@ -45,6 +48,9 @@ pub const COMMAND_ALLOWLIST: &[&str] = &[
     "remove_openrouter_key",
     "list_activity",
     "complete_onboarding",
+    "list_outputs",
+    "review_claim",
+    "regenerate_output",
 ];
 
 /// Every command of the IPC surface, for [`tauri::Builder::invoke_handler`].
@@ -67,7 +73,10 @@ pub fn handler<R: tauri::Runtime>() -> impl Fn(tauri::ipc::Invoke<R>) -> bool + 
         set_openrouter_key,
         remove_openrouter_key,
         list_activity,
-        complete_onboarding
+        complete_onboarding,
+        list_outputs,
+        review_claim,
+        regenerate_output
     ]
 }
 
@@ -199,6 +208,29 @@ pub async fn complete_onboarding(
     to_command_result(settings::complete_onboarding(&state.ports, request).await)
 }
 
+#[tauri::command]
+pub async fn list_outputs(
+    state: State<'_, AppState>,
+    request: ListOutputsRequest,
+) -> CommandResult<ListOutputsResponse> {
+    to_command_result(outputs::list_outputs(&state.ports, request).await)
+}
+
+#[tauri::command]
+pub async fn review_claim(
+    state: State<'_, AppState>,
+    request: ReviewClaimRequest,
+) -> CommandResult<ReviewClaimResponse> {
+    to_command_result(outputs::review_claim(&state.ports, request).await)
+}
+
+#[tauri::command]
+pub async fn regenerate_output(
+    state: State<'_, AppState>,
+    request: RegenerateOutputRequest,
+) -> CommandResult<RegenerateOutputResponse> {
+    to_command_result(outputs::regenerate_output(&state.ports, request).await)
+}
 #[cfg(test)]
 mod tests {
     use super::*;
