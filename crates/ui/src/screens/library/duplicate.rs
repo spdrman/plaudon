@@ -73,10 +73,7 @@ pub fn duplicate_dialog(ui: &mut Ui, session: &ImportSession) -> Option<Duplicat
                 short_hash(sha256)
             ));
             ui.horizontal(|ui| {
-                if ui
-                    .button("Import anyway as a separate recording")
-                    .clicked()
-                {
+                if ui.button("Import anyway as a separate recording").clicked() {
                     decision = Some(DuplicateDecision::Chose {
                         path: path.clone(),
                         choice: DuplicateChoice::ImportAnyway,

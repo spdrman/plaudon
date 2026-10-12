@@ -105,11 +105,7 @@ impl InboxScreen {
             self.work.refresh(send);
         }
 
-        let error = self
-            .imports
-            .error()
-            .or_else(|| self.work.error())
-            .cloned();
+        let error = self.imports.error().or_else(|| self.work.error()).cloned();
         if let Some(envelope) = error {
             if let Some(ErrorNoticeAction::Retry) =
                 error_notice(ui, &envelope, "The inbox could not be loaded.")

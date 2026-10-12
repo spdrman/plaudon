@@ -71,17 +71,18 @@ pub fn row_at(index: usize) -> RecordingSummary {
         title: format!("Recording {index:04}"),
         // Every fifth recording arrived without a capture instant, which is
         // the case the "never invent a timestamp" rule exists for.
-        recorded_at: (index % 5 != 0).then(|| format!("2026-{month:02}-{day:02}T09:15:00Z")),
+        recorded_at: (!index.is_multiple_of(5))
+            .then(|| format!("2026-{month:02}-{day:02}T09:15:00Z")),
         imported_at: format!("2026-{month:02}-{day:02}T10:30:00Z"),
         // Every third recording has no measured duration.
-        duration_ms: (index % 3 != 0).then(|| ((index as u64 % 90) + 1) * 61_000),
+        duration_ms: (!index.is_multiple_of(3)).then(|| ((index as u64 % 90) + 1) * 61_000),
         source: RecordingSourceRef {
             source_kind,
             label: source_label.to_owned(),
         },
         import_status,
         transcription_status,
-        processing_engine: (index % 2 == 0).then(|| "whisper.cpp".to_owned()),
+        processing_engine: index.is_multiple_of(2).then(|| "whisper.cpp".to_owned()),
         last_error: None,
         tags: match index % 3 {
             0 => vec!["work".to_owned()],

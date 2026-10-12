@@ -203,9 +203,7 @@ impl LibraryScreen {
             // even if that event is coalesced away.
             if !self.import.is_pending() {
                 self.list.refresh(send);
-                intents.push(LibraryIntent::Status(
-                    self.import.announcement().to_owned(),
-                ));
+                intents.push(LibraryIntent::Status(self.import.announcement().to_owned()));
             }
             return intents;
         }
@@ -288,8 +286,7 @@ impl LibraryScreen {
             self.import.note_unrepresentable(dropped.unrepresentable);
         }
         if !dropped.paths.is_empty() {
-            self.import
-                .start(dropped.paths, DuplicatePolicy::Ask, send);
+            self.import.start(dropped.paths, DuplicatePolicy::Ask, send);
         }
     }
 

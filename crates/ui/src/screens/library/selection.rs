@@ -179,11 +179,15 @@ mod tests {
         selection.move_down(true, &rows);
         selection.move_down(true, &rows);
         assert_eq!(selection.len(), 3);
-        for index in 1..=3 {
-            assert!(selection.contains(rows[index].recording_id), "row {index}");
+        for (index, row) in rows.iter().enumerate().take(4).skip(1) {
+            assert!(selection.contains(row.recording_id), "row {index}");
         }
         assert!(!selection.contains(rows[0].recording_id));
-        assert_eq!(selection.anchor(), 1, "the anchor stays put while extending");
+        assert_eq!(
+            selection.anchor(),
+            1,
+            "the anchor stays put while extending"
+        );
     }
 
     #[test]

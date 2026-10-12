@@ -497,7 +497,9 @@ impl RecordingTable<'_> {
                 output.batch = Some(BatchOperation::Transcribe(self.targets(selection, index)));
             }
             RowEvent::CopyIdentities(index) => {
-                output.batch = Some(BatchOperation::CopyIdentities(self.targets(selection, index)));
+                output.batch = Some(BatchOperation::CopyIdentities(
+                    self.targets(selection, index),
+                ));
             }
         }
     }
@@ -545,8 +547,7 @@ impl RecordingTable<'_> {
 /// when it changes.
 fn status_line(ui: &mut Ui, text: &str) {
     let response = ui.label(text);
-    response
-        .widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, text));
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, text));
     let announcement = text.to_owned();
     ui.ctx().accesskit_node_builder(response.id, |node| {
         node.set_role(accesskit::Role::Status);
@@ -649,8 +650,7 @@ fn annotate_row(
     // has — which `WidgetType` cannot express — and the rectangle the cells
     // occupied.
     let info_label = label.clone();
-    response
-        .widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Other, true, &info_label));
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Other, true, &info_label));
     response.ctx.accesskit_node_builder(response.id, |node| {
         node.set_role(accesskit::Role::Row);
         node.set_label(label);

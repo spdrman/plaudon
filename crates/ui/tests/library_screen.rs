@@ -11,8 +11,8 @@
 //! everywhere.
 
 use egui_kittest::kittest::{NodeT as _, Queryable as _};
-use egui_kittest::Node;
 use egui_kittest::Harness;
+use egui_kittest::Node;
 use plaudon_app::command::{AppCommand, AppResponse, CommandId};
 use plaudon_app::dto::{
     EventKind, ImportFilesResponse, ImportOutcome, ListRecordingsRequest, RecordingSortField,
@@ -115,11 +115,7 @@ fn harness_with_rows(count: usize) -> Harness<'static, LibraryApp> {
     let items = rows(count);
     harness.state_mut().respond(
         1,
-        Ok(AppResponse::ListRecordings(page(
-            items,
-            None,
-            count as u64,
-        ))),
+        Ok(AppResponse::ListRecordings(page(items, None, count as u64))),
     );
     harness.run();
     harness
@@ -153,9 +149,10 @@ fn the_first_frame_asks_for_the_first_page_with_no_cursor() {
 #[test]
 fn an_empty_library_offers_import_and_connect_plaud() {
     let mut harness = harness();
-    harness
-        .state_mut()
-        .respond(1, Ok(AppResponse::ListRecordings(page(Vec::new(), None, 0))));
+    harness.state_mut().respond(
+        1,
+        Ok(AppResponse::ListRecordings(page(Vec::new(), None, 0))),
+    );
     harness.run();
 
     assert!(a11y::has_label(&harness, "No recordings"));
@@ -164,10 +161,7 @@ fn an_empty_library_offers_import_and_connect_plaud() {
 
     harness.get_by_label("Import an audio file").click();
     harness.run();
-    assert!(harness
-        .state()
-        .intents
-        .contains(&LibraryIntent::PickFiles));
+    assert!(harness.state().intents.contains(&LibraryIntent::PickFiles));
 
     assert_ne!(
         visual::assert_snapshot(&mut harness, "library_empty"),
@@ -185,9 +179,10 @@ fn an_empty_result_under_a_filter_offers_to_clear_it_instead() {
     harness.run();
     // The sort restarted the chain; answer it with nothing.
     let id = harness.state().list_requests().len() as u64;
-    harness
-        .state_mut()
-        .respond(id, Ok(AppResponse::ListRecordings(page(Vec::new(), None, 0))));
+    harness.state_mut().respond(
+        id,
+        Ok(AppResponse::ListRecordings(page(Vec::new(), None, 0))),
+    );
     harness.run();
     // A sort is not a filter, so the unfiltered empty state is still right.
     assert!(a11y::has_label(&harness, "No recordings"));
@@ -250,11 +245,15 @@ fn an_unmeasured_duration_is_stated_and_never_drawn_as_zero() {
         .filter_map(|node| node.accesskit_node().label())
         .collect();
     assert!(
-        announced.iter().any(|label| label.contains("duration unknown")),
+        announced
+            .iter()
+            .any(|label| label.contains("duration unknown")),
         "the fixture library contains unmeasured recordings and none said so"
     );
     assert!(
-        !announced.iter().any(|label| label.contains("Duration 0:00")),
+        !announced
+            .iter()
+            .any(|label| label.contains("Duration 0:00")),
         "an unmeasured duration was rendered as a zero duration"
     );
 }
@@ -278,9 +277,10 @@ fn clicking_a_column_sorts_by_it_and_clicking_again_reverses() {
     assert_eq!(request.cursor, None, "a sort change restarts the chain");
 
     let id = harness.state().list_requests().len() as u64;
-    harness
-        .state_mut()
-        .respond(id, Ok(AppResponse::ListRecordings(page(rows(10), None, 10))));
+    harness.state_mut().respond(
+        id,
+        Ok(AppResponse::ListRecordings(page(rows(10), None, 10))),
+    );
     harness.run();
 
     harness
@@ -347,9 +347,10 @@ fn typing_in_the_search_field_issues_one_query_after_the_debounce() {
     harness.get_by_label("Search recordings").focus();
     harness.run();
     for character in ["b", "o", "a", "r", "d"] {
-        harness.input_mut().events.push(egui::Event::Text(
-            character.to_owned(),
-        ));
+        harness
+            .input_mut()
+            .events
+            .push(egui::Event::Text(character.to_owned()));
         harness.step();
     }
     assert_eq!(
@@ -439,9 +440,7 @@ fn the_arrow_keys_move_the_cursor_and_enter_opens_the_recording() {
         harness
             .state()
             .intents
-            .contains(&LibraryIntent::OpenRecording(
-                fixtures[2].recording_id
-            )),
+            .contains(&LibraryIntent::OpenRecording(fixtures[2].recording_id)),
         "Enter must open the row the cursor is on, not the one that was clicked"
     );
 }
@@ -583,10 +582,7 @@ fn dropping_files_forwards_their_paths_verbatim_to_import_files() {
     assert_eq!(requests.len(), 1);
     assert_eq!(
         requests[0].paths,
-        [
-            "/tmp/plaudon-test/board.wav",
-            "/tmp/plaudon-test/notes.txt"
-        ],
+        ["/tmp/plaudon-test/board.wav", "/tmp/plaudon-test/notes.txt"],
         "a dropped file is not filtered locally; Rust decides and says why"
     );
     assert_eq!(
@@ -640,8 +636,9 @@ fn a_rejected_file_is_reported_next_to_the_accepted_ones() {
 #[test]
 fn a_duplicate_asks_rather_than_deciding_for_the_user() {
     let mut harness = harness_with_rows(5);
-    harness.input_mut().dropped_files =
-        vec![std::sync::Arc::new(TestFile("/tmp/plaudon-test/copy.wav".into()))];
+    harness.input_mut().dropped_files = vec![std::sync::Arc::new(TestFile(
+        "/tmp/plaudon-test/copy.wav".into(),
+    ))];
     harness.step();
     harness.run();
 
@@ -766,5 +763,3 @@ fn the_hundred_row_library_matches_its_baseline() {
     ));
     visual::assert_snapshot(&mut harness, "library_100_rows");
 }
-
-
