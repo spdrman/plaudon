@@ -282,3 +282,64 @@ pub fn cloud_listing(items: Vec<PlaudItemSummary>) -> PlaudListResponse {
         ),
     }
 }
+
+/// The listing the Sources screen gets from the committed `@plaud-ai/cli`
+/// 0.3.15 capture.
+///
+/// Parsed by the shipped version-locked parser rather than typed out by hand,
+/// so the screen is exercised against the layout the real release prints: a
+/// vendor-truncated name, durations in the release's own `41m07s` spelling and
+/// no capture time at all, because that listing carries only a day-precision
+/// date with no timezone.
+pub fn plaud_0_3_15_listing() -> PlaudListResponse {
+    use plaudon_domain::source::SourceAccountScope;
+    use plaudon_source_plaud_cli::compatibility::CliCompatibilityTable;
+    use plaudon_source_plaud_cli::parser::{CliVersion, ListingCompleteness, VersionedParser};
+
+    let capture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/integration/fixtures/plaud-cli/v0.3.15-plaud-table/files.stdout");
+    let stdout = std::fs::read_to_string(&capture)
+        .unwrap_or_else(|error| panic!("the committed capture {}: {error}", capture.display()));
+    let table = CliCompatibilityTable::committed();
+    let row = table
+        .verdict(Some(&CliVersion::new("0.3.15")))
+        .row()
+        .cloned()
+        .expect("0.3.15 is in the committed compatibility table");
+    let page = VersionedParser::for_row(&row, SourceAccountScope::new("plaud:cloud-cli"))
+        .parse_listing(&stdout)
+        .expect("the committed capture parses");
+
+    PlaudListResponse {
+        source_id: "8f14e45f-ea0a-4f36-9f1a-000000000001".to_owned(),
+        items: page
+            .items
+            .iter()
+            .map(|item| PlaudItemSummary {
+                external_id: item
+                    .identity
+                    .external_id
+                    .as_ref()
+                    .expect("a listed recording has an identifier")
+                    .as_str()
+                    .to_owned(),
+                display_name: item.display_name.clone(),
+                captured_at: item.captured_at_ms.map(|ms| {
+                    time::OffsetDateTime::from_unix_timestamp_nanos(i128::from(ms) * 1_000_000)
+                        .expect("a representable instant")
+                        .format(&time::format_description::well_known::Rfc3339)
+                        .expect("rfc3339")
+                }),
+                duration_ms: item.duration_ms,
+                declared_byte_length: item.declared_byte_length,
+                imported_recording_id: None,
+            })
+            .collect(),
+        next_cursor: page.next_cursor.clone(),
+        completeness: match page.completeness {
+            ListingCompleteness::Complete => PlaudListingCompleteness::Complete,
+            ListingCompleteness::PossiblyIncomplete => PlaudListingCompleteness::PossiblyIncomplete,
+        },
+        empty_account_advisory: None,
+    }
+}

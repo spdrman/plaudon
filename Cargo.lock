@@ -5064,6 +5064,7 @@ dependencies = [
  "plaudon-audio-playback",
  "plaudon-craft-ui",
  "plaudon-domain",
+ "plaudon-source-plaud-cli",
  "plaudon-transcript-doc",
  "plaudon-ui-testkit",
  "serde_json",

@@ -1,0 +1,8 @@
+{
+  "version": "0.3.15",
+  "listing_format": "plaud_table_0_3",
+  "pagination_observed": true,
+  "account_scope": "plaud:eu:account-a",
+  "captured_on": "2026-10-12",
+  "note": "Layout captured byte for byte from @plaud-ai/cli 0.3.15 (commit 0fa20ec, built 2026-10-08) on macOS arm64: the column offsets, the two-space gutters, the U+2500 rule, the declared count and the 'Page N' footer are the real ones. Every value is synthetic. The real account's identifiers, recording names and signed URLs are private and are never committed; the second row reproduces the vendor's 35-character name truncation with U+2026."
+}

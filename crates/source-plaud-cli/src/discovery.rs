@@ -288,7 +288,7 @@ impl CliDiscovery {
             for directory in directories {
                 let candidate = directory.join(EXECUTABLE_LEAF);
                 if self.probe.is_executable_file(&candidate) {
-                    let program = self.probe.canonicalize(&candidate).unwrap_or(candidate);
+                    let program = self.resolved_candidate(&directory).unwrap_or(candidate);
                     return Ok(DiscoveredCli {
                         program,
                         origin,
@@ -306,6 +306,22 @@ impl CliDiscovery {
         shim.map_or(Err(DiscoveryError::NotFound), |shim| {
             Err(DiscoveryError::ShimRequiresInterpreter { shim })
         })
+    }
+
+    /// Resolve the *directory* of a candidate, never the executable itself.
+    ///
+    /// npm installs the CLI as a symlink from a `bin` directory into the
+    /// package (on macOS 2026-10-12: `/opt/homebrew/bin/plaud` ->
+    /// `/opt/homebrew/lib/node_modules/@plaud-ai/cli/dist/index.js`).
+    /// Canonicalizing the whole path would hand the launcher a program whose
+    /// leaf name is no longer the pinned `plaud`, and the egress allowlist
+    /// refuses that — correctly, because the pinned name is the property being
+    /// enforced. Resolving only the directory still strips `..` and symlinked
+    /// directories from the path we launch, which is what canonicalization was
+    /// there for.
+    fn resolved_candidate(&self, directory: &Path) -> Option<PathBuf> {
+        let resolved = self.probe.canonicalize(directory)?.join(EXECUTABLE_LEAF);
+        self.probe.is_executable_file(&resolved).then_some(resolved)
     }
 
     /// Accept a path the user picked, which must carry an approval record.
@@ -428,6 +444,39 @@ mod tests {
         assert_eq!(found.program, PathBuf::from("/opt/homebrew/bin/plaud"));
         assert_eq!(found.origin, DiscoveryOrigin::WellKnownLocation);
         assert!(found.approval.is_none());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_npm_symlink_is_launched_under_the_pinned_leaf_name() {
+        // How npm actually installs the CLI: a `bin` symlink into the package
+        // directory. Following that symlink all the way would produce
+        // `.../dist/index.js`, which the egress allowlist refuses because its
+        // leaf name is not `plaud`.
+        let root = tempfile::tempdir().expect("tempdir");
+        let bin = root.path().join("bin");
+        let package = root.path().join("lib/node_modules/@plaud-ai/cli/dist");
+        std::fs::create_dir_all(&bin).expect("bin");
+        std::fs::create_dir_all(&package).expect("package");
+        let real = package.join("index.js");
+        std::fs::write(&real, "#!/usr/bin/env node\n").expect("write");
+        std::fs::set_permissions(&real, std::os::unix::fs::PermissionsExt::from_mode(0o755))
+            .expect("chmod");
+        std::os::unix::fs::symlink(&real, bin.join(EXECUTABLE_LEAF)).expect("symlink");
+
+        let discovery = CliDiscovery::with_probe(
+            Arc::new(OsProbe),
+            [("PATH".to_owned(), bin.to_string_lossy().into_owned())]
+                .into_iter()
+                .collect(),
+        );
+        let found = discovery.discover().expect("discovered");
+        assert_eq!(
+            found.program.file_name().and_then(|leaf| leaf.to_str()),
+            Some(EXECUTABLE_LEAF)
+        );
+        assert!(found.program.is_absolute());
+        assert!(!found.program.to_string_lossy().contains("index.js"));
     }
 
     #[cfg(not(windows))]
