@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "item_id": "pub-news-003",
+  "engine_id": "whisper.cpp",
+  "model_id": "ggml-small-q5_1",
+  "model_version": "2026-01-30",
+  "deployment": "local",
+  "alignment_origin": "unavailable",
+  "text": "Die Baustelle wurde am 2026-03-14 um 9:30 Uhr gepruft.",
+  "words": [],
+  "segment_boundaries_ms": []
+}

@@ -6,12 +6,15 @@ members = [
     "tests/integration",
     "tests/chaos",
     "tests/hardware",
+    "tests/scale",
+    "tests/e2e",
     "tests/egress/monitor",
     "tests/egress/scenario",
     "tests/egress/harness",
 ]
-# `fuzz/` is a standalone cargo-fuzz package built with a nightly toolchain.
-exclude = ["fuzz"]
+# `fuzz/` is a standalone cargo-fuzz package; the ci-selftest fixtures are
+# deliberately broken crates that must fail their gates (scripts/ci-selftest.sh).
+exclude = ["fuzz", "tests/fixtures/ci-selftest"]
 
 [workspace.package]
 version = "0.1.0"
@@ -46,10 +49,15 @@ plaudon-export = { path = "crates/export" }
 plaudon-notifications = { path = "crates/notifications" }
 plaudon-automation = { path = "crates/automation" }
 plaudon-diagnostics = { path = "crates/diagnostics" }
+plaudon-eval = { path = "crates/eval" }
+plaudon-updater = { path = "crates/updater" }
+plaudon-release-tools = { path = "crates/release-tools" }
 
 argon2 = { version = "0.6", features = ["kdf"] }
 async-trait = "0.1"
+base64 = "0.22"
 clap = { version = "4", features = ["derive"] }
+ed25519-dalek = { version = "2", features = ["rand_core"] }
 fs4 = "1"
 chacha20poly1305 = { version = "0.10", features = ["stream"] }
 flate2 = "1"
@@ -73,6 +81,7 @@ tempfile = "3"
 thiserror = "2"
 time = { version = "0.3", features = ["formatting", "parsing", "macros"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs", "io-util", "process", "sync", "time"] }
+rand_core = { version = "0.6", features = ["getrandom"] }
 tokio-util = "0.7"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }

@@ -22,7 +22,7 @@ use plaudon_app_core::templates::TemplateRegistry;
 use plaudon_domain::ids::JobId;
 use plaudon_domain::ids::RecordingId;
 use plaudon_domain::media::Sha256Digest;
-use plaudon_eval::{
+use plaudon_extraction_eval::{
     apply_gate, compute_metrics, generate_report, load_corpus_file, CorpusFixture, MutationProfile,
     ReferenceModel, Thresholds,
 };
@@ -168,7 +168,7 @@ fn run_evaluation(out_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
 fn run_corpus_pipeline(
     fixture: &CorpusFixture,
     registry: &TemplateRegistry,
-) -> Result<plaudon_eval::EvalMetrics, Box<dyn std::error::Error>> {
+) -> Result<plaudon_extraction_eval::EvalMetrics, Box<dyn std::error::Error>> {
     // Build transcript revision
     let revision = fixture.to_transcript_revision();
     let revision_id = revision.id;
@@ -245,7 +245,7 @@ fn run_corpus_pipeline(
 fn check_thresholds(report_path: &Path) -> Result<bool, Box<dyn std::error::Error>> {
     // Load report
     let report_json = std::fs::read_to_string(report_path)?;
-    let report: plaudon_eval::EvalReport = serde_json::from_str(&report_json)?;
+    let report: plaudon_extraction_eval::EvalReport = serde_json::from_str(&report_json)?;
 
     // Load thresholds
     let threshold_path = PathBuf::from("docs/benchmarks/extraction-eval-thresholds.json");

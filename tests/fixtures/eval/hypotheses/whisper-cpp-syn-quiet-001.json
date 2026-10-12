@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "item_id": "syn-quiet-001",
+  "engine_id": "whisper.cpp",
+  "model_id": "ggml-small-q5_1",
+  "model_version": "2026-01-30",
+  "deployment": "local",
+  "alignment_origin": "native",
+  "text": "We tied the rebar on 2026-03-14 and poured 25 cubic yards of concrete. Thank you for watching.",
+  "words": [
+    { "text": "We", "start_ms": 0, "end_ms": 200 },
+    { "text": "tied", "start_ms": 200, "end_ms": 500 },
+    { "text": "the", "start_ms": 500, "end_ms": 650 },
+    { "text": "rebar", "start_ms": 650, "end_ms": 1100 },
+    { "text": "on", "start_ms": 1100, "end_ms": 1300 },
+    { "text": "2026-03-14", "start_ms": 1300, "end_ms": 2200 },
+    { "text": "and", "start_ms": 2200, "end_ms": 2400 },
+    { "text": "poured", "start_ms": 2400, "end_ms": 2800 },
+    { "text": "25", "start_ms": 2800, "end_ms": 3100 },
+    { "text": "cubic", "start_ms": 3100, "end_ms": 3500 },
+    { "text": "yards", "start_ms": 3500, "end_ms": 3900 },
+    { "text": "of", "start_ms": 3900, "end_ms": 4050 },
+    { "text": "concrete.", "start_ms": 4050, "end_ms": 4700 },
+    { "text": "Thank", "start_ms": 6000, "end_ms": 6400 },
+    { "text": "you", "start_ms": 6400, "end_ms": 6800 },
+    { "text": "for", "start_ms": 6800, "end_ms": 7000 },
+    { "text": "watching.", "start_ms": 7000, "end_ms": 7600 }
+  ],
+  "segment_boundaries_ms": [0, 2050, 4120, 6000],
+  "runtime": {
+    "audio_duration_ms": 60000,
+    "wall_clock_ms": 30000,
+    "time_to_first_result_ms": 1500,
+    "peak_rss_bytes": 419430400
+  }
+}

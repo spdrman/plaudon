@@ -1,0 +1,8 @@
+[package]
+name = "plaudon-selftest-agpl-dep"
+version = "0.0.0"
+edition = "2021"
+publish = false
+# The policy in deny.toml allows no copyleft licence that would reach a
+# redistributed binary. This declaration is what the gate must reject.
+license = "AGPL-3.0-only"

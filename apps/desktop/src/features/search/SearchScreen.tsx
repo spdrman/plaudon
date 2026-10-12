@@ -45,6 +45,7 @@ export function SearchScreen({ onNavigate }: SearchScreenProps) {
 
       {loading && <p role="status" aria-live="polite">Searching...</p>}
 
+      {!submitted && !loading && (
         <EmptyState title="Search library" body="Enter a search term to find content across all recordings" />
       )}
 
@@ -53,7 +54,7 @@ export function SearchScreen({ onNavigate }: SearchScreenProps) {
           <p>No results found for &ldquo;{query}&rdquo;</p>
           <Button onClick={() => setSubmitted(false)}>Clear search</Button>
         </EmptyState>
-
+      )}
       {submitted && !loading && !error && data && data.results.length > 0 && (
         <SearchResults results={data.results} onNavigate={onNavigate} onSeek={handleSeek} />
       )}

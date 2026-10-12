@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "item_id": "syn-quiet-001",
+  "text": "We tied the rebar on 2026-03-14 and poured 25 cubic yards of concrete.",
+  "domain_terms": ["rebar", "cubic yards"],
+  "silence_spans_ms": [{ "start_ms": 5000, "end_ms": 20000 }],
+  "segment_boundaries_ms": [0, 2000, 4000],
+  "quality_note": "Generator script, verbatim. The 5s-20s span is digital silence by construction."
+}

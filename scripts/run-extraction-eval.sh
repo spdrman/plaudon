@@ -21,7 +21,7 @@ mkdir -p target/eval
 
 # Run the evaluation
 echo "Running extraction evaluation suite..."
-cargo run --release -p plaudon-eval --bin extraction-eval -- \
+cargo run --release -p plaudon-extraction-eval --bin extraction-eval -- \
     --out target/eval/extraction-eval.json \
     --check
 

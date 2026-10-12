@@ -815,6 +815,7 @@ export interface SourceArtifactSummary {
 
 export interface ListSourceArtifactsResponse {
   artifacts: SourceArtifactSummary[];
+}
 
 /* ------------------------------------------------------------------ search */
 

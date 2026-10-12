@@ -1,0 +1,354 @@
+schema_version = 1
+quarantine_policy = "A scenario that fails intermittently is quarantined by editing this file — status becomes blocked-on with the flake ticket — never by adding a retry loop to the harness. CI retries nothing (spec 18.1)."
+
+[[scenarios]]
+number = 1
+title = "Fresh macOS install, manual MP3 import, local STT, local output if eligible, export Markdown with network blocked."
+platforms = ["macos", "windows"]
+status = "implemented"
+harness = "rust"
+test = "scenario_01_fresh_install_mp3_import_local_stt_export_offline"
+
+[[scenarios]]
+number = 2
+title = "Fresh Windows install, manual WAV import, whisper.cpp STT, transcript edit, export JSON with network blocked."
+platforms = ["macos", "windows"]
+status = "implemented"
+harness = "rust"
+test = "scenario_02_fresh_install_wav_import_edit_export_json_offline"
+
+[[scenarios]]
+number = 3
+title = "PLAUD CLI absent -> actionable setup and functional manual-import fallback."
+platforms = []
+status = "blocked-on"
+task = "K1.3"
+reason = "the cloud CLI connector and its absent-binary guidance are not merged yet"
+
+[[scenarios]]
+number = 4
+title = "PLAUD CLI authenticated -> supported record listing, import, deduplicate same ID/file/hash, view playable original."
+platforms = []
+status = "blocked-on"
+task = "K1.4"
+reason = "supported record listing and import through the cloud CLI are not merged yet"
+
+[[scenarios]]
+number = 5
+title = "PLAUD auth expires mid-poll -> safe pause and re-auth prompt; no dropped work."
+platforms = []
+status = "blocked-on"
+task = "K1.5"
+reason = "mid-poll re-authentication handling is not merged yet"
+
+[[scenarios]]
+number = 6
+title = "Download interrupted at every staged checkpoint -> resume or restart safely; no false-completed record."
+platforms = []
+status = "blocked-on"
+task = "K1.5"
+reason = "staged download checkpoints and resume are not merged yet"
+
+[[scenarios]]
+number = 7
+title = "Cloud STT denied by policy -> zero outgoing audio bytes."
+platforms = ["macos", "windows"]
+status = "implemented"
+harness = "rust"
+test = "scenario_07_cloud_stt_denied_sends_no_audio_bytes"
+
+[[scenarios]]
+number = 8
+title = "First OpenRouter cloud job -> explicit consent, price/retention disclosure, successful result, actual usage if supported."
+platforms = []
+status = "blocked-on"
+task = "G2.2"
+reason = "the OpenRouter consent, price and usage flow is not merged yet"
+
+[[scenarios]]
+number = 9
+title = "OpenRouter request times out after dispatch -> outcome uncertain; no automatic duplicate-billed retry."
+platforms = []
+status = "blocked-on"
+task = "G2.1"
+reason = "the inference-attempt ledger and uncertain-outcome handling are not merged yet"
+
+[[scenarios]]
+number = 10
+title = "Apple native model unavailable -> clear explanation and whisper.cpp fallback without changing cloud policy."
+platforms = []
+status = "blocked-on"
+task = "H2.2"
+reason = "the Apple availability downgrade path is not merged yet"
+
+[[scenarios]]
+number = 11
+title = "Transcript corrected -> new revision, old revision retrievable, previous summary labeled stale."
+platforms = []
+status = "blocked-on"
+task = "I1.4"
+reason = "stale-summary labelling needs the summarization pipeline"
+
+[[scenarios]]
+number = 12
+title = "Model fails JSON Schema -> visible failure or bounded repair; no fabricated structured fields."
+platforms = []
+status = "blocked-on"
+task = "I1.3"
+reason = "schema-failure and bounded repair need the structured output pipeline"
+
+[[scenarios]]
+number = 13
+title = "Action item lacking date -> `not specified`; evidence anchor resolves to original passage."
+platforms = []
+status = "blocked-on"
+task = "I2.1"
+reason = "evidence anchors need the grounding pipeline"
+
+[[scenarios]]
+number = 14
+title = "Restart/kill mid-job -> recovered queue, no partial output presented as final."
+platforms = ["macos", "windows"]
+status = "implemented"
+harness = "rust"
+test = "scenario_14_restart_mid_job_recovers_the_queue"
+
+[[scenarios]]
+number = 15
+title = "User revokes cloud consent during queue -> no new cloud dispatch after revocation."
+platforms = []
+status = "blocked-on"
+task = "G2.3"
+reason = "consent revocation mid-queue needs the cloud dispatch queue"
+
+[[scenarios]]
+number = 16
+title = "Delete recording -> removes intended managed derivatives, retains no dangling DB references."
+platforms = []
+status = "blocked-on"
+task = "backlog"
+reason = "no delete-recording command exists in the typed command set yet"
+
+[[scenarios]]
+number = 17
+title = "Export/restore -> restored media hashes and structured records match source manifest."
+platforms = []
+status = "blocked-on"
+task = "J2.3"
+reason = "portable archive export and restore are not merged yet"
+
+[[scenarios]]
+number = 18
+title = "Accessibility -> all critical flows keyboard-completable, tested with screen readers."
+platforms = ["macos", "windows"]
+status = "implemented"
+harness = "playwright"
+test = "keyboard-flow.spec.ts"
+
+[[scenarios]]
+number = 19
+title = "Watched folder: file written slowly to an iCloud/OneDrive-style folder -> no premature import, no source deletion, exactly one archived asset."
+platforms = []
+status = "blocked-on"
+task = "K2.2"
+reason = "watched-folder readiness detection is not merged yet"
+
+[[scenarios]]
+number = 20
+title = "Watched folder: rename, change and repeat events -> deterministic reconciliation, no duplicates or orphaned derivatives."
+platforms = []
+status = "blocked-on"
+task = "K2.2"
+reason = "watched-folder reconciliation is not merged yet"
+
+[[scenarios]]
+number = 21
+title = "PLAUD source metadata changed or remotely trashed -> local audio retained, status reflects source state, user tombstone respected."
+platforms = []
+status = "blocked-on"
+task = "K2.1"
+reason = "source reconciliation and tombstones are not merged yet"
+
+[[scenarios]]
+number = 22
+title = "Cloud STT request-style mismatch -> model marked incompatible rather than trying invalid endpoint or uploading unexpectedly."
+platforms = []
+status = "blocked-on"
+task = "G1.5"
+reason = "request-family compatibility marking is not merged yet"
+
+[[scenarios]]
+number = 23
+title = "User switches STT model for one recording -> new revision, original human edits and prior results remain intact."
+platforms = []
+status = "blocked-on"
+task = "G2.4"
+reason = "per-recording model override is not merged yet"
+
+[[scenarios]]
+number = 24
+title = "Local OS notice permitted/denied -> correct notification or in-app activity entry with privacy-safe text."
+platforms = ["macos", "windows"]
+status = "implemented"
+harness = "rust"
+test = "scenario_24_denied_os_notice_still_records_activity"
+
+[[scenarios]]
+number = 25
+title = "Q&A / study tool groundedness -> invalid anchors rejected, unsupported answers labeled, fixed transcript revision logged."
+platforms = []
+status = "blocked-on"
+task = "M1.2"
+reason = "the Q&A and study tool contract is not merged yet"
+
+[[scenarios]]
+number = 26
+title = "Portable archive exported and restored across OSes -> full media, transcripts, outputs and SHA matches; secret material absent."
+platforms = []
+status = "blocked-on"
+task = "J2.3"
+reason = "cross-OS portable archive restore is not merged yet"
+
+[[scenarios]]
+number = 27
+title = "Archive compromised by traversal, duplicate paths, decompression bomb or altered hash -> safe reject and no partial archive mutation."
+platforms = []
+status = "blocked-on"
+task = "J2.4"
+reason = "hostile archive rejection needs the archive reader"
+
+[[scenarios]]
+number = 28
+title = "PLAUD social-login incompatibility or region ambiguity -> actionable fallback without token-copy requests."
+platforms = []
+status = "blocked-on"
+task = "K1.2"
+reason = "social-login and region fallback guidance are not merged yet"
+
+[[scenarios]]
+number = 29
+title = "Background cloud processing queue + revoked consent -> no billing dispatch, even when a watched-folder event fires."
+platforms = []
+status = "blocked-on"
+task = "G2.3"
+reason = "background queue plus revoked consent needs the cloud dispatch queue"
+
+[[scenarios]]
+number = 30
+title = "Delete and rescan -> user-deleted local recording stays deleted until explicit user restore/import confirmation."
+platforms = []
+status = "blocked-on"
+task = "backlog"
+reason = "delete-and-rescan needs the delete-recording command"
+
+[[scenarios]]
+number = 31
+title = "On a verified legacy PLAUD Note/firmware, import `.ASR` through direct BLE into a staged object; decode and locally transcribe with external networking disabled."
+platforms = []
+status = "opt-in"
+opt_in_env = "PLAUDON_HARDWARE_TESTS"
+reason = "a verified legacy PLAUD Note and firmware must be physically attached (spec 18.3A)"
+
+[[scenarios]]
+number = 32
+title = "macOS Bluetooth permission denied or revoked during scan -> actionable recovery; no app crash or unauthorized access attempt."
+platforms = []
+status = "opt-in"
+opt_in_env = "PLAUDON_HARDWARE_TESTS"
+reason = "macOS Bluetooth permission revocation can only be exercised against the real OS permission prompt"
+
+[[scenarios]]
+number = 33
+title = "Windows BLE radio unavailable/reconnect after suspend -> persistent job state and successful clean restart."
+platforms = []
+status = "opt-in"
+opt_in_env = "PLAUDON_HARDWARE_TESTS"
+reason = "a Windows BLE radio and a real suspend cycle are required"
+
+[[scenarios]]
+number = 34
+title = "Wrong or absent device secret -> no vendor file command; no fallback to anonymous data extraction or PLAUD Cloud."
+platforms = []
+status = "blocked-on"
+task = "L1.4"
+reason = "device-secret enforcement is not merged yet"
+
+[[scenarios]]
+number = 35
+title = "New encrypted-mode firmware -> `UNSUPPORTED_FIRMWARE`/`AUTH_MODE_UNSUPPORTED`, no legacy downgrade and no token leak."
+platforms = []
+status = "blocked-on"
+task = "L1.3"
+reason = "encrypted-mode firmware refusal is not merged yet"
+
+[[scenarios]]
+number = 36
+title = "Device already synced with phone and returns no unsynced recordings -> explicit incompleteness explanation; no fabricated recordings."
+platforms = []
+status = "blocked-on"
+task = "L2.1"
+reason = "unsynced-delta incompleteness reporting is not merged yet"
+
+[[scenarios]]
+number = 37
+title = "Transfer interrupted at every chunk boundary -> verified resume if supported or safe restart; `.part` never becomes committed archive media."
+platforms = []
+status = "blocked-on"
+task = "L1.5"
+reason = "chunk-boundary resume and staging are not merged yet"
+
+[[scenarios]]
+number = 38
+title = "Original-note mounted USB volume (where supported) -> read-only import preserves full WAV source and never mutates the filesystem."
+platforms = []
+status = "opt-in"
+opt_in_env = "PLAUDON_HARDWARE_TESTS"
+reason = "a mounted original Note USB volume is required; no simulator produces the vendor filesystem"
+
+[[scenarios]]
+number = 39
+title = "Note Pro/NotePin S unsupported USB -> no misleading instruction to mount them; relevant supported alternatives offered."
+platforms = []
+status = "blocked-on"
+task = "L2.3"
+reason = "the unsupported-USB guidance path is not merged yet"
+
+[[scenarios]]
+number = 40
+title = "An attacker advertises `PLAUD_NOTE` or replays a malformed BLE frame -> identity/auth validation rejects or marks unverified; no crash or out-of-bounds allocation."
+platforms = []
+status = "blocked-on"
+task = "L1.2"
+reason = "spoofed-advertisement rejection needs the discovery and authentication adapter"
+
+[[scenarios]]
+number = 41
+title = "Direct-device import under Local-only Mode -> zero HTTP calls, no model downloads, no PLAUD account login, no OpenRouter dispatch, verified local STT and outputs."
+platforms = []
+status = "blocked-on"
+task = "L2.4"
+reason = "direct-device import under Local-only Mode needs the acquisition service"
+
+[[scenarios]]
+number = 42
+title = "Read-only acquisition emits no `deleteFile`, `clearAllFile`, recording control, settings write, device privacy toggle or OTA opcode; a golden opcode trace proves the restriction."
+platforms = []
+status = "blocked-on"
+task = "L1.1"
+reason = "the golden read-only opcode trace needs the acquisition service"
+
+[[scenarios]]
+number = 43
+title = "Same recording arrives from BLE, legacy USB and cloud export -> source provenance preserved, content-addressed dedupe by actual bytes; quality variants not incorrectly collapsed."
+platforms = []
+status = "blocked-on"
+task = "L2.2"
+reason = "tri-source provenance dedupe needs the device and cloud adapters"
+
+[[scenarios]]
+number = 44
+title = "A firmware update or changed BLE service map invalidates cached capability; rescan requires verification, not unprompted authorization reuse."
+platforms = []
+status = "blocked-on"
+task = "L1.2"
+reason = "capability-cache invalidation needs the discovery adapter"

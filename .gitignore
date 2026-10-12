@@ -21,3 +21,7 @@ apps/desktop/e2e/**/*.js
 apps/desktop/*.config.js
 apps/desktop/vitest.setup.js
 apps/desktop/*.tsbuildinfo
+
+# Release and CI working artifacts
+ci-artifacts/
+dist/

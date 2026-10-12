@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "item_id": "syn-quiet-001",
+  "engine_id": "apple.speech",
+  "model_id": "SFSpeechRecognizer",
+  "deployment": "local",
+  "alignment_origin": "unavailable",
+  "text": "We tied the rebar on 2026-03-14 and poured 25 cubic yards of concrete.",
+  "words": [],
+  "segment_boundaries_ms": [],
+  "runtime": {
+    "audio_duration_ms": 60000,
+    "wall_clock_ms": 12000,
+    "time_to_first_result_ms": 800,
+    "peak_rss_bytes": 83886080
+  }
+}

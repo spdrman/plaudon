@@ -1,0 +1,12 @@
+# CI self-test fixture: this workspace MUST fail `cargo deny check licenses`,
+# because it depends on a crate carrying a licence the policy does not allow.
+[package]
+name = "plaudon-selftest-forbidden-license"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+plaudon-selftest-agpl-dep = { path = "agpl-dep" }

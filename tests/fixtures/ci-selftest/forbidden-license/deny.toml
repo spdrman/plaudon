@@ -1,0 +1,38 @@
+# Software composition and licence policy (spec 18.8, A1.5).
+#
+# The allowlist is the set of licences we have reviewed and can comply with for
+# a redistributed desktop binary. A dependency carrying anything else fails the
+# build until it is reviewed and either added here or removed. Copyleft
+# licences that would reach our distributed binary are deliberately absent.
+
+[graph]
+all-features = true
+
+[licenses]
+version = 2
+confidence-threshold = 0.9
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "Unicode-3.0",
+    "MPL-2.0",
+    "CC0-1.0",
+    "Unlicense",
+    "BSL-1.0",
+]
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+# Never link a GPL/AGPL implementation into the shipped binary (ADR-0009).
+deny = []
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

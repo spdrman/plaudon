@@ -1,0 +1,782 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.local/schemas/evaluation-report.v1.schema.json",
+  "title": "AI evaluation report v1",
+  "description": "One offline evaluation run of one engine and model over a consent-cleared corpus (spec 17.1, 17.2, 17.6). Spec 17.2 requires sample size, locale, reference quality and hardware details to be published, so this schema requires them. A metric without a denominator, or a runtime figure the producing process did not record, is null: never zero.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "tool_version",
+    "engine",
+    "corpus",
+    "sample",
+    "reference_quality",
+    "environment",
+    "metrics",
+    "per_item",
+    "frozen_thresholds"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "tool_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "engine": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "engine_id",
+        "model_id",
+        "model_version",
+        "deployment",
+        "cloud_opt_in"
+      ],
+      "properties": {
+        "engine_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model_version": {
+          "type": ["string", "null"]
+        },
+        "deployment": {
+          "enum": ["local", "cloud"]
+        },
+        "cloud_opt_in": {
+          "type": "boolean"
+        }
+      }
+    },
+    "corpus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "corpus_id",
+        "manifest_sha256",
+        "items_declared",
+        "items_cleared",
+        "items_evaluated",
+        "excluded",
+        "missing_hypotheses"
+      ],
+      "properties": {
+        "corpus_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "manifest_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "items_declared": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "items_cleared": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "items_evaluated": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "excluded": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["item_id", "reasons"],
+            "properties": {
+              "item_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "reasons": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "$ref": "#/$defs/clearance_reason"
+                }
+              }
+            }
+          }
+        },
+        "missing_hypotheses": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "sample": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evaluated_items",
+        "locale_breakdown",
+        "duration_bucket_breakdown",
+        "items_with_overlapping_speech",
+        "multi_speaker_items",
+        "total_audio_ms"
+      ],
+      "properties": {
+        "evaluated_items": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "locale_breakdown": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "duration_bucket_breakdown": {
+          "type": "object",
+          "propertyNames": {
+            "enum": ["1min", "10min", "60min", "180min"]
+          },
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "items_with_overlapping_speech": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "multi_speaker_items": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "total_audio_ms": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        }
+      }
+    },
+    "reference_quality": {
+      "type": "string",
+      "minLength": 1
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "os",
+        "os_version",
+        "cpu",
+        "ram_bytes",
+        "commit",
+        "measured_on"
+      ],
+      "properties": {
+        "os": {
+          "type": "string",
+          "minLength": 1
+        },
+        "os_version": {
+          "type": ["string", "null"]
+        },
+        "cpu": {
+          "type": ["string", "null"]
+        },
+        "ram_bytes": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "commit": {
+          "type": ["string", "null"]
+        },
+        "measured_on": {
+          "type": "integer",
+          "description": "Milliseconds since the Unix epoch, UTC."
+        }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "word_error_rate",
+        "character_error_rate",
+        "domain_term_accuracy",
+        "numeric_accuracy",
+        "silence_hallucination",
+        "timestamp_error",
+        "runtime"
+      ],
+      "properties": {
+        "word_error_rate": {
+          "$ref": "#/$defs/error_rate"
+        },
+        "character_error_rate": {
+          "$ref": "#/$defs/error_rate"
+        },
+        "domain_term_accuracy": {
+          "$ref": "#/$defs/domain_term_accuracy"
+        },
+        "numeric_accuracy": {
+          "$ref": "#/$defs/numeric_accuracy"
+        },
+        "silence_hallucination": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/silence"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "timestamp_error": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/timestamp_error"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "runtime": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "items_with_runtime",
+            "items_without_runtime",
+            "total_audio_ms",
+            "total_wall_clock_ms",
+            "real_time_factor",
+            "mean_time_to_first_result_ms",
+            "time_to_first_result_samples",
+            "peak_rss_bytes",
+            "metered_cost_micro_usd"
+          ],
+          "properties": {
+            "items_with_runtime": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "items_without_runtime": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "total_audio_ms": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "total_wall_clock_ms": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "real_time_factor": {
+              "type": ["number", "null"],
+              "minimum": 0
+            },
+            "mean_time_to_first_result_ms": {
+              "type": ["number", "null"],
+              "minimum": 0
+            },
+            "time_to_first_result_samples": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "peak_rss_bytes": {
+              "type": ["integer", "null"],
+              "minimum": 0
+            },
+            "metered_cost_micro_usd": {
+              "type": ["integer", "null"],
+              "minimum": 0
+            }
+          }
+        }
+      }
+    },
+    "per_item": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "item_id",
+          "locale",
+          "duration_bucket",
+          "speaker_count",
+          "alignment_origin",
+          "word_error_rate",
+          "character_error_rate",
+          "domain_term_accuracy",
+          "numeric_accuracy",
+          "silence_hallucination",
+          "hallucinated_words",
+          "timestamp_error",
+          "runtime"
+        ],
+        "properties": {
+          "item_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "locale": {
+            "type": "string",
+            "minLength": 2
+          },
+          "duration_bucket": {
+            "enum": ["1min", "10min", "60min", "180min"]
+          },
+          "speaker_count": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "alignment_origin": {
+            "enum": ["native", "derived", "unavailable"]
+          },
+          "word_error_rate": {
+            "$ref": "#/$defs/error_rate"
+          },
+          "character_error_rate": {
+            "$ref": "#/$defs/error_rate"
+          },
+          "domain_term_accuracy": {
+            "$ref": "#/$defs/domain_term_accuracy"
+          },
+          "numeric_accuracy": {
+            "$ref": "#/$defs/numeric_accuracy"
+          },
+          "silence_hallucination": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/silence"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "hallucinated_words": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/timed_word"
+            }
+          },
+          "timestamp_error": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/timestamp_error"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "runtime": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/item_runtime"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "frozen_thresholds": {
+      "type": "object",
+      "description": "Spec 17.6 defers numeric quality thresholds. The section is published either way so a release reviewer sees `deferred` rather than nothing.",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "spec_reference",
+        "note",
+        "evidence_bundle",
+        "thresholds"
+      ],
+      "properties": {
+        "status": {
+          "enum": ["deferred", "frozen"]
+        },
+        "spec_reference": {
+          "type": "string",
+          "minLength": 1
+        },
+        "note": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence_bundle": {
+          "type": ["string", "null"]
+        },
+        "thresholds": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["metric", "comparator", "value", "frozen_on"],
+            "properties": {
+              "metric": {
+                "enum": [
+                  "word_error_rate",
+                  "character_error_rate",
+                  "domain_term_recall",
+                  "numeric_recall",
+                  "silence_words_per_minute",
+                  "timestamp_mean_abs_ms",
+                  "real_time_factor",
+                  "peak_rss_bytes"
+                ]
+              },
+              "comparator": {
+                "enum": ["at_most", "at_least"]
+              },
+              "value": {
+                "type": "number"
+              },
+              "frozen_on": {
+                "type": ["integer", "null"]
+              }
+            }
+          }
+        }
+      },
+      "if": {
+        "properties": {
+          "status": {
+            "const": "deferred"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "thresholds": {
+            "maxItems": 0
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "clearance_reason": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code"],
+      "properties": {
+        "code": {
+          "enum": [
+            "consent_not_cleared",
+            "missing_license",
+            "confidential_real_client",
+            "missing_source_attribution",
+            "missing_reference_transcript"
+          ]
+        },
+        "status": {
+          "enum": [
+            "synthetic",
+            "opt_in_consented",
+            "public_licensed",
+            "unverified"
+          ]
+        }
+      }
+    },
+    "error_rate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rate",
+        "edits",
+        "substitutions",
+        "deletions",
+        "insertions",
+        "reference_length"
+      ],
+      "properties": {
+        "rate": {
+          "type": ["number", "null"],
+          "minimum": 0
+        },
+        "edits": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "substitutions": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "deletions": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "insertions": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "reference_length": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "domain_term_accuracy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "recall",
+        "matched",
+        "expected",
+        "terms",
+        "absent_from_reference"
+      ],
+      "properties": {
+        "recall": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 1
+        },
+        "matched": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "expected": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "terms": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "term",
+              "reference_occurrences",
+              "hypothesis_occurrences"
+            ],
+            "properties": {
+              "term": {
+                "type": "string",
+                "minLength": 1
+              },
+              "reference_occurrences": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "hypothesis_occurrences": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        },
+        "absent_from_reference": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "numeric_accuracy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["recall", "matched", "expected", "per_kind", "invented"],
+      "properties": {
+        "recall": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 1
+        },
+        "matched": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "expected": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "per_kind": {
+          "type": "object",
+          "propertyNames": {
+            "enum": ["number", "date", "amount"]
+          },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["matched", "expected"],
+            "properties": {
+              "matched": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "expected": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        },
+        "invented": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["text", "kind"],
+            "properties": {
+              "text": {
+                "type": "string",
+                "minLength": 1
+              },
+              "kind": {
+                "enum": ["number", "date", "amount"]
+              }
+            }
+          }
+        }
+      }
+    },
+    "silence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "spans",
+        "silent_ms",
+        "spans_with_content",
+        "words_in_silence",
+        "hypothesis_words",
+        "words_per_silent_minute",
+        "fraction_of_hypothesis_words"
+      ],
+      "properties": {
+        "spans": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "silent_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "spans_with_content": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "words_in_silence": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "hypothesis_words": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "words_per_silent_minute": {
+          "type": ["number", "null"],
+          "minimum": 0
+        },
+        "fraction_of_hypothesis_words": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "timestamp_error": {
+      "type": "object",
+      "description": "Only present when the hypothesis alignment origin is native or derived. An unavailable alignment serializes as null, never as zero.",
+      "additionalProperties": false,
+      "required": [
+        "mean_abs_ms",
+        "median_abs_ms",
+        "max_abs_ms",
+        "compared_boundaries"
+      ],
+      "properties": {
+        "mean_abs_ms": {
+          "type": "number",
+          "minimum": 0
+        },
+        "median_abs_ms": {
+          "type": "number",
+          "minimum": 0
+        },
+        "max_abs_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "compared_boundaries": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "timed_word": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text", "start_ms", "end_ms"],
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "start_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "end_ms": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "item_runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "audio_duration_ms",
+        "wall_clock_ms",
+        "real_time_factor",
+        "time_to_first_result_ms",
+        "peak_rss_bytes",
+        "metered_cost_micro_usd"
+      ],
+      "properties": {
+        "audio_duration_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "wall_clock_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "real_time_factor": {
+          "type": ["number", "null"],
+          "minimum": 0
+        },
+        "time_to_first_result_ms": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "peak_rss_bytes": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "metered_cost_micro_usd": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        }
+      }
+    }
+  }
+}

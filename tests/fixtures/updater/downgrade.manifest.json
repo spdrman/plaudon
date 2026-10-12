@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "manifest": {
+    "version": "0.9.0",
+    "minimum_supported_version": "0.9.0",
+    "target": {
+      "platform": "mac_os",
+      "arch": "aarch64"
+    },
+    "package_url": "https://updates.plaudon.app/stable/plaudon-0.9.0.pkg",
+    "package_sha256": "a9199d86adf3c4737a651c37d4c2a89a297d1428731ef11aeb55e8e3fe437db0",
+    "package_size": 512,
+    "package_signature": "nXIPfTqtKkKk6DoUrZ28jTg1MwdAzizcYUdYXdXHQfsmt7ropb1z8sagAcKMXA0hSP5ie4r5e3nCDfcGUtpTBA=="
+  },
+  "signing_key_id": "plaudon-test-only-2026a",
+  "manifest_signature": "ko91Dv1BhHLQUJSf9cbitwF5AdCJ5h+BRWPayi7jE2NN1V2fNb7UJrJzmAO2VJF7uBVC9c0taciH99e7BuHhBg=="
+}

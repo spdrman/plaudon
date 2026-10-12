@@ -24,6 +24,7 @@ pub mod media;
 pub mod notify;
 pub mod ports;
 pub mod secrets;
+pub mod updater;
 pub mod validate;
 
 use std::path::{Path, PathBuf};
@@ -253,6 +254,22 @@ pub fn run() {
                 secrets,
                 default_approved_roots(),
             ))?;
+
+            // Spec 16.5 and 22(8): opening the update root runs crash
+            // recovery, discarding any uncommitted attempt so the launched
+            // version is always a complete, previously verified one. A root
+            // that does not exist yet is not an error: this build was
+            // installed by the packaged installer, not by the updater.
+            match updater::UpdateService::open(&data_dir, true) {
+                Ok(service) => match service.installed_version() {
+                    Ok(version) => tracing::info!(%version, "update state recovered"),
+                    Err(error) => tracing::warn!(%error, "update state is unreadable"),
+                },
+                Err(error) => {
+                    tracing::debug!(%error, "no update root yet; nothing to recover");
+                }
+            }
+
             tauri::Manager::manage(app, AppState { ports });
             Ok(())
         })

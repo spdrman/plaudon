@@ -1,0 +1,12 @@
+# CI self-test fixture: a registry that omits required spec 18.7 scenarios.
+# `plaudon-release scenarios` must reject it.
+schema_version = 1
+quarantine_policy = "fixture"
+
+[[scenarios]]
+number = 1
+title = "Fresh macOS install, manual MP3 import, local STT, local output if eligible, export Markdown with network blocked."
+platforms = ["macos"]
+status = "implemented"
+harness = "rust"
+test = "scenario_01_fresh_install_mp3_import_local_stt_export_offline"
