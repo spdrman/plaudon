@@ -21,5 +21,14 @@ plaudon-transcript-doc = { workspace = true }
 plaudon-audio-playback = { workspace = true }
 
 [dev-dependencies]
+# Text hit-testing is geometry: `Galley::cursor_from_pos` can only answer which
+# character the pointer is over if the glyphs were laid out with a real font.
+# The workspace entry disables egui's default features, so without this the
+# test build links no font at all, every galley comes out with zero glyphs and
+# every pointer lands on offset 0 — click-to-place-caret, drag-select and
+# double-click-to-select-a-word would all silently assert nothing. The shipped
+# binary turns the same feature on (`apps/plaudon-egui`), so this keeps the
+# tests measuring what the application does.
+egui = { workspace = true, features = ["default_fonts"] }
 egui_kittest = { workspace = true }
 tempfile = { workspace = true }
