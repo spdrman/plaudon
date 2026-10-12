@@ -348,7 +348,7 @@ fn the_activity_history_reads_its_page_and_its_links_navigate() {
         .state_mut()
         .answer(AppResponse::ListActivity(activity_page()));
     harness.run_steps(2);
-    assert!(says(&harness, "Board meeting"));
+    assert!(says(&harness, "Board meeting"), "{:?}", announced(&harness));
 
     click_button(&mut harness, "Open the job for Board meeting");
     assert_eq!(

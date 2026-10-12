@@ -22,6 +22,11 @@ fn dto(speaker: &Speaker) -> SpeakerDto {
     SpeakerDto {
         speaker_id: speaker.id,
         recording_id: speaker.recording_id,
+        cluster_key: speaker
+            .cluster_key
+            .as_ref()
+            .map(|key| key.as_str().to_owned()),
+        person_id: speaker.person_id,
         label: speaker.label.clone(),
         name: speaker.name.clone(),
         confirmed: speaker.user_confirmed,

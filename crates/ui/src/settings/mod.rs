@@ -43,8 +43,8 @@ pub mod updater;
 use egui::Ui;
 use plaudon_app::command::{AppCommand, AppResponse};
 use plaudon_app::dto::{
-    Capabilities, ListLocalModelsResponse, LocalOnlyModeResponse, OsNotificationPermission,
-    Preferences,
+    Capabilities, EmptyRequest, ListLocalModelsResponse, LocalOnlyModeResponse,
+    OsNotificationPermission, Preferences, VoiceProfileSettingsDto,
 };
 use plaudon_app::settings_presentation::UpdateStatus;
 use plaudon_app::shortcuts::{ShortcutBindings, ShortcutSpec};
@@ -89,6 +89,11 @@ pub struct SettingsData {
     /// What the operating system said about notifications the last time a
     /// preference was written.
     pub notification_permission: Option<OsNotificationPermission>,
+    /// The last `get_voice_profile_settings` or `set_voice_profiles_enabled`
+    /// answer (VP-090). `None` means the settings have not been read, which
+    /// the block renders as such: the feature is off until something says
+    /// otherwise, and a missing answer is not a reading of the switch.
+    pub voice_profiles: Option<VoiceProfileSettingsDto>,
 }
 
 impl SettingsData {
@@ -116,6 +121,7 @@ impl SettingsData {
             AppCommand::GetShortcuts,
             AppCommand::ListLocalModels,
             AppCommand::GetUpdateStatus,
+            AppCommand::GetVoiceProfileSettings(EmptyRequest {}),
         ]
     }
 
@@ -142,6 +148,11 @@ impl SettingsData {
             }
             AppResponse::GetUpdateStatus(status) => {
                 self.update = Some(status.clone());
+                true
+            }
+            AppResponse::GetVoiceProfileSettings(settings)
+            | AppResponse::SetVoiceProfilesEnabled(settings) => {
+                self.voice_profiles = Some(settings.clone());
                 true
             }
             AppResponse::SetLocalOnlyMode(policy) => {

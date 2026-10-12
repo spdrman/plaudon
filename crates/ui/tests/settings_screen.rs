@@ -95,7 +95,10 @@ fn the_screen_opens_by_reading_exactly_what_its_sections_render() {
             "get_capabilities",
             "get_shortcuts",
             "list_local_models",
-            "get_update_status"
+            "get_update_status",
+            // The Privacy section's voice-profile block (VP-090) renders
+            // from this one, and it is off by default until it answers.
+            "get_voice_profile_settings"
         ]
     );
 }

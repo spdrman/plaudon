@@ -8,7 +8,8 @@
 //!
 //! Ported from the React shell's `app/router.ts`, including the ordering
 //! comment: Devices is last so `Mod+1`…`Mod+5` keep the meaning they had
-//! before Devices existed.
+//! before Devices existed — and People, which the React shell never had, is
+//! appended after it for the same reason (`VOICE_PROFILES_SPEC` VP-091).
 
 /// A top-level destination in the navigation rail.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -25,18 +26,21 @@ pub enum Destination {
     Settings,
     /// PLAUD devices.
     Devices,
+    /// The master speaker list (`VOICE_PROFILES_SPEC` §9A, VP-091).
+    People,
 }
 
 impl Destination {
-    /// Every destination, in navigation order. `Mod+1`…`Mod+6` index into
+    /// Every destination, in navigation order. `Mod+1`…`Mod+7` index into
     /// this array, so the order is part of the contract.
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::Library,
         Self::Inbox,
         Self::Jobs,
         Self::Templates,
         Self::Settings,
         Self::Devices,
+        Self::People,
     ];
 
     /// The stable identifier, matching `router.ts`'s `DESTINATIONS`.
@@ -49,6 +53,7 @@ impl Destination {
             Self::Templates => "templates",
             Self::Settings => "settings",
             Self::Devices => "devices",
+            Self::People => "people",
         }
     }
 
@@ -62,6 +67,7 @@ impl Destination {
             Self::Templates => "Templates",
             Self::Settings => "Settings",
             Self::Devices => "Devices",
+            Self::People => "People",
         }
     }
 
@@ -78,6 +84,7 @@ impl Destination {
             Self::Templates => "T",
             Self::Settings => "S",
             Self::Devices => "D",
+            Self::People => "P",
         }
     }
 
@@ -90,6 +97,7 @@ impl Destination {
             Self::Jobs | Self::Templates => "O2.2 (#206)",
             Self::Devices => "O2.3 (#207)",
             Self::Settings => "O2.4 (#208)",
+            Self::People => "P2.1 (#244)",
         }
     }
 
@@ -103,6 +111,7 @@ impl Destination {
             Self::Templates => Route::Templates,
             Self::Settings => Route::Settings,
             Self::Devices => Route::Devices,
+            Self::People => Route::People,
         }
     }
 
@@ -153,6 +162,8 @@ pub enum Route {
         /// The peripheral being shown.
         peripheral_id: String,
     },
+    /// The master speaker list (`VOICE_PROFILES_SPEC` §9A).
+    People,
 }
 
 impl Route {
@@ -170,6 +181,7 @@ impl Route {
                 Destination::Settings
             }
             Self::Devices | Self::DevicesDevice { .. } => Destination::Devices,
+            Self::People => Destination::People,
         }
     }
 
@@ -203,6 +215,7 @@ impl Route {
             Self::SettingsSources => "/settings/sources".to_owned(),
             Self::Devices => "/devices".to_owned(),
             Self::DevicesDevice { peripheral_id } => format!("/devices/{peripheral_id}"),
+            Self::People => "/people".to_owned(),
         }
     }
 
@@ -239,6 +252,7 @@ impl Route {
             (Some("devices"), Some(id)) => Self::DevicesDevice {
                 peripheral_id: id.to_owned(),
             },
+            (Some("people"), _) => Self::People,
             _ => Self::Library,
         }
     }
@@ -249,7 +263,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_six_destinations_keep_the_order_the_shortcuts_depend_on() {
+    fn the_seven_destinations_keep_the_order_the_shortcuts_depend_on() {
         let ids: Vec<&str> = Destination::ALL.iter().map(|d| d.id()).collect();
         assert_eq!(
             ids,
@@ -259,12 +273,14 @@ mod tests {
                 "jobs",
                 "templates",
                 "settings",
-                "devices"
+                "devices",
+                "people"
             ]
         );
         assert_eq!(Destination::from_index(1), Some(Destination::Library));
         assert_eq!(Destination::from_index(6), Some(Destination::Devices));
-        assert_eq!(Destination::from_index(7), None);
+        assert_eq!(Destination::from_index(7), Some(Destination::People));
+        assert_eq!(Destination::from_index(8), None);
         assert_eq!(Destination::from_index(0), None);
     }
 
@@ -289,8 +305,13 @@ mod tests {
             Route::DevicesDevice {
                 peripheral_id: "p1".to_owned(),
             },
+            Route::People,
         ];
-        assert_eq!(routes.len(), 12, "router.ts publishes twelve variants");
+        assert_eq!(
+            routes.len(),
+            13,
+            "router.ts published twelve variants; People is the thirteenth"
+        );
         for route in &routes {
             assert!(Destination::ALL.contains(&route.destination()));
         }
@@ -317,6 +338,7 @@ mod tests {
             Route::DevicesDevice {
                 peripheral_id: "dev-2".to_owned(),
             },
+            Route::People,
         ] {
             assert_eq!(Route::parse(&route.path()), route);
         }

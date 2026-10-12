@@ -271,7 +271,7 @@ impl LocalBackend {
             bool,
             Option<crate::dto::SpeakerDto>,
             Option<PersonRefDto>,
-            u32,
+            Vec<u32>,
             u32,
         ),
         AppError,
@@ -298,7 +298,7 @@ impl LocalBackend {
             applied.applied,
             Some(applied.speaker),
             applied.person,
-            applied.segments_assigned,
+            applied.assigned_segments,
             applied.segment_exceptions,
         ))
     }
@@ -657,7 +657,7 @@ impl VoiceProfilesPort for LocalBackend {
         // The assignment is attempted first: with per-segment exceptions and
         // no overwrite the answer is a disclosure, and settling the suggestion
         // then would record a decision the user has not made yet (VP-211).
-        let (applied, speaker, person, segments_assigned, segment_exceptions) = self
+        let (applied, speaker, person, assigned_segments, segment_exceptions) = self
             .assign_from_suggestion(&row, row.person_id, overwrite_segment_exceptions)
             .await?;
         if !applied {
@@ -667,7 +667,7 @@ impl VoiceProfilesPort for LocalBackend {
                 applied: false,
                 speaker,
                 person: None,
-                segments_assigned,
+                assigned_segments,
                 segment_exceptions,
             });
         }
@@ -682,7 +682,7 @@ impl VoiceProfilesPort for LocalBackend {
             applied: true,
             speaker,
             person,
-            segments_assigned,
+            assigned_segments,
             segment_exceptions,
         })
     }
@@ -723,7 +723,7 @@ impl VoiceProfilesPort for LocalBackend {
                 applied: false,
                 speaker: None,
                 person: None,
-                segments_assigned: 0,
+                assigned_segments: Vec::new(),
                 segment_exceptions: 0,
             });
         };
@@ -734,7 +734,7 @@ impl VoiceProfilesPort for LocalBackend {
                 "a correction has to name somebody other than the suggested person",
             ));
         }
-        let (applied, speaker, person, segments_assigned, segment_exceptions) = self
+        let (applied, speaker, person, assigned_segments, segment_exceptions) = self
             .assign_from_suggestion(&row, corrected, overwrite_segment_exceptions)
             .await?;
         if !applied {
@@ -744,7 +744,7 @@ impl VoiceProfilesPort for LocalBackend {
                 applied: false,
                 speaker,
                 person: None,
-                segments_assigned,
+                assigned_segments,
                 segment_exceptions,
             });
         }
@@ -758,7 +758,7 @@ impl VoiceProfilesPort for LocalBackend {
             applied: true,
             speaker,
             person,
-            segments_assigned,
+            assigned_segments,
             segment_exceptions,
         })
     }

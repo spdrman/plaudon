@@ -228,6 +228,27 @@ impl EngineConfig {
         self
     }
 
+    /// Replace the diarizer, the speaker embedder and the credential store
+    /// the voice-profile tier uses.
+    ///
+    /// Tests use this to run enrolment and matching with no model file and no
+    /// OS keychain. This build ships no ONNX tier, so without it a match job
+    /// parks in `waiting_for_model` (VP-042).
+    #[must_use]
+    pub fn with_voice_engines(
+        mut self,
+        diarizer: Arc<dyn plaudon_ai_diarization::contract::DiarizationProvider>,
+        embedder: Arc<dyn plaudon_app_core::voice_profiles::embedder::SpeakerEmbedder>,
+        secrets: Arc<dyn plaudon_security::secrets::SecretStore>,
+    ) -> Self {
+        self.engines.voice = Some(crate::VoiceEngines {
+            diarizer,
+            embedder,
+            secrets,
+        });
+        self
+    }
+
     /// Replace the text model every summarization and tool run uses.
     #[must_use]
     pub fn with_text_model(

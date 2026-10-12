@@ -58,6 +58,9 @@ pub struct TranscriptEditorState {
     scroll_to_caret: bool,
     follow_playback: bool,
     last_highlight: Option<SegmentId>,
+    /// The person picker of the speaker chip. One, not one per row: a popup
+    /// menu is modal, so only one chip's list is ever open.
+    pub speaker_picker: crate::screens::people::picker::PersonPickerState,
 }
 
 impl Default for TranscriptEditorState {
@@ -72,6 +75,7 @@ impl Default for TranscriptEditorState {
             scroll_to_caret: false,
             follow_playback: true,
             last_highlight: None,
+            speaker_picker: crate::screens::people::picker::PersonPickerState::default(),
         }
     }
 }
@@ -449,9 +453,14 @@ impl<'a> TranscriptEditor<'a> {
                     Vec2::new(style.speaker_width - style.row_padding.x, line_height),
                 );
                 let editable = self.session.document().is_editable();
-                if let Some(picked) =
-                    chips::speaker(ui, speaker_rect, row.speaker_id, self.speakers, editable)
-                {
+                if let Some(picked) = chips::speaker(
+                    ui,
+                    speaker_rect,
+                    row.speaker_id,
+                    self.speakers,
+                    editable,
+                    &mut self.state.speaker_picker,
+                ) {
                     // The session owns the rule: the change is one undo step,
                     // and a read-only document refuses it outright.
                     let picked = picked.speaker_id();
