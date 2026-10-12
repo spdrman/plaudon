@@ -7,6 +7,7 @@
 pub mod dedup;
 pub mod diarization;
 pub mod import;
+pub mod library;
 pub mod models;
 pub mod search;
 pub mod speakers;
@@ -15,6 +16,7 @@ pub mod stt;
 pub use dedup::{BlobDecision, DedupPolicy};
 pub use diarization::{reconcile, Reconciliation, SegmentAssignment};
 pub use import::{ImportOutcome, ImportRequest, ImportService};
+pub use library::{LibraryOrder, LibraryPage, LibraryService, RecordingSummary, TranscriptExport};
 pub use models::{ModelError, ModelId, ModelInstaller, ModelPack, ModelRegistry};
 pub use search::{LibrarySearch, SearchResult};
 pub use speakers::{Speaker, SpeakerDisplay, SpeakerProvenance, SpeakerRegistry};

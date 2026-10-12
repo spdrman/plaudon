@@ -15,6 +15,7 @@ plaudon-ai-contracts = { workspace = true }
 plaudon-ai-diarization = { workspace = true }
 plaudon-domain = { workspace = true }
 plaudon-persistence = { workspace = true }
+sqlx = { workspace = true }
 fs4 = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

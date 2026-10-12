@@ -10,4 +10,27 @@ repository.workspace = true
 [lints]
 workspace = true
 
+[[bin]]
+name = "plaudon"
+path = "src/bin/plaudon.rs"
+
 [dependencies]
+clap = { workspace = true }
+plaudon-ai-tools = { workspace = true }
+plaudon-app-core = { workspace = true }
+plaudon-domain = { workspace = true }
+plaudon-jobs = { workspace = true }
+plaudon-persistence = { workspace = true }
+plaudon-security = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+
+[target.'cfg(unix)'.dependencies]
+libc = { workspace = true }
+
+[dev-dependencies]
+plaudon-ai-contracts = { workspace = true }
+tempfile = { workspace = true }
