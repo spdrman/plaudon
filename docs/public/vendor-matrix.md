@@ -18,7 +18,8 @@ it.
 | Direct device access over Bluetooth or USB | Unofficial interoperability with a compatible PLAUD recorder, built from protocol observation, not from a vendor SDK | No | No | **Unsupported** | Our own implementation; see the compatibility matrix for the exact cells |
 | Apple Speech and Foundation Models | On-device transcription and text generation on qualifying macOS hardware | No | No | **Documented** | Apple system frameworks; availability is probed at runtime, never assumed |
 | whisper.cpp | Local speech-to-text engine | For local transcription | No | **Validated** | MIT; the model weights you download carry their own licence, shown before download |
-| Tauri 2 | Desktop application shell | Yes | No | **Validated** | MIT / Apache-2.0 |
+| Tauri 2 | Desktop application shell of the current release | Yes, until the egui shell replaces it | No | **Validated** | MIT / Apache-2.0 |
+| egui and eframe | Rust desktop application shell that replaces Tauri; same application underneath, no embedded browser | Yes, once the replacement ships | No | **Documented** | MIT / Apache-2.0 |
 | SQLite (via sqlx) | Local database | Yes | No | **Validated** | Public domain / MIT |
 | Symphonia | Audio decoding | Yes | No | **Validated** | MPL-2.0 |
 

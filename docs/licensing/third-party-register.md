@@ -68,6 +68,19 @@ Reviewed on 2026-10-12 (O1.6: the Opus decoder row is now a shipped dependency).
 | FFmpeg | LGPL-2.1+ or GPL depending on build | **excluded for now** | would require source offer and dynamic linking care | large C codebase parsing untrusted input | Not introduced, and no longer needed for Opus: Symphonia covers WAV, MP3, M4A/AAC, FLAC and Ogg Vorbis, and `opus-pure` covers Ogg Opus (O1.6, #214). A format outside that set is still refused with a typed error rather than reached for with an LGPL C library. |
 | filmcraft (`spdrman/filmcraft`) | MIT or Apache-2.0 | bundle (adapted source) | **`NOTICE`, per file** | `std`-only ring buffer and mixing thread; no `unsafe` | Adapt, not depend: `crates/audio-playback/src/ring.rs` is derived from its `play_ahead.rs`, and `cpal_out.rs` and the waveform mesh follow its structure. Every adapted file names the origin in its header and in `NOTICE`. A git dependency is impossible here — `deny.toml` sets `unknown-git = "deny"` — and the crate is unpublished. |
 
+## Packaging and installer tooling
+
+Build-time tools, listed here because two of them put *their* bytes inside an
+artifact we hand to a user, which makes them a redistribution question and not
+just a toolchain one.
+
+| Component | Licence | Redistribution | Attribution | Security note | Decision |
+|---|---|---|---|---|---|
+| NSIS 3 (`makensis`, MUI2, the installer stub) | zlib/libpng licence; its LZMA and bzip2 compression components under their own permissive terms | **bundle**: the installer executable contains NSIS's stub code | notice file | the stub is what runs on the user's machine before anything of ours does; the installer is per-user, writes only `HKCU`, requests `asInvoker` and is Authenticode-signed when a certificate is available | Chosen for the Windows installer (`apps/plaudon-egui/packaging/windows/plaudon-egui.nsi`, O2.6). The alternative, the WiX Toolset, is MS-RL — a reciprocal licence we do not want in the artifact path when a permissive toolchain does the job. `cargo-packager` was also considered and rejected: it would add a generator between us and the installer definition, and the registry claim has to stay byte-comparable with `plaudon_platform::associations` (`apps/plaudon-egui/tests/packaging.rs`). |
+| Apple `codesign`, `notarytool`, `stapler`, `iconutil`, `sips` | Apple developer tools, part of Xcode / the Command Line Tools | never redistributed | n/a | they sign and verify; nothing of theirs ships | Use on macOS only (`scripts/package-macos-egui.sh`). |
+| Microsoft `signtool` (Windows SDK) | Microsoft Windows SDK licence | never redistributed | n/a | Authenticode signing only | Use on Windows only (`scripts/package-windows-egui.ps1`). |
+| `rsvg-convert` / ImageMagick (`magick`) | LGPL-2.1+ / ImageMagick licence (Apache-2.0-style) | never redistributed | n/a | run once by a developer to rasterise our own SVG; no third-party artwork is involved | Developer tools for `scripts/make-app-icon.sh`. The application icon (`apps/plaudon-egui/packaging/icon.svg`) is original artwork authored in this repository; no third-party icon set, font or trace is used. |
+
 ## Model weights
 
 Weights are **never bundled** unless the entry below says otherwise. §12

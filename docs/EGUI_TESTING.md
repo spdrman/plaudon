@@ -142,6 +142,7 @@ regenerated baseline is committed **with the change that caused it**, never on i
 | Settings sections, onboarding and the settings screen (O2.4) | anywhere (software raster) | `cargo test -p plaudon-ui --test settings_screen --test settings_privacy_group --test settings_engines_group --test settings_backup --test onboarding` |
 | `plaudon-platform` adapter tests (fakes only; no dialog, clipboard or tray is touched) | anywhere, no GPU | `cargo test -p plaudon-platform` |
 | Desktop integration (tray model, drag-drop classification, deep links) | anywhere; the tray backend is linked on macOS and Windows only | `cargo test -p plaudon-egui --lib` |
+| Packaging inputs (O2.6): bundle identifier and library path, entitlement set, the NSIS registry claim against `plaudon_platform::associations`, icon geometry, the Windows manifest, and that both packaging scripts fail closed without a credential | anywhere, no GPU, **both platforms** — it asserts the macOS inputs on Windows and the Windows inputs on macOS | `cargo test -p plaudon-egui --test packaging` |
 | Snapshot comparison, scale and performance runs | **MARS only** | `scripts/e2e-remote.sh …` |
 
 The resource policy is part of the test strategy: heavy or renderer-dependent runs go to MARS Docker
