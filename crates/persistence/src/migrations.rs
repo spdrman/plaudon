@@ -139,6 +139,14 @@ pub const MIGRATIONS: &[Migration] = &[
         name: "voice_retention_and_erasure",
         sql: include_str!("../migrations/0902_voice_retention_and_erasure.sql"),
     },
+    // The activation half of the consent gate: the versioned disclosure the
+    // user accepted, journalled rather than only held in the gate row
+    // (VP-120..VP-122). Still EPIC P's range.
+    Migration {
+        version: 903,
+        name: "voice_consent_journal",
+        sql: include_str!("../migrations/0903_voice_consent_journal.sql"),
+    },
 ];
 
 /// An applied migration as recorded in the database.

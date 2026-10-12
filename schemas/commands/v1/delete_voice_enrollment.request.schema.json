@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/delete_voice_enrollment.request.schema.json",
+  "title": "delete_voice_enrollment.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "person_id",
+    "apply",
+    "reason"
+  ],
+  "properties": {
+    "person_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "apply": {
+      "type": "boolean"
+    },
+    "reason": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  }
+}

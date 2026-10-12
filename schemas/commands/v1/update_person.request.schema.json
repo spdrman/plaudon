@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/update_person.request.schema.json",
+  "title": "update_person.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "person_id",
+    "display_name",
+    "aliases",
+    "email",
+    "organisation"
+  ],
+  "properties": {
+    "person_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "display_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "aliases": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 120
+      }
+    },
+    "email": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "organisation": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  }
+}

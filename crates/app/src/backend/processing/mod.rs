@@ -157,6 +157,21 @@ impl ProcessingEngine {
         self
     }
 
+    /// The speaker embedder this build runs, when it has one.
+    ///
+    /// `None` is the honest answer on a host: no ONNX speaker-embedding model
+    /// ships yet, so enrolment and matching report the model as unavailable
+    /// rather than failing halfway through (VP-042, §14.4).
+    #[must_use]
+    pub(crate) fn voice_embedder(
+        &self,
+    ) -> Option<Arc<dyn plaudon_app_core::voice_profiles::embedder::SpeakerEmbedder>> {
+        match &self.voice {
+            speaker_match::VoiceSeam::Host => None,
+            speaker_match::VoiceSeam::Substituted { embedder, .. } => Some(Arc::clone(embedder)),
+        }
+    }
+
     /// The durable job engine.
     #[must_use]
     pub fn engine(&self) -> &JobEngine {

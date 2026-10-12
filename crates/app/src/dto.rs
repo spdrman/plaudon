@@ -22,7 +22,10 @@ use std::collections::BTreeMap;
 
 use plaudon_domain::capability::CapabilityStatus;
 use plaudon_domain::error::ErrorEnvelope;
-use plaudon_domain::ids::{ClaimId, JobId, OutputId, RecordingId, SpeakerId, TranscriptRevisionId};
+use plaudon_domain::ids::{
+    ClaimId, JobId, OutputId, PersonId, RecordingId, SpeakerId, SpeakerSuggestionId,
+    TranscriptRevisionId, VoiceExemplarId,
+};
 use plaudon_domain::media::Sha256Digest;
 use plaudon_domain::time::Timestamp;
 use plaudon_domain::transcript::AlignmentOrigin;
@@ -2959,6 +2962,13 @@ pub enum EventKind {
     /// A device session ended.
     #[serde(rename = "device.disconnected")]
     DeviceDisconnected,
+    /// A match job wrote suggestions for a recording (VP-086). Ids and counts
+    /// only: a name or a score never travels in an event or a notification.
+    #[serde(rename = "voiceprofile.suggestions_ready")]
+    VoiceProfileSuggestionsReady,
+    /// A roster entry was created, edited, merged or deleted (VP-086).
+    #[serde(rename = "person.changed")]
+    PersonChanged,
 }
 
 impl EventKind {
@@ -2984,6 +2994,8 @@ impl EventKind {
         Self::DeviceTransferProgress,
         Self::DeviceTransferVerified,
         Self::DeviceDisconnected,
+        Self::VoiceProfileSuggestionsReady,
+        Self::PersonChanged,
     ];
 
     /// Stable wire string, which is also the value the published
@@ -3011,6 +3023,8 @@ impl EventKind {
             Self::DeviceTransferProgress => "device.transfer_progress",
             Self::DeviceTransferVerified => "device.transfer_verified",
             Self::DeviceDisconnected => "device.disconnected",
+            Self::VoiceProfileSuggestionsReady => "voiceprofile.suggestions_ready",
+            Self::PersonChanged => "person.changed",
         }
     }
 }
@@ -4073,6 +4087,599 @@ pub struct ListTemplateVersionsResponse {
     pub versions: Vec<TemplateVersionDto>,
 }
 
+/* ------------------------------------------- the people roster (§9A) */
+
+/// Request for `list_people` (VP-010, VP-091).
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct ListPeopleRequest {
+    /// Case-insensitive substring filter over display names and aliases.
+    #[serde(default)]
+    pub query: Option<String>,
+}
+
+/// A person's biometric attachment, when they have one.
+///
+/// Never an embedding and never a score: this is the enrolment's *metadata*,
+/// which is what the People screen's badge, exemplar count and expiry
+/// countdown are made of (VP-091).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PersonVoiceDto {
+    /// `active` or `expired` (VP-130).
+    pub status: String,
+    /// Stored exemplars.
+    pub exemplars: u32,
+    /// Distinct recordings they were cut from — the device-diversity hint.
+    pub source_recordings: u32,
+    /// Clean speech across every exemplar.
+    pub total_speech_ms: u32,
+    /// Retention term in months, 1..=12.
+    pub retention_months: u8,
+    /// Disclosure version the user attested under.
+    pub consent_version: String,
+    /// When the enrolment was created.
+    pub enrolled_at: Timestamp,
+    /// When a match last used it.
+    pub last_matched_at: Option<Timestamp>,
+    /// When it expires if nothing uses it.
+    pub expires_at: Option<Timestamp>,
+}
+
+/// One roster entry.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PersonDto {
+    /// Row identity.
+    pub person_id: PersonId,
+    /// Name shown wherever the person appears.
+    pub display_name: String,
+    /// Alternate spellings, searched but never displayed as the name.
+    pub aliases: Vec<String>,
+    /// Optional contact address.
+    pub email: Option<String>,
+    /// Optional organisation.
+    pub organisation: Option<String>,
+    /// `active`, or `merged` for a merge tombstone.
+    pub status: String,
+    /// When the entry was created.
+    pub created_at: Timestamp,
+    /// When it was last edited.
+    pub updated_at: Timestamp,
+    /// Recordings that have an assignment to this person — the blast radius a
+    /// rename or a merge discloses (VP-213a).
+    pub recordings: u32,
+    /// Pending suggestions naming this person.
+    pub pending_suggestions: u32,
+    /// The enrolment, or `None` for a name-only entry (VP-011).
+    pub voice: Option<PersonVoiceDto>,
+}
+
+/// A person named by another object, without the counts.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PersonRefDto {
+    /// Row identity.
+    pub person_id: PersonId,
+    /// Name shown for them.
+    pub display_name: String,
+}
+
+/// Roster entries whose names normalise to the same thing (VP-214).
+///
+/// A *candidate* group, never an executed merge: the screen offers it, the
+/// user decides.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MergeCandidateGroupDto {
+    /// The normalised name the group shares.
+    pub normalised_name: String,
+    /// The people in it, in roster order.
+    pub people: Vec<PersonRefDto>,
+}
+
+/// Response for `list_people`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ListPeopleResponse {
+    /// Matching entries, by display name.
+    pub people: Vec<PersonDto>,
+    /// Same-name groups the screen may offer as merge candidates (VP-214).
+    pub merge_candidates: Vec<MergeCandidateGroupDto>,
+}
+
+/// Request for `create_person`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CreatePersonRequest {
+    /// Name to show.
+    pub display_name: String,
+    /// Alternate spellings.
+    #[serde(default)]
+    pub aliases: Vec<String>,
+    /// Optional contact address.
+    #[serde(default)]
+    pub email: Option<String>,
+    /// Optional organisation.
+    #[serde(default)]
+    pub organisation: Option<String>,
+}
+
+/// Request for `update_person`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UpdatePersonRequest {
+    /// Entry to edit.
+    pub person_id: String,
+    /// Name to show.
+    pub display_name: String,
+    /// Alternate spellings.
+    #[serde(default)]
+    pub aliases: Vec<String>,
+    /// Optional contact address.
+    #[serde(default)]
+    pub email: Option<String>,
+    /// Optional organisation.
+    #[serde(default)]
+    pub organisation: Option<String>,
+}
+
+/// Response of the two roster-write commands.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PersonResponse {
+    /// The entry as stored.
+    pub person: PersonDto,
+}
+
+/// Request for `merge_people` (VP-213c).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MergePeopleRequest {
+    /// Entry that becomes a tombstone.
+    pub loser_person_id: String,
+    /// Entry that survives and receives everything.
+    pub survivor_person_id: String,
+    /// `false` discloses what the merge would move and changes nothing.
+    #[serde(default)]
+    pub apply: bool,
+}
+
+/// Response for `merge_people`: the disclosure, and after `apply` the counts
+/// that happened.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MergePeopleResponse {
+    /// Whether the merge was executed.
+    pub applied: bool,
+    /// Speaker rows repointed at the survivor.
+    pub speaker_links: u32,
+    /// Distinct recordings those rows belong to.
+    pub recordings: u32,
+    /// Exemplars moved to the surviving enrolment.
+    pub exemplars: u32,
+    /// Pending suggestions repointed.
+    pub pending_suggestions: u32,
+    /// Whether the loser's enrolment became the survivor's.
+    pub enrollment_moved: bool,
+    /// The survivor after the merge; `None` for a disclosure-only call.
+    pub survivor: Option<PersonDto>,
+}
+
+/// Request for `delete_person` (VP-080).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeletePersonRequest {
+    /// Entry to delete.
+    pub person_id: String,
+    /// `false` discloses what deletion would reach and changes nothing.
+    #[serde(default)]
+    pub apply: bool,
+}
+
+/// Response for `delete_person`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeletePersonResponse {
+    /// Whether the deletion was executed.
+    pub applied: bool,
+    /// Speaker links severed. The name snapshots stay (VP-213d).
+    pub severed_speaker_links: u32,
+    /// Distinct recordings affected.
+    pub recordings: u32,
+    /// Exemplars destroyed with the enrolment.
+    pub exemplars: u32,
+    /// Suggestions destroyed.
+    pub suggestions: u32,
+}
+
+/// Request for `assign_cluster_person` (VP-211).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AssignClusterPersonRequest {
+    /// Recording the cluster belongs to. Nothing outside it is touched.
+    pub recording_id: String,
+    /// Speaker row standing for the cluster.
+    pub speaker_id: String,
+    /// Person to assign, or `null` for "Unknown/none", which clears the
+    /// assignment back to the neutral cluster label (VP-210).
+    #[serde(default)]
+    pub person_id: Option<String>,
+    /// Overwrite segments that were attributed individually. With `false` and
+    /// exceptions present nothing is written and the count is disclosed.
+    #[serde(default)]
+    pub overwrite_segment_exceptions: bool,
+}
+
+/// Response for `assign_cluster_person`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AssignClusterPersonResponse {
+    /// Whether the assignment was written.
+    pub applied: bool,
+    /// The speaker row as it now stands.
+    pub speaker: SpeakerDto,
+    /// Who it points at, `None` after a clear.
+    pub person: Option<PersonRefDto>,
+    /// Segments attributed in this action.
+    pub segments_assigned: u32,
+    /// Segments that had been attributed individually (VP-211).
+    pub segment_exceptions: u32,
+}
+
+/* --------------------------- voice profiles: the biometric tier (§12.2) */
+
+/// The versioned activation disclosure (VP-120, VP-128).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ActivationDisclosureDto {
+    /// Version an acceptance records.
+    pub version: String,
+    /// Heading.
+    pub title: String,
+    /// Body paragraphs, in reading order.
+    pub body: Vec<String>,
+    /// The §12.2A boundary sentence.
+    pub two_tier_sentence: String,
+    /// The user-responsibility sentence.
+    pub responsibility_sentence: String,
+    /// Retention a new enrolment gets by default.
+    pub retention_default_months: u8,
+}
+
+/// Where the consent gate stands.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ConsentGateDto {
+    /// `off`, `disclosure_required` or `active`.
+    pub state: String,
+    /// Why the disclosure has to be shown: `never_accepted`,
+    /// `version_changed` or `restored_library`.
+    pub reason: Option<String>,
+    /// Version the user accepted, when they accepted one.
+    pub accepted_version: Option<String>,
+    /// When they accepted it.
+    pub accepted_at: Option<Timestamp>,
+    /// Version this build requires.
+    pub required_version: String,
+}
+
+/// Response for `get_voice_profile_settings` and
+/// `set_voice_profiles_enabled`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VoiceProfileSettingsDto {
+    /// The master toggle. Off by default, always (VP-003).
+    pub enabled: bool,
+    /// The gate behind the toggle.
+    pub consent: ConsentGateDto,
+    /// The text the gate shows.
+    pub disclosure: ActivationDisclosureDto,
+    /// People with an enrolment.
+    pub enrolled_people: u32,
+    /// Stored exemplars.
+    pub exemplars: u32,
+    /// Pending suggestions across the library.
+    pub pending_suggestions: u32,
+    /// Roster entries, which survive everything in this block (VP-095).
+    pub roster_people: u32,
+    /// Whether the OS credential store answers. `false` is a locked
+    /// biometric tier, not a plaintext fallback (ADR-0014).
+    pub key_available: bool,
+    /// Whether this build has a speaker-embedding model at all.
+    pub embedder_available: bool,
+    /// Clean speech an enrolment needs, for the VP-094 meter.
+    pub enrol_speech_ms: u32,
+    /// Clean speech an added exemplar needs.
+    pub exemplar_speech_ms: u32,
+}
+
+/// Request for `set_voice_profiles_enabled`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SetVoiceProfilesEnabledRequest {
+    /// Desired state of the toggle.
+    pub enabled: bool,
+    /// The disclosure version the user just accepted. Required to turn the
+    /// feature on; ignored when turning it off.
+    #[serde(default)]
+    pub accept_disclosure_version: Option<String>,
+}
+
+/// The per-enrolment attestation (VP-120 level 3).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EnrolmentConsentDto {
+    /// Disclosure version the user was shown.
+    pub disclosure_version: String,
+    /// The user's attestation that this person has agreed.
+    pub person_attested: bool,
+    /// Retention term, 1..=12 months; absent means the default.
+    #[serde(default)]
+    pub retention_months: Option<u8>,
+    /// The user's own note of the consent basis.
+    #[serde(default)]
+    pub consent_note: Option<String>,
+}
+
+/// Request for `enroll_person_voice`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EnrollPersonVoiceRequest {
+    /// Roster person to attach the enrolment to.
+    pub person_id: String,
+    /// Recording the speech comes from.
+    pub recording_id: String,
+    /// Cluster within that recording's latest diarization run.
+    pub cluster_key: String,
+    /// The attestation.
+    pub consent: EnrolmentConsentDto,
+}
+
+/// Request for `add_voice_exemplar`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AddVoiceExemplarRequest {
+    /// Enrolled person to extend.
+    pub person_id: String,
+    /// Recording the speech comes from.
+    pub recording_id: String,
+    /// Cluster within that recording's latest diarization run.
+    pub cluster_key: String,
+}
+
+/// What an enrolment or exemplar addition produced. Never a vector.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VoiceEnrollmentDto {
+    /// The person.
+    pub person_id: PersonId,
+    /// The exemplar just stored.
+    pub exemplar_id: VoiceExemplarId,
+    /// Exemplars the enrolment now has.
+    pub exemplars: u32,
+    /// Clean speech this exemplar used.
+    pub speech_ms: u32,
+    /// Clean speech across the enrolment.
+    pub total_speech_ms: u32,
+    /// Distinct source recordings.
+    pub source_recordings: u32,
+    /// Embedding model identity (VP-075).
+    pub model_id: String,
+    /// Embedding model version.
+    pub model_version: String,
+    /// Retention term in months.
+    pub retention_months: u8,
+    /// When the enrolment expires if nothing uses it.
+    pub expires_at: Option<Timestamp>,
+}
+
+/// Request for `split_voice_enrollment` (§3.5, VP-213c).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SplitVoiceEnrollmentRequest {
+    /// Enrolment to split.
+    pub person_id: String,
+    /// Exemplars to move, by provenance as the screen showed them.
+    pub exemplar_ids: Vec<String>,
+    /// Existing roster person to move them to. Exactly one of this and
+    /// `new_person_display_name` is given.
+    #[serde(default)]
+    pub target_person_id: Option<String>,
+    /// Name of a roster person to create and move them to.
+    #[serde(default)]
+    pub new_person_display_name: Option<String>,
+    /// The attestation for the *target* person: the speech turned out to be
+    /// theirs, so they are the one who has to have agreed.
+    pub consent: EnrolmentConsentDto,
+}
+
+/// Response for `split_voice_enrollment`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SplitVoiceEnrollmentResponse {
+    /// Enrolment the exemplars came from.
+    pub source_person_id: PersonId,
+    /// Enrolment they went to.
+    pub target_person_id: PersonId,
+    /// How many moved.
+    pub exemplars_moved: u32,
+    /// How many the source has left.
+    pub exemplars_remaining: u32,
+    /// The target entry after the split.
+    pub target: PersonDto,
+}
+
+/// Request for `delete_voice_enrollment` (§12.4, VP-123).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeleteVoiceEnrollmentRequest {
+    /// Person whose voiceprint goes.
+    pub person_id: String,
+    /// `false` discloses what deletion would destroy and changes nothing.
+    #[serde(default)]
+    pub apply: bool,
+    /// Why, when the user recorded a reason ("withdrew consent").
+    #[serde(default)]
+    pub reason: Option<String>,
+}
+
+/// Response for `delete_voice_enrollment`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeleteVoiceEnrollmentResponse {
+    /// Whether the deletion was executed.
+    pub applied: bool,
+    /// Exemplars destroyed.
+    pub exemplars: u32,
+    /// Suggestions destroyed.
+    pub suggestions: u32,
+    /// Always `true`: the roster entry stays as a name-only person (VP-080).
+    pub person_kept: bool,
+    /// The entry as it now stands.
+    pub person: PersonDto,
+}
+
+/// Request for `forget_all_voice_profiles` (VP-095).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ForgetAllVoiceProfilesRequest {
+    /// `false` discloses the counts and the limits and changes nothing.
+    #[serde(default)]
+    pub apply: bool,
+}
+
+/// Response for `forget_all_voice_profiles`.
+///
+/// Four independent facts, each of which the disclosure and the receipt state
+/// separately: VP-095 promises counts, the fate of the key and the fate of the
+/// toggle, and collapsing them into one enum would make a partially-completed
+/// erasure unrepresentable rather than impossible.
+#[allow(clippy::struct_excessive_bools)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ForgetAllVoiceProfilesResponse {
+    /// Whether the erasure was executed.
+    pub applied: bool,
+    /// Enrolments destroyed, or that would be.
+    pub enrollments: u32,
+    /// Exemplar ciphertexts destroyed, or that would be.
+    pub exemplars: u32,
+    /// Suggestions destroyed, or that would be.
+    pub suggestions: u32,
+    /// Roster entries that survive. Names are not voiceprints.
+    pub people_kept: u32,
+    /// Whether a data key exists to destroy.
+    pub key_present: bool,
+    /// Whether the data key is now gone from the OS credential store.
+    pub key_destroyed: bool,
+    /// Whether biometric matching is now off.
+    pub feature_disabled: bool,
+    /// What the erasure cannot reach, in the ADR-0072 disclosure style.
+    pub limits: Vec<String>,
+}
+
+/// Request for `list_speaker_suggestions` (VP-092, VP-093).
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct ListSpeakerSuggestionsRequest {
+    /// One recording's panel, or `null` for the global review queue.
+    #[serde(default)]
+    pub recording_id: Option<String>,
+    /// Page size of the queue.
+    #[serde(default)]
+    pub limit: Option<u32>,
+}
+
+/// One pending suggestion: a score and a band, never a label (ADR-0082).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SpeakerSuggestionDto {
+    /// Row identity.
+    pub suggestion_id: SpeakerSuggestionId,
+    /// Recording the cluster is in.
+    pub recording_id: RecordingId,
+    /// That recording's title, for the queue's context line.
+    pub recording_title: Option<String>,
+    /// Diarization run the cluster belongs to.
+    pub diarization_run_id: String,
+    /// The cluster.
+    pub cluster_key: String,
+    /// Speaker row standing for the cluster, when one exists.
+    pub speaker_id: Option<SpeakerId>,
+    /// That row's current label.
+    pub speaker_label: Option<String>,
+    /// Who the score is about.
+    pub person: PersonRefDto,
+    /// The AS-Norm similarity score.
+    pub score: f64,
+    /// How it was computed.
+    pub score_kind: String,
+    /// `suggest` or `weak` (VP-061).
+    pub band: String,
+    /// `pending`, `confirmed`, `rejected`, `corrected` or `expired`.
+    pub state: String,
+    /// When the match job produced it.
+    pub created_at: Timestamp,
+}
+
+/// Response for `list_speaker_suggestions`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ListSpeakerSuggestionsResponse {
+    /// The suggestions, strongest score first.
+    pub suggestions: Vec<SpeakerSuggestionDto>,
+    /// How many are pending in the requested scope.
+    pub pending_count: u32,
+}
+
+/// Request for `confirm_speaker_suggestion`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ConfirmSpeakerSuggestionRequest {
+    /// Suggestion to confirm.
+    pub suggestion_id: String,
+    /// Overwrite segments that were attributed individually (VP-211).
+    #[serde(default)]
+    pub overwrite_segment_exceptions: bool,
+}
+
+/// Request for `reject_speaker_suggestion` (VP-216, VP-217).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RejectSpeakerSuggestionRequest {
+    /// Suggestion to reject.
+    pub suggestion_id: String,
+    /// Who it actually was, for the reject-then-pick flow. With a person the
+    /// suggestion is marked `corrected` and that person is assigned; without
+    /// one it is `rejected` and nothing is renamed.
+    #[serde(default)]
+    pub corrected_person_id: Option<String>,
+    /// Overwrite segments that were attributed individually (VP-211).
+    #[serde(default)]
+    pub overwrite_segment_exceptions: bool,
+}
+
+/// What settling a suggestion did.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SpeakerSuggestionDecisionDto {
+    /// The suggestion.
+    pub suggestion_id: SpeakerSuggestionId,
+    /// Its state afterwards.
+    pub state: String,
+    /// Whether an assignment was written. A plain rejection never renames
+    /// anything, so it reports `false` (VP-216).
+    pub applied: bool,
+    /// The speaker row as it now stands, when one was touched.
+    pub speaker: Option<SpeakerDto>,
+    /// The person now assigned, when one was.
+    pub person: Option<PersonRefDto>,
+    /// Segments attributed in this action.
+    pub segments_assigned: u32,
+    /// Segments that had been attributed individually (VP-211).
+    pub segment_exceptions: u32,
+}
+
+/// Request for `start_speaker_matching` (VP-007: explicit and scoped).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StartSpeakerMatchingRequest {
+    /// The recordings the user selected. Never "everything" implicitly.
+    pub recording_ids: Vec<String>,
+}
+
+/// One queued match job.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SpeakerMatchJobDto {
+    /// Recording being matched.
+    pub recording_id: RecordingId,
+    /// The job.
+    pub job_id: JobId,
+}
+
+/// One recording the job could not be queued for, and why.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SpeakerMatchRefusalDto {
+    /// Recording that was skipped.
+    pub recording_id: RecordingId,
+    /// The condition the user can act on, in plain words.
+    pub reason: String,
+}
+
+/// Response for `start_speaker_matching`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StartSpeakerMatchingResponse {
+    /// Jobs queued, in request order.
+    pub jobs: Vec<SpeakerMatchJobDto>,
+    /// Recordings skipped, in request order.
+    pub refusals: Vec<SpeakerMatchRefusalDto>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -4122,9 +4729,11 @@ mod tests {
             assert_eq!(json, format!("\"{}\"", kind.as_str()));
         }
         // The twelve §15.3 names this build emits, the ADR-0020 activation
-        // event, the six §15.3 `device.*` names and `model.install_progress`,
-        // which EPIC O task O2.4 added for the local-model installer.
-        assert_eq!(EventKind::ALL.len(), 20);
+        // event, the six §15.3 `device.*` names, `model.install_progress`,
+        // which EPIC O task O2.4 added for the local-model installer, and the
+        // two EPIC P task P1.5 added for the people roster and its
+        // suggestions (VP-086).
+        assert_eq!(EventKind::ALL.len(), 22);
         for name in [
             "device.discovered",
             "device.connected",
@@ -4132,6 +4741,8 @@ mod tests {
             "device.transfer_progress",
             "device.transfer_verified",
             "device.disconnected",
+            "voiceprofile.suggestions_ready",
+            "person.changed",
         ] {
             assert!(
                 EventKind::ALL.iter().any(|kind| kind.as_str() == name),

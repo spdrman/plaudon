@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/forget_all_voice_profiles.request.schema.json",
+  "title": "forget_all_voice_profiles.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "apply"
+  ],
+  "properties": {
+    "apply": {
+      "type": "boolean"
+    }
+  }
+}

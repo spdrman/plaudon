@@ -443,6 +443,110 @@ impl SpeakerRepository {
             .collect()
     }
 
+    /// How many of a cluster's segments were attributed to somebody other
+    /// than `speaker_id` by hand (VP-211's "3 segments were set
+    /// individually").
+    ///
+    /// A per-segment exception is a segment the reconciliation attributes to
+    /// this cluster alone, whose `transcript_segments.speaker_id` points at a
+    /// *different* speaker row. A segment with no attribution yet is not an
+    /// exception: nobody decided anything about it.
+    ///
+    /// # Errors
+    ///
+    /// Propagates persistence failures.
+    pub async fn cluster_segment_exceptions(
+        &self,
+        revision_id: TranscriptRevisionId,
+        run_id: Uuid,
+        cluster_key: &str,
+        speaker_id: SpeakerId,
+    ) -> PersistenceResult<u32> {
+        let count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*)
+             FROM segment_speaker_assignments AS a
+             JOIN transcript_segments AS s
+               ON s.transcript_revision_id = a.transcript_revision_id
+              AND s.seq_index = a.seq_index
+             WHERE a.transcript_revision_id = ?1 AND a.diarization_run_id = ?2
+               AND a.assignment = 'single' AND a.cluster_key = ?3
+               AND s.speaker_id IS NOT NULL AND s.speaker_id <> ?4",
+        )
+        .bind(revision_id.to_string())
+        .bind(run_id.to_string())
+        .bind(cluster_key)
+        .bind(speaker_id.to_string())
+        .fetch_one(self.db.pool())
+        .await?;
+        Ok(u32::try_from(count).unwrap_or(u32::MAX))
+    }
+
+    /// Attribute every segment of one cluster to one speaker row, in one
+    /// statement (VP-032, VP-211).
+    ///
+    /// This is the bulk half of an assignment: "this whole cluster is Priya"
+    /// writes the cluster's segments here and the roster link on the speaker
+    /// row, rather than issuing N single-segment commands — which is both the
+    /// spec's rule and what makes the action one undo step (VP-212).
+    ///
+    /// Returns the number of segments written.
+    ///
+    /// # Errors
+    ///
+    /// Propagates persistence failures.
+    pub async fn assign_cluster_segments(
+        &self,
+        revision_id: TranscriptRevisionId,
+        run_id: Uuid,
+        cluster_key: &str,
+        speaker_id: SpeakerId,
+    ) -> PersistenceResult<u32> {
+        let affected = sqlx::query(
+            "UPDATE transcript_segments SET speaker_id = ?4
+             WHERE transcript_revision_id = ?1
+               AND seq_index IN (
+                   SELECT seq_index FROM segment_speaker_assignments
+                   WHERE transcript_revision_id = ?1 AND diarization_run_id = ?2
+                     AND assignment = 'single' AND cluster_key = ?3
+               )",
+        )
+        .bind(revision_id.to_string())
+        .bind(run_id.to_string())
+        .bind(cluster_key)
+        .bind(speaker_id.to_string())
+        .execute(self.db.pool())
+        .await?
+        .rows_affected();
+        Ok(u32::try_from(affected).unwrap_or(u32::MAX))
+    }
+
+    /// The most recent diarization run of a recording, when it has one.
+    ///
+    /// Enrolment and cluster assignment both work from the run the user is
+    /// looking at, which is the newest succeeded one.
+    ///
+    /// # Errors
+    ///
+    /// Propagates persistence failures.
+    pub async fn latest_run(
+        &self,
+        recording_id: RecordingId,
+    ) -> PersistenceResult<Option<StoredDiarizationRun>> {
+        let row = sqlx::query(
+            "SELECT id, recording_id, media_asset_id, provider_id, provider_version,
+                    privacy_class, status, input_sha256, detected_cluster_count, created_at,
+                    finished_at
+             FROM diarization_runs
+             WHERE recording_id = ?1 AND status = 'succeeded'
+             ORDER BY created_at DESC, id DESC
+             LIMIT 1",
+        )
+        .bind(recording_id.to_string())
+        .fetch_optional(self.db.pool())
+        .await?;
+        row.as_ref().map(decode_run).transpose()
+    }
+
     /// Rename a speaker. The name is recorded; identity is not claimed until
     /// [`SpeakerRepository::confirm`] is called.
     ///
