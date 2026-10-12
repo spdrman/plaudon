@@ -11,4 +11,6 @@
 
 #![deny(missing_docs)]
 
+pub mod screens;
 pub mod transcript;
+pub mod widgets;
