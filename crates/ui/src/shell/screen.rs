@@ -168,6 +168,17 @@ pub trait Screen: std::fmt::Debug {
     /// stale.
     fn on_resync(&mut self, _reason: ResyncReason, _cx: &mut ScreenCtx<'_>) {}
 
+    /// The desktop asked the application to open a portable archive
+    /// (parity row C10: the `.plaudon` document type the installer claims).
+    ///
+    /// The path has already been resolved inside an approved root by the
+    /// host. Return `true` when the screen took it; the shell says so
+    /// honestly when nothing did, rather than leaving the user in front of a
+    /// screen that quietly ignored their file.
+    fn on_open_archive(&mut self, _path: &str, _cx: &mut ScreenCtx<'_>) -> bool {
+        false
+    }
+
     /// The window is closing.
     ///
     /// The last chance to finish what the user started: dispatch a pending

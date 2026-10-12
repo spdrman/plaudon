@@ -200,6 +200,17 @@ pub trait Section: std::fmt::Debug {
 
     /// Receive a path the user chose in a native dialog.
     fn on_path_picked(&mut self, picked: PickedPath, path: &str, out: &mut SettingsOutput) {}
+
+    /// Receive a portable archive the operating system asked us to open
+    /// (parity row C10).
+    ///
+    /// Unlike [`Section::on_path_picked`] this does not answer a dialog the
+    /// section opened: it arrives unprompted, so a section that takes it has
+    /// to put itself into the state the user would otherwise have reached by
+    /// hand.
+    fn on_open_archive(&mut self, path: &str) -> bool {
+        false
+    }
 }
 
 /// The Settings screen.
@@ -279,6 +290,21 @@ impl SettingsScreen {
         for section in &mut self.sections {
             section.on_path_picked(picked, path, out);
         }
+    }
+
+    /// Hand an archive the desktop opened to whichever section restores.
+    ///
+    /// Returns whether a section took it, which is what lets the shell say
+    /// so when none did.
+    pub fn open_archive(&mut self, path: &str) -> bool {
+        // Every section is offered the archive, deliberately without
+        // short-circuiting: taking it is a state change, and a section that
+        // happens to sit after the one that restores must still be told.
+        let mut taken = false;
+        for section in &mut self.sections {
+            taken |= section.on_open_archive(path);
+        }
+        taken
     }
 
     /// Render the whole screen.

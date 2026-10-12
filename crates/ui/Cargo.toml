@@ -37,6 +37,9 @@ tracing = { workspace = true }
 # tests measuring what the application does.
 egui = { workspace = true, features = ["default_fonts"] }
 egui_kittest = { workspace = true }
+# The deletion disclosure's limit sentences are asserted verbatim against the
+# constant the service sends, so a reworded sentence fails the UI test too.
+plaudon-app-core = { workspace = true }
 plaudon-ui-testkit = { workspace = true }
 serde_json = { workspace = true }
 tempfile = { workspace = true }

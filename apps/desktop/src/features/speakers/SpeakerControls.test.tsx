@@ -9,6 +9,7 @@ describe("SpeakerControls", () => {
     speaker_id: "spk-1",
     recording_id: "rec-1",
     label: "Speaker 1",
+    name: null,
     confirmed: false,
     original_label: "Speaker 1",
     renamed_at: null,
@@ -18,6 +19,7 @@ describe("SpeakerControls", () => {
   const renamedSpeaker: Speaker = {
     ...inferredSpeaker,
     label: "Alice",
+    name: "Alice",
     renamed_at: "2026-10-11T10:00:00Z",
   };
 

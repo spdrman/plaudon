@@ -140,7 +140,8 @@ pub enum SpikeError {
         /// Container found in the bytes.
         sniffed: SniffedContainer,
     },
-    /// The container is recognized but no installed decoder handles its codec.
+    /// The container is recognized but the bare Symphonia registry this spike
+    /// measures has no decoder for its codec. Not a product verdict.
     UnsupportedCodec {
         /// Container the bytes are in.
         container: SniffedContainer,
@@ -272,6 +273,10 @@ pub fn probe_and_decode(path: &Path) -> Result<(MediaProbe, CanonicalPcm), Spike
     let track_id = track.id;
     let codec_params = track.codec_params.clone();
 
+    // Deliberately Symphonia's own registry, not `plaudon_audio::codecs`: this
+    // spike measures what upstream Symphonia alone decodes, so its verdict is
+    // never a statement about what the application supports. The product adds
+    // a pure-Rust Opus decoder on top (O1.6, #214).
     let mut decoder = symphonia::default::get_codecs()
         .make(&codec_params, &DecoderOptions::default())
         .map_err(|_| SpikeError::UnsupportedCodec { container })?;

@@ -6,6 +6,7 @@ shell under `apps/desktop` is still in the tree and still has its own `scripts/p
 "Tauri" rows below go with it.
 
 Companion documents: `docs/EGUI_MIGRATION_PLAN.md` (what is being built and why),
+`docs/EGUI_ARCHITECTURE.md` (the layers, the command/event flow and how to add a screen),
 `docs/EGUI_TESTING.md` (the test strategy and the MARS renderer rule),
 `docs/EGUI_DESIGN_SYSTEM.md` (tokens and components).
 

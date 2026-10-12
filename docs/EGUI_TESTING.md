@@ -38,6 +38,28 @@ pass vacuously. `plaudon-ui-testkit` turns the feature on for the tests that go 
 that builds its own harness (`crates/ui`) adds
 `egui = { workspace = true, features = ["default_fonts"] }` to its `[dev-dependencies]`.
 
+### 2.1 The scale axis (S16)
+
+egui lays out in logical points and rasterises at `pixels_per_point`, so a high-DPI defect is a
+*rendering* defect, not a layout one — unless the layout accidentally depends on the scale, which
+is the bug the suite exists to catch. `plaudon_ui_testkit::builder_at_scale(ppp)` is
+[`builder`] at a chosen scale and nothing else: same 1280×820 **points**, same theme, same
+reported OS. `plaudon_ui_testkit::SCALE_AXIS` is the three scales every scale case runs at, and
+why those three:
+
+| Scale | Why |
+| --- | --- |
+| 1.0 | the integral case, and the default of every other test |
+| 1.5 | the *fractional* case — a point is not a whole number of pixels, which is what exposes rounding |
+| 2.0 | Retina / 200%, where everything doubles |
+
+**A scaled baseline carries its scale in its name.** `visual::assert_snapshot_at_scale` derives
+the name from the harness's own `pixels_per_point` — never from an argument — through
+`visual::scaled_name`, which writes `1.0` as `@1x`, `1.5` as `@1_5x` and `2.0` as `@2x`. So
+`tests/visual/scale-shell-ready@1_5x.png` cannot be compared against a 1.0× frame: the files are
+different before the pixels are. `builder()` and `assert_snapshot` are unchanged, so every
+pre-existing baseline keeps its unscaled name.
+
 ## 3. Accessibility assertions replace axe
 
 egui has no axe equivalent, and pretending otherwise would be the easiest way to claim a WCAG 2.2 AA
@@ -45,15 +67,41 @@ conformance we have not checked (ADR-0023). The replacements, all in `plaudon_ui
 
 | Legacy check | Rust replacement |
 | --- | --- |
-| axe role/name violations | `a11y::nodes(&harness)` — every AccessKit node's role, label and value, asserted per screen |
+| axe role/name violations | `a11y::nodes(&harness)` — every AccessKit node's role, label and value, asserted per screen — and `a11y::assert_every_control_is_named`, §3.1 |
 | `getByLabel`, `getByRole` | `harness.get_by_label(..)`, `query_all_by_role(..)` (kittest's own queries) |
 | Playwright "no interactive element is unreachable by keyboard" | `a11y::focus_order(&mut harness, max_stops)` — presses Tab, reports the labels reached, stops when the order cycles so a focus trap fails instead of hanging |
 | axe colour-contrast | token contrast unit tests over the 20 roles × 4 themes (O1.3) |
-| — (nothing automated can replace it) | the manual VoiceOver/Narrator script, run per phase (`docs/accessibility/manual-screen-reader-script.md`) |
+| — (nothing automated can replace it) | the manual VoiceOver/Narrator scripts, run per phase: `scripts/ui-a11y-egui.md` for the egui shell, `docs/accessibility/manual-screen-reader-script.md` for the React build |
 
 Example, from `apps/plaudon-egui/tests/spike_kittest.rs`: the vendored divider must report
 `Role::Splitter` with the label "Resize the library pane", and the two toolbar actions and the
 divider must all appear in the Tab order.
+
+### 3.1 The naming contract (S17)
+
+WCAG 2.2 AA 4.1.2 wants a name, a role and a value on every component. egui supplies role and
+value; the **name** is the part a screen has to give and the part that vanishes when a control
+becomes an icon. `a11y::assert_every_control_is_named(&harness, screen, exemptions)` asserts that
+every non-hidden node whose role is in `a11y::INTERACTIVE_ROLES` has a label with at least one
+non-whitespace character.
+
+`INTERACTIVE_ROLES` is a typed, explicit list (`Button`, `Link`, `CheckBox`, `RadioButton`,
+`Switch`, `Tab`, `MenuItem`…, the text inputs, `ComboBox`, `Slider`, `SpinButton`, `Splitter`,
+`ColorWell`, `ColumnHeader`, `DisclosureTriangle`, `TreeItem`) rather than AccessKit's
+`is_focusable`/`is_clickable`, for two reasons given in full in its doc comment: those predicates
+need a tree filter, which would make the check depend on how the filter was written, and a
+*disabled* control is neither focusable nor clickable while still needing a name. `ScrollBar`,
+`Row`, `Cell` and the text roles are deliberately out.
+
+The exemption mechanism is `a11y::NamedByContainer { role, container, why }`: **one role inside
+one named ancestor**, for the rare control whose name genuinely belongs to its container. It
+cannot silence a role globally, and the `why` is printed next to any violation that was not
+waived. As of this suite the exemption list is **empty** — every control the sweep reaches names
+itself.
+
+The sweep is `apps/plaudon-egui/tests/a11y_contract.rs`, which drives the application the binary
+runs (`plaudon_egui::screens::register_all`) to every destination, every sub-route, the recording
+detail, search, the first-run flow and the command palette.
 
 ## 4. Snapshot policy — the O1.2 decision
 
@@ -123,6 +171,17 @@ The runner copies back `*.png` under any `tests/visual/` directory as well as `*
 `*.diff.png`, so a failed comparison always arrives with the image that failed and the diff. A
 regenerated baseline is committed **with the change that caused it**, never on its own.
 
+The nine scale baselines are regenerated the same way, with the crate the suite lives in:
+
+```sh
+PLAUDON_E2E_APT_PACKAGES=libdbus-1-dev scripts/e2e-remote.sh shell \
+  'UPDATE_SNAPSHOTS=1 PLAUDON_VISUAL=1 cargo test -p plaudon-ui --test scale_kittest'
+cp target/e2e-results/crates/ui/tests/visual/*.png crates/ui/tests/visual/
+# then prove the committed files compare clean, without UPDATE_SNAPSHOTS:
+PLAUDON_E2E_APT_PACKAGES=libdbus-1-dev scripts/e2e-remote.sh shell \
+  'PLAUDON_VISUAL=1 cargo test -p plaudon-ui --test scale_kittest'
+```
+
 ## 5. Where tests run
 
 | Suite | Where | Command |
@@ -143,6 +202,8 @@ regenerated baseline is committed **with the change that caused it**, never on i
 | `plaudon-platform` adapter tests (fakes only; no dialog, clipboard or tray is touched) | anywhere, no GPU | `cargo test -p plaudon-platform` |
 | Desktop integration (tray model, drag-drop classification, deep links) | anywhere; the tray backend is linked on macOS and Windows only | `cargo test -p plaudon-egui --lib` |
 | Packaging inputs (O2.6): bundle identifier and library path, entitlement set, the NSIS registry claim against `plaudon_platform::associations`, icon geometry, the Windows manifest, and that both packaging scripts fail closed without a credential | anywhere, no GPU, **both platforms** — it asserts the macOS inputs on Windows and the Windows inputs on macOS | `cargo test -p plaudon-egui --test packaging` |
+| High-DPI suite (S16): the shell at rest, the library list and the recording detail at 1.0×, 1.5× and 2.0× | anywhere for the layout assertions, **MARS** for the nine baselines | `cargo test -p plaudon-ui --test scale_kittest` |
+| Accessibility naming contract (S17): every destination, every sub-route, the recording detail, search, the first-run flow and the command palette | anywhere (software raster), no GPU | `cargo test -p plaudon-egui --test a11y_contract` |
 | Snapshot comparison, scale and performance runs | **MARS only** | `scripts/e2e-remote.sh …` |
 
 The resource policy is part of the test strategy: heavy or renderer-dependent runs go to MARS Docker

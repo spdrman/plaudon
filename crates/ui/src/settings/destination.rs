@@ -172,6 +172,12 @@ impl Screen for SettingsDestinationScreen {
         self.sources.on_ui_event(event, cx);
     }
 
+    fn on_open_archive(&mut self, path: &str, cx: &mut ScreenCtx<'_>) -> bool {
+        // Only the settings child restores: the shell has already navigated
+        // to `Route::Settings`, which is the child that will be painted.
+        self.settings.on_open_archive(path, cx)
+    }
+
     fn on_resync(&mut self, reason: ResyncReason, cx: &mut ScreenCtx<'_>) {
         self.settings.on_resync(reason, cx);
         self.activity.on_resync(reason, cx);

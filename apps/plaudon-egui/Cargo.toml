@@ -47,6 +47,26 @@ tracing = { workspace = true }
 # there instead.
 tray-icon = { workspace = true }
 
+[target.'cfg(target_os = "macos")'.dependencies]
+# The application menu in the system menu bar (parity row S8). macOS only:
+# Windows and Linux keep the in-window menu bar, which is where their menu
+# belongs. `muda` is already linked here through `tray-icon`, at this version,
+# so naming it directly adds no package to the graph — it only stops the
+# application menu depending on the tray crate for its types.
+muda = { workspace = true }
+# The Objective-C runtime, for the one thing winit does not surface: a
+# document or `plaudon://` link the OS hands a *running* application
+# (parity row C10, `src/mac_open.rs`). All three are already in the graph at
+# these versions through `tray-icon`/`muda`, so naming them adds no package.
+objc2 = { workspace = true }
+objc2-app-kit = { workspace = true, features = ["NSApplication", "NSResponder"] }
+objc2-foundation = { workspace = true, features = [
+    "NSArray",
+    "NSNotification",
+    "NSString",
+    "NSURL",
+] }
+
 [target.'cfg(target_os = "linux")'.dependencies]
 # Window-system backends are Linux-only features of winit; `default-features`
 # is off, so they have to be named.

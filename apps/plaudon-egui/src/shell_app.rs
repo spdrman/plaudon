@@ -21,7 +21,12 @@ use std::time::{Duration, Instant};
 use plaudon_app::event::Waker;
 use plaudon_app::runtime::AppEngine;
 use plaudon_app::shell_state::ShellState;
-use plaudon_ui::shell::{HostHooks, Shell, ShellHost};
+use plaudon_platform::activation::Activation;
+use plaudon_platform::dragdrop::DropClassification;
+use plaudon_platform::theme::OsTheme;
+use plaudon_ui::shell::{ActivationTarget, HostHooks, OpenRequest, Shell, ShellHost};
+
+use crate::desktop::{Desktop, DesktopEvent};
 
 /// How long the shell waits after the last change before writing its state.
 ///
@@ -56,8 +61,20 @@ pub struct PlaudonShell {
     engine: Option<AppEngine>,
     hooks: HostHooks,
     shell: Shell,
+    /// The platform adapters, when the binary supplied them. A test drives
+    /// the shell without any, and queues [`DesktopEvent`]s directly.
+    desktop: Option<Desktop>,
+    /// What the desktop asked for before the first frame could ask for it:
+    /// the launch argument vector, parsed before the window existed.
+    queued_desktop: Vec<DesktopEvent>,
+    /// Set when the desktop asked to quit, so the window closes once.
+    closing: bool,
     waker_installed: bool,
     pending_save: Option<(ShellState, Instant)>,
+    /// Whether the window had focus on the previous frame, so the operating
+    /// system's appearance is re-read when it comes back and never per
+    /// frame.
+    was_focused: bool,
 }
 
 impl PlaudonShell {
@@ -68,9 +85,31 @@ impl PlaudonShell {
             engine: Some(engine),
             hooks,
             shell: Shell::new(state),
+            desktop: None,
+            queued_desktop: Vec::new(),
+            closing: false,
             waker_installed: false,
             pending_save: None,
+            was_focused: true,
         }
+    }
+
+    /// Hand over the platform adapters (matrix rows C10 and C11).
+    ///
+    /// The binary builds them inside eframe's creation closure, because on
+    /// macOS the status item has to be created on the main thread after the
+    /// event loop started; owning them here is what makes their events
+    /// arrive, since nothing else is called once per frame.
+    pub fn set_desktop(&mut self, desktop: Desktop) {
+        self.desktop = Some(desktop);
+    }
+
+    /// Queue something the desktop asked for before the window existed.
+    ///
+    /// The launch argument vector is parsed before `eframe::run_native`, so
+    /// its request waits here until there is a frame to answer it in.
+    pub fn queue_desktop_event(&mut self, event: DesktopEvent) {
+        self.queued_desktop.push(event);
     }
 
     /// The shell, for registering screens and for tests.
@@ -121,8 +160,94 @@ impl PlaudonShell {
         }
     }
 
+    /// Hand everything the desktop delivered to the shell (matrix rows C10
+    /// and C11).
+    ///
+    /// Called once per frame before the shell paints, so an activation is
+    /// answered by the frame it arrived in. Every event has exactly one
+    /// effect and none is dropped.
+    pub fn pump_desktop(&mut self, ctx: &egui::Context) {
+        #[cfg(target_os = "macos")]
+        {
+            // An Apple event can land while the window is idle, and this
+            // application paints nothing when nothing happened.
+            crate::mac_open::set_repaint_target(ctx);
+            // The application menu posts to the same process-global `muda`
+            // channel the tray uses, and it exists even when the tray
+            // backend could not be built (parity row S8).
+            for id in crate::app_menu::drain() {
+                self.with_host(|shell, host| shell.run_command(&id, host));
+            }
+        }
+
+        // The operating system's appearance is re-read when the window comes
+        // back, never per frame: it is a process spawn on macOS.
+        let focused = ctx.input(|input| input.viewport().focused.unwrap_or(true));
+        let regained = focused && !self.was_focused;
+        self.was_focused = focused;
+
+        let mut events = std::mem::take(&mut self.queued_desktop);
+        if let Some(desktop) = self.desktop.as_mut() {
+            events.extend(desktop.drain());
+            if regained {
+                events.extend(desktop.refresh_os_theme());
+            }
+        }
+        for event in events {
+            self.apply_desktop_event(event, ctx);
+        }
+    }
+
+    /// One desktop event, as the one thing it means.
+    fn apply_desktop_event(&mut self, event: DesktopEvent, ctx: &egui::Context) {
+        match event {
+            DesktopEvent::FocusWindow => self.shell.activate_window(),
+            DesktopEvent::Activate(activation) => {
+                self.shell.activate_target(activation_target(activation));
+            }
+            DesktopEvent::Open(classified) => {
+                let request = open_request(classified);
+                self.with_host(|shell, host| shell.open_files(request, host));
+            }
+            DesktopEvent::TrayCommand(id) => {
+                self.with_host(|shell, host| shell.run_command(id.as_str(), host));
+            }
+            DesktopEvent::Quit => self.request_close(ctx),
+            DesktopEvent::OsThemeChanged(theme) => {
+                self.shell.set_system_dark(theme == OsTheme::Dark);
+            }
+        }
+    }
+
+    /// Run `visit` with the shell and a host over the live engine.
+    ///
+    /// Does nothing once the engine has been wound down: there is no
+    /// dispatcher to send to, and a command raised then could not commit.
+    fn with_host<R>(&mut self, visit: impl FnOnce(&mut Shell, &ShellHost<'_>) -> R) -> Option<R> {
+        let engine = self.engine.as_ref()?;
+        let host = ShellHost {
+            dispatcher: engine.dispatcher(),
+            hooks: &self.hooks,
+        };
+        Some(visit(&mut self.shell, &host))
+    }
+
+    /// Close the window the orderly way, once.
+    ///
+    /// `ViewportCommand::Close` and not an immediate shutdown: eframe then
+    /// calls [`PlaudonShell::on_exit`], which is where every screen gets its
+    /// last turn and the shell state is flushed.
+    fn request_close(&mut self, ctx: &egui::Context) {
+        if self.closing {
+            return;
+        }
+        self.closing = true;
+        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+    }
+
     /// Paint one frame.
     pub fn view(&mut self, ui: &mut egui::Ui) {
+        self.pump_desktop(ui.ctx());
         self.pump_events();
         let Some(engine) = self.engine.as_ref() else {
             return;
@@ -132,13 +257,14 @@ impl PlaudonShell {
             hooks: &self.hooks,
         };
         self.shell.ui(ui, &host);
-        // Parity row J15: a notification click routes the shell and raises
-        // the window. The shell decided where to go; only the host can
-        // un-minimise and focus a viewport.
+        // Parity rows C10 and J15: a notification click, a deep link or a
+        // tray click routes the shell and raises the window. The shell
+        // decided where to go; only the host can un-minimise and focus a
+        // viewport.
         if self.shell.take_activation() {
-            ui.ctx()
-                .send_viewport_cmd(egui::ViewportCommand::Minimized(false));
-            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Focus);
+            for command in crate::desktop::focus_commands() {
+                ui.ctx().send_viewport_cmd(command);
+            }
         }
         self.persist(ui.ctx());
     }
@@ -193,6 +319,52 @@ impl PlaudonShell {
         if let Some(engine) = self.engine.take() {
             engine.shutdown(SHUTDOWN_GRACE);
         }
+    }
+}
+
+/// The platform's activation, as the shell's own vocabulary.
+///
+/// Total in both directions and deliberately dull: the view layer does not
+/// depend on `plaudon-platform`, so this is the one place the two
+/// three-case enums meet.
+const fn activation_target(activation: Activation) -> ActivationTarget {
+    match activation {
+        Activation::Recording(recording_id) => ActivationTarget::Recording(recording_id),
+        Activation::Job(job_id) => ActivationTarget::Job(job_id),
+        Activation::Settings => ActivationTarget::Settings,
+    }
+}
+
+/// A validated drop or launch, as the shell's open request.
+///
+/// Only reason codes cross: a path the application refused is user data,
+/// and the toast that reports the refusal has no business echoing it.
+fn open_request(classified: DropClassification) -> OpenRequest {
+    let mut refused: Vec<String> = classified
+        .rejected
+        .iter()
+        .map(|rejected| rejected.reason.reason_code().to_owned())
+        .collect();
+    // A folder is not a document: the installer claims no folder type, and
+    // watched folders are configured in Settings, not opened.
+    refused.extend(
+        classified
+            .directories
+            .iter()
+            .map(|_| "folder_is_not_a_document".to_owned()),
+    );
+    OpenRequest {
+        audio: classified
+            .audio
+            .into_iter()
+            .map(|validated| validated.requested)
+            .collect(),
+        archives: classified
+            .archives
+            .iter()
+            .map(|path| path.display().to_string())
+            .collect(),
+        refused,
     }
 }
 

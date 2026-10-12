@@ -99,13 +99,19 @@ pub enum AppEvent {
     /// A §15.3 event: something changed, refetch what depends on it.
     Ui(UiEvent),
     /// The outcome of a command previously handed to the dispatcher.
+    ///
+    /// The payload is boxed because it is the one large variant: an
+    /// [`AppResponse`] is as wide as the widest response DTO (hundreds of
+    /// bytes), while a [`AppEvent::Ui`] is a few dozen. Unboxed, every slot
+    /// of the bounded queue — and every event the render loop moves, most of
+    /// them `Ui` — would cost the maximum.
     Response {
         /// The id returned by `Dispatcher::send`.
         id: CommandId,
         /// The command's published name, for logs and tests.
         command: &'static str,
         /// The typed response, or the §15.4 envelope.
-        result: Result<AppResponse, ErrorEnvelope>,
+        result: Box<Result<AppResponse, ErrorEnvelope>>,
     },
     /// The interface's cached state may be stale; refetch everything.
     Resync {
@@ -596,14 +602,14 @@ mod tests {
         tx.send(AppEvent::Response {
             id: CommandId::from_raw(1),
             command: "list_recordings",
-            result: Err(plaudon_domain::error::AppError::new(
+            result: Box::new(Err(plaudon_domain::error::AppError::new(
                 plaudon_domain::error::AppErrorCode::InternalError,
                 "detail",
             )
             .to_envelope(
                 &mut plaudon_domain::error::DiagnosticLog::new(),
                 plaudon_domain::time::Timestamp::EPOCH,
-            )),
+            ))),
         });
         for seq in 1..=20 {
             tx.send(AppEvent::Ui(ui(
