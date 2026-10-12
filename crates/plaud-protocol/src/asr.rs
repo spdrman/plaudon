@@ -350,7 +350,7 @@ impl<W: Write> OggOpusWriter<W> {
     }
 
     /// Append one packet's lacing values and bytes to the current page.
-    fn stage_packet(&mut self, packet: &[u8]) -> Result<(), AsrError> {
+    fn stage_packet(&mut self, packet: &[u8]) {
         let mut remaining = packet.len();
         let mut written = 0usize;
         loop {
@@ -370,7 +370,6 @@ impl<W: Write> OggOpusWriter<W> {
                 break;
             }
         }
-        Ok(())
     }
 
     fn write_header_pages(&mut self, channels: u8, input_rate: u32) -> Result<(), AsrError> {
@@ -382,7 +381,7 @@ impl<W: Write> OggOpusWriter<W> {
         head.extend_from_slice(&input_rate.to_le_bytes());
         head.extend_from_slice(&0i16.to_le_bytes()); // output gain
         head.push(0); // channel mapping family 0
-        self.stage_packet(&head)?;
+        self.stage_packet(&head);
         self.write_page(0x02, 0, false)?;
 
         let vendor = b"plaudon";
@@ -395,7 +394,7 @@ impl<W: Write> OggOpusWriter<W> {
         tags.extend_from_slice(&1u32.to_le_bytes());
         tags.extend_from_slice(&u32::try_from(comment.len()).unwrap_or(0).to_le_bytes());
         tags.extend_from_slice(comment);
-        self.stage_packet(&tags)?;
+        self.stage_packet(&tags);
         self.write_page(0x00, 0, false)?;
         self.first_page = false;
         Ok(())
@@ -409,7 +408,7 @@ impl<W: Write> OggOpusWriter<W> {
             let granule = self.page_granule;
             self.write_page(0x00, granule, false)?;
         }
-        self.stage_packet(packet)?;
+        self.stage_packet(packet);
         self.granule += u64::from(duration_us) * u64::from(OPUS_TIMEBASE_HZ) / 1_000_000;
         self.page_granule = self.granule + u64::from(OPUS_PRE_SKIP);
         Ok(())

@@ -483,7 +483,7 @@ mod tests {
             decision.ui_label(),
             SupportStatus::KnownUnsupported.ui_label()
         );
-        assert!(!decision.known_limitations().is_empty());
+        assert_ne!(decision.known_limitations(), Vec::<String>::new());
     }
 
     #[test]

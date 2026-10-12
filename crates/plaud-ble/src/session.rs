@@ -122,7 +122,14 @@ impl SessionDriver {
             (S::NeedsProvisioning | S::Probing, SessionEvent::Authenticated) => S::Authenticated,
             (_, SessionEvent::AuthRejected) => S::UnsupportedAuth,
 
-            (S::Authenticated | S::Available, SessionEvent::EnumerationStarted) => S::Enumerating,
+            // A session stays authenticated across a transfer, so a second
+            // enumeration is legitimate once bytes have been verified or
+            // committed. This is what the non-destructive audit does: list,
+            // read, list again (spec App. B.6).
+            (
+                S::Authenticated | S::Available | S::Verifying | S::DurableCommit | S::Imported,
+                SessionEvent::EnumerationStarted,
+            ) => S::Enumerating,
             (S::Enumerating, SessionEvent::EnumerationSucceeded) => S::Available,
 
             (S::Available, SessionEvent::TransferStarted) => S::Transferring,
@@ -306,6 +313,36 @@ mod tests {
             DeviceSessionState::Disconnected
         );
         assert!(!driver.may_read());
+    }
+
+    #[test]
+    fn an_authenticated_session_may_enumerate_again_after_a_transfer() {
+        let mut driver = SessionDriver::new();
+        driver.apply(&SessionEvent::ProbeRequested);
+        driver.apply(&legacy_profile());
+        driver.apply(&SessionEvent::Authenticated);
+        driver.apply(&SessionEvent::EnumerationStarted);
+        driver.apply(&SessionEvent::EnumerationSucceeded);
+        driver.apply(&SessionEvent::TransferStarted);
+        driver.apply(&SessionEvent::TransferEnded);
+        assert_eq!(driver.state(), DeviceSessionState::Verifying);
+
+        // The audit's second pass: list again without reauthenticating.
+        driver.apply(&SessionEvent::EnumerationStarted);
+        assert_eq!(
+            driver.apply(&SessionEvent::EnumerationSucceeded),
+            DeviceSessionState::Available
+        );
+
+        // But a failed gate still absorbs everything.
+        let mut refused = SessionDriver::new();
+        refused.apply(&SessionEvent::ProbeRequested);
+        refused.apply(&SessionEvent::ProfileIdentified {
+            firmware_validated: false,
+            auth_scheme: AuthScheme::LegacyStaticToken,
+        });
+        refused.apply(&SessionEvent::EnumerationStarted);
+        assert_eq!(refused.state(), DeviceSessionState::UnsupportedProfile);
     }
 
     #[test]

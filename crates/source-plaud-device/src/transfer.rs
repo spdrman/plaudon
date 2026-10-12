@@ -603,6 +603,21 @@ impl<W: Write> StagingAcquisition<W> {
     }
 }
 
+/// The actor hands frames straight to the acquisition, so a transfer streams
+/// from radio to disk without the recording ever being held in memory
+/// (spec App. B.4).
+impl<W: Write + Send> plaudon_plaud_ble::FrameSink for StagingAcquisition<W> {
+    fn accept(&mut self, frame: &BulkFrame) -> Result<(), DeviceError> {
+        Self::accept(self, frame)
+            .map(|_| ())
+            .map_err(DeviceError::from)
+    }
+
+    fn written(&self) -> u64 {
+        Self::written(self)
+    }
+}
+
 /// Produce the playable conversion from staged sidecar bytes.
 ///
 /// A remux, not a decode: the coded packets are copied unchanged into an Ogg
@@ -790,7 +805,7 @@ mod tests {
                 ceiling: LEGACY_NOTE_V0095.max_transfer_bytes,
             })
         );
-        assert!(staging.is_empty());
+        assert_eq!(staging, Vec::<u8>::new());
     }
 
     #[test]
@@ -855,7 +870,7 @@ mod tests {
         let mut derived = Vec::new();
         let outcome = derive_playable(&report, &mut bytes.as_slice(), &mut derived);
         assert!(matches!(outcome, DerivativeOutcome::Unavailable { .. }));
-        assert!(derived.is_empty());
+        assert_eq!(derived, Vec::<u8>::new());
     }
 
     #[test]

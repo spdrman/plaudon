@@ -224,9 +224,7 @@ impl DeviceBinding {
         let digest = hasher.finalize();
         let mut id = String::with_capacity(4 + 32);
         id.push_str("dev-");
-        for byte in &digest[..16] {
-            id.push_str(&format!("{byte:02x}"));
-        }
+        id.push_str(&hex_lower(&digest[..16]));
         id
     }
 
@@ -388,7 +386,7 @@ impl<'a> DeviceCredentials<'a> {
 /// Decode a hex-encoded token without ever formatting the value.
 fn decode_token_hex(token_hex: &str) -> Result<Vec<u8>, CredentialError> {
     let trimmed = token_hex.trim();
-    if trimmed.is_empty() || trimmed.len() % 2 != 0 {
+    if trimmed.is_empty() || !trimmed.len().is_multiple_of(2) {
         return Err(CredentialError::CredentialShape {
             offered_bytes: trimmed.len() / 2,
         });
@@ -416,9 +414,10 @@ const fn nibble(byte: u8) -> Option<u8> {
 }
 
 fn hex_lower(bytes: &[u8]) -> String {
+    use std::fmt::Write as _;
     let mut out = String::with_capacity(bytes.len() * 2);
     for byte in bytes {
-        out.push_str(&format!("{byte:02x}"));
+        let _ = write!(out, "{byte:02x}");
     }
     out
 }
@@ -667,6 +666,7 @@ mod tests {
         assert!(joined.contains("copied token"));
         assert!(joined.contains("local-only mode"));
         assert!(!joined.contains("end-to-end"));
+        assert_eq!(LEGACY_DISCLOSURES.len(), 3);
     }
 
     #[test]

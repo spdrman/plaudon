@@ -1,0 +1,23 @@
+{
+  "fixture_version": 1,
+  "name": "encrypted-mode-offer",
+  "profile": "plaud-note-legacy-v0095",
+  "device_model": "Note",
+  "firmware": "V0095",
+  "synthetic": true,
+  "provenance": "Synthesized by ScenarioBuilder from the protocol description in spec App. B.3. Contains no captured credential and no captured audio.",
+  "battery_percent": 80,
+  "control_characteristic": null,
+  "radio_permission_denied": false,
+  "exchanges": [
+    {
+      "expect": {
+        "request": "authenticate"
+      },
+      "reply_frames": [
+        "01000100020200"
+      ],
+      "then": "continue"
+    }
+  ]
+}

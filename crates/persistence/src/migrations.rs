@@ -326,7 +326,6 @@ mod tests {
         let runner = MigrationRunner::new();
         let report = runner.run(&db).await.unwrap();
 
-
         let expected: Vec<i64> = MIGRATIONS.iter().map(|m| m.version).collect();
         assert_eq!(report.applied, expected);
         assert_eq!(

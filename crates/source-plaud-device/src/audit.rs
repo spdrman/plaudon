@@ -420,7 +420,7 @@ mod tests {
         codes.dedup();
         assert_eq!(codes.len(), total);
         for outcome in &outcomes {
-            assert!(!outcome.ui_explanation().is_empty());
+            assert_ne!(outcome.ui_explanation(), "");
         }
     }
 }
