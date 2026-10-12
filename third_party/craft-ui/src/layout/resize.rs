@@ -1,8 +1,9 @@
 // Adapted from storytold/craft-libs, crates/ui/src/layout/resize.rs @ 1aa81a773aa9198a0e4c0daeda954d622475af38
 // Copyright (c) 2026 ArtCraft Team and the craft-libs contributors
 // Licensed under MIT OR Apache-2.0. Modified: the two let-chains rewritten for
-// edition 2021 (Plaudon is edition 2021, MSRV 1.90); `#[derive(Debug)]` added to
-// satisfy the workspace `missing_debug_implementations` lint; imports reordered
+// edition 2021 (Plaudon is edition 2021, MSRV 1.90); `#[derive(Debug)]` and `#[must_use]`
+// added to satisfy the workspace `missing_debug_implementations` and
+// `clippy::pedantic` lints; imports reordered
 // for rustfmt.
 
 use std::ops::RangeInclusive;
@@ -68,12 +69,14 @@ impl<'a> ResizeHandle<'a> {
     }
 
     /// Expand the hit rectangle along the movement axis, in logical points. Default: 3.
+    #[must_use]
     pub fn hit_margin(mut self, margin: f32) -> Self {
         self.hit_margin = margin;
         self
     }
 
     /// Keyboard and accessibility increment/decrement size in logical points. Default: 8.
+    #[must_use]
     pub fn keyboard_step(mut self, step: f32) -> Self {
         self.step = step;
         self
@@ -81,6 +84,7 @@ impl<'a> ResizeHandle<'a> {
 
     /// Expose the current size and bounds to accessibility, and support its SetValue action.
     /// The caller remains responsible for updating this value when it accepts a delta.
+    #[must_use]
     pub fn value(mut self, value: f32, range: RangeInclusive<f32>) -> Self {
         self.value = Some((value, range));
         self

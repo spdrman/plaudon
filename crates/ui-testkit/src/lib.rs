@@ -42,7 +42,6 @@ pub const DEFAULT_PIXELS_PER_POINT: f32 = 1.0;
 /// Fixed size and scale, light theme, and a fixed reported operating system so
 /// that shortcut rendering (`Cmd` versus `Ctrl`) does not depend on where the
 /// test runs.
-#[must_use]
 pub fn builder<State>() -> HarnessBuilder<State> {
     Harness::<State>::builder()
         .with_size(DEFAULT_SIZE)
