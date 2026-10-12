@@ -24,6 +24,7 @@ pub mod ai_key;
 pub mod appearance;
 pub mod backup;
 pub mod consent;
+pub mod destination;
 pub mod engines;
 pub mod export;
 pub mod intent;
@@ -49,6 +50,7 @@ use plaudon_app::settings_presentation::UpdateStatus;
 use plaudon_app::shortcuts::{ShortcutBindings, ShortcutSpec};
 use plaudon_domain::error::ErrorEnvelope;
 
+pub use destination::SettingsDestinationScreen;
 pub use intent::{FilePurpose, FolderPurpose, SettingsDestination, SettingsIntent, SettingsOutput};
 pub use shell_adapter::{OnboardingShellScreen, SettingsShellScreen};
 pub use theme::{SettingsTokens, Tone, VisualsTokens};

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/resolve_media.request.schema.json",
+  "title": "resolve_media.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["recording_id"],
+  "properties": {
+    "recording_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Recording whose archived media is wanted."
+    }
+  }
+}

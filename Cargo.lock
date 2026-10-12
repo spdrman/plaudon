@@ -5714,13 +5714,20 @@ dependencies = [
 name = "plaudon-egui"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "eframe",
  "egui",
+ "plaudon-ai-openrouter",
  "plaudon-app",
+ "plaudon-audio-playback",
  "plaudon-craft-ui",
  "plaudon-diagnostics",
  "plaudon-domain",
  "plaudon-platform",
+ "plaudon-plaud-ble",
+ "plaudon-plaud-protocol",
+ "plaudon-security",
+ "plaudon-transcript-doc",
  "plaudon-ui",
  "plaudon-ui-testkit",
  "rfd 0.17.2",

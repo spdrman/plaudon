@@ -10,6 +10,7 @@ pub mod connector;
 pub mod folders;
 pub mod presentation;
 pub mod recordings;
+pub mod shell_adapter;
 
 use std::collections::{BTreeMap, BTreeSet};
 

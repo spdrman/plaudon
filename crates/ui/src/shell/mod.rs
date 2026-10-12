@@ -21,6 +21,7 @@
 
 pub mod commands;
 pub mod host;
+pub mod intents;
 pub mod layout;
 pub mod menu;
 pub mod nav;
@@ -103,6 +104,7 @@ pub struct Shell {
     focus_main: bool,
     dirty: bool,
     pending_import: Option<CommandId>,
+    activation_requested: bool,
 }
 
 impl Shell {
@@ -136,6 +138,7 @@ impl Shell {
             focus_main: false,
             dirty: false,
             pending_import: None,
+            activation_requested: false,
         }
     }
 
@@ -279,6 +282,27 @@ impl Shell {
         Some(self.shell_state())
     }
 
+    /// Whether a destination has a screen, rather than the registry's
+    /// "not built yet" state.
+    #[must_use]
+    pub fn has_screen(&self, destination: Destination) -> bool {
+        self.screens.has(destination)
+    }
+
+    /// Whether the first-run flow is registered (parity row S15).
+    #[must_use]
+    pub fn has_onboarding(&self) -> bool {
+        self.screens.has_onboarding()
+    }
+
+    /// The window is closing: give every screen its last, frame-less turn.
+    ///
+    /// Called by the host from `eframe::App::on_exit`, before the engine is
+    /// wound down, so a command a screen sends here still runs.
+    pub fn shutdown(&mut self, host: &ShellHost<'_>) {
+        self.for_each_screen(host, |screen, cx| screen.on_shutdown(cx));
+    }
+
     /// Apply one event from the application.
     ///
     /// The host drains the channel and hands every event here; the shell
@@ -373,7 +397,35 @@ impl Shell {
     }
 
     fn handle_ui_event(&mut self, event: &UiEvent, host: &ShellHost<'_>) {
+        if event.kind == plaudon_app::dto::EventKind::ActivationRequested {
+            self.activate(event);
+        }
         self.for_each_screen(host, |screen, cx| screen.on_ui_event(event, cx));
+    }
+
+    /// A notification was clicked (parity row J15).
+    ///
+    /// The event names what the user clicked, so the shell goes there; the
+    /// window itself is the host's to raise, which it does by taking
+    /// [`Shell::take_activation`]. The shell never guesses a destination
+    /// from an event that names nothing — it raises the window and leaves
+    /// the user where they were.
+    fn activate(&mut self, event: &UiEvent) {
+        self.activation_requested = true;
+        if let Some(recording_id) = event.recording_id {
+            self.navigate(Route::LibraryRecording {
+                recording_id: recording_id.to_string(),
+            });
+        } else if let Some(job_id) = event.job_id {
+            self.navigate(Route::JobsJob {
+                job_id: job_id.to_string(),
+            });
+        }
+    }
+
+    /// Whether the window should be raised and focused, consumed once.
+    pub fn take_activation(&mut self) -> bool {
+        std::mem::take(&mut self.activation_requested)
     }
 
     fn handle_resync(&mut self, reason: ResyncReason, dropped: u64, host: &ShellHost<'_>) {

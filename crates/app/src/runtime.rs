@@ -38,7 +38,7 @@ use crate::events::{EventPublisher, EventSink};
 use crate::notify;
 use crate::secrets::{KeyringSecretStore, SecretStore};
 use crate::updater::UpdateService;
-use crate::{build_ports_with_radio, default_approved_roots, AppPorts};
+use crate::{default_approved_roots, AppPorts};
 
 /// The bundle identifier the Tauri shell shipped with, and therefore the
 /// directory name an existing installation already uses.
@@ -61,6 +61,7 @@ pub struct EngineConfig {
     waker: Arc<dyn Waker>,
     secrets: Arc<dyn SecretStore>,
     radio: Arc<dyn DeviceRadio>,
+    cloud_transport: Option<Arc<dyn plaudon_ai_openrouter::transport::AsyncHttpTransport>>,
     notifier: Option<Arc<dyn plaudon_notifications::Notifier>>,
     worker_threads: Option<usize>,
 }
@@ -88,6 +89,7 @@ impl EngineConfig {
             waker: Arc::new(NoopWaker),
             secrets: Arc::new(KeyringSecretStore::new()),
             radio: Arc::new(NoRadio),
+            cloud_transport: None,
             notifier: None,
             worker_threads: None,
         }
@@ -142,6 +144,20 @@ impl EngineConfig {
     #[must_use]
     pub fn with_radio(mut self, radio: Arc<dyn DeviceRadio>) -> Self {
         self.radio = radio;
+        self
+    }
+
+    /// Replace the cloud HTTPS transport.
+    ///
+    /// The one reason to do this is a test that must prove nothing left the
+    /// process: a transport that records and refuses is the only way to tell
+    /// "no request was made" apart from "a request was made and failed".
+    #[must_use]
+    pub fn with_cloud_transport(
+        mut self,
+        transport: Arc<dyn plaudon_ai_openrouter::transport::AsyncHttpTransport>,
+    ) -> Self {
+        self.cloud_transport = Some(transport);
         self
     }
 
@@ -236,13 +252,14 @@ impl AppEngine {
             NotificationSettings::uniform(false),
         ));
 
-        let ports = runtime.block_on(build_ports_with_radio(
+        let ports = runtime.block_on(crate::build_ports_with(
             &config.data_dir,
             sink,
             notifications,
             config.secrets,
             config.approved_roots,
             config.radio,
+            config.cloud_transport,
         ))?;
         *publisher.lock() = Some(ports.events.clone());
 

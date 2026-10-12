@@ -10,9 +10,11 @@ use plaudon_app::dto::UiEvent;
 use plaudon_app::event::ResyncReason;
 use plaudon_domain::error::ErrorEnvelope;
 
+use crate::ai::AiOutput;
 use crate::screens::inbox::{InboxIntent, InboxScreen};
 use crate::screens::recording::{DetailContext, DetailIntent};
 use crate::screens::search::SearchIntent;
+use crate::shell::intents::apply_ai_output;
 use crate::shell::route::{Destination, Route};
 use crate::shell::screen::{Screen, ScreenCtx};
 
@@ -50,6 +52,40 @@ impl LibraryScreen {
             }
         }
     }
+
+    /// Hand one frame of panel output to the shell.
+    ///
+    /// A seek belongs to the player the panels own, so it never reaches
+    /// here: [`crate::screens::recording::DetailPanels`] routes its own
+    /// seeks before returning. One that does arrive would be a panel asking
+    /// for a player this host does not have, and dropping it silently is
+    /// what this assertion-free `debug_assert` is for.
+    fn drain_panels(&mut self, out: crate::ai::AiOutput, cx: &mut ScreenCtx<'_>) {
+        let unrouted = apply_ai_output(out, cx);
+        debug_assert!(
+            unrouted.is_empty(),
+            "the detail panels own the player and must route their own seeks"
+        );
+    }
+
+    /// Tell the panels the detail view is gone, if it was open.
+    fn close_detail(&mut self, cx: &mut ScreenCtx<'_>) {
+        if self.detail.recording_id().is_none() {
+            return;
+        }
+        let mut out = crate::ai::AiOutput::default();
+        self.detail.close(self.panels.as_mut(), &mut out);
+        self.drain_panels(out, cx);
+    }
+
+    /// Flush everything the panels still hold: the window is closing.
+    ///
+    /// The shell calls this through [`crate::shell::screen::Screen::on_shutdown`];
+    /// it is the same path as navigating away, so there is one flush rule and
+    /// not two.
+    pub fn shutdown(&mut self, cx: &mut ScreenCtx<'_>) {
+        self.close_detail(cx);
+    }
 }
 
 impl Screen for LibraryScreen {
@@ -79,10 +115,15 @@ impl Screen for LibraryScreen {
                     return;
                 };
                 with_sender!(cx, |send| self.detail.open(parsed, &mut send));
-                let context = DetailContext { local_only: true };
+                let context = DetailContext {
+                    local_only: self.panels.local_only(),
+                };
                 let panels = self.panels.as_mut();
-                let intents =
-                    with_sender!(cx, |send| self.detail.ui(ui, panels, context, &mut send));
+                let mut out = AiOutput::default();
+                let intents = with_sender!(cx, |send| self
+                    .detail
+                    .ui(ui, panels, context, &mut send, &mut out));
+                self.drain_panels(out, cx);
                 for intent in intents {
                     match intent {
                         DetailIntent::Back => cx.navigate(Route::Library),
@@ -91,6 +132,10 @@ impl Screen for LibraryScreen {
                 }
             }
             _ => {
+                // Leaving the detail view is what gives a half-typed edit
+                // its last chance to be saved and stops the audio device;
+                // nothing else tells the panels the user walked away.
+                self.close_detail(cx);
                 let intents = with_sender!(cx, |send| LibraryScreen::ui(self, ui, &mut send));
                 self.route_intents(intents, cx);
             }
@@ -100,10 +145,13 @@ impl Screen for LibraryScreen {
     fn on_response(
         &mut self,
         id: CommandId,
-        _command: &'static str,
+        command: &'static str,
         result: &Result<AppResponse, ErrorEnvelope>,
         cx: &mut ScreenCtx<'_>,
     ) {
+        let mut out = AiOutput::default();
+        self.panels.on_response(id, command, result, &mut out);
+        self.drain_panels(out, cx);
         if self.search.on_response(id, result) || self.detail.on_response(id, result) {
             return;
         }
@@ -115,6 +163,9 @@ impl Screen for LibraryScreen {
 
     fn on_ui_event(&mut self, event: &UiEvent, cx: &mut ScreenCtx<'_>) {
         let kind = event.kind;
+        let mut out = AiOutput::default();
+        self.panels.on_ui_event(event, &mut out);
+        self.drain_panels(out, cx);
         with_sender!(cx, |send| {
             LibraryScreen::on_ui_event(self, kind, &mut send);
             self.detail.on_ui_event(kind, &mut send);
@@ -126,6 +177,10 @@ impl Screen for LibraryScreen {
             LibraryScreen::on_resync(self, &mut send);
             self.detail.on_resync(&mut send);
         });
+    }
+
+    fn on_shutdown(&mut self, cx: &mut ScreenCtx<'_>) {
+        LibraryScreen::shutdown(self, cx);
     }
 }
 

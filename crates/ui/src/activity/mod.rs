@@ -10,6 +10,8 @@
 //! Titles, bodies and instants are the backend's words and the backend's
 //! timestamps, rendered as sent.
 
+pub mod shell_adapter;
+
 use egui::{RichText, Ui};
 use plaudon_app::command::AppCommand;
 use plaudon_app::dto::{

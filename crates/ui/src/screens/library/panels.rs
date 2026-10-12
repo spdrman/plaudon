@@ -8,6 +8,7 @@
 use egui::Ui;
 use plaudon_app::dto::RecordingDetail;
 
+use crate::ai::AiOutput;
 use crate::screens::recording::DetailPanels;
 
 /// The panels a host that has no player, transcript or review widget yet can
@@ -20,15 +21,15 @@ fn pending(ui: &mut Ui, what: &str, owner: &str) {
 }
 
 impl DetailPanels for UnbuiltPanels {
-    fn player(&mut self, ui: &mut Ui, _detail: &RecordingDetail) {
+    fn player(&mut self, ui: &mut Ui, _detail: &RecordingDetail, _out: &mut AiOutput) {
         pending(ui, "Playback", "EPIC O task O1.5, issue #203");
     }
 
-    fn transcript(&mut self, ui: &mut Ui, _detail: &RecordingDetail) {
+    fn transcript(&mut self, ui: &mut Ui, _detail: &RecordingDetail, _out: &mut AiOutput) {
         pending(ui, "The transcript pane", "EPIC O task O2.1, issue #205");
     }
 
-    fn outputs(&mut self, ui: &mut Ui, _detail: &RecordingDetail) {
+    fn outputs(&mut self, ui: &mut Ui, _detail: &RecordingDetail, _out: &mut AiOutput) {
         pending(
             ui,
             "Summary, actions and decisions",

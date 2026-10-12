@@ -6,6 +6,7 @@
 //! the widgets' commands into requests on a [`PlayerHandle`].
 
 pub mod peaks;
+pub mod position;
 pub mod ruler;
 pub mod style;
 pub mod transport;
@@ -18,6 +19,7 @@ use plaudon_audio_playback::time::Micros;
 use plaudon_audio_playback::timeline::Timeline;
 
 pub use peaks::{PeakSource, PeakStatus};
+pub use position::SnapshotPosition;
 pub use ruler::{RulerOutcome, TimeRuler};
 pub use style::PlayerStyle;
 pub use transport::{keyboard_commands, speed_shortcut, TransportBar, TransportOutcome, SKIP};
