@@ -161,7 +161,9 @@ pub fn verify_anchor(anchor: &SourceAnchor, revision: &TranscriptRevision) -> An
     }
 
     let seek_ms = if revision.alignment_origin.permits_seek() {
-        segment.start.map(plaudon_domain::timerange::SourceTimeMs::get)
+        segment
+            .start
+            .map(plaudon_domain::timerange::SourceTimeMs::get)
     } else {
         None
     };

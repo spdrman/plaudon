@@ -11,3 +11,13 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
+async-trait = { workspace = true }
+plaudon-ai-contracts = { workspace = true }
+plaudon-domain = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+tokio = { workspace = true }

@@ -12,6 +12,7 @@ workspace = true
 
 [dependencies]
 plaudon-ai-contracts = { workspace = true }
+plaudon-ai-diarization = { workspace = true }
 plaudon-domain = { workspace = true }
 plaudon-persistence = { workspace = true }
 fs4 = { workspace = true }
@@ -21,6 +22,8 @@ sha2 = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
+uuid = { workspace = true }
+sqlx = { workspace = true }
 proptest = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true }

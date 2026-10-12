@@ -223,7 +223,9 @@ fn check_anchors(
 
 fn non_empty(value: &str, field: &'static str) -> Result<(), RejectionReason> {
     if value.trim().is_empty() {
-        Err(RejectionReason::EmptyField { field: field.to_string() })
+        Err(RejectionReason::EmptyField {
+            field: field.to_string(),
+        })
     } else {
         Ok(())
     }
@@ -454,7 +456,9 @@ mod tests {
         let result = validate_study_artifacts(&payload, &revision);
         assert_eq!(
             result.rejected[0].reason,
-            RejectionReason::EmptyField { field: "front".to_string() }
+            RejectionReason::EmptyField {
+                field: "front".to_string()
+            }
         );
     }
 

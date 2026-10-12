@@ -112,7 +112,11 @@ impl RecordingConversation {
     }
 
     /// Append a user question.
-    pub fn ask(&mut self, text: impl Into<String>, at: Timestamp) -> Result<&ConversationTurn, ToolError> {
+    pub fn ask(
+        &mut self,
+        text: impl Into<String>,
+        at: Timestamp,
+    ) -> Result<&ConversationTurn, ToolError> {
         let text = text.into();
         if text.trim().is_empty() {
             return Err(ToolError::InvalidArgument("question must not be empty"));
@@ -218,7 +222,9 @@ mod tests {
     #[test]
     fn a_turn_always_carries_its_recording_and_revision() {
         let mut convo = conversation();
-        convo.ask("what happened?", Timestamp::from_millis(1)).unwrap();
+        convo
+            .ask("what happened?", Timestamp::from_millis(1))
+            .unwrap();
         let turn = convo
             .answer(
                 "This happened.",

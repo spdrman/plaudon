@@ -178,7 +178,10 @@ pub async fn ask_recording(
         return Err(ToolError::Canceled);
     }
 
-    let fenced: Vec<_> = passages.iter().map(crate::retrieval::ScoredPassage::to_fenced).collect();
+    let fenced: Vec<_> = passages
+        .iter()
+        .map(crate::retrieval::ScoredPassage::to_fenced)
+        .collect();
     let prompt = build_grounded_prompt(&tool.instruction, Some(request.question), &fenced);
     let schema = OutputSchema::compile(tool.output_schema_version.clone(), &tool.output_schema)?;
 
@@ -247,7 +250,9 @@ pub async fn ask_recording(
         AskOutcomeKind::InsufficientEvidence => {
             "The retrieved passages do not support an answer.".to_string()
         }
-        AskOutcomeKind::NotSupportedByRecording => "This recording does not discuss that.".to_string(),
+        AskOutcomeKind::NotSupportedByRecording => {
+            "This recording does not discuss that.".to_string()
+        }
     };
 
     Ok(AskExecution {
@@ -273,13 +278,13 @@ mod tests {
     use crate::registry::ToolRegistry;
     use crate::testing::{fixture_revision, FIXTURE_SENTENCES};
     use crate::tool::ToolId;
+    use parking_lot::Mutex;
     use plaudon_ai_contracts::capabilities::{AvailabilityReason, PrivacyClass};
     use plaudon_ai_contracts::text::{StructuredResponse, TextModelError};
     use plaudon_domain::capability::{CapabilityStatus, Known, Tri};
     use plaudon_domain::ids::JobId;
     use plaudon_domain::model::{EngineId, ModelIdentity};
     use plaudon_domain::transcript::AlignmentOrigin;
-    use parking_lot::Mutex;
 
     #[derive(Debug)]
     struct ScriptedModel {
@@ -396,7 +401,9 @@ mod tests {
     #[tokio::test]
     async fn an_off_topic_question_never_dispatches_anything() {
         let revision = fixture_revision(AlignmentOrigin::Native);
-        let model = ScriptedModel::new(serde_json::json!({"outcome": "answered", "answer": "x", "anchors": []}));
+        let model = ScriptedModel::new(
+            serde_json::json!({"outcome": "answered", "answer": "x", "anchors": []}),
+        );
         let result = ask_recording(
             &model,
             &capable(),
@@ -407,7 +414,10 @@ mod tests {
         .await
         .unwrap();
 
-        assert_eq!(result.answer.outcome, AskOutcomeKind::NotSupportedByRecording);
+        assert_eq!(
+            result.answer.outcome,
+            AskOutcomeKind::NotSupportedByRecording
+        );
         assert!(!result.answer.dispatched);
         assert!(model.prompts().is_empty());
     }
@@ -610,8 +620,7 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(result.answer.outcome, AskOutcomeKind::Answered);
-        let verification =
-            crate::anchor::verify_anchor(&result.answer.anchors[0], &revision);
+        let verification = crate::anchor::verify_anchor(&result.answer.anchors[0], &revision);
         assert_eq!(
             verification,
             crate::anchor::AnchorVerification::Verified {

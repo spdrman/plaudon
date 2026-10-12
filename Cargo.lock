@@ -3182,6 +3182,16 @@ dependencies = [
 [[package]]
 name = "plaudon-ai-diarization"
 version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "plaudon-ai-contracts",
+ "plaudon-domain",
+ "proptest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+]
 
 [[package]]
 name = "plaudon-ai-openrouter"
@@ -3242,15 +3252,18 @@ version = "0.1.0"
 dependencies = [
  "fs4",
  "plaudon-ai-contracts",
+ "plaudon-ai-diarization",
  "plaudon-domain",
  "plaudon-persistence",
  "proptest",
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "sqlx",
  "tempfile",
  "thiserror 2.0.21",
  "tokio",
+ "uuid",
 ]
 
 [[package]]

@@ -310,7 +310,10 @@ mod tests {
     #[test]
     fn a_later_tool_edit_cannot_change_what_a_past_run_recorded() {
         let mut registry = ToolRegistry::with_defaults();
-        let original = registry.latest(&ToolId::new("meeting_summary")).unwrap().clone();
+        let original = registry
+            .latest(&ToolId::new("meeting_summary"))
+            .unwrap()
+            .clone();
         let run = ToolRunRecord::open(&original, draft());
 
         registry
@@ -390,7 +393,10 @@ mod tests {
     fn mixed_currencies_do_not_silently_add_up() {
         let eur = Money::new(500, 2, Currency::parse("EUR").unwrap());
         assert_eq!(
-            aggregate_cost(&[MoneyEstimate::Finalized(usd(10)), MoneyEstimate::Finalized(eur)]),
+            aggregate_cost(&[
+                MoneyEstimate::Finalized(usd(10)),
+                MoneyEstimate::Finalized(eur)
+            ]),
             MoneyEstimate::Unknown
         );
     }

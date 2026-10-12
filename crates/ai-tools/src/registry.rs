@@ -189,9 +189,8 @@ impl ToolRegistry {
         for path in paths {
             let text = std::fs::read_to_string(&path)
                 .map_err(|e| ToolError::ConfigurationInvalid(e.to_string()))?;
-            let config: ToolConfigOverride = serde_json::from_str(&text).map_err(|e| {
-                ToolError::ConfigurationInvalid(format!("{}: {e}", path.display()))
-            })?;
+            let config: ToolConfigOverride = serde_json::from_str(&text)
+                .map_err(|e| ToolError::ConfigurationInvalid(format!("{}: {e}", path.display())))?;
             self.apply_override(&config)?;
             applied += 1;
         }
@@ -525,7 +524,12 @@ mod tests {
         for id in ["flashcards", "quiz", "definitions"] {
             assert!(registry.latest(&ToolId::new(id)).unwrap().optional, "{id}");
         }
-        for id in ["meeting_summary", "action_items", "decisions", "topic_outline"] {
+        for id in [
+            "meeting_summary",
+            "action_items",
+            "decisions",
+            "topic_outline",
+        ] {
             assert!(!registry.latest(&ToolId::new(id)).unwrap().optional, "{id}");
         }
     }
@@ -606,7 +610,9 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let mut registry = ToolRegistry::with_defaults();
         assert_eq!(
-            registry.load_overrides_from(&dir.path().join("absent")).unwrap(),
+            registry
+                .load_overrides_from(&dir.path().join("absent"))
+                .unwrap(),
             0
         );
 

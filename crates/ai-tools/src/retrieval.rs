@@ -254,7 +254,10 @@ mod tests {
 
     #[test]
     fn hostile_query_syntax_degrades_to_its_word_content() {
-        assert_eq!(tokenize("rollback\" OR 1=1 --; rm -rf /"), ["rollback", "or", "1", "1", "rm", "rf"]);
+        assert_eq!(
+            tokenize("rollback\" OR 1=1 --; rm -rf /"),
+            ["rollback", "or", "1", "1", "rm", "rf"]
+        );
         let revision = fixture_revision(AlignmentOrigin::Native);
         let hits = Retriever::over_revision(&revision).retrieve("\"rollback\" OR 1=1 --", 5);
         assert!(hits.iter().all(|h| h.score > 0.0));
@@ -270,8 +273,7 @@ mod tests {
 
     #[test]
     fn an_empty_revision_is_handled_without_dividing_by_zero() {
-        let revision =
-            crate::testing::revision_from_segments(AlignmentOrigin::None, Vec::new());
+        let revision = crate::testing::revision_from_segments(AlignmentOrigin::None, Vec::new());
         let retriever = Retriever::over_revision(&revision);
         assert!(retriever.is_empty());
         assert!(retriever.retrieve("anything", 5).is_empty());
@@ -287,6 +289,9 @@ mod tests {
 
     #[test]
     fn tokenization_is_case_and_diacritic_literal_but_lowercased() {
-        assert_eq!(tokenize("Priya OWNS Rollback"), ["priya", "owns", "rollback"]);
+        assert_eq!(
+            tokenize("Priya OWNS Rollback"),
+            ["priya", "owns", "rollback"]
+        );
     }
 }

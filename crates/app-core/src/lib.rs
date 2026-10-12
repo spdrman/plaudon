@@ -5,13 +5,19 @@
 //! repeated import of the same source item stays idempotent.
 
 pub mod dedup;
+pub mod diarization;
 pub mod import;
 pub mod models;
+pub mod search;
+pub mod speakers;
 pub mod stt;
 
 pub use dedup::{BlobDecision, DedupPolicy};
+pub use diarization::{reconcile, Reconciliation, SegmentAssignment};
 pub use import::{ImportOutcome, ImportRequest, ImportService};
 pub use models::{ModelError, ModelId, ModelInstaller, ModelPack, ModelRegistry};
+pub use search::{LibrarySearch, SearchResult};
+pub use speakers::{Speaker, SpeakerDisplay, SpeakerProvenance, SpeakerRegistry};
 pub use stt::{select_engine, EngineCandidate, EngineDecision, SelectionRequest};
 
 /// Cargo package name of this crate, used by the workspace layout conformance test.

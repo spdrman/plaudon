@@ -269,7 +269,8 @@ impl TranscriptToolDefinition {
     ) -> Result<(), Vec<CapabilityGap>> {
         let mut gaps = Vec::new();
 
-        if !self.model_policy.allow_unverified_models && caps.status != CapabilityStatus::Supported {
+        if !self.model_policy.allow_unverified_models && caps.status != CapabilityStatus::Supported
+        {
             gaps.push(CapabilityGap::ModelNotVerified {
                 status: caps.status,
             });
@@ -415,8 +416,7 @@ mod tests {
             can_cancel: Tri::Yes,
             privacy_class: Known::Known(PrivacyClass::CloudZeroRetention),
             pricing_basis: Known::Unknown,
-            availability_reason:
-                plaudon_ai_contracts::capabilities::AvailabilityReason::Available,
+            availability_reason: plaudon_ai_contracts::capabilities::AvailabilityReason::Available,
         }
     }
 
@@ -439,13 +439,9 @@ mod tests {
         caps.max_context_tokens = Known::Unknown;
         let gaps = summary_tool().check_capabilities(&caps).unwrap_err();
         assert!(gaps.contains(&CapabilityGap::StructuredOutputUnavailable));
-        assert!(gaps.iter().any(|g| matches!(
-            g,
-            CapabilityGap::ContextTooSmall {
-                observed: None,
-                ..
-            }
-        )));
+        assert!(gaps
+            .iter()
+            .any(|g| matches!(g, CapabilityGap::ContextTooSmall { observed: None, .. })));
     }
 
     #[test]
@@ -453,10 +449,9 @@ mod tests {
         let mut caps = capable();
         caps.privacy_class = Known::Known(PrivacyClass::Unresolved);
         let gaps = summary_tool().check_capabilities(&caps).unwrap_err();
-        assert!(gaps.iter().any(|g| matches!(
-            g,
-            CapabilityGap::PrivacyClassNotAllowed { .. }
-        )));
+        assert!(gaps
+            .iter()
+            .any(|g| matches!(g, CapabilityGap::PrivacyClassNotAllowed { .. })));
     }
 
     #[test]

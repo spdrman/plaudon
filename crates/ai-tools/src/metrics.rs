@@ -139,7 +139,9 @@ pub fn load_corpus(path: &Path) -> Result<Option<LabeledCorpus>, String> {
         return Ok(None);
     }
     let text = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
-    serde_json::from_str(&text).map(Some).map_err(|e| e.to_string())
+    serde_json::from_str(&text)
+        .map(Some)
+        .map_err(|e| e.to_string())
 }
 
 /// Token-set overlap, symmetric, in `[0, 1]`.
@@ -179,7 +181,11 @@ fn claims(artifacts: &StudyArtifacts) -> Vec<String> {
 
 /// Questions a study set poses, used for the redundancy rate.
 fn questions(artifacts: &StudyArtifacts) -> Vec<String> {
-    let mut out: Vec<String> = artifacts.flashcards.iter().map(|c| c.front.clone()).collect();
+    let mut out: Vec<String> = artifacts
+        .flashcards
+        .iter()
+        .map(|c| c.front.clone())
+        .collect();
     out.extend(artifacts.quiz.iter().map(|q| q.question.clone()));
     out
 }
@@ -379,7 +385,9 @@ mod tests {
     fn distinct_questions_are_not_counted_as_redundant() {
         let revision = fixture_revision(AlignmentOrigin::Native);
         assert_eq!(
-            redundant_question_rate(&set(&revision, true)).unwrap().value,
+            redundant_question_rate(&set(&revision, true))
+                .unwrap()
+                .value,
             0.0
         );
     }

@@ -124,7 +124,10 @@ mod tests {
         let violations = schema.violations(&instance);
         assert!(!violations.is_empty());
         assert!(violations.iter().any(|p| p.starts_with("/items/1")));
-        assert_eq!(schema.check(&instance), Err(ToolError::SchemaValidationFailed));
+        assert_eq!(
+            schema.check(&instance),
+            Err(ToolError::SchemaValidationFailed)
+        );
     }
 
     #[test]
