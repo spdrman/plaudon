@@ -168,6 +168,16 @@ pub trait Screen: std::fmt::Debug {
     /// stale.
     fn on_resync(&mut self, _reason: ResyncReason, _cx: &mut ScreenCtx<'_>) {}
 
+    /// The window is closing.
+    ///
+    /// The last chance to finish what the user started: dispatch a pending
+    /// autosave, stop a device, hand over anything that would otherwise be
+    /// lost. Commands sent here are real commands — the host gives the
+    /// engine a grace period to finish them before the process exits — but
+    /// nothing will be painted again, so a screen must not expect a
+    /// response.
+    fn on_shutdown(&mut self, _cx: &mut ScreenCtx<'_>) {}
+
     /// Commands this screen contributes to the central map, and therefore to
     /// the palette and the keyboard reference.
     fn commands(&self) -> &[CommandSpec] {

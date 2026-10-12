@@ -60,24 +60,14 @@ fn main() -> ExitCode {
         "Plaudon",
         options,
         Box::new(move |_cc| {
+            let peak_cache = engine.data_dir().join("peak-cache");
             let mut app = PlaudonShell::new(engine, hooks, state);
-            // Matrix rows C1-C5, C8, C9, A13, J16 and S15: the Settings
-            // destination and the first-run flow (EPIC O task O2.4).
-            let mut settings = plaudon_ui::settings::SettingsShellScreen::new();
-            settings.set_command_registry(app.shell().command_specs());
-            app.shell_mut().register(Box::new(settings));
-            app.shell_mut()
-                .register_onboarding(Box::new(plaudon_ui::settings::OnboardingShellScreen::new()));
             // Matrix row C11: the status item, where a backend exists.
             let desktop =
                 plaudon_egui::desktop::Desktop::native(plaudon_egui::desktop::approved_roots());
             plaudon_egui::desktop::install_tray(&desktop, false);
-            // One line per screen (O1.3's registry contract). A destination
-            // with no screen renders the registry's honest empty state.
-            app.shell_mut()
-                .register(Box::new(plaudon_ui::screens::library::LibraryScreen::new()));
-            app.shell_mut()
-                .register(Box::new(plaudon_ui::screens::inbox::InboxScreen::new()));
+            // Every destination, in one place the tests drive as well.
+            plaudon_egui::screens::register_all(&mut app, audio_output(), Some(peak_cache));
             Ok(Box::new(app))
         }),
     );
@@ -90,6 +80,20 @@ fn main() -> ExitCode {
             ExitCode::FAILURE
         }
     }
+}
+
+/// The real audio output device.
+///
+/// A factory, not a device: nothing is opened until the user plays
+/// something, and a device that was lost (an unplugged interface, a
+/// switched default) is reopened the next time they do. A failure is
+/// reported in the player panel in the words `cpal` gave, because this
+/// process cannot know why the host's audio stack refused.
+fn audio_output() -> plaudon_ui::screens::recording::AudioOutFactory {
+    Arc::new(|| {
+        plaudon_audio_playback::cpal_out::CpalOut::default_output()
+            .map(|out| Box::new(out) as Box<dyn plaudon_audio_playback::engine::AudioOut>)
+    })
 }
 
 /// The real dialogs, and a state writer that never touches the render

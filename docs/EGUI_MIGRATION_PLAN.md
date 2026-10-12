@@ -508,171 +508,177 @@ stays in the domain error set but loses its Tauri-specific wording.
 Legend for **Reuse**: **P** = port the existing Rust unchanged; **R** = rebuild the UI in egui over
 unchanged Rust; **N** = genuinely new code. Issue numbers are the EPIC O tasks that own each row.
 
+**Status** is the state of the row in the tree as of EPIC O task O2.7 (integration), read out of the
+code rather than inferred from a task being closed: `done` means the behaviour is reachable in the
+shipped binary and covered by a test; `partial` and `blocked` carry the reason; `not started` means
+the command exists and nothing calls it. A row that says `done` with a trailing clause is one O2.7
+itself completed.
+
 ### 4.1 Application shell
 
-| # | Feature today | Source of truth | egui replacement | Crate / module | Reuse | Issue |
-| --- | --- | --- | --- | --- | --- | --- |
-| S1 | Six destinations, `Mod+1`…`Mod+6` | `app/router.ts`, `app/shortcuts.ts` | left nav rail, `egui::Panel::left`, roving focus, central command map | `plaudon-ui::shell::nav` | R | O1.3 |
-| S2 | Hash routes, 12 variants, deep links to recording/job/device | `app/router.ts` | a `Route` enum in UI state; no URL | `plaudon-ui::shell::route` | R | O1.3 |
-| S3 | Skip link + landmarks + `main-region` | `App.tsx` | AccessKit roles via egui widgets; a focus-first control | `plaudon-ui::shell` | R | O1.3 |
-| S4 | Light / dark / hc-light / hc-dark, follows OS live | `design/theme.ts`, `design/tokens.ts` | `Tokens` struct → `egui::Visuals`/`Style`, both themes installed, `ThemePreference::System` | `plaudon-ui::theme` | R | O1.3 |
-| S5 | 20 colour roles, spacing/type/motion scales, contrast tests | `design/tokens.ts`, `tokens.test.ts` | the same token values as Rust constants + contrast unit tests | `plaudon-ui::theme::tokens` | R | O1.3 |
-| S6 | Toolbar — *not present as such* | — | toolbar with overflow | `plaudon-ui::shell::toolbar` | N | O1.3 |
-| S7 | Resizable/dockable panels — *not present* | — | split panes with persisted sizes | `plaudon-ui::shell::layout` | N | O1.3 |
-| S8 | Native menus — *not present* | — | platform menu where practical | `apps/plaudon-egui` | N | O1.3 |
-| S9 | Shortcut help dialog (`?`) | `app/ShortcutsDialog.tsx` | same dialog, generated from the command map | `plaudon-ui::shell::shortcuts` | R | O1.3 |
-| S10 | Command palette — *not present* | — | fuzzy palette over the command registry | `plaudon-ui::shell::palette` | N | O1.3 |
-| S11 | Window 1280×820 / min 880×560; compact below 1040; status notice below 880 | `tauri.conf.json`, `App.tsx` | `NativeOptions` viewport + the same two breakpoints | `apps/plaudon-egui` | R | O1.3 |
-| S12 | Window geometry **not** persisted | — | persist size/position/maximised, sanitised on load | `plaudon-ui::shell::window_state` | N | O1.3 |
-| S13 | Toasts (`ToastRegion`, polite, manual dismiss) | `app/ToastRegion.tsx` | an anchored `egui::Area` toast stack | `plaudon-ui::widgets::toast` | R | O1.3 |
-| S14 | Startup states: capabilities error with retry; loading | `App.tsx` | same two states before the shell renders | `plaudon-ui::shell` | R | O1.3 |
-| S15 | Onboarding gate until `onboarding_completed` | `OnboardingFlow.tsx` | same gate | `plaudon-ui::screens::onboarding` | R | O2.4 |
-| S16 | High-DPI | browser | `pixels_per_point`, `ViewportInfo` | `apps/plaudon-egui` | N | O1.3 |
-| S17 | WCAG 2.2 AA + VoiceOver/Narrator script | `docs/accessibility/manual-screen-reader-script.md` | AccessKit via `eframe` feature `accesskit`; same manual script, updated for six destinations | `plaudon-ui` (all) | N | O1.3 / O2.5 |
+| # | Feature today | Source of truth | egui replacement | Crate / module | Reuse | Issue | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| S1 | Six destinations, `Mod+1`…`Mod+6` | `app/router.ts`, `app/shortcuts.ts` | left nav rail, `egui::Panel::left`, roving focus, central command map | `plaudon-ui::shell::nav` | R | O1.3 | done |
+| S2 | Hash routes, 12 variants, deep links to recording/job/device | `app/router.ts` | a `Route` enum in UI state; no URL | `plaudon-ui::shell::route` | R | O1.3 | done |
+| S3 | Skip link + landmarks + `main-region` | `App.tsx` | AccessKit roles via egui widgets; a focus-first control | `plaudon-ui::shell` | R | O1.3 | done |
+| S4 | Light / dark / hc-light / hc-dark, follows OS live | `design/theme.ts`, `design/tokens.ts` | `Tokens` struct → `egui::Visuals`/`Style`, both themes installed, `ThemePreference::System` | `plaudon-ui::theme` | R | O1.3 | done |
+| S5 | 20 colour roles, spacing/type/motion scales, contrast tests | `design/tokens.ts`, `tokens.test.ts` | the same token values as Rust constants + contrast unit tests | `plaudon-ui::theme::tokens` | R | O1.3 | done |
+| S6 | Toolbar — *not present as such* | — | toolbar with overflow | `plaudon-ui::shell::toolbar` | N | O1.3 | done |
+| S7 | Resizable/dockable panels — *not present* | — | split panes with persisted sizes | `plaudon-ui::shell::layout` | N | O1.3 | done |
+| S8 | Native menus — *not present* | — | platform menu where practical | `apps/plaudon-egui` | N | O1.3 | partial — an in-window menu bar (`shell::menu`); no platform (macOS app) menu |
+| S9 | Shortcut help dialog (`?`) | `app/ShortcutsDialog.tsx` | same dialog, generated from the command map | `plaudon-ui::shell::shortcuts` | R | O1.3 | done |
+| S10 | Command palette — *not present* | — | fuzzy palette over the command registry | `plaudon-ui::shell::palette` | N | O1.3 | done |
+| S11 | Window 1280×820 / min 880×560; compact below 1040; status notice below 880 | `tauri.conf.json`, `App.tsx` | `NativeOptions` viewport + the same two breakpoints | `apps/plaudon-egui` | R | O1.3 | done |
+| S12 | Window geometry **not** persisted | — | persist size/position/maximised, sanitised on load | `plaudon-ui::shell::window_state` | N | O1.3 | done |
+| S13 | Toasts (`ToastRegion`, polite, manual dismiss) | `app/ToastRegion.tsx` | an anchored `egui::Area` toast stack | `plaudon-ui::widgets::toast` | R | O1.3 | done |
+| S14 | Startup states: capabilities error with retry; loading | `App.tsx` | same two states before the shell renders | `plaudon-ui::shell` | R | O1.3 | done |
+| S15 | Onboarding gate until `onboarding_completed` | `OnboardingFlow.tsx` | same gate | `plaudon-ui::screens::onboarding` | R | O2.4 | done |
+| S16 | High-DPI | browser | `pixels_per_point`, `ViewportInfo` | `apps/plaudon-egui` | N | O1.3 | partial — geometry is sanitised against the reported scale; no high-DPI snapshot run exists |
+| S17 | WCAG 2.2 AA + VoiceOver/Narrator script | `docs/accessibility/manual-screen-reader-script.md` | AccessKit via `eframe` feature `accesskit`; same manual script, updated for six destinations | `plaudon-ui` (all) | N | O1.3 / O2.5 | partial — AccessKit is on and kittest asserts roles, labels and focus order; the manual VoiceOver/Narrator script has not been re-run for six destinations |
 
 ### 4.2 Library, inbox and search
 
-| # | Feature today | Command | egui replacement | Crate / module | Reuse | Issue |
-| --- | --- | --- | --- | --- | --- | --- |
-| L1 | Virtualized recordings grid, ARIA `grid`, `aria-rowcount` for the **whole** set | `list_recordings` | `egui_extras::TableBuilder` with `body.rows(..)`; row count from the page total | `plaudon-ui::screens::library::table` | R | O1.4 |
-| L2 | Columns per spec §5.2 incl. last error message | — | same columns | same | R | O1.4 |
-| L3 | Sort per column, direction toggle, `aria-sort` on the active column only | `libraryQuery.ts` | clickable headers over the same `RecordingSort` DTO | same | R | O1.4 |
-| L4 | Filters: query (200 ms debounce), import status, transcription status, source, tag, date from/to | `libraryQuery.ts` | same filter bar and same debounce | same | R | O1.4 |
-| L5 | Keyset paging, 100 per page, cursor preserved, dedup across pages | `libraryQuery.ts:148` | same reducer logic in Rust | `plaudon-app::library_query` | R | O1.4 |
-| L6 | Roving tabindex, Up/Down/Home/End, Enter to open, Space select, Shift range, `Cmd+A` | `RecordingTable.tsx` | same keyboard model over the table | same | R | O1.4 |
-| L7 | Bulk selection with a live-region count | `RecordingTable.tsx` | same, announced via AccessKit | same | R | O1.4 |
-| L8 | Context menus — *not present* | — | right-click menu on rows | same | N | O1.4 |
-| L9 | Empty state with Import and Connect PLAUD | `LibraryScreen.tsx` | same | same | R | O1.4 |
-| L10 | Error envelope rendering with the control its `action` implies | `library/ErrorNotice.tsx` | one shared envelope widget driven by `ErrorAction` | `plaudon-ui::widgets::error_notice` | R | O1.4 |
-| L11 | Refetch on `library.changed` / dropped event | `useRefetchOnEvents` | the same event-triggers-refetch contract | `plaudon-ui::events` | R | O1.4 |
-| L12 | Inbox = union of two `list_recordings` branches, newest import first | `InboxScreen.tsx`, `mergeInboxRows` | same | `plaudon-ui::screens::inbox` | R | O1.4 |
-| L13 | Cross-recording search, grouped by recording, seek affordance only when `seek_ms` is present | `search_library` | same results list | `plaudon-ui::screens::search` | R | O1.4 |
-| L14 | Recording detail header: provenance, privacy badge, read-only title | `get_recording` | same | `plaudon-ui::screens::recording` | R | O1.4 |
-| L15 | Drag-and-drop import | webview drop event | `i.raw.dropped_files` + the same validation | `plaudon-ui::import` | R | O1.4 |
-| L16 | Manual import via OS picker, audio extensions filter | `import_files` + dialog plugin | `rfd` file picker, same extension list | `plaudon-ui::import` | R | O1.4 |
-| L17 | Duplicate dialog, three choices, content-hash wording | `DuplicateDialog.tsx` | same modal | `plaudon-ui::import::duplicate` | R | O1.4 |
-| L18 | Per-file outcomes; a batch never aborts | `useImport.ts` | same | same | R | O1.4 |
-| L19 | Unknown duration renders "Unknown", never `0:00`; unknown timestamp never invented | `libraryQuery.ts` | same formatting rules | `plaudon-ui::format` | R | O1.4 |
+| # | Feature today | Command | egui replacement | Crate / module | Reuse | Issue | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| L1 | Virtualized recordings grid, ARIA `grid`, `aria-rowcount` for the **whole** set | `list_recordings` | `egui_extras::TableBuilder` with `body.rows(..)`; row count from the page total | `plaudon-ui::screens::library::table` | R | O1.4 | done |
+| L2 | Columns per spec §5.2 incl. last error message | — | same columns | same | R | O1.4 | done |
+| L3 | Sort per column, direction toggle, `aria-sort` on the active column only | `libraryQuery.ts` | clickable headers over the same `RecordingSort` DTO | same | R | O1.4 | done |
+| L4 | Filters: query (200 ms debounce), import status, transcription status, source, tag, date from/to | `libraryQuery.ts` | same filter bar and same debounce | same | R | O1.4 | done |
+| L5 | Keyset paging, 100 per page, cursor preserved, dedup across pages | `libraryQuery.ts:148` | same reducer logic in Rust | `plaudon-app::library_query` | R | O1.4 | done |
+| L6 | Roving tabindex, Up/Down/Home/End, Enter to open, Space select, Shift range, `Cmd+A` | `RecordingTable.tsx` | same keyboard model over the table | same | R | O1.4 | done |
+| L7 | Bulk selection with a live-region count | `RecordingTable.tsx` | same, announced via AccessKit | same | R | O1.4 | done |
+| L8 | Context menus — *not present* | — | right-click menu on rows | same | N | O1.4 | done |
+| L9 | Empty state with Import and Connect PLAUD | `LibraryScreen.tsx` | same | same | R | O1.4 | done |
+| L10 | Error envelope rendering with the control its `action` implies | `library/ErrorNotice.tsx` | one shared envelope widget driven by `ErrorAction` | `plaudon-ui::widgets::error_notice` | R | O1.4 | done |
+| L11 | Refetch on `library.changed` / dropped event | `useRefetchOnEvents` | the same event-triggers-refetch contract | `plaudon-ui::events` | R | O1.4 | done |
+| L12 | Inbox = union of two `list_recordings` branches, newest import first | `InboxScreen.tsx`, `mergeInboxRows` | same | `plaudon-ui::screens::inbox` | R | O1.4 | done |
+| L13 | Cross-recording search, grouped by recording, seek affordance only when `seek_ms` is present | `search_library` | same results list | `plaudon-ui::screens::search` | R | O1.4 | done |
+| L14 | Recording detail header: provenance, privacy badge, read-only title | `get_recording` | same | `plaudon-ui::screens::recording` | R | O1.4 | done |
+| L15 | Drag-and-drop import | webview drop event | `i.raw.dropped_files` + the same validation | `plaudon-ui::import` | R | O1.4 | done |
+| L16 | Manual import via OS picker, audio extensions filter | `import_files` + dialog plugin | `rfd` file picker, same extension list | `plaudon-ui::import` | R | O1.4 | done |
+| L17 | Duplicate dialog, three choices, content-hash wording | `DuplicateDialog.tsx` | same modal | `plaudon-ui::import::duplicate` | R | O1.4 | done |
+| L18 | Per-file outcomes; a batch never aborts | `useImport.ts` | same | same | R | O1.4 | done |
+| L19 | Unknown duration renders "Unknown", never `0:00`; unknown timestamp never invented | `libraryQuery.ts` | same formatting rules | `plaudon-ui::format` | R | O1.4 | done |
 
 ### 4.3 Player and waveform
 
-| # | Feature today | Mechanism | egui replacement | Crate / module | Reuse | Issue |
-| --- | --- | --- | --- | --- | --- | --- |
-| P1 | Playback of the archived media | `<audio>` + `plaudon-media://` | native audio output device fed from a decoded/streaming source | `plaudon-audio::playback` (new module) | **N** | O1.5 |
-| P2 | Play/pause | `playerReducer` | same transport model, ported | `plaudon-ui::player` | R | O1.5 |
-| P3 | ±10 s skip (`SKIP_MS`) | `AudioPlayer.tsx` | same | same | R | O1.5 |
-| P4 | Speeds 0.5/0.75/1/1.25/1.5/2 | `playbackRate` | resampling or rate-capable output | `plaudon-audio::playback` | **N** | O1.5 |
-| P5 | Scrubber as a slider with `aria-valuetext`; arrows ±5 s, PageUp/Down ∓30 s, Home, End; pointer-ratio seek | `AudioPlayer.tsx` | an egui slider reporting the same value text | `plaudon-ui::player::scrubber` | R | O1.5 |
-| P6 | Unknown duration → no slider, "Duration unknown", skips disabled | `playerState.ts` | identical | same | R | O1.5 |
-| P7 | Keyboard Space / J / K / L / `,` / `.`, suppressed in text entry and dialogs | `usePlayerShortcuts` | same, through the central command map | `plaudon-ui::shell::shortcuts` | R | O1.5 |
-| P8 | Position/duration as text, `h:mm:ss` dropping hours below one hour | `playerState.ts` | ported formatter + its 13 unit tests | `plaudon-ui::format` | R | O1.5 |
-| P9 | Waveform: ≤2,000 absolute-peak buckets decoded in the webview | `usePeaks` | **multiresolution peaks built in Rust in the background**, cached, progressive, cancellable | `plaudon-audio::peaks` (new) | **N** | O1.5 |
-| P10 | Waveform canvas, played/remaining colouring | `useWaveformCanvas` | one `egui::Mesh` of 1-px columns | `plaudon-ui::player::waveform` | **N** | O1.5 |
-| P11 | Timeline ruler, zoom, scroll — *not present* | — | integer-time timeline model with ruler ticks and anchored zoom | `plaudon-ui::player::timeline` | **N** | O1.5 |
-| P12 | Click-to-seek on the waveform — *only via the slider today* | — | click and drag on the waveform | same | **N** | O1.5 |
-| P13 | Speaker regions on the timeline — *not present* | — | regions from `speaker_turns` | same | **N** | O1.5 |
-| P14 | Volume control — *not present* | — | volume slider | `plaudon-ui::player` | **N** | O1.5 |
-| P15 | Transcript↔player sync: timestamp chip seeks | `TranscriptPane.tsx` | same, plus auto-follow of the playing segment (new) | `plaudon-ui::screens::recording` | R + N | O1.5 / O2.1 |
-| P16 | Opus-coded device derivatives | browser decodes Opus | **decision required**: enable a Symphonia Opus feature or add a decoder | `plaudon-audio` | **N** | O1.5 |
+| # | Feature today | Mechanism | egui replacement | Crate / module | Reuse | Issue | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| P1 | Playback of the archived media | `<audio>` + `plaudon-media://` | native audio output device fed from a decoded/streaming source | `plaudon-audio::playback` (new module) | **N** | O1.5 | done — O2.7 wires the real `Player` over `cpal` behind the binary-only `cpal-output` feature, fed by the new `resolve_media` command |
+| P2 | Play/pause | `playerReducer` | same transport model, ported | `plaudon-ui::player` | R | O1.5 | done |
+| P3 | ±10 s skip (`SKIP_MS`) | `AudioPlayer.tsx` | same | same | R | O1.5 | done |
+| P4 | Speeds 0.5/0.75/1/1.25/1.5/2 | `playbackRate` | resampling or rate-capable output | `plaudon-audio::playback` | **N** | O1.5 | done |
+| P5 | Scrubber as a slider with `aria-valuetext`; arrows ±5 s, PageUp/Down ∓30 s, Home, End; pointer-ratio seek | `AudioPlayer.tsx` | an egui slider reporting the same value text | `plaudon-ui::player::scrubber` | R | O1.5 | done |
+| P6 | Unknown duration → no slider, "Duration unknown", skips disabled | `playerState.ts` | identical | same | R | O1.5 | done |
+| P7 | Keyboard Space / J / K / L / `,` / `.`, suppressed in text entry and dialogs | `usePlayerShortcuts` | same, through the central command map | `plaudon-ui::shell::shortcuts` | R | O1.5 | done |
+| P8 | Position/duration as text, `h:mm:ss` dropping hours below one hour | `playerState.ts` | ported formatter + its 13 unit tests | `plaudon-ui::format` | R | O1.5 | done |
+| P9 | Waveform: ≤2,000 absolute-peak buckets decoded in the webview | `usePeaks` | **multiresolution peaks built in Rust in the background**, cached, progressive, cancellable | `plaudon-audio::peaks` (new) | **N** | O1.5 | done |
+| P10 | Waveform canvas, played/remaining colouring | `useWaveformCanvas` | one `egui::Mesh` of 1-px columns | `plaudon-ui::player::waveform` | **N** | O1.5 | done |
+| P11 | Timeline ruler, zoom, scroll — *not present* | — | integer-time timeline model with ruler ticks and anchored zoom | `plaudon-ui::player::timeline` | **N** | O1.5 | done |
+| P12 | Click-to-seek on the waveform — *only via the slider today* | — | click and drag on the waveform | same | **N** | O1.5 | done |
+| P13 | Speaker regions on the timeline — *not present* | — | regions from `speaker_turns` | same | **N** | O1.5 | done |
+| P14 | Volume control — *not present* | — | volume slider | `plaudon-ui::player` | **N** | O1.5 | done |
+| P15 | Transcript↔player sync: timestamp chip seeks | `TranscriptPane.tsx` | same, plus auto-follow of the playing segment (new) | `plaudon-ui::screens::recording` | R + N | O1.5 / O2.1 | done — O2.7 binds the editor highlight to the engine clock and routes timestamp chips and review anchors to a seek |
+| P16 | Opus-coded device derivatives | browser decodes Opus | **decision required**: enable a Symphonia Opus feature or add a decoder | `plaudon-audio` | **N** | O1.5 | blocked — `SymphoniaPcmSource` refuses Ogg Opus (`SourceError::Unsupported`); `plaudon-audio` has an Opus decoder that is not wired into the playback source, so a device-derived Opus file plays nothing and says so |
 
 ### 4.4 Transcript editor
 
-| # | Feature today | Mechanism | egui replacement | Crate / module | Reuse | Issue |
-| --- | --- | --- | --- | --- | --- | --- |
-| T1 | Virtualized segment list, cursor pages of 200 | `get_transcript` + react-virtual | `ScrollArea::show_rows` / `show_viewport` over the same paging | `plaudon-ui::screens::transcript` | R | O2.1 |
-| T2 | Segment rows: timestamp chip, speaker label, text, annotation badges | `TranscriptPane.tsx` | same row composition | same | R | O2.1 |
-| T3 | Timestamp chip only when `alignment_origin != None` and `start_ms` present; derived labelled approximate | `domain::AlignmentOrigin::permits_seek()` | identical rule, read from the domain type | same | R | O2.1 |
-| T4 | Enter/double-click to edit a segment; Escape cancels the session | `TranscriptPane.tsx` | per-segment `TextEdit` with the same gestures | same | R | O2.1 |
-| T5 | Draft overlay, session-coalesced undo/redo, `Cmd/Ctrl+Z` | `transcriptEditing.ts` (12 tests) | the same pure model, ported to Rust with its tests | `plaudon-app::transcript_edit` | R | O2.1 |
-| T6 | Save only changed segments against a `base_revision_id` | `save_transcript_revision` | unchanged command | — | P | O2.1 |
-| T7 | Conflict: keep the user's text, offer reload or copy | `TranscriptPane.tsx` | same two resolutions | `plaudon-ui::screens::transcript` | R | O2.1 |
-| T8 | Revision switcher; "Original (machine)"; read-only non-head revisions | `RevisionSwitcher.tsx` | same | same | R | O2.1 |
-| T9 | Incremental literal search with match highlight and prev/next | `transcriptEditing.ts` | same, highlight via `LayoutJob` sections | same | R | O2.1 |
-| T10 | Find **and replace** — *not present* | — | new replace UI over the same edit model | same | **N** | O2.1 |
-| T11 | Copy passage as `[m:ss] text` | `formatPassage` | same | same | R | O2.1 |
-| T12 | Speaker reassignment — *orphaned component, not mounted* | `list_speakers`, `rename_speaker`, `confirm_speaker`, `reset_speaker` | mount it: per-segment speaker picker + a speaker panel | `plaudon-ui::screens::speakers` | R (mount) | O2.1 |
-| T13 | Autosave — *not present* | — | debounced autosave of drafts | same | **N** | O2.1 |
-| T14 | 3-hour transcript performance | 100k-segment vitest case | same scale target under kittest | same | R | O2.1 |
+| # | Feature today | Mechanism | egui replacement | Crate / module | Reuse | Issue | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| T1 | Virtualized segment list, cursor pages of 200 | `get_transcript` + react-virtual | `ScrollArea::show_rows` / `show_viewport` over the same paging | `plaudon-ui::screens::transcript` | R | O2.1 | done |
+| T2 | Segment rows: timestamp chip, speaker label, text, annotation badges | `TranscriptPane.tsx` | same row composition | same | R | O2.1 | done |
+| T3 | Timestamp chip only when `alignment_origin != None` and `start_ms` present; derived labelled approximate | `domain::AlignmentOrigin::permits_seek()` | identical rule, read from the domain type | same | R | O2.1 | done |
+| T4 | Enter/double-click to edit a segment; Escape cancels the session | `TranscriptPane.tsx` | per-segment `TextEdit` with the same gestures | same | R | O2.1 | done |
+| T5 | Draft overlay, session-coalesced undo/redo, `Cmd/Ctrl+Z` | `transcriptEditing.ts` (12 tests) | the same pure model, ported to Rust with its tests | `plaudon-app::transcript_edit` | R | O2.1 | done |
+| T6 | Save only changed segments against a `base_revision_id` | `save_transcript_revision` | unchanged command | — | P | O2.1 | done — O2.7 binds the editor to `get_transcript` paging and `save_transcript_revision` |
+| T7 | Conflict: keep the user's text, offer reload or copy | `TranscriptPane.tsx` | same two resolutions | `plaudon-ui::screens::transcript` | R | O2.1 | done |
+| T8 | Revision switcher; "Original (machine)"; read-only non-head revisions | `RevisionSwitcher.tsx` | same | same | R | O2.1 | done |
+| T9 | Incremental literal search with match highlight and prev/next | `transcriptEditing.ts` | same, highlight via `LayoutJob` sections | same | R | O2.1 | done |
+| T10 | Find **and replace** — *not present* | — | new replace UI over the same edit model | same | **N** | O2.1 | done |
+| T11 | Copy passage as `[m:ss] text` | `formatPassage` | same | same | R | O2.1 | done |
+| T12 | Speaker reassignment — *orphaned component, not mounted* | `list_speakers`, `rename_speaker`, `confirm_speaker`, `reset_speaker` | mount it: per-segment speaker picker + a speaker panel | `plaudon-ui::screens::speakers` | R (mount) | O2.1 | partial — the per-segment picker changes the open document; `rename_speaker`/`confirm_speaker`/`reset_speaker` are still unmounted, so a reassignment is not persisted |
+| T13 | Autosave — *not present* | — | debounced autosave of drafts | same | **N** | O2.1 | done — autosave fires on the session debounce and is flushed on navigation and on window close |
+| T14 | 3-hour transcript performance | 100k-segment vitest case | same scale target under kittest | same | R | O2.1 | done |
 
 ### 4.5 Jobs, activity and notifications
 
-| # | Feature today | Command/event | egui replacement | Crate / module | Reuse | Issue |
-| --- | --- | --- | --- | --- | --- | --- |
-| J1 | Job list with filters by state and kind, 50 per page | `list_jobs` | same list | `plaudon-ui::screens::jobs` | R | O2.2 |
-| J2 | Every job state with a distinct label **and** glyph, never colour alone | `jobPresentation.ts` (14 tests) | the same mapping ported to Rust | `plaudon-app::job_presentation` | R | O2.2 |
-| J3 | Indeterminate progress when unknown; never invents completion | `Progress.tsx` | `egui::ProgressBar` with an indeterminate mode | `plaudon-ui::widgets::progress` | R | O2.2 |
-| J4 | Cancel with the §14.7 irreversibility disclosure; cancelling → cancelled | `cancel_job` | same modal | same | R | O2.2 |
-| J5 | Retry of an uncertain cloud outcome requires explicit cost acknowledgement | `retry_job(cost_acknowledged)` | same gate | same | R | O2.2 |
-| J6 | Provider-outage controls: Retry / Choose local engine / Keep queued | `jobPresentation.ts` | same | same | R | O2.2 |
-| J7 | Capacity comparison and a storage-settings control when disk is full | `JobsScreen.tsx` | same | same | R | O2.2 |
-| J8 | Deep-linked job row focus and scroll | route `jobs.job` | same | same | R | O2.2 |
-| J9 | Refetch after a dropped `job.updated` | `EventBus` | same | `plaudon-ui::events` | R | O2.2 |
-| J10 | Granular per-stage progress — *not present* | `job_steps.progress_json` unused | surface `ProgressSink` fractions per job | `plaudon-app::jobs` | **N** | O2.2 |
-| J11 | Activity history with categories, deep links, read state | `list_activity` | same screen | `plaudon-ui::screens::activity` | R | O2.2 |
-| J12 | Activity bell with unread count in the header | `ActivityBell.tsx` | same | `plaudon-ui::shell` | R | O2.2 |
-| J13 | Activity stays complete and explains suppression when the OS denies notifications | `activity_events` table | same | same | R | O2.2 |
-| J14 | OS notifications, four categories, privacy-safe payloads | `plaudon-notifications` | unchanged crate | — | P | O2.4 |
-| J15 | Notification click → focus window + `ui.activation_requested` | `notify.rs`, `lib.rs::activate` | `ViewportCommand::{Minimized(false), Focus}` + the same event | `apps/plaudon-egui` | R | O2.4 |
-| J16 | Notification settings: master switch, four categories, denied-permission copy | `set_notification_settings` | same section | `plaudon-ui::screens::settings` | R | O2.4 |
+| # | Feature today | Command/event | egui replacement | Crate / module | Reuse | Issue | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| J1 | Job list with filters by state and kind, 50 per page | `list_jobs` | same list | `plaudon-ui::screens::jobs` | R | O2.2 | done |
+| J2 | Every job state with a distinct label **and** glyph, never colour alone | `jobPresentation.ts` (14 tests) | the same mapping ported to Rust | `plaudon-app::job_presentation` | R | O2.2 | done |
+| J3 | Indeterminate progress when unknown; never invents completion | `Progress.tsx` | `egui::ProgressBar` with an indeterminate mode | `plaudon-ui::widgets::progress` | R | O2.2 | done |
+| J4 | Cancel with the §14.7 irreversibility disclosure; cancelling → cancelled | `cancel_job` | same modal | same | R | O2.2 | done |
+| J5 | Retry of an uncertain cloud outcome requires explicit cost acknowledgement | `retry_job(cost_acknowledged)` | same gate | same | R | O2.2 | done |
+| J6 | Provider-outage controls: Retry / Choose local engine / Keep queued | `jobPresentation.ts` | same | same | R | O2.2 | done |
+| J7 | Capacity comparison and a storage-settings control when disk is full | `JobsScreen.tsx` | same | same | R | O2.2 | done |
+| J8 | Deep-linked job row focus and scroll | route `jobs.job` | same | same | R | O2.2 | done |
+| J9 | Refetch after a dropped `job.updated` | `EventBus` | same | `plaudon-ui::events` | R | O2.2 | done |
+| J10 | Granular per-stage progress — *not present* | `job_steps.progress_json` unused | surface `ProgressSink` fractions per job | `plaudon-app::jobs` | **N** | O2.2 | partial — the job card renders the fraction a job reports and stays indeterminate otherwise; `list_jobs` publishes no per-stage breakdown |
+| J11 | Activity history with categories, deep links, read state | `list_activity` | same screen | `plaudon-ui::screens::activity` | R | O2.2 | done |
+| J12 | Activity bell with unread count in the header | `ActivityBell.tsx` | same | `plaudon-ui::shell` | R | O2.2 | done |
+| J13 | Activity stays complete and explains suppression when the OS denies notifications | `activity_events` table | same | same | R | O2.2 | done |
+| J14 | OS notifications, four categories, privacy-safe payloads | `plaudon-notifications` | unchanged crate | — | P | O2.4 | done |
+| J15 | Notification click → focus window + `ui.activation_requested` | `notify.rs`, `lib.rs::activate` | `ViewportCommand::{Minimized(false), Focus}` + the same event | `apps/plaudon-egui` | R | O2.4 | done — O2.7 routes `ui.activation_requested` to the recording or job it names and raises the window with `ViewportCommand::{Minimized(false), Focus}` |
+| J16 | Notification settings: master switch, four categories, denied-permission copy | `set_notification_settings` | same section | `plaudon-ui::screens::settings` | R | O2.4 | done |
 
 ### 4.6 AI workflows
 
-| # | Feature today | Command | egui replacement | Crate / module | Reuse | Issue |
-| --- | --- | --- | --- | --- | --- | --- |
-| A1 | Capability inventory: engines, stages, installed models, storage, permissions | `get_capabilities` | same, rendered in Settings and onboarding | `plaudon-ui::screens::settings` | R | O2.2 |
-| A2 | Model picker: request family, verification reason, price, route, retention | `list_models` | same | `plaudon-ui::screens::cloud::model_picker` | R | O2.2 |
-| A3 | Unknown price shown as unknown, never zero; user-supplied model ids marked not verified and not dispatchable | `cloudPresentation.ts` (11 tests) | same rules ported | `plaudon-app::cloud_presentation` | R | O2.2 |
-| A4 | Billable capability check with explicit confirmation | `verify_model` | same | same | R | O2.2 |
-| A5 | Cloud consent sheet: every §4.4 disclosure item, three scopes, fail-closed when a zero-retention route cannot be resolved | `grant_cloud_consent` + `security::ConsentPrompt` | same sheet, driven by `ConsentPrompt` | `plaudon-ui::screens::cloud::consent` | R | O2.2 |
-| A6 | Per-recording and per-task model overrides | `set_model_preference` | same | same | R | O2.2 |
-| A7 | Stage rerun with an estimate before dispatch and a local budget stop | `start_processing` | same panel | `plaudon-ui::screens::recording::stages` | R | O2.2 |
-| A8 | Spending: finalized vs estimated vs unknown, month-to-date, per-job and monthly caps | `get_usage`, `set_cloud_budget` | same section | `plaudon-ui::screens::settings::budget` | R | O2.2 |
-| A9 | Consent grants listed with the facts they were given under; revocation recorded and never claimed to recall sent content | `revoke_cloud_consent` | same | same | R | O2.2 |
-| A10 | Outputs / claims / review panel — *commands exist, no UI* | `list_outputs`, `review_claim`, `regenerate_output` | build the review panel: claims, anchors, stale markers, regenerate | `plaudon-ui::screens::review` | **N** | O2.2 |
-| A11 | Transcript tools and study artifacts — *no UI* | `ai-tools` | out of scope for EPIC O unless a command exists | — | — | — |
-| A12 | Templates screen is a placeholder | `TemplatesScreen.tsx` | keep the honest placeholder until a backend exists | `plaudon-ui::screens::templates` | R | O2.2 |
-| A13 | Local model install with progress and approval | `InstallObserver` | new UI over the existing observer | `plaudon-ui::screens::settings::models` | **N** | O2.4 |
-| A14 | Transcript export TXT/MD/JSON/SRT/VTT; SRT/VTT disabled without alignment | `export_recording` | mount the full `ExportMenu` (today only txt/md/json are reachable) | `plaudon-ui::screens::recording::export` | R (mount) | O2.2 |
+| # | Feature today | Command | egui replacement | Crate / module | Reuse | Issue | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| A1 | Capability inventory: engines, stages, installed models, storage, permissions | `get_capabilities` | same, rendered in Settings and onboarding | `plaudon-ui::screens::settings` | R | O2.2 | done |
+| A2 | Model picker: request family, verification reason, price, route, retention | `list_models` | same | `plaudon-ui::screens::cloud::model_picker` | R | O2.2 | done |
+| A3 | Unknown price shown as unknown, never zero; user-supplied model ids marked not verified and not dispatchable | `cloudPresentation.ts` (11 tests) | same rules ported | `plaudon-app::cloud_presentation` | R | O2.2 | done |
+| A4 | Billable capability check with explicit confirmation | `verify_model` | same | same | R | O2.2 | done |
+| A5 | Cloud consent sheet: every §4.4 disclosure item, three scopes, fail-closed when a zero-retention route cannot be resolved | `grant_cloud_consent` + `security::ConsentPrompt` | same sheet, driven by `ConsentPrompt` | `plaudon-ui::screens::cloud::consent` | R | O2.2 | done |
+| A6 | Per-recording and per-task model overrides | `set_model_preference` | same | same | R | O2.2 | done |
+| A7 | Stage rerun with an estimate before dispatch and a local budget stop | `start_processing` | same panel | `plaudon-ui::screens::recording::stages` | R | O2.2 | done |
+| A8 | Spending: finalized vs estimated vs unknown, month-to-date, per-job and monthly caps | `get_usage`, `set_cloud_budget` | same section | `plaudon-ui::screens::settings::budget` | R | O2.2 | done |
+| A9 | Consent grants listed with the facts they were given under; revocation recorded and never claimed to recall sent content | `revoke_cloud_consent` | same | same | R | O2.2 | done |
+| A10 | Outputs / claims / review panel — *commands exist, no UI* | `list_outputs`, `review_claim`, `regenerate_output` | build the review panel: claims, anchors, stale markers, regenerate | `plaudon-ui::screens::review` | **N** | O2.2 | done |
+| A11 | Transcript tools and study artifacts — *no UI* | `ai-tools` | out of scope for EPIC O unless a command exists | — | — | — | in flight — EPIC O task O2.6 (#224) adds the tool commands and their panels |
+| A12 | Templates screen is a placeholder | `TemplatesScreen.tsx` | keep the honest placeholder until a backend exists | `plaudon-ui::screens::templates` | R | O2.2 | partial — the honest placeholder is registered for the Templates destination; O2.6 (#224) replaces it with a real screen |
+| A13 | Local model install with progress and approval | `InstallObserver` | new UI over the existing observer | `plaudon-ui::screens::settings::models` | **N** | O2.4 | done |
+| A14 | Transcript export TXT/MD/JSON/SRT/VTT; SRT/VTT disabled without alignment | `export_recording` | mount the full `ExportMenu` (today only txt/md/json are reachable) | `plaudon-ui::screens::recording::export` | R (mount) | O2.2 | done |
 
 ### 4.7 Devices and sources
 
-| # | Feature today | Command | egui replacement | Crate / module | Reuse | Issue |
-| --- | --- | --- | --- | --- | --- | --- |
-| D1 | Scan with a bounded timeout; five App. B.8 sections, each a labelled region | `list_nearby_devices` | same sections | `plaudon-ui::screens::devices` | R | O2.3 |
-| D2 | Denied radio reported as denied, with a way forward; "no radio in this build" distinguished from "no devices" | `RadioState` incl. `UnavailableInBuild` | same | same | R | O2.3 |
-| D3 | Device facts: model, firmware, transport, name, signal, battery, identity, register status and verbatim limitations | `device_probe` | same | `plaudon-ui::screens::devices::detail` | R | O2.3 |
-| D4 | Unverifiable firmware/battery/signal shown as Unknown | DTO tri-state | same | same | R | O2.3 |
-| D5 | Experimental-probe opt-in grant | `DeviceProbeRequest.experimental_probe_approved` | same consent | same | R | O2.3 |
-| D6 | Token import: handed over once, cleared, never rendered or re-sent | `device_authorize` | same | same | R | O2.3 |
-| D7 | Listing with delta-completeness qualifier; never claims a complete archive | `device_list_recordings` | same | same | R | O2.3 |
-| D8 | Transfer rows: 14 states, observed bandwidth, ETA labelled an estimate, no ETA invented | `device.transfer_progress` | same | same | R | O2.3 |
-| D9 | Cancel a running transfer by disconnecting, without removing archived recordings | `device_disconnect` | same | same | R | O2.3 |
-| D10 | Sync policy toggle | `device_sync_policy` | same | same | R | O2.3 |
-| D11 | Setup wizard: exactly three options (direct, account, files) | `SetupWizard.tsx` | same | same | R | O2.3 |
-| D12 | Real BLE radio is **not wired into `run()`** (`build_ports_with_radio` has no caller) | `lib.rs` | wire `hardware-scan` behind the same feature in the new binary, or keep `NoRadio` and say so | `apps/plaudon-egui` | R | O2.3 |
-| D13 | USB import — *no UI at all* | `plaud-usb` (no command exists) | out of scope unless a command is added; the matrix records the gap | — | — | O2.3 |
-| D14 | PLAUD Cloud CLI: probe, connect, list, import, disconnect with verbatim Rust copy | `plaud_*` | same panel; the UI composes no user-facing string of its own | `plaudon-ui::screens::sources` | R | O2.3 |
-| D15 | Empty compatibility table ⇒ honest `IncompatibleVersion` | `cli-compatibility.yaml` | same | same | R | O2.3 |
-| D16 | Watched folders — *commands exist, no UI* | `source_add_folder`, `source_sync`, `source_reconcile` | build the watched-folder section: add, rule, status, sync, reconcile | same | **N** | O2.3 |
-| D17 | Source artifacts — *command exists, no UI* | `list_source_artifacts` | show vendor artifacts on the recording detail | `plaudon-ui::screens::recording` | **N** | O2.3 |
-| D18 | Watched-folder service must be pumped on a timer | `WatchedFolderService::pump/drain_due` | a background tokio task, not the render loop | `plaudon-app::runtime` | **N** | O2.3 |
+| # | Feature today | Command | egui replacement | Crate / module | Reuse | Issue | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| D1 | Scan with a bounded timeout; five App. B.8 sections, each a labelled region | `list_nearby_devices` | same sections | `plaudon-ui::screens::devices` | R | O2.3 | done |
+| D2 | Denied radio reported as denied, with a way forward; "no radio in this build" distinguished from "no devices" | `RadioState` incl. `UnavailableInBuild` | same | same | R | O2.3 | done |
+| D3 | Device facts: model, firmware, transport, name, signal, battery, identity, register status and verbatim limitations | `device_probe` | same | `plaudon-ui::screens::devices::detail` | R | O2.3 | done |
+| D4 | Unverifiable firmware/battery/signal shown as Unknown | DTO tri-state | same | same | R | O2.3 | done |
+| D5 | Experimental-probe opt-in grant | `DeviceProbeRequest.experimental_probe_approved` | same consent | same | R | O2.3 | done |
+| D6 | Token import: handed over once, cleared, never rendered or re-sent | `device_authorize` | same | same | R | O2.3 | done |
+| D7 | Listing with delta-completeness qualifier; never claims a complete archive | `device_list_recordings` | same | same | R | O2.3 | done |
+| D8 | Transfer rows: 14 states, observed bandwidth, ETA labelled an estimate, no ETA invented | `device.transfer_progress` | same | same | R | O2.3 | done |
+| D9 | Cancel a running transfer by disconnecting, without removing archived recordings | `device_disconnect` | same | same | R | O2.3 | done |
+| D10 | Sync policy toggle | `device_sync_policy` | same | same | R | O2.3 | done |
+| D11 | Setup wizard: exactly three options (direct, account, files) | `SetupWizard.tsx` | same | same | R | O2.3 | done |
+| D12 | Real BLE radio is **not wired into `run()`** (`build_ports_with_radio` has no caller) | `lib.rs` | wire `hardware-scan` behind the same feature in the new binary, or keep `NoRadio` and say so | `apps/plaudon-egui` | R | O2.3 | partial — the `hardware-scan` feature is forwarded to `plaudon-app`; with it off the screen reports `UnavailableInBuild`, which is the honest state and not "no devices" |
+| D13 | USB import — *no UI at all* | `plaud-usb` (no command exists) | out of scope unless a command is added; the matrix records the gap | — | — | O2.3 | blocked — no `device_*` command exists for a mounted USB volume; the screen offers ordinary import of the mounted files and says why |
+| D14 | PLAUD Cloud CLI: probe, connect, list, import, disconnect with verbatim Rust copy | `plaud_*` | same panel; the UI composes no user-facing string of its own | `plaudon-ui::screens::sources` | R | O2.3 | done |
+| D15 | Empty compatibility table ⇒ honest `IncompatibleVersion` | `cli-compatibility.yaml` | same | same | R | O2.3 | done |
+| D16 | Watched folders — *commands exist, no UI* | `source_add_folder`, `source_sync`, `source_reconcile` | build the watched-folder section: add, rule, status, sync, reconcile | same | **N** | O2.3 | done |
+| D17 | Source artifacts — *command exists, no UI* | `list_source_artifacts` | show vendor artifacts on the recording detail | `plaudon-ui::screens::recording` | **N** | O2.3 | not started — `list_source_artifacts` still has no caller; the recording detail shows no vendor artifacts |
+| D18 | Watched-folder service must be pumped on a timer | `WatchedFolderService::pump/drain_due` | a background tokio task, not the render loop | `plaudon-app::runtime` | **N** | O2.3 | done |
 
 ### 4.8 Settings, privacy, backup and onboarding
 
-| # | Feature today | Command | egui replacement | Crate / module | Reuse | Issue |
-| --- | --- | --- | --- | --- | --- | --- |
-| C1 | Appearance and contrast | `Preferences` | same section | `plaudon-ui::screens::settings` | R | O2.4 |
-| C2 | Local-only mode with explicit confirmation; renders the enforced policy the gate returns | `set_local_only_mode` | same | same | R | O2.4 |
-| C3 | OpenRouter key: handed over once, presence reported only, destructive removal confirmation | `set_openrouter_key`, `remove_openrouter_key` | same | same | R | O2.4 |
-| C4 | Storage facts, read-only | `get_capabilities` | same | same | R | O2.4 |
-| C5 | Backup and restore — *orphaned component* | `create_portable_backup`, `inspect_restore_archive`, `restore_portable_archive` | mount it: plaintext vs encrypted disclosure, inspect before restore, conflicts, restore modes | `plaudon-ui::screens::settings::backup` | R (mount) | O2.4 |
-| C6 | Deletion disclosure and confirmation token — *orphaned component* | `get_deletion_disclosure`, `delete_recording` | mount it | `plaudon-ui::screens::recording::delete` | R (mount) | O2.4 |
-| C7 | Media export (original + sanitised) — *orphaned* | `export_media` | mount it | `plaudon-ui::screens::recording::export` | R (mount) | O2.4 |
-| C8 | Onboarding: privacy, mode, engines, key, sources, finish; account steps skippable; no model download in local-only mode | `complete_onboarding` | same flow | `plaudon-ui::screens::onboarding` | R | O2.4 |
-| C9 | Keyboard shortcut customisation — *not present* | — | optional; the command map makes it cheap | `plaudon-ui::shell::shortcuts` | **N** | O2.4 |
-| C10 | File associations, open-in-folder, clipboard — *not present* | — | new platform integration | `apps/plaudon-egui` | **N** | O2.4 |
-| C11 | Tray — *not present* | — | where supported | `apps/plaudon-egui` | **N** | O2.4 |
-| C12 | Logging is never initialised by the shell | `diagnostics::init_logging` | call it, plus `install_crash_hook` | `apps/plaudon-egui` | **N** | O1.2 |
+| # | Feature today | Command | egui replacement | Crate / module | Reuse | Issue | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| C1 | Appearance and contrast | `Preferences` | same section | `plaudon-ui::screens::settings` | R | O2.4 | done |
+| C2 | Local-only mode with explicit confirmation; renders the enforced policy the gate returns | `set_local_only_mode` | same | same | R | O2.4 | done |
+| C3 | OpenRouter key: handed over once, presence reported only, destructive removal confirmation | `set_openrouter_key`, `remove_openrouter_key` | same | same | R | O2.4 | done |
+| C4 | Storage facts, read-only | `get_capabilities` | same | same | R | O2.4 | done |
+| C5 | Backup and restore — *orphaned component* | `create_portable_backup`, `inspect_restore_archive`, `restore_portable_archive` | mount it: plaintext vs encrypted disclosure, inspect before restore, conflicts, restore modes | `plaudon-ui::screens::settings::backup` | R (mount) | O2.4 | done |
+| C6 | Deletion disclosure and confirmation token — *orphaned component* | `get_deletion_disclosure`, `delete_recording` | mount it | `plaudon-ui::screens::recording::delete` | R (mount) | O2.4 | not started — `get_deletion_disclosure`/`delete_recording` are still unmounted; the recording detail offers no deletion |
+| C7 | Media export (original + sanitised) — *orphaned* | `export_media` | mount it | `plaudon-ui::screens::recording::export` | R (mount) | O2.4 | done |
+| C8 | Onboarding: privacy, mode, engines, key, sources, finish; account steps skippable; no model download in local-only mode | `complete_onboarding` | same flow | `plaudon-ui::screens::onboarding` | R | O2.4 | done |
+| C9 | Keyboard shortcut customisation — *not present* | — | optional; the command map makes it cheap | `plaudon-ui::shell::shortcuts` | **N** | O2.4 | done |
+| C10 | File associations, open-in-folder, clipboard — *not present* | — | new platform integration | `apps/plaudon-egui` | **N** | O2.4 | partial — open-in-folder and clipboard are wired through the host hooks; file associations are not registered by this build |
+| C11 | Tray — *not present* | — | where supported | `apps/plaudon-egui` | **N** | O2.4 | done |
+| C12 | Logging is never initialised by the shell | `diagnostics::init_logging` | call it, plus `install_crash_hook` | `apps/plaudon-egui` | **N** | O1.2 | done |
 
 ### 4.9 Cross-cutting invariants that must survive
 
@@ -1037,6 +1043,21 @@ budget exists anywhere in the repository today (verified by grep). O1.2's spike 
 first measurement on MARS; budgets are then written into `EGUI_TESTING.md`, not invented here.
 
 ---
+
+
+**First measured figures (EPIC O task O2.7).** `docs/EGUI_BASELINE.md` §7 records idle CPU, memory
+and cold start as UNMEASURED because no harness existed. One of them now has a number, taken from the
+shipped binary rather than from a test:
+
+| Metric | Value | How |
+| --- | --- | --- |
+| Idle CPU of `plaudon-egui` | **0.02 CPU-seconds over a 30 s idle window = 0.07 % of one core** | `cargo build -p plaudon-egui --release`, launch over an empty library, let it settle for 12 s, then sample the delta of the process's cumulative CPU time across a measured 30 s wall window (`ps -o time=`). macOS arm64. |
+| Resident set at idle | 95,104 KiB | `ps -o rss=` at the end of the same window |
+
+The in-process half of the same claim is `apps/plaudon-egui/tests/idle.rs`: once the application has
+settled, the frame egui schedules next is `Duration::MAX` — on every destination. That is the
+regression test; the figure above is the evidence that it means what it says. Cold start, frame time
+and binary size remain UNMEASURED.
 
 ## 10. Risks
 

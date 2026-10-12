@@ -23,6 +23,11 @@ hardware-scan = ["plaudon-app/hardware-scan"]
 
 [dependencies]
 plaudon-app = { workspace = true }
+# The real output device. The workspace entry carries
+# `default-features = false` so the view layer and the kittest suite build in
+# a container with no audio stack; the shipped binary is the one place that
+# turns the `cpal` backend back on.
+plaudon-audio-playback = { workspace = true, features = ["cpal-output"] }
 plaudon-craft-ui = { workspace = true }
 plaudon-domain = { workspace = true }
 plaudon-diagnostics = { workspace = true }
@@ -48,6 +53,16 @@ tray-icon = { workspace = true }
 eframe = { workspace = true, features = ["x11", "wayland"] }
 
 [dev-dependencies]
+# The integration suite builds the fakes the edges need: a device radio
+# (`DeviceRadio` names types from the BLE and protocol crates) and a
+# recording HTTPS transport. All four are already in the graph through
+# `plaudon-app`.
+async-trait = { workspace = true }
+plaudon-ai-openrouter = { workspace = true }
+plaudon-plaud-ble = { workspace = true }
+plaudon-plaud-protocol = { workspace = true }
+plaudon-security = { workspace = true }
+plaudon-transcript-doc = { workspace = true }
 plaudon-ui-testkit = { workspace = true }
 tempfile = { workspace = true }
 

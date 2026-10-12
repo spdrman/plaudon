@@ -18,6 +18,7 @@
 pub mod badge;
 pub mod detail;
 pub mod presentation;
+pub mod shell_adapter;
 pub mod transfers;
 pub mod wizard;
 

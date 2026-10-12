@@ -17,12 +17,21 @@
 //!   it is;
 //! * a recorded-at that was never captured renders as unknown.
 
+pub mod ai_panels;
+pub mod live;
+pub mod playback;
+pub mod transcript_panel;
+
+pub use live::LivePanels;
+pub use playback::{no_audio_output, AudioOutFactory, PlaybackBinding};
+
 use egui::{RichText, Ui};
 use plaudon_app::command::{AppCommand, AppResponse, CommandId};
-use plaudon_app::dto::{EventKind, GetRecordingRequest, RecordingDetail};
+use plaudon_app::dto::{EventKind, GetRecordingRequest, RecordingDetail, UiEvent};
 use plaudon_domain::error::ErrorEnvelope;
 use plaudon_domain::ids::RecordingId;
 
+use crate::ai::AiOutput;
 use crate::screens::library::format::{format_duration, format_timestamp, short_hash};
 use crate::screens::library::list::Sender;
 use crate::screens::library::status::{
@@ -43,13 +52,55 @@ pub const DETAIL_EVENTS: [EventKind; 3] = [
 /// implementation decides what is in them. A host that has no widget for one
 /// of them yet says so in that panel — the container never draws a
 /// placeholder on its behalf.
+///
+/// A panel reaches the application the same way every other view does: it
+/// records [`AiIntent`](crate::ai::AiIntent)s into the [`AiOutput`] the
+/// container hands it, and the screen adapter above dispatches them. The
+/// panels therefore need no dispatcher, no ports and no `ScreenCtx`, which
+/// is what keeps them drivable from a kittest without a backend.
 pub trait DetailPanels: std::fmt::Debug {
     /// Playback controls and waveform.
-    fn player(&mut self, ui: &mut Ui, detail: &RecordingDetail);
+    fn player(&mut self, ui: &mut Ui, detail: &RecordingDetail, out: &mut AiOutput);
     /// Transcript, revisions and editing.
-    fn transcript(&mut self, ui: &mut Ui, detail: &RecordingDetail);
+    fn transcript(&mut self, ui: &mut Ui, detail: &RecordingDetail, out: &mut AiOutput);
     /// Summary, actions, decisions and their review state.
-    fn outputs(&mut self, ui: &mut Ui, detail: &RecordingDetail);
+    fn outputs(&mut self, ui: &mut Ui, detail: &RecordingDetail, out: &mut AiOutput);
+
+    /// A recording was opened. Called once per recording, before the first
+    /// frame that draws it, so a panel can ask for what it needs.
+    fn opened(&mut self, _recording_id: RecordingId, _out: &mut AiOutput) {}
+
+    /// The detail view is being left: another recording, another
+    /// destination, or the window closing.
+    ///
+    /// This is the panels' only chance to finish what the user started —
+    /// flushing a pending autosave, stopping the audio device — so it is
+    /// called on navigation **and** on shutdown.
+    fn closed(&mut self, _out: &mut AiOutput) {}
+
+    /// A command a panel sent has an outcome.
+    fn on_response(
+        &mut self,
+        _id: CommandId,
+        _command: &'static str,
+        _result: &Result<AppResponse, ErrorEnvelope>,
+        _out: &mut AiOutput,
+    ) {
+    }
+
+    /// Something changed in the application (spec §15.3).
+    fn on_ui_event(&mut self, _event: &UiEvent, _out: &mut AiOutput) {}
+
+    /// Whether Local-only Mode is enforced, as the capability report states
+    /// it.
+    ///
+    /// The default is `true`: until a panel has been told otherwise, the
+    /// header says local-only, because claiming cloud eligibility without
+    /// evidence is the one direction that can mislead a user into sending
+    /// content (§4.3).
+    fn local_only(&self) -> bool {
+        true
+    }
 }
 
 /// How the three panels are arranged.
@@ -100,6 +151,9 @@ pub struct RecordingDetailScreen {
     detail: Option<RecordingDetail>,
     pending: Option<CommandId>,
     error: Option<ErrorEnvelope>,
+    /// The recording the panels were last told about, so `opened` and
+    /// `closed` fire exactly once each per recording.
+    announced: Option<RecordingId>,
 }
 
 impl Default for RecordingDetailScreen {
@@ -117,6 +171,7 @@ impl RecordingDetailScreen {
             detail: None,
             pending: None,
             error: None,
+            announced: None,
         }
     }
 
@@ -190,15 +245,45 @@ impl RecordingDetailScreen {
         }
     }
 
+    /// Leave the detail view: tell the panels, and forget the recording.
+    ///
+    /// Called when the route moves off this recording and when the window is
+    /// closing, which is what gives a half-typed transcript edit its last
+    /// chance to be saved.
+    pub fn close(&mut self, panels: &mut dyn DetailPanels, out: &mut AiOutput) {
+        if self.announced.take().is_some() {
+            panels.closed(out);
+        }
+        self.recording_id = None;
+        self.detail = None;
+        self.pending = None;
+        self.error = None;
+    }
+
     /// Draw the container around `panels`.
+    ///
+    /// Anything the panels asked the application for is appended to `out`;
+    /// the container itself only reports [`DetailIntent`]s, which are the
+    /// two things a command cannot express.
     pub fn ui(
         &mut self,
         ui: &mut Ui,
         panels: &mut dyn DetailPanels,
         context: DetailContext,
         send: Sender<'_>,
+        out: &mut AiOutput,
     ) -> Vec<DetailIntent> {
         let mut intents = Vec::new();
+        if self.announced != self.recording_id {
+            if self.announced.is_some() {
+                panels.closed(out);
+            }
+            self.announced = self.recording_id;
+            if let Some(recording_id) = self.recording_id {
+                panels.opened(recording_id, out);
+            }
+        }
+
         if ui.button("← Back to library").clicked() {
             intents.push(DetailIntent::Back);
         }
@@ -232,19 +317,19 @@ impl RecordingDetailScreen {
                 ui.horizontal_top(|ui| {
                     let main = ui.available_width() - side;
                     ui.allocate_ui(egui::vec2(main, ui.available_height()), |ui| {
-                        panel(ui, "Playback", |ui| panels.player(ui, &detail));
-                        panel(ui, "Transcript", |ui| panels.transcript(ui, &detail));
+                        panel(ui, "Playback", |ui| panels.player(ui, &detail, out));
+                        panel(ui, "Transcript", |ui| panels.transcript(ui, &detail, out));
                     });
                     ui.separator();
                     ui.allocate_ui(egui::vec2(side, ui.available_height()), |ui| {
-                        panel(ui, "Outputs", |ui| panels.outputs(ui, &detail));
+                        panel(ui, "Outputs", |ui| panels.outputs(ui, &detail, out));
                     });
                 });
             }
             DetailLayout::Stacked => {
-                panel(ui, "Playback", |ui| panels.player(ui, &detail));
-                panel(ui, "Transcript", |ui| panels.transcript(ui, &detail));
-                panel(ui, "Outputs", |ui| panels.outputs(ui, &detail));
+                panel(ui, "Playback", |ui| panels.player(ui, &detail, out));
+                panel(ui, "Transcript", |ui| panels.transcript(ui, &detail, out));
+                panel(ui, "Outputs", |ui| panels.outputs(ui, &detail, out));
             }
         }
 
