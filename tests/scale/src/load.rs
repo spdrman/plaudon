@@ -249,7 +249,7 @@ async fn insert_speakers(db: &Database, recording: &SyntheticRecording) -> Persi
     if recording.speakers.is_empty() {
         return Ok(0);
     }
-    let mut tx = db.pool().begin().await?;
+    let mut tx = db.begin_write().await?;
     for (slot, (id, label)) in recording.speakers.iter().enumerate() {
         sqlx::query(
             "INSERT INTO speakers (id, recording_id, label, name, provenance, user_confirmed)
@@ -300,7 +300,7 @@ async fn insert_segments(
         if batch.is_empty() {
             break;
         }
-        let mut tx = db.pool().begin().await?;
+        let mut tx = db.begin_write().await?;
         for segment in &batch {
             let speaker_id = segment
                 .speaker_slot
