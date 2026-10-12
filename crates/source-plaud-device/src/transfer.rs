@@ -307,8 +307,8 @@ pub enum DerivativeOutcome {
     },
     /// No derivative is available, with an honest reason.
     ///
-    /// Spike A1.4 recorded that this build bundles no Opus decoder, so a
-    /// decoded WAV is unavailable rather than fabricated.
+    /// The reason is the one the conversion actually hit; nothing is
+    /// fabricated to fill the slot.
     Unavailable {
         /// What could not be produced.
         kind: DerivativeKind,
@@ -321,7 +321,9 @@ pub enum DerivativeOutcome {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DerivativeRefusal {
-    /// This build bundles no decoder for the acquired codec (spike A1.4).
+    /// No bundled decoder handles the acquired codec. Opus is no longer in
+    /// that set — O1.6 (#214) added a decoder to `plaudon-audio` — but a
+    /// device that ships a different compressed format still lands here.
     UnsupportedCodec,
     /// The acquired bytes did not parse, so there is nothing to convert.
     FramingUnverified,
@@ -345,8 +347,8 @@ impl DerivativeRefusal {
     pub const fn ui_explanation(self) -> &'static str {
         match self {
             Self::UnsupportedCodec => {
-                "This build has no Opus decoder, so the compressed device audio cannot be \
-                 converted to WAV here. The original transferred bytes and a playable Ogg Opus \
+                "This build has no decoder for the device's audio format, so it cannot be \
+                 converted to WAV here. The original transferred bytes and a playable \
                  conversion are both kept."
             }
             Self::FramingUnverified => {
@@ -359,7 +361,7 @@ impl DerivativeRefusal {
 }
 
 impl DerivativeOutcome {
-    /// The decoded-PCM outcome for a build with no Opus decoder.
+    /// The decoded-PCM outcome when no bundled decoder handles the codec.
     #[must_use]
     pub const fn no_pcm_decoder() -> Self {
         Self::Unavailable {
@@ -855,11 +857,11 @@ mod tests {
     fn a_decoded_wav_derivative_is_reported_unavailable_rather_than_faked() {
         let outcome = DerivativeOutcome::no_pcm_decoder();
         let DerivativeOutcome::Unavailable { kind, reason } = outcome else {
-            panic!("this build has no Opus decoder");
+            panic!("an unsupported codec has no decoded derivative");
         };
         assert_eq!(kind, DerivativeKind::DecodedWav);
         assert_eq!(reason.code(), "UNSUPPORTED_CODEC");
-        assert!(reason.ui_explanation().contains("no Opus decoder"));
+        assert!(reason.ui_explanation().contains("no decoder"));
         assert!(reason.ui_explanation().contains("kept"));
     }
 

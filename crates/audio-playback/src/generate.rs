@@ -7,16 +7,13 @@
 //! of writing it anywhere — peak building never materialises the recording,
 //! on disk or in memory.
 //!
-//! Opus is the one gap, and it is not a feature flag away: Symphonia 0.5 has
-//! no Opus decoder at all, for any feature set. Device `.ASR` derivatives are
-//! remuxed to Ogg Opus by `plaudon_plaud_protocol::remux_to_ogg_opus`, so
-//! such a file is refused here — `AudioError::UnsupportedCodec`, surfaced as
-//! [`PeakBuildError::Validate`] — exactly as it is refused by the rest of the
-//! pipeline today. That is a visible, accurate error rather than an empty
-//! waveform, and the test below pins it against the committed fixture. Ogg
-//! Vorbis decodes normally; only Opus is affected. Closing the gap means a
-//! new decoder dependency in `plaudon-audio` (ADR territory), which is out of
-//! scope for the player.
+//! Opus used to be the one gap: Symphonia has no Opus decoder for any
+//! feature set, and device `.ASR` derivatives are remuxed to Ogg Opus by
+//! `plaudon_plaud_protocol::remux_to_ogg_opus`, so such a file was refused
+//! here. O1.6 (#214) closed it inside `plaudon_audio` — a pure-Rust decoder
+//! registered on `plaudon_audio::codecs::registry()`, which this decode path
+//! already goes through — so an Opus recording now builds a pyramid like any
+//! other, and the test below holds that.
 
 use std::path::{Path, PathBuf};
 
@@ -42,8 +39,8 @@ pub enum PeakBuildError {
         #[source]
         source: AudioError,
     },
-    /// The file could not be decoded. An Ogg Opus device derivative lands
-    /// here: no Opus decoder is compiled into `plaudon-audio`.
+    /// The file could not be decoded: a codec no bundled decoder handles, or
+    /// a stream that fails part-way through.
     #[error("media at {path} could not be decoded: {source}")]
     Decode {
         /// File that was rejected.
@@ -237,23 +234,28 @@ mod tests {
         ));
     }
 
-    /// Pins the Opus gap against the committed fixture, so the day a decoder
-    /// is added this test fails and the claim above gets rewritten.
+    /// O1.5 pinned the Opus gap here and said this test must be rewritten the
+    /// day a decoder is added. O1.6 (#214) added one, so the fixture that was
+    /// refused now produces a waveform.
     #[test]
-    fn an_ogg_opus_recording_is_refused_with_a_reason() {
+    fn an_ogg_opus_recording_builds_a_pyramid() {
         // Canonicalised: the path guard refuses a `..` component outright,
         // which would make this test pass for the wrong reason.
         let fixture = fixture_path("tone-mono-16k.opus");
         let ctx = JobContext::new(JobId::new());
-        let error = build_peaks(&fixture, PeakParams::default(), &ctx)
-            .expect_err("symphonia 0.5 has no Opus decoder");
-        assert!(matches!(error, PeakBuildError::Validate { .. }), "{error}");
-        assert!(
-            error.to_string().contains("unsupported codec"),
-            "the refusal must name the codec: {error}"
-        );
+        let built = build_peaks(&fixture, PeakParams::default(), &ctx).expect("ogg opus");
+        // One second of 440 Hz tone, analysed at the default rate.
+        let duration = built.pyramid.duration().as_millis();
+        assert!((950..=1_050).contains(&duration), "duration {duration} ms");
+        let loudest = built.pyramid.levels()[0]
+            .buckets()
+            .iter()
+            .map(|bucket| bucket.amplitude())
+            .fold(0.0f32, f32::max);
+        assert!(loudest > 0.05, "the waveform is flat: {loudest}");
+        assert_eq!(built.content_hash.len(), 32);
 
-        // Ogg itself is fine: the container is supported, the codec is not.
+        // Ogg Vorbis is unaffected by the new codec.
         let vorbis = fixture_path("tone-mono-16k.ogg");
         let built = build_peaks(&vorbis, PeakParams::default(), &ctx).expect("ogg vorbis");
         assert!(built.pyramid.total_frames() > 0);
