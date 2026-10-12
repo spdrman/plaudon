@@ -1,4 +1,4 @@
-# ADR-0050: An explicitly versioned `.recording-archive` container, not a ZIP
+# ADR-0070: An explicitly versioned `.recording-archive` container, not a ZIP
 
 - **Status:** Accepted
 - **Date:** 2026-10-11

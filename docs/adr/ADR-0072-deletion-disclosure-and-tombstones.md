@@ -1,4 +1,4 @@
-# ADR-0052: Deletion is a journalled operation with a confirmed disclosure
+# ADR-0072: Deletion is a journalled operation with a confirmed disclosure
 
 - **Status:** Accepted
 - **Date:** 2026-10-11

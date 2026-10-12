@@ -1,4 +1,4 @@
-# ADR-0051: Argon2id plus STREAM XChaCha20-Poly1305 for encrypted backups
+# ADR-0071: Argon2id plus STREAM XChaCha20-Poly1305 for encrypted backups
 
 - **Status:** Accepted
 - **Date:** 2026-10-11

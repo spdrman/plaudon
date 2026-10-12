@@ -65,7 +65,7 @@ pub const MAX_P_COST: u32 = 16;
 #[non_exhaustive]
 pub enum KdfProfile {
     /// Default for `Create backup`: ~64 MiB, three passes. Roughly a second on
-    /// a current laptop; documented in `docs/adr/ADR-0J01-portable-archive.md`.
+    /// a current laptop; documented in `docs/adr/ADR-0071-argon2id-stream-aead-backups.md`.
     Backup,
     /// Deliberately heavier profile for users who want it: 256 MiB.
     Sensitive,
