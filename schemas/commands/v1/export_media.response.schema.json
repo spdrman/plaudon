@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/export_media.response.schema.json",
+  "title": "export_media.response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "original"
+  ],
+  "properties": {
+    "original": {
+      "$ref": "#/$defs/ExportedMediaFile"
+    },
+    "sanitized": {
+      "anyOf": [
+        { "$ref": "#/$defs/ExportedMediaFile" },
+        { "type": "null" }
+      ]
+    },
+    "sanitized_refusal": {
+      "type": ["string", "null"]
+    }
+  },
+  "$defs": {
+    "ExportedMediaFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "file_name",
+        "sha256",
+        "byte_length",
+        "is_original",
+        "label",
+        "stripped_metadata"
+      ],
+      "properties": {
+        "file_name": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string"
+        },
+        "byte_length": {
+          "type": "number"
+        },
+        "is_original": {
+          "type": "boolean"
+        },
+        "label": {
+          "type": "string"
+        },
+        "stripped_metadata": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

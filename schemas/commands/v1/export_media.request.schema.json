@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/export_media.request.schema.json",
+  "title": "export_media.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "recording_id",
+    "destination_directory"
+  ],
+  "properties": {
+    "recording_id": {
+      "type": "string"
+    },
+    "media_asset_id": {
+      "type": ["string", "null"]
+    },
+    "destination_directory": {
+      "type": "string"
+    },
+    "include_sanitized_derivative": {
+      "type": "boolean"
+    }
+  }
+}

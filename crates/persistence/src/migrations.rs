@@ -43,8 +43,9 @@ impl Migration {
 /// Version ranges are allocated per EPIC so two branches cannot renumber each
 /// other, and because [`MigrationRunner`] refuses a version below the applied
 /// head: 0001-0099 EPIC B (core), 0100-0199 EPIC C (job engine), 0200-0299
-/// EPIC F (audio/STT), 0300-0399 the desktop shell, 0400-0499 EPIC J
-/// (export, portable archive and deletion).
+/// EPIC F (audio/STT), 0300-0399 the desktop shell, 0400-0499 transcript tools
+/// and automation, 0500-0599 direct-device import, 0600-0699 export, portable
+/// archive and deletion.
 pub const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 1,
@@ -74,12 +75,12 @@ pub const MIGRATIONS: &[Migration] = &[
         name: "desktop_shell",
         sql: include_str!("../migrations/0300_desktop_shell.sql"),
     },
-    // 400+ is EPIC J's range: export derivatives, portable archive accounting
+    // 600+ is EPIC J's range: export derivatives, portable archive accounting
     // and deletion journalling.
     Migration {
-        version: 400,
+        version: 600,
         name: "export_deletion",
-        sql: include_str!("../migrations/0400_export_deletion.sql"),
+        sql: include_str!("../migrations/0600_export_deletion.sql"),
     },
 ];
 

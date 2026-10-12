@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/delete_recording.response.schema.json",
+  "title": "delete_recording.response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "deletion_id",
+    "blobs_removed",
+    "blobs_retained_shared",
+    "bytes_freed",
+    "tombstoned"
+  ],
+  "properties": {
+    "deletion_id": {
+      "type": "string"
+    },
+    "blobs_removed": {
+      "type": "number"
+    },
+    "blobs_retained_shared": {
+      "type": "number"
+    },
+    "bytes_freed": {
+      "type": "number"
+    },
+    "tombstoned": {
+      "type": "boolean"
+    }
+  }
+}

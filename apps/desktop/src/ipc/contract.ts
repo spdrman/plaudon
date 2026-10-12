@@ -74,8 +74,12 @@ export const ERROR_CODES = [
   "STORAGE_FULL",
   "MIGRATION_FAILED",
   "RECORD_NOT_FOUND",
+  "EXPORT_DESTINATION_REJECTED",
+  "CAPTIONS_UNAVAILABLE",
   "CONFLICT",
   "ARCHIVE_PATH_REJECTED",
+  "ARCHIVE_REJECTED",
+  "ARCHIVE_DECRYPTION_FAILED",
   "CROSS_VOLUME_COMMIT",
   "CONSENT_REQUIRED",
   "LOCAL_ONLY_MODE",
@@ -94,6 +98,7 @@ export const ERROR_CODES = [
   "BUDGET_EXCEEDED",
   "SECRET_STORE_LOCKED",
   "EGRESS_DENIED",
+  "SECRET_EXCLUSION_FAILED",
   "COMMAND_NOT_AUTHORIZED",
   "HELPER_FAILED",
   "INTERNAL_ERROR",
@@ -411,7 +416,7 @@ export interface ImportFilesResponse {
 
 /* ------------------------------------------------------------------ export */
 
-export type ExportFormat = "txt" | "markdown" | "json";
+export type ExportFormat = "txt" | "markdown" | "json" | "srt" | "vtt";
 
 export interface ExportRecordingRequest {
   recording_id: string;
@@ -425,6 +430,140 @@ export interface ExportRecordingResponse {
   job_id: string;
 }
 
+
+/* ------------------------------------------------- audio export / deletion */
+
+export interface ExportMediaRequest {
+  recording_id: string;
+  media_asset_id: string | null;
+  destination_directory: string;
+  include_sanitized_derivative?: boolean;
+}
+
+export interface ExportedMediaFile {
+  file_name: string;
+  sha256: string;
+  byte_length: number;
+  is_original: boolean;
+  label: string;
+  stripped_metadata: string[];
+}
+
+export interface ExportMediaResponse {
+  original: ExportedMediaFile;
+  sanitized: ExportedMediaFile | null;
+  sanitized_refusal: string | null;
+}
+
+export interface DeletionMediaDto {
+  sha256: string;
+  byte_length: number;
+  quality_label: string;
+  shared_with_other_recordings: boolean;
+  bytes_will_be_removed: boolean;
+}
+
+export interface DeletionCategoryDto {
+  label: string;
+  count: number;
+}
+
+export interface DeletionDisclosureDto {
+  disclosure_version: string;
+  recording_id: string;
+  title: string;
+  has_annotation: boolean;
+  media: DeletionMediaDto[];
+  categories: DeletionCategoryDto[];
+  bytes_to_free: number;
+  limits: string[];
+  confirmation_token: string;
+}
+
+export interface DeletionDisclosureRequest {
+  recording_id: string;
+}
+
+export interface DeleteRecordingRequest {
+  recording_id: string;
+  confirmation_token: string;
+}
+
+export interface DeleteRecordingResponse {
+  deletion_id: string;
+  blobs_removed: number;
+  blobs_retained_shared: number;
+  bytes_freed: number;
+  tombstoned: boolean;
+}
+
+/* ---------------------------------------------------- portable archive */
+
+export interface CreateBackupRequest {
+  destination_directory: string;
+  password: string | null;
+  sensitive_profile?: boolean;
+}
+
+export interface CreateBackupResponse {
+  file_name: string;
+  encrypted: boolean;
+  protection_disclosure: string;
+  entry_count: number;
+  total_byte_length: number;
+  file_byte_length: number;
+  integrity_digest: string;
+  integrity_note: string;
+  manifest_schema_version: string;
+  nonportable_settings: string[];
+}
+
+export interface InspectArchiveRequest {
+  archive_path: string;
+  password: string | null;
+}
+
+export interface RestoreConflictDto {
+  entry_path: string;
+  reason: string;
+}
+
+export interface InspectArchiveResponse {
+  encrypted: boolean;
+  manifest_schema_version: string;
+  format_version: number;
+  created_at: string;
+  source_os: string;
+  entries_by_namespace: DeletionCategoryDto[];
+  total_byte_length: number;
+  payloads_verified: boolean;
+  integrity_digest: string;
+  integrity_note: string;
+  nonportable_settings: string[];
+  conflicts: RestoreConflictDto[];
+  target_is_empty: boolean;
+}
+
+export type RestoreMode = "new_library" | "merge";
+export type ConflictPolicy = "skip" | "fail";
+
+export interface RestoreArchiveRequest {
+  archive_path: string;
+  password: string | null;
+  mode: RestoreMode;
+  on_conflict: ConflictPolicy;
+  restore_tombstoned?: boolean;
+}
+
+export interface RestoreArchiveResponse {
+  recordings_restored: number;
+  transcripts_restored: number;
+  outputs_restored: number;
+  sources_restored: number;
+  media_committed: number;
+  media_reused: number;
+  conflicts: RestoreConflictDto[];
+}
 /* ----------------------------------------------------- settings / activity */
 
 export const NOTIFICATION_CATEGORIES = [
@@ -513,6 +652,12 @@ export interface CommandMap {
   cancel_job: { req: { job_id: string }; res: JobSummary };
   retry_job: { req: RetryJobRequest; res: JobSummary };
   export_recording: { req: ExportRecordingRequest; res: ExportRecordingResponse };
+  export_media: { req: ExportMediaRequest; res: ExportMediaResponse };
+  get_deletion_disclosure: { req: DeletionDisclosureRequest; res: DeletionDisclosureDto };
+  delete_recording: { req: DeleteRecordingRequest; res: DeleteRecordingResponse };
+  create_portable_backup: { req: CreateBackupRequest; res: CreateBackupResponse };
+  inspect_restore_archive: { req: InspectArchiveRequest; res: InspectArchiveResponse };
+  restore_portable_archive: { req: RestoreArchiveRequest; res: RestoreArchiveResponse };
   set_notification_settings: {
     req: { settings: NotificationSettings };
     res: NotificationSettingsResponse;
@@ -538,6 +683,12 @@ export const SPEC_COMMANDS: readonly CommandName[] = [
   "cancel_job",
   "retry_job",
   "export_recording",
+  "export_media",
+  "get_deletion_disclosure",
+  "delete_recording",
+  "create_portable_backup",
+  "inspect_restore_archive",
+  "restore_portable_archive",
   "set_notification_settings",
   "set_local_only_mode",
   "set_openrouter_key",
