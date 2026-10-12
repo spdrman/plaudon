@@ -5,6 +5,8 @@ members = [
     "apps/desktop/src-tauri",
     "tests/integration",
     "tests/chaos",
+    "tests/scale",
+    "tests/e2e",
     "tests/egress/monitor",
     "tests/egress/scenario",
     "tests/egress/harness",
@@ -44,8 +46,13 @@ plaudon-export = { path = "crates/export" }
 plaudon-notifications = { path = "crates/notifications" }
 plaudon-automation = { path = "crates/automation" }
 plaudon-diagnostics = { path = "crates/diagnostics" }
+plaudon-eval = { path = "crates/eval" }
+plaudon-updater = { path = "crates/updater" }
+plaudon-release-tools = { path = "crates/release-tools" }
 
 async-trait = "0.1"
+base64 = "0.22"
+ed25519-dalek = { version = "2", features = ["rand_core"] }
 fs4 = "1"
 hex = "0.4"
 jsonschema = { version = "0.26", default-features = false }
@@ -65,6 +72,7 @@ tempfile = "3"
 thiserror = "2"
 time = { version = "0.3", features = ["formatting", "parsing", "macros"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs", "io-util", "sync", "time"] }
+rand_core = { version = "0.6", features = ["getrandom"] }
 tokio-util = "0.7"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }

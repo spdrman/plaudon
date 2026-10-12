@@ -1,0 +1,245 @@
+name: CI
+
+# Spec 18.8 pipeline. Native macOS Apple Silicon and Windows x86-64 runners:
+# spec 18.4 forbids calling Windows green from a non-native environment, so no
+# job here runs Windows code under Wine or an emulator.
+#
+# The pipeline is hermetic. No job holds a provider credential, touches real
+# hardware or reaches a vendor API. Opt-in suites (real hardware, real
+# provider, real model artifacts) are switched on by an environment variable
+# that CI never sets; see tests/hardware/README.md and tests/e2e/README.md.
+#
+# Flake policy: a scenario that fails intermittently is quarantined by editing
+# tests/e2e/scenarios.toml, which is reviewable, rather than by adding a retry
+# loop. Nothing in this pipeline retries a failed test.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  # Belt and braces: every suite must already be hermetic, and this makes an
+  # accidental outbound call from application code fail loudly (spec 22(15)).
+  PLAUDON_LOCAL_ONLY: "1"
+
+jobs:
+  rust:
+    name: Rust (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            arch: aarch64-apple-darwin
+          - os: windows-2025
+            arch: x86_64-pc-windows-msvc
+    steps:
+      - uses: actions/checkout@v4
+
+      # rust-toolchain.toml pins the channel and components; `rustup show`
+      # installs exactly what the file says, so CI cannot drift from a
+      # developer machine.
+      - name: Install the pinned toolchain
+        run: rustup show
+
+      - name: Report toolchain
+        run: |
+          rustc --version --verbose
+          cargo --version
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.arch }}
+
+      - name: Verify the host target matches the matrix leg
+        shell: bash
+        run: |
+          host=$(rustc -vV | sed -n 's/^host: //p')
+          if [ "$host" != "${{ matrix.arch }}" ]; then
+            echo "runner host $host is not the native ${{ matrix.arch }} leg (spec 18.4)" >&2
+            exit 1
+          fi
+
+      - name: Formatting
+        run: cargo fmt --all --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+      - name: Unit, integration and contract tests
+        shell: bash
+        run: |
+          # The Apple bridge links a Swift static library that is built by
+          # scripts/build-apple-bridge.sh and is macOS-only; its probe suite is
+          # opt-in (spec 18.3). Everything else runs on both legs.
+          cargo test --workspace --all-features --exclude plaudon-ai-apple
+
+      - name: Database migrations apply to a fresh database and reject drift
+        run: cargo test -p plaudon-persistence --all-features
+
+      - name: Crash-recovery suite
+        run: cargo test -p plaudon-chaos-tests --all-features
+
+      - name: Reproducible build metadata
+        shell: bash
+        run: |
+          mkdir -p ci-artifacts/build-metadata
+          cargo run -q -p plaudon-release-tools --bin plaudon-release -- \
+            build-metadata --out "ci-artifacts/build-metadata/${{ matrix.arch }}.json"
+          cat "ci-artifacts/build-metadata/${{ matrix.arch }}.json"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build-metadata-${{ matrix.arch }}
+          path: ci-artifacts/build-metadata
+          retention-days: 30
+
+  desktop-ui:
+    name: Desktop UI (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, windows-2025]
+    defaults:
+      run:
+        working-directory: apps/desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - run: npm ci
+      - name: Type check
+        run: npx tsc -b
+      - name: Component, contract and accessibility tests
+        run: npm run test
+      - name: Production bundle
+        run: npm run build
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+      - name: UI smoke, keyboard and WCAG suite
+        run: npx playwright test --reporter=line
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report-${{ matrix.os }}
+          path: apps/desktop/playwright-report
+          retention-days: 7
+
+  acceptance:
+    name: E2E acceptance (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, windows-2025]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install the pinned toolchain
+        run: rustup show
+      - uses: Swatinem/rust-cache@v2
+      - name: Spec 18.7 scenario registry
+        run: cargo run -q -p plaudon-release-tools --bin plaudon-release -- scenarios
+      - name: Acceptance scenarios
+        run: cargo test -p plaudon-e2e --all-features -- --nocapture
+      - name: Publish scenario coverage
+        shell: bash
+        run: |
+          mkdir -p ci-artifacts/scenario-coverage
+          cargo run -q -p plaudon-release-tools --bin plaudon-release -- \
+            scenarios --json > ci-artifacts/scenario-coverage/${{ matrix.os }}.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: scenario-coverage-${{ matrix.os }}
+          path: ci-artifacts/scenario-coverage
+          retention-days: 30
+
+  supply-chain:
+    name: SCA and licence audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install the pinned toolchain
+        run: rustup show
+      - uses: Swatinem/rust-cache@v2
+      - name: Install cargo-deny
+        run: cargo install cargo-deny --locked --version ^0.18
+      - name: Advisories, licences, bans and sources
+        run: cargo deny --all-features check licenses bans sources advisories
+      - name: Model and third-party licence register
+        run: scripts/license-audit.sh --register-only
+      - name: Software bill of materials
+        run: |
+          mkdir -p ci-artifacts/sbom
+          scripts/sbom.sh --out ci-artifacts/sbom/sbom.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: ci-artifacts/sbom
+          retention-days: 30
+
+  coverage:
+    name: Coverage policy (spec 18.9)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install the pinned toolchain
+        run: rustup show
+      - uses: Swatinem/rust-cache@v2
+      - name: Install cargo-llvm-cov
+        run: cargo install cargo-llvm-cov --locked --version ^0.6
+      - name: Branch coverage
+        run: scripts/coverage.sh --json ci-artifacts/coverage/llvm-cov.json
+      - name: Enforce the critical-module policy
+        run: |
+          cargo run -q -p plaudon-release-tools --bin plaudon-release -- \
+            coverage --llvm-cov ci-artifacts/coverage/llvm-cov.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: ci-artifacts/coverage
+          retention-days: 30
+
+  release-gates:
+    name: Documentation and claim gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install the pinned toolchain
+        run: rustup show
+      - uses: Swatinem/rust-cache@v2
+      - name: Compatibility matrix is generated, not written
+        run: cargo run -q -p plaudon-release-tools --bin plaudon-release -- compat-matrix --check
+      - name: Public documentation lint
+        run: cargo run -q -p plaudon-release-tools --bin plaudon-release -- doc-lint
+      - name: Spec 18.7 scenario registry
+        run: cargo run -q -p plaudon-release-tools --bin plaudon-release -- scenarios
+
+  pipeline-selftest:
+    name: Pipeline self-test (every gate blocks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install the pinned toolchain
+        run: rustup show
+      - uses: Swatinem/rust-cache@v2
+      - name: Install cargo-deny
+        run: cargo install cargo-deny --locked --version ^0.18
+      - name: Deliberately failing fixtures must fail their gates
+        run: scripts/ci-selftest.sh

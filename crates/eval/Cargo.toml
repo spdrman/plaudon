@@ -1,0 +1,28 @@
+[package]
+name = "plaudon-eval"
+description = "Offline AI evaluation harness: consent-cleared corpus register, STT metrics, reports and release gates."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+plaudon-domain = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_norway = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
+time = { workspace = true }
+
+[dev-dependencies]
+jsonschema = { workspace = true }
+tempfile = { workspace = true }
+
+[[bin]]
+name = "plaudon-eval"
+path = "src/bin/plaudon-eval.rs"

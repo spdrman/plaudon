@@ -1,0 +1,146 @@
+# Coverage policy (spec 18.9) — enforced by `plaudon-release coverage`.
+#
+# Spec 18.9 is narrow on purpose:
+#   * at least 90% MEANINGFUL BRANCH coverage in security policy, job state
+#     transitions, parsing and archive accounting;
+#   * explicitly NO global line-coverage gate for UI adapters or vendor
+#     frameworks;
+#   * a critical state transition must carry positive, negative AND
+#     crash-recovery tests regardless of the number.
+#
+# Both halves are gates. Changing the threshold or adding an exemption means
+# editing this file, so it shows up in review rather than hiding in a CI flag.
+
+schema_version = 1
+branch_threshold = 90.0
+
+# ---------------------------------------------------------------- critical --
+# "Security policy, job state transitions, parsing and archive accounting."
+
+[[critical]]
+package = "plaudon-security"
+path_prefix = "crates/security/src"
+rationale = "security policy: consent, outbound egress policy, secret handling (spec 18.9, 16.2A)"
+
+[[critical]]
+package = "plaudon-jobs"
+path_prefix = "crates/jobs/src"
+rationale = "job state transitions and the crash-recovery journal (spec 18.9, 14.7)"
+
+[[critical]]
+package = "plaudon-persistence"
+path_prefix = "crates/persistence/src/archive.rs"
+rationale = "archive accounting: content-addressed blob paths and commit durability (spec 18.9, 13)"
+
+[[critical]]
+package = "plaudon-persistence"
+path_prefix = "crates/persistence/src/journal.rs"
+rationale = "import journal accounting across crash boundaries (spec 18.9, 13.4)"
+
+[[critical]]
+package = "plaudon-plaud-protocol"
+path_prefix = "crates/plaud-protocol/src"
+rationale = "parsing: BLE control and bulk frame decoding of untrusted device input (spec 18.9, 18.2A)"
+
+[[critical]]
+package = "plaudon-source-plaud-cli"
+path_prefix = "crates/source-plaud-cli/src/parser.rs"
+rationale = "parsing: untrusted vendor CLI output (spec 18.9, 7.2)"
+
+[[critical]]
+package = "plaudon-export"
+path_prefix = "crates/export/src"
+rationale = "archive accounting: portable backup manifest and restore accounting (spec 18.9, 12.3)"
+
+[[critical]]
+package = "plaudon-updater"
+path_prefix = "crates/updater/src"
+rationale = "security policy: update signature verification and rollback (spec 16.5, 18.5)"
+
+# ----------------------------------------------------------------- exempt --
+# Spec 18.9: "We will not require 90% global line coverage for UI adapters or
+# vendor frameworks."
+
+[[exempt]]
+path_prefix = "apps/desktop"
+reason = "UI adapter and vendor framework glue; covered by the spec 18.6A UI cluster and the E2E suite instead (spec 18.9)"
+
+[[exempt]]
+path_prefix = "crates/ai-apple/src/ffi.rs"
+reason = "vendor framework FFI shim; exercised by the macOS platform tests, not by host-independent branch coverage (spec 18.4)"
+
+[[exempt]]
+path_prefix = "native/apple-bridge"
+reason = "Swift vendor-framework bridge; not instrumented by the Rust coverage tool (spec 18.9)"
+
+[[exempt]]
+path_prefix = "crates/plaud-ble/src/bin"
+reason = "opt-in hardware scanner binary; cannot run without real radio hardware (spec 18.3A)"
+
+[[exempt]]
+path_prefix = "crates/ai-apple/src/bin"
+reason = "opt-in macOS availability probe binary (spec 18.3)"
+
+# ------------------------------------------------------------ transitions --
+# Each entry names the three tests spec 18.9 demands. The gate greps the listed
+# files for the test names, so deleting a crash-recovery test fails CI.
+
+[[transitions]]
+id = "jobs::committing_to_completed"
+spec = "14.7"
+positive_test = "completed_is_only_reachable_from_committing"
+negative_test = "committing_to_completed_requires_committed_output"
+crash_recovery_test = "every_durable_step_recovers_to_a_valid_state"
+test_files = [
+    "crates/jobs/src/state.rs",
+    "tests/chaos/tests/import_journal_chaos.rs",
+]
+
+[[transitions]]
+id = "jobs::cloud_ready_to_cloud_sending"
+spec = "14.7, 10.6"
+positive_test = "cloud_sending_is_only_reachable_from_cloud_ready"
+negative_test = "dispatch_requires_verified_consent"
+crash_recovery_test = "recovery_can_never_redispatch_a_possibly_billed_job"
+test_files = ["crates/jobs/src/state.rs"]
+
+[[transitions]]
+id = "jobs::any_to_cancelled"
+spec = "14.7"
+positive_test = "every_non_terminal_state_can_reach_cancellation"
+negative_test = "terminal_states_have_no_outgoing_edges"
+crash_recovery_test = "recovery_is_idempotent_across_repeated_restarts"
+test_files = [
+    "crates/jobs/src/state.rs",
+    "tests/chaos/tests/import_journal_chaos.rs",
+]
+
+[[transitions]]
+id = "import::prepared_to_committed"
+spec = "13.4"
+positive_test = "journal_states_round_trip_and_settle_correctly"
+negative_test = "a_failed_sqlite_transaction_leaves_no_half_registered_asset"
+crash_recovery_test = "every_durable_step_recovers_to_a_valid_state"
+test_files = [
+    "crates/persistence/src/journal.rs",
+    "tests/chaos/tests/import_journal_chaos.rs",
+]
+
+[[transitions]]
+id = "archive::staged_to_committed"
+spec = "13.2"
+positive_test = "staging_then_committing_produces_a_verifiable_blob"
+negative_test = "staging_outside_the_staging_directory_is_refused"
+crash_recovery_test = "an_unwritable_archive_fails_the_commit_without_registering_an_asset"
+test_files = [
+    "crates/persistence/src/archive.rs",
+    "tests/chaos/tests/import_journal_chaos.rs",
+]
+
+[[transitions]]
+id = "updater::staged_to_committed"
+spec = "16.5"
+positive_test = "a_validly_signed_update_installs"
+negative_test = "a_tampered_package_is_rejected"
+crash_recovery_test = "an_interruption_at_every_step_leaves_a_launchable_application"
+test_files = ["crates/updater/src/install.rs"]

@@ -1,0 +1,32 @@
+[package]
+name = "plaudon-release-tools"
+description = "Release evidence bundle, build metadata, coverage policy, compatibility docs and E2E scenario registry tooling (spec 18.7-18.9, 24)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+base64 = { workspace = true }
+ed25519-dalek = { workspace = true }
+hex = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_norway = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
+time = { workspace = true }
+toml = "0.8"
+walkdir = { workspace = true }
+
+[dev-dependencies]
+rand_core = { workspace = true }
+tempfile = { workspace = true }
+
+[[bin]]
+name = "plaudon-release"
+path = "src/bin/plaudon-release.rs"
