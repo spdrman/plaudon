@@ -1,0 +1,1 @@
+GET https://cdn.example/x?X-Amz-Signature=deadbeef0123456789 Authorization: Bearer sk-or-v1-0123456789abcdef0123456789abcdef path=/Users/rom/a.m4a cookie=session_abcdef0123456789 done

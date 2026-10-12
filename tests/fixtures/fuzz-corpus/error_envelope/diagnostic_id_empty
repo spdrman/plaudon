@@ -1,0 +1,1 @@
+{"code": "CLI_MISSING", "message": "The PLAUD CLI was not found.", "retryable": false, "diagnostic_id": "", "action": "OPEN_CLI_SETUP"}

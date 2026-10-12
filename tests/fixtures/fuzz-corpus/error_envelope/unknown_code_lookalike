@@ -1,0 +1,1 @@
+{"code": "EGRESS_DENIED ", "message": "The PLAUD CLI was not found.", "retryable": false, "diagnostic_id": "0190f2c0-1b2a-7c3d-8e4f-5a6b7c8d9e0f", "action": "OPEN_CLI_SETUP"}

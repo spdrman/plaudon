@@ -1,0 +1,14 @@
+{
+  "entries": [
+    {
+      "path": "**/secret-scan/documented/content-hashes.log",
+      "pattern": "device_token_hex",
+      "reason": "SHA-256 content digests of media assets (spec 13.3A). They are 64 hex characters, the same shape as a PLAUD legacy static device token, but they are derived from file bytes and are not credentials. Keeping them readable is what makes a deduplication bug diagnosable."
+    },
+    {
+      "path": "**/hostile-paths/names.txt",
+      "pattern": "device_token_hex",
+      "reason": "Content-addressed media archive paths (spec 13.4) of the form media/sha256/<first-two>/<digest-prefix>.m4a. The hex run is a content digest prefix used as a storage path, not a device token; this corpus is the path-guard hostile-filename fixture and contains no credentials."
+    }
+  ]
+}

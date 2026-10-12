@@ -1,6 +1,15 @@
 [workspace]
 resolver = "2"
-members = ["crates/*", "tests/integration", "tests/chaos"]
+members = [
+    "crates/*",
+    "tests/integration",
+    "tests/chaos",
+    "tests/egress/monitor",
+    "tests/egress/scenario",
+    "tests/egress/harness",
+]
+# `fuzz/` is a standalone cargo-fuzz package built with a nightly toolchain.
+exclude = ["fuzz"]
 
 [workspace.package]
 version = "0.1.0"
@@ -39,7 +48,11 @@ async-trait = "0.1"
 hex = "0.4"
 jsonschema = { version = "0.26", default-features = false }
 libc = "0.2"
+parking_lot = "0.12"
 proptest = "1"
+rand = "0.8"
+regex = "1"
+rusqlite = { version = "0.32", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_norway = "0.9"
@@ -51,8 +64,11 @@ time = { version = "0.3", features = ["formatting", "parsing", "macros"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs", "io-util", "sync", "time"] }
 tokio-util = "0.7"
 tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+url = "2"
 uuid = { version = "1", features = ["v4", "v7", "serde"] }
 walkdir = "2"
+zeroize = { version = "1", features = ["derive"] }
 
 [workspace.lints.rust]
 unsafe_code = "warn"
