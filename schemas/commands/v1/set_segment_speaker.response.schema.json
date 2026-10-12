@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/set_segment_speaker.response.schema.json",
+  "title": "set_segment_speaker.response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "recording_id",
+    "transcript_revision_id",
+    "seq_index",
+    "speaker_id",
+    "speaker_label"
+  ],
+  "properties": {
+    "recording_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "transcript_revision_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "seq_index": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "speaker_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "uuid"
+    },
+    "speaker_label": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  }
+}

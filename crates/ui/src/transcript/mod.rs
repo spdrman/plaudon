@@ -25,7 +25,9 @@ use plaudon_transcript_doc::playback::PlaybackPosition;
 use plaudon_transcript_doc::search::SearchMatch;
 use plaudon_transcript_doc::session::EditSession;
 
-pub use chips::{SpeakerChoice, SPEAKER_EDIT_HINT};
+pub use chips::{
+    SpeakerChoice, SpeakerPick, NO_SPEAKER, SPEAKER_EDIT_HINT, SPEAKER_READ_ONLY_HINT,
+};
 pub use find::{FindBarState, FindOutcome};
 pub use style::TranscriptStyle;
 
@@ -117,6 +119,24 @@ pub struct TranscriptEditorOutput {
     pub edited: bool,
     /// The user resolved a save conflict.
     pub conflict_choice: Option<ConflictChoice>,
+    /// The user reassigned a segment's speaker; the host persists it with
+    /// `set_segment_speaker` (spec §4.1, VP-031).
+    pub speaker_change: Option<SpeakerChange>,
+}
+
+/// One segment's speaker, as the user just set it.
+///
+/// The document already carries the change — it is an undo step — so this is
+/// what the host has to persist, not a request for permission.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SpeakerChange {
+    /// Segment the user reassigned, for matching the answer back.
+    pub segment: SegmentId,
+    /// That segment's position in the revision, which is what the command
+    /// addresses it by.
+    pub seq_index: u32,
+    /// Speaker now attributed, `None` when the attribution was cleared.
+    pub speaker_id: Option<SpeakerId>,
 }
 
 /// The transcript editor.
@@ -428,7 +448,22 @@ impl<'a> TranscriptEditor<'a> {
                     egui::pos2(left + style.gutter_width, y + style.row_padding.y),
                     Vec2::new(style.speaker_width - style.row_padding.x, line_height),
                 );
-                chips::speaker(ui, speaker_rect, row.speaker_id, self.speakers);
+                let editable = self.session.document().is_editable();
+                if let Some(picked) =
+                    chips::speaker(ui, speaker_rect, row.speaker_id, self.speakers, editable)
+                {
+                    // The session owns the rule: the change is one undo step,
+                    // and a read-only document refuses it outright.
+                    let picked = picked.speaker_id();
+                    if self.session.set_speaker(row.id, picked).is_ok() {
+                        output.speaker_change = Some(SpeakerChange {
+                            segment: row.id,
+                            seq_index: row.seq_index,
+                            speaker_id: picked,
+                        });
+                        output.edited = true;
+                    }
+                }
 
                 if is_edited {
                     ui.painter().rect_filled(
