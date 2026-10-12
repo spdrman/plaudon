@@ -60,6 +60,11 @@ route is advertised as anything other than Experimental or Unavailable.
 | F-036 | TM-036 | Medium | `crates/security/src/secrets.rs` | D | §22.16 | Needs zeroizing buffers for transient secret material. The accompanying honesty statement (memory cannot be perfectly protected from privileged malware) is already published. |
 | F-040 | TM-040 | High | `crates/ui/src/screens/devices/presentation.rs` | E | §22.3; §16.6 operational privacy | The device transfer screen derives its cloud sentence from the DTO's own `cloud_route`, in exactly one place, so no screen can print `Cloud: not used` on its own authority. Remaining: the same per-route labelling on the recording and job surfaces, so a user can tell local from cloud processing for a given recording. |
 | F-043 | TM-043 | High | `crates/domain/src/error.rs` | B | §22.8; §1.5 "Secrets in application logs: 0" | Found by D2.4 fuzzing. `plaudon_domain::error::Redactor` only matches a URL scheme at the *start* of a token, so a parenthesised, quoted, angle-bracketed or `url=`-prefixed URL is persisted verbatim with its signed query string; and `looks_like_opaque_secret` rejects any token containing `.`, `+` or `/`, so dotted JWTs and base64 credentials survive. Both run on untrusted vendor text in `AppError::from_unmapped_vendor` and `DiagnosticLog::record`. Regression test `domain_redactor_redacts_separator_bearing_credentials` is committed and `#[ignore]`d against this finding; Team-AB has a confirmed fix on `epic-a-spikes`. Closes when that merges here and the ignore is deleted. |
+| F-044 | TM-044 | Medium | `crates/security/src/outbound.rs` | D | Voice-profiles feature gate (EPIC P) | Planned; no code exists. Needs the unconsentable `VoiceBiometric` payload class refused by `OutboundPolicy::authorize` in every mode, the egress watch extended over the enrol-and-match flow, and embedding-shaped diagnostics redaction, per `docs/specs/VOICE_PROFILES_SPEC.md` VP-110–VP-113 and ADR-0080. |
+| F-045 | TM-045 | Medium | `crates/app-core/src/voice_profiles/store.rs` | D | Voice-profiles feature gate (EPIC P) | Planned; no code exists. Needs the feature-scoped AEAD key in the OS secret store (`SecretScope::VoiceProfileKey`), ciphertext-only embeddings at rest, locked-state refusal when the store is unavailable (ADR-0014), and the honest at-rest-not-in-use documentation, per VP-071/VP-132. |
+| F-046 | TM-046 | Medium | `crates/export/src/archive/voiceprofiles.rs` | J | Voice-profiles feature gate (EPIC P) | Planned; no code exists. Needs the export/backup exclusion by default, the encrypted-only `voiceprofiles/` archive namespace (a plaintext voice backup must be unrepresentable), the archive-scanner refusal of embedding blobs elsewhere, and consent re-gating on restore, per VP-077–VP-080. |
+| F-047 | TM-047 | Medium | `crates/app-core/src/voice_profiles/enroll.rs` | M | Voice-profiles feature gate (EPIC P) | Planned; no code exists. Needs enrolment minima over clean single-speaker speech, suggestion-only matching with no auto-assignment at any score, exemplar provenance with split-by-provenance repair, and remembered rejections, per VP-060–VP-066 and ADR-0082. |
+| F-048 | TM-048 | Medium | `crates/app-core/src/voice_profiles/mod.rs` | D | Voice-profiles feature gate (EPIC P) | Planned; no code exists. Needs the no-sync, no-stable-identifier, per-library-key posture with exports off by default, and the documented residual risk of a user restoring one encrypted backup into two libraries, per VP-079. |
 
 **Retired, 2026-10-12.** F-039 — "production build ships devtools or a permissive
 content security policy" — is closed by the egui cutover (ADR-0024) rather than
@@ -78,12 +83,18 @@ not belong in this file. The id is retired, not reused.
 |---|---|---|
 | Critical | 0 | — |
 | High | 12 | F-003, F-004, F-005, F-006, F-011, F-013, F-015, F-018, F-020, F-023, F-040, F-043 |
-| Medium | 16 | F-001, F-002, F-008, F-010, F-012, F-017, F-019, F-021, F-022, F-024, F-025, F-028, F-029, F-031, F-035, F-036 |
+| Medium | 21 | F-001, F-002, F-008, F-010, F-012, F-017, F-019, F-021, F-022, F-024, F-025, F-028, F-029, F-031, F-035, F-036, F-044, F-045, F-046, F-047, F-048 |
 | Low | 0 | — |
 
 The High set is the §22.8 release blocker list. Of it, F-003, F-004, F-005 and
 F-006 block only the direct-device track; F-011 and F-015 block only the
 cloud-AI track; the remainder block core V1.
+
+F-044 through F-048 are planned controls for the speaker voice-profiles
+feature ([`docs/specs/VOICE_PROFILES_SPEC.md`](../specs/VOICE_PROFILES_SPEC.md),
+ADR-0080/0081/0082); no code for that feature exists, so nothing is reachable
+today. They block the voice-profiles feature gate (EPIC P), not core V1, and
+each must be re-rated the moment the subsystem lands.
 
 No finding is currently rated Critical. The controls that would carry a
 Critical rating if they were missing — the OS-backed secret store with no
