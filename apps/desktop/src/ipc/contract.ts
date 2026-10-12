@@ -683,12 +683,6 @@ export const SPEC_COMMANDS: readonly CommandName[] = [
   "cancel_job",
   "retry_job",
   "export_recording",
-  "export_media",
-  "get_deletion_disclosure",
-  "delete_recording",
-  "create_portable_backup",
-  "inspect_restore_archive",
-  "restore_portable_archive",
   "set_notification_settings",
   "set_local_only_mode",
   "set_openrouter_key",
@@ -698,7 +692,17 @@ export const SPEC_COMMANDS: readonly CommandName[] = [
 /** Additions reviewed in ADR-0020 because §15.2 has no read path for them. */
 export const ADR_0020_COMMANDS: readonly CommandName[] = ["list_activity", "complete_onboarding"];
 
-export const ALL_COMMANDS: readonly CommandName[] = [...SPEC_COMMANDS, ...ADR_0020_COMMANDS];
+/** EPIC J: export, portable archive, and deletion commands. */
+export const EPIC_J_COMMANDS: readonly CommandName[] = [
+  "export_media",
+  "get_deletion_disclosure",
+  "delete_recording",
+  "create_portable_backup",
+  "inspect_restore_archive",
+  "restore_portable_archive",
+];
+
+export const ALL_COMMANDS: readonly CommandName[] = [...SPEC_COMMANDS, ...ADR_0020_COMMANDS, ...EPIC_J_COMMANDS];
 
 /* ----------------------------------------------------------------- events */
 
