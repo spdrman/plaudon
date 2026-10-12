@@ -142,6 +142,10 @@ pub fn install(ctx: &egui::Context, contrast_is_high: bool, preference: egui::Th
     };
     ctx.set_style_of(egui::Theme::Light, style_for(light));
     ctx.set_style_of(egui::Theme::Dark, style_for(dark));
+    // When the platform reports no appearance at all, follow the React
+    // shell's initial state (`systemDark: false`) rather than egui's default
+    // of dark, so "follow the system" means the same thing in both shells.
+    ctx.options_mut(|options| options.fallback_theme = egui::Theme::Light);
     ctx.set_theme(preference);
 }
 
@@ -198,6 +202,14 @@ mod tests {
             dark.visuals.panel_fill,
             Tokens::for_theme(ThemeKind::Dark).color.bg_canvas
         );
+    }
+
+    #[test]
+    fn following_a_system_that_reports_nothing_means_light() {
+        let ctx = egui::Context::default();
+        install(&ctx, false, egui::ThemePreference::System);
+        assert_eq!(ctx.system_theme(), None);
+        assert_eq!(ctx.theme(), egui::Theme::Light);
     }
 
     #[test]
