@@ -130,13 +130,7 @@ fn walk(
         }
         Value::Array(items) => {
             for (index, item) in items.iter().enumerate() {
-                walk(
-                    entry_path,
-                    &format!("{pointer}/{index}"),
-                    key,
-                    item,
-                    found,
-                );
+                walk(entry_path, &format!("{pointer}/{index}"), key, item, found);
             }
         }
         Value::Object(fields) => {
@@ -204,9 +198,7 @@ fn is_content_addressed_media_path(value: &str) -> bool {
     let Some((stem, extension)) = name.split_once('.') else {
         return false;
     };
-    is_hex64(stem)
-        && !extension.is_empty()
-        && extension.bytes().all(|b| b.is_ascii_alphanumeric())
+    is_hex64(stem) && !extension.is_empty() && extension.bytes().all(|b| b.is_ascii_alphanumeric())
 }
 
 /// Split `text` into overlapping windows at character boundaries.
@@ -311,7 +303,8 @@ mod tests {
 
     #[test]
     fn a_nested_value_reports_its_json_pointer() {
-        let document = br#"{"outputs":[{"body":{"note":"Bearer abcdefghijklmnopqrstuvwxyz012345"}}]}"#;
+        let document =
+            br#"{"outputs":[{"body":{"note":"Bearer abcdefghijklmnopqrstuvwxyz012345"}}]}"#;
         let findings = ArchiveSecretScanner::findings("outputs/a.json", document);
         assert_eq!(findings.len(), 1);
         assert_eq!(findings[0].field, "/outputs/0/body/note");
@@ -323,9 +316,8 @@ mod tests {
         // separator exactly as it would be inside a JSON document.
         let mut document = "x".repeat(WINDOW_BYTES - 9);
         document.push(' ');
-        document.push_str(
-            "sk-or-v1-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-        );
+        document
+            .push_str("sk-or-v1-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
         document.push_str(&"y".repeat(1024));
         let findings = ArchiveSecretScanner::findings("records/a.json", document.as_bytes());
         assert_ne!(findings, Vec::new(), "boundary-spanning secret missed");

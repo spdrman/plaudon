@@ -12,8 +12,8 @@ use plaudon_domain::ids::{MediaAssetId, RecordingId, TranscriptRevisionId};
 use plaudon_domain::time::Timestamp;
 use plaudon_persistence::archive::MediaArchive;
 use plaudon_persistence::backups::{
-    ArchiveBackupRecord, ArchiveDirection, ArchiveProtection, ArchiveVerifyStatus, ExportDerivative,
-    ExportRepository,
+    ArchiveBackupRecord, ArchiveDirection, ArchiveProtection, ArchiveVerifyStatus,
+    ExportDerivative, ExportRepository,
 };
 use plaudon_persistence::Database;
 use serde::{Deserialize, Serialize};
@@ -219,7 +219,11 @@ pub struct ExportService {
 impl ExportService {
     /// Wrap a library.
     #[must_use]
-    pub fn new(db: Database, media_archive: MediaArchive, library_root: impl Into<PathBuf>) -> Self {
+    pub fn new(
+        db: Database,
+        media_archive: MediaArchive,
+        library_root: impl Into<PathBuf>,
+    ) -> Self {
         Self {
             db,
             media_archive,
@@ -427,7 +431,11 @@ impl ExportService {
 
         for source in snapshot.source_documents().await? {
             let document = serde_json::to_vec(&source)?;
-            builder.add_document(&format!("sources/{}.json", source.id), SOURCE_SCHEMA, &document)?;
+            builder.add_document(
+                &format!("sources/{}.json", source.id),
+                SOURCE_SCHEMA,
+                &document,
+            )?;
         }
         for tool in snapshot.tool_documents().await? {
             let document = serde_json::to_vec(&tool)?;

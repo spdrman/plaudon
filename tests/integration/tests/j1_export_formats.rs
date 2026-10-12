@@ -61,7 +61,11 @@ async fn text_markdown_and_json_carry_the_revision_text_verbatim() {
             &ExportRecordingRequest {
                 recording_id: library.recording_id,
                 transcript_revision_id: Some(library.native_revision),
-                formats: vec![ExportFormat::Txt, ExportFormat::Markdown, ExportFormat::Json],
+                formats: vec![
+                    ExportFormat::Txt,
+                    ExportFormat::Markdown,
+                    ExportFormat::Json,
+                ],
                 destination: out.clone(),
             },
             NOW,
@@ -83,24 +87,24 @@ async fn text_markdown_and_json_carry_the_revision_text_verbatim() {
         assert_eq!(bytes.len() as u64, file.byte_length);
         let text = String::from_utf8(bytes).unwrap();
         if file.format == ExportFormat::Json {
-                let value: serde_json::Value = serde_json::from_str(&text).unwrap();
-                assert_valid(&validator("recording-export.v1.schema.json"), &value);
-                let rendered: Vec<&str> = value["transcripts"]
-                    .as_array()
-                    .unwrap()
-                    .iter()
-                    .find(|t| t["id"] == serde_json::json!(library.native_revision.to_string()))
-                    .unwrap()["segments"]
-                    .as_array()
-                    .unwrap()
-                    .iter()
-                    .map(|segment| segment["text"].as_str().unwrap())
-                    .collect();
-                let expected: Vec<&str> = transcript
-                    .segments
-                    .iter()
-                    .map(|segment| segment.text.as_str())
-                    .collect();
+            let value: serde_json::Value = serde_json::from_str(&text).unwrap();
+            assert_valid(&validator("recording-export.v1.schema.json"), &value);
+            let rendered: Vec<&str> = value["transcripts"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|t| t["id"] == serde_json::json!(library.native_revision.to_string()))
+                .unwrap()["segments"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|segment| segment["text"].as_str().unwrap())
+                .collect();
+            let expected: Vec<&str> = transcript
+                .segments
+                .iter()
+                .map(|segment| segment.text.as_str())
+                .collect();
             assert_eq!(rendered, expected);
         } else {
             // Every segment's text appears verbatim, in order.
@@ -126,7 +130,10 @@ async fn a_markdown_export_preserves_anchors_and_never_fills_in_a_missing_value(
         .unwrap();
     let markdown = render::to_markdown(&export);
 
-    assert!(markdown.contains("not_specified"), "a missing due date must stay missing");
+    assert!(
+        markdown.contains("not_specified"),
+        "a missing due date must stay missing"
+    );
     assert!(markdown.contains("unknown"));
     assert!(markdown.contains("/action_items/0/verb"));
     assert!(markdown.contains("source_linked"));

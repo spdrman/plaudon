@@ -107,7 +107,10 @@ pub struct Cue {
 /// non-overlapping caption track without any offset being invented or moved
 /// forward. A zero-length cue is given a one-millisecond duration, which is
 /// the minimum a caption format can express.
-pub fn build_cues(export: &RecordingExport, transcript: &TranscriptFacts) -> ExportResult<Vec<Cue>> {
+pub fn build_cues(
+    export: &RecordingExport,
+    transcript: &TranscriptFacts,
+) -> ExportResult<Vec<Cue>> {
     eligibility(transcript).map_err(ExportError::CaptionsUnavailable)?;
 
     let mut cues: Vec<Cue> = Vec::new();
@@ -273,7 +276,10 @@ mod tests {
     fn a_text_only_revision_refuses_captions_instead_of_inventing_times() {
         let transcript = transcript(
             "none",
-            vec![segment(0, None, None, "hello"), segment(1, None, None, "world")],
+            vec![
+                segment(0, None, None, "hello"),
+                segment(1, None, None, "world"),
+            ],
         );
         let export = export_with(transcript);
         let selected = export.selected_transcript().unwrap();
@@ -297,7 +303,12 @@ mod tests {
             ],
         );
         let export = export_with(transcript);
-        let srt = render(&export, export.selected_transcript().unwrap(), CaptionFormat::Srt).unwrap();
+        let srt = render(
+            &export,
+            export.selected_transcript().unwrap(),
+            CaptionFormat::Srt,
+        )
+        .unwrap();
         assert!(srt.starts_with("1\n00:00:00,000 --> 00:00:01,500\nfirst\n"));
         assert!(srt.contains("2\n00:00:01,500 --> 00:00:03,061\nsecond\n"));
     }
@@ -360,7 +371,12 @@ mod tests {
             user_confirmed: false,
             display: "Speaker 1 (inferred cluster)".into(),
         });
-        let vtt = render(&export, export.selected_transcript().unwrap(), CaptionFormat::Vtt).unwrap();
+        let vtt = render(
+            &export,
+            export.selected_transcript().unwrap(),
+            CaptionFormat::Vtt,
+        )
+        .unwrap();
         assert!(vtt.contains("<v Speaker 1 (inferred cluster)>hi"));
     }
 }

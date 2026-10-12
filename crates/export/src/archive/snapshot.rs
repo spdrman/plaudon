@@ -16,8 +16,7 @@ use super::documents::{
     AnnotationDocument, EvidenceRow, MediaAssetRow, MediaRevisionRow, OutputDocument, OutputRow,
     RecordDocument, RecordingMediaRow, RecordingRow, SegmentRow, SourceDocument, SourceItemRow,
     SpeakerRow, ToolDocument, TranscriptAnnotationRow, TranscriptDocument, TranscriptRow, WordRow,
-    ANNOTATION_SCHEMA, OUTPUT_SCHEMA, RECORD_SCHEMA, SOURCE_SCHEMA, TOOL_SCHEMA,
-    TRANSCRIPT_SCHEMA,
+    ANNOTATION_SCHEMA, OUTPUT_SCHEMA, RECORD_SCHEMA, SOURCE_SCHEMA, TOOL_SCHEMA, TRANSCRIPT_SCHEMA,
 };
 use crate::error::{ExportError, ExportResult};
 
@@ -181,14 +180,15 @@ impl LibrarySnapshot {
             .map_err(PersistenceError::from)?
             .ok_or(ExportError::RecordNotFound)?;
 
-        let tags = sqlx::query("SELECT tag FROM recording_tags WHERE recording_id = ?1 ORDER BY tag")
-            .bind(recording_id)
-            .fetch_all(self.db.pool())
-            .await
-            .map_err(PersistenceError::from)?
-            .iter()
-            .map(|row| row.get::<String, _>("tag"))
-            .collect();
+        let tags =
+            sqlx::query("SELECT tag FROM recording_tags WHERE recording_id = ?1 ORDER BY tag")
+                .bind(recording_id)
+                .fetch_all(self.db.pool())
+                .await
+                .map_err(PersistenceError::from)?
+                .iter()
+                .map(|row| row.get::<String, _>("tag"))
+                .collect();
 
         let speakers = sqlx::query(
             "SELECT id, label, name, provenance, user_confirmed
@@ -346,10 +346,7 @@ impl LibrarySnapshot {
     }
 
     /// Generated outputs for one recording.
-    pub async fn output_documents(
-        &self,
-        recording_id: &str,
-    ) -> ExportResult<Vec<OutputDocument>> {
+    pub async fn output_documents(&self, recording_id: &str) -> ExportResult<Vec<OutputDocument>> {
         let rows = sqlx::query(
             "SELECT id, output_type, transcript_revision_id, template_version, model_id,
                     prompt_version, schema_version, body_json, status, created_at

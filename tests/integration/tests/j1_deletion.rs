@@ -218,7 +218,10 @@ async fn a_deleted_recording_is_not_resurrected_by_a_later_sync() {
 
     // Only the explicit reimport action clears it.
     // Two media identities plus one source identity.
-    assert_eq!(service.allow_reimport(&receipt.deletion_id).await.unwrap(), 3);
+    assert_eq!(
+        service.allow_reimport(&receipt.deletion_id).await.unwrap(),
+        3
+    );
     assert!(!service
         .is_media_suppressed(&library.original_identity)
         .await

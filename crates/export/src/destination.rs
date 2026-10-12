@@ -188,9 +188,11 @@ impl ExportDestination {
     /// Refuse to overwrite anything that is not a plain file we can replace.
     fn reject_unsafe_target(target: &Path) -> ExportResult<()> {
         match std::fs::symlink_metadata(target) {
-            Ok(metadata) if metadata.file_type().is_symlink() => Err(
-                ExportError::DestinationRejected("a symbolic link already exists at that name".into()),
-            ),
+            Ok(metadata) if metadata.file_type().is_symlink() => {
+                Err(ExportError::DestinationRejected(
+                    "a symbolic link already exists at that name".into(),
+                ))
+            }
             Ok(metadata) if !metadata.is_file() => Err(ExportError::DestinationRejected(
                 "a folder or special file already exists at that name".into(),
             )),
@@ -234,7 +236,9 @@ mod tests {
             assert!(!name.contains('\0'), "{hostile} -> {name}");
             assert_eq!(Path::new(&name).components().count(), 1, "{hostile}");
             assert!(
-                std::path::Path::new(&name).extension().is_some_and(|e| e == "txt"),
+                std::path::Path::new(&name)
+                    .extension()
+                    .is_some_and(|e| e == "txt"),
                 "{hostile} -> {name}"
             );
         }
@@ -309,7 +313,9 @@ mod tests {
         std::os::unix::fs::symlink(&victim, dir.path().join("notes.txt")).unwrap();
 
         let destination = ExportDestination::new(dir.path()).unwrap();
-        let error = destination.write_atomic("notes.txt", b"attack").unwrap_err();
+        let error = destination
+            .write_atomic("notes.txt", b"attack")
+            .unwrap_err();
         assert!(matches!(error, ExportError::DestinationRejected(_)));
         assert_eq!(std::fs::read(&victim).unwrap(), b"original");
     }

@@ -1,33 +1,28 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import { DeleteRecordingDialog } from "./DeleteRecordingDialog";
-import { AppStateProvider } from "../../app/AppState";
 import { FakeBackend } from "../../testing/fakeBackend";
-import { IpcProvider } from "../../ipc/client";
+import { renderWithApp } from "../../testing/renderWithApp";
 
 describe("DeleteRecordingDialog", () => {
   let backend: FakeBackend;
 
   beforeEach(() => {
     backend = new FakeBackend({ recordings: 1 });
-    vi.clearAllMocks();
   });
 
   it("fetches disclosure when opened", async () => {
     const onClose = vi.fn();
     const onDeleted = vi.fn();
 
-    render(
-      <IpcProvider transport={backend}>
-        <AppStateProvider>
-          <DeleteRecordingDialog
-            recordingId="rec-00001"
-            open={true}
-            onClose={onClose}
-            onDeleted={onDeleted}
-          />
-        </AppStateProvider>
-      </IpcProvider>
+    renderWithApp(
+      <DeleteRecordingDialog
+        recordingId="rec-00001"
+        open={true}
+        onClose={onClose}
+        onDeleted={onDeleted}
+      />,
+      { backend }
     );
 
     await waitFor(() => {
@@ -44,17 +39,14 @@ describe("DeleteRecordingDialog", () => {
     const onClose = vi.fn();
     const onDeleted = vi.fn();
 
-    render(
-      <IpcProvider transport={backend}>
-        <AppStateProvider>
-          <DeleteRecordingDialog
-            recordingId="rec-00001"
-            open={true}
-            onClose={onClose}
-            onDeleted={onDeleted}
-          />
-        </AppStateProvider>
-      </IpcProvider>
+    renderWithApp(
+      <DeleteRecordingDialog
+        recordingId="rec-00001"
+        open={true}
+        onClose={onClose}
+        onDeleted={onDeleted}
+      />,
+      { backend }
     );
 
     await waitFor(() => {
@@ -68,17 +60,14 @@ describe("DeleteRecordingDialog", () => {
     const onClose = vi.fn();
     const onDeleted = vi.fn();
 
-    render(
-      <IpcProvider transport={backend}>
-        <AppStateProvider>
-          <DeleteRecordingDialog
-            recordingId="rec-00001"
-            open={true}
-            onClose={onClose}
-            onDeleted={onDeleted}
-          />
-        </AppStateProvider>
-      </IpcProvider>
+    renderWithApp(
+      <DeleteRecordingDialog
+        recordingId="rec-00001"
+        open={true}
+        onClose={onClose}
+        onDeleted={onDeleted}
+      />,
+      { backend }
     );
 
     await waitFor(() => {
@@ -90,17 +79,14 @@ describe("DeleteRecordingDialog", () => {
     const onClose = vi.fn();
     const onDeleted = vi.fn();
 
-    render(
-      <IpcProvider transport={backend}>
-        <AppStateProvider>
-          <DeleteRecordingDialog
-            recordingId="rec-00001"
-            open={true}
-            onClose={onClose}
-            onDeleted={onDeleted}
-          />
-        </AppStateProvider>
-      </IpcProvider>
+    renderWithApp(
+      <DeleteRecordingDialog
+        recordingId="rec-00001"
+        open={true}
+        onClose={onClose}
+        onDeleted={onDeleted}
+      />,
+      { backend }
     );
 
     await waitFor(() => {
@@ -112,17 +98,14 @@ describe("DeleteRecordingDialog", () => {
     const onClose = vi.fn();
     const onDeleted = vi.fn();
 
-    render(
-      <IpcProvider transport={backend}>
-        <AppStateProvider>
-          <DeleteRecordingDialog
-            recordingId="rec-00001"
-            open={true}
-            onClose={onClose}
-            onDeleted={onDeleted}
-          />
-        </AppStateProvider>
-      </IpcProvider>
+    renderWithApp(
+      <DeleteRecordingDialog
+        recordingId="rec-00001"
+        open={true}
+        onClose={onClose}
+        onDeleted={onDeleted}
+      />,
+      { backend }
     );
 
     await waitFor(() => {
@@ -135,24 +118,21 @@ describe("DeleteRecordingDialog", () => {
     const onClose = vi.fn();
     const onDeleted = vi.fn();
 
-    render(
-      <IpcProvider transport={backend}>
-        <AppStateProvider>
-          <DeleteRecordingDialog
-            recordingId="rec-00001"
-            open={true}
-            onClose={onClose}
-            onDeleted={onDeleted}
-          />
-        </AppStateProvider>
-      </IpcProvider>
+    const { user } = renderWithApp(
+      <DeleteRecordingDialog
+        recordingId="rec-00001"
+        open={true}
+        onClose={onClose}
+        onDeleted={onDeleted}
+      />,
+      { backend }
     );
 
     await waitFor(() => {
       expect(screen.getByText("Delete permanently")).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText("Delete permanently"));
+    await user.click(screen.getByText("Delete permanently"));
 
     await waitFor(() => {
       const deleteCall = backend.calls.find((c) => c.command === "delete_recording");
@@ -169,24 +149,21 @@ describe("DeleteRecordingDialog", () => {
     const onClose = vi.fn();
     const onDeleted = vi.fn();
 
-    render(
-      <IpcProvider transport={backend}>
-        <AppStateProvider>
-          <DeleteRecordingDialog
-            recordingId="rec-00001"
-            open={true}
-            onClose={onClose}
-            onDeleted={onDeleted}
-          />
-        </AppStateProvider>
-      </IpcProvider>
+    const { user } = renderWithApp(
+      <DeleteRecordingDialog
+        recordingId="rec-00001"
+        open={true}
+        onClose={onClose}
+        onDeleted={onDeleted}
+      />,
+      { backend }
     );
 
     await waitFor(() => {
       expect(screen.getByRole("alertdialog")).toBeInTheDocument();
     });
 
-    fireEvent.keyDown(screen.getByRole("alertdialog"), { key: "Escape" });
+    await user.keyboard("{Escape}");
 
     expect(onClose).toHaveBeenCalled();
   });

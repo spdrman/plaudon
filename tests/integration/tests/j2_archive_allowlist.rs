@@ -243,7 +243,10 @@ fn decisions() -> Vec<(&'static str, Vec<(&'static str, Decision)>)> {
         (
             "tombstones",
             vec![
-                ("id", Excluded("a local deletion decision, not portable content")),
+                (
+                    "id",
+                    Excluded("a local deletion decision, not portable content"),
+                ),
                 ("entity_type", Excluded(LOCAL)),
                 ("entity_id", Excluded(LOCAL)),
                 ("reason", Excluded(LOCAL)),
@@ -309,7 +312,10 @@ fn decisions() -> Vec<(&'static str, Vec<(&'static str, Decision)>)> {
         (
             "consent_grants",
             vec![
-                ("id", Excluded("consent is granted on the machine that dispatches")),
+                (
+                    "id",
+                    Excluded("consent is granted on the machine that dispatches"),
+                ),
                 ("scope", Excluded(LOCAL)),
                 ("privacy_policy_version", Excluded(LOCAL)),
                 ("engine", Excluded(LOCAL)),
@@ -329,7 +335,10 @@ fn decisions() -> Vec<(&'static str, Vec<(&'static str, Decision)>)> {
         (
             "export_events",
             vec![
-                ("id", Excluded("a local history of files written on this machine")),
+                (
+                    "id",
+                    Excluded("a local history of files written on this machine"),
+                ),
                 ("recording_id", Excluded(LOCAL)),
                 ("format", Excluded(LOCAL)),
                 ("destination_hint", Excluded(LOCAL)),
@@ -531,7 +540,10 @@ fn decisions() -> Vec<(&'static str, Vec<(&'static str, Decision)>)> {
         (
             "activity_events",
             vec![
-                ("id", Excluded("in-app notification history for this machine")),
+                (
+                    "id",
+                    Excluded("in-app notification history for this machine"),
+                ),
                 ("category", Excluded(LOCAL)),
                 ("occurred_at", Excluded(LOCAL)),
                 ("title", Excluded(LOCAL)),
@@ -659,18 +671,20 @@ async fn every_column_has_an_explicit_archive_decision() {
         "these tables have no archive decision; add them to tests/integration/tests/j2_archive_allowlist.rs: {undecided:?}"
     );
     let stale: Vec<&&str> = decided_tables.difference(&actual_tables).collect();
-    assert!(stale.is_empty(), "these decisions name tables that no longer exist: {stale:?}");
+    assert!(
+        stale.is_empty(),
+        "these decisions name tables that no longer exist: {stale:?}"
+    );
 
     for (table, columns) in &decided {
-        let actual: BTreeSet<String> = sqlx::query(sqlx::AssertSqlSafe(format!(
-            "PRAGMA table_info({table})"
-        )))
-        .fetch_all(db.pool())
-        .await
-        .unwrap()
-        .iter()
-        .map(|row| row.get::<String, _>("name"))
-        .collect();
+        let actual: BTreeSet<String> =
+            sqlx::query(sqlx::AssertSqlSafe(format!("PRAGMA table_info({table})")))
+                .fetch_all(db.pool())
+                .await
+                .unwrap()
+                .iter()
+                .map(|row| row.get::<String, _>("name"))
+                .collect();
         let listed: BTreeSet<String> = columns.iter().map(|(name, _)| (*name).to_owned()).collect();
 
         let missing: Vec<&String> = actual.difference(&listed).collect();
@@ -712,6 +726,12 @@ fn the_carried_documents_are_exactly_the_spec_namespaces() {
         .collect();
     assert_eq!(
         namespaces,
-        BTreeSet::from(["records", "annotations", "transcripts", "outputs", "sources"])
+        BTreeSet::from([
+            "records",
+            "annotations",
+            "transcripts",
+            "outputs",
+            "sources"
+        ])
     );
 }

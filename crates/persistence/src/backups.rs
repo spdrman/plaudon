@@ -193,10 +193,7 @@ impl ExportRepository {
     }
 
     /// Record a sanitized derivative.
-    pub async fn record_derivative(
-        &self,
-        derivative: &ExportDerivative,
-    ) -> PersistenceResult<()> {
+    pub async fn record_derivative(&self, derivative: &ExportDerivative) -> PersistenceResult<()> {
         let stripped = serde_json::to_string(&derivative.stripped_metadata)
             .unwrap_or_else(|_| "[]".to_owned());
         sqlx::query(
@@ -330,7 +327,10 @@ mod tests {
             verification_state: VerificationState::Verified,
             verified_at: Some(Timestamp::from_millis(10)),
         };
-        assets.insert(&asset, Timestamp::from_millis(10)).await.unwrap();
+        assets
+            .insert(&asset, Timestamp::from_millis(10))
+            .await
+            .unwrap();
 
         exports
             .record_derivative(&ExportDerivative {

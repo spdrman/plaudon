@@ -14,9 +14,7 @@ use crate::dto::{
     InspectArchiveRequest, InspectArchiveResponse, RestoreArchiveRequest, RestoreArchiveResponse,
 };
 use crate::error::invalid_argument;
-use crate::validate::{
-    parse_id, validate_archive_file, validate_directory, validate_password,
-};
+use crate::validate::{parse_id, validate_archive_file, validate_directory, validate_password};
 use crate::AppPorts;
 
 /// Longest confirmation token we accept: a lowercase SHA-256 in hex.

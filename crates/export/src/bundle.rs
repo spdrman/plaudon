@@ -493,14 +493,15 @@ impl BundleLoader {
         .map_err(PersistenceError::from)?
         .ok_or(ExportError::RecordNotFound)?;
 
-        let tags = sqlx::query("SELECT tag FROM recording_tags WHERE recording_id = ?1 ORDER BY tag")
-            .bind(id.to_string())
-            .fetch_all(self.db.pool())
-            .await
-            .map_err(PersistenceError::from)?
-            .iter()
-            .map(|row| row.get::<String, _>("tag"))
-            .collect();
+        let tags =
+            sqlx::query("SELECT tag FROM recording_tags WHERE recording_id = ?1 ORDER BY tag")
+                .bind(id.to_string())
+                .fetch_all(self.db.pool())
+                .await
+                .map_err(PersistenceError::from)?
+                .iter()
+                .map(|row| row.get::<String, _>("tag"))
+                .collect();
 
         Ok(RecordingFacts {
             id,

@@ -977,7 +977,6 @@ pub struct ExportRecordingResponse {
     pub job_id: JobId,
 }
 
-
 /* -------------------------------------------------- audio export (J1.3) */
 
 /// `export_media` request.

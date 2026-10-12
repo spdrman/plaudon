@@ -24,8 +24,9 @@ fn schemas_dir() -> PathBuf {
 }
 
 fn manifest_validator() -> jsonschema::Validator {
-    let text = std::fs::read_to_string(schemas_dir().join("recording-archive-manifest.v1.schema.json"))
-        .expect("read schema");
+    let text =
+        std::fs::read_to_string(schemas_dir().join("recording-archive-manifest.v1.schema.json"))
+            .expect("read schema");
     let schema: serde_json::Value = serde_json::from_str(&text).expect("parse schema");
     jsonschema::options()
         .with_draft(jsonschema::Draft::Draft202012)
@@ -76,15 +77,18 @@ async fn an_archive_has_the_spec_namespaces_and_a_verifying_manifest() {
 
     assert!(!response.encrypted);
     assert!(response.protection_disclosure.contains("NOT encrypted"));
-    assert!(response.integrity_note.contains("not an authenticity signature"));
+    assert!(response
+        .integrity_note
+        .contains("not an authenticity signature"));
     assert!(response
         .path
         .to_string_lossy()
         .ends_with(".recording-archive"));
     assert_ne!(response.nonportable_settings, Vec::<String>::new());
 
-    let report = ExportService::inspect_archive_only(&response.path, None, &dir.path().join("probe"))
-        .expect("inspect");
+    let report =
+        ExportService::inspect_archive_only(&response.path, None, &dir.path().join("probe"))
+            .expect("inspect");
     assert!(report.payloads_verified);
     assert_eq!(report.manifest.integrity_digest, response.integrity_digest);
 
@@ -95,7 +99,14 @@ async fn an_archive_has_the_spec_namespaces_and_a_verifying_manifest() {
         .collect();
     assert_eq!(
         namespaces,
-        vec!["annotations", "media", "outputs", "records", "sources", "transcripts"]
+        vec![
+            "annotations",
+            "media",
+            "outputs",
+            "records",
+            "sources",
+            "transcripts"
+        ]
     );
     for entry in &report.manifest.entries {
         assert_eq!(entry.kind, "file");
@@ -410,8 +421,14 @@ async fn an_archive_carries_no_credential_shaped_value() {
     let report = ExportService::inspect_archive_only(&backup.path, None, &dir.path().join("probe"))
         .expect("inspect");
     for entry in &report.manifest.entries {
-        for forbidden in ["jobs/", "inference/", "consents/", "devices/", "preferences/", "cache/"]
-        {
+        for forbidden in [
+            "jobs/",
+            "inference/",
+            "consents/",
+            "devices/",
+            "preferences/",
+            "cache/",
+        ] {
             assert!(!entry.path.starts_with(forbidden), "{}", entry.path);
         }
     }
@@ -497,7 +514,9 @@ async fn merge_mode_reports_a_conflict_instead_of_overwriting() {
     assert_eq!(report.media_reused, 2);
     assert_eq!(report.media_committed, 0);
     assert_eq!(report.conflicts.len(), 1);
-    assert!(report.conflicts[0].reason.contains("already in this library"));
+    assert!(report.conflicts[0]
+        .reason
+        .contains("already in this library"));
 
     let title_after: String = sqlx::query_scalar("SELECT title FROM recordings WHERE id = ?1")
         .bind(library.recording_id.to_string())
@@ -677,8 +696,8 @@ async fn the_manifest_lists_the_settings_that_do_not_travel() {
         )
         .await
         .unwrap();
-    let report = ExportService::inspect_archive_only(&backup.path, None, &dir.path().join("probe"))
-        .unwrap();
+    let report =
+        ExportService::inspect_archive_only(&backup.path, None, &dir.path().join("probe")).unwrap();
     let text = report.manifest.nonportable_settings.join(" ");
     assert!(text.contains("keychain"));
     assert!(text.contains("permission"));
@@ -790,8 +809,8 @@ async fn an_archive_from_another_operating_system_restores_unchanged() {
         .await
         .unwrap();
 
-    let report = ExportService::inspect_archive_only(&backup.path, None, &dir.path().join("probe"))
-        .unwrap();
+    let report =
+        ExportService::inspect_archive_only(&backup.path, None, &dir.path().join("probe")).unwrap();
     let produced_on = report.manifest.source_os.clone();
     assert_ne!(produced_on, "unknown");
 

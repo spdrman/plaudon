@@ -44,7 +44,11 @@ pub fn strip_controls(raw: &str) -> String {
         .collect()
 }
 
-fn segment_prefix(export: &RecordingExport, transcript: &TranscriptFacts, segment: &SegmentFacts) -> String {
+fn segment_prefix(
+    export: &RecordingExport,
+    transcript: &TranscriptFacts,
+    segment: &SegmentFacts,
+) -> String {
     let mut parts = Vec::new();
     if let Some(start) = segment.start_ms {
         if transcript.alignment().permits_times() {
@@ -69,7 +73,11 @@ pub fn to_text(export: &RecordingExport) -> String {
     let mut out = String::new();
     let recording = &export.recording;
     let _ = writeln!(out, "{}", strip_controls(&recording.title));
-    let _ = writeln!(out, "{}", "=".repeat(recording.title.chars().count().clamp(3, 80)));
+    let _ = writeln!(
+        out,
+        "{}",
+        "=".repeat(recording.title.chars().count().clamp(3, 80))
+    );
     let _ = writeln!(out, "Recording id: {}", recording.id);
     if let Some(captured) = recording.captured_at {
         let _ = writeln!(out, "Captured: {captured}");
@@ -133,7 +141,10 @@ pub fn to_text(export: &RecordingExport) -> String {
             }
         }
     } else {
-        let _ = writeln!(out, "\nTranscript\n----------\nNo transcript revision exists yet.");
+        let _ = writeln!(
+            out,
+            "\nTranscript\n----------\nNo transcript revision exists yet."
+        );
     }
     out
 }
@@ -142,11 +153,7 @@ fn render_output_text(out: &mut String, output: &OutputFacts) {
     let _ = writeln!(
         out,
         "## {} ({}, template {}, model {}, status {})",
-        output.output_type,
-        output.id,
-        output.template_version,
-        output.model_id,
-        output.status
+        output.output_type, output.id, output.template_version, output.model_id, output.status
     );
     let body = serde_json::to_string_pretty(&output.body).unwrap_or_else(|_| "{}".to_owned());
     let _ = writeln!(out, "{}", strip_controls(&body));

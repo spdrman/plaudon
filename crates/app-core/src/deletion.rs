@@ -257,7 +257,10 @@ impl DeletionService {
 
         let counts = DisclosedCounts {
             transcript_revisions: self
-                .count("SELECT COUNT(*) FROM transcript_revisions WHERE recording_id = ?1", &id)
+                .count(
+                    "SELECT COUNT(*) FROM transcript_revisions WHERE recording_id = ?1",
+                    &id,
+                )
                 .await?,
             transcript_segments: self
                 .count(
@@ -285,7 +288,10 @@ impl DeletionService {
                 )
                 .await?,
             ai_outputs: self
-                .count("SELECT COUNT(*) FROM ai_outputs WHERE recording_id = ?1", &id)
+                .count(
+                    "SELECT COUNT(*) FROM ai_outputs WHERE recording_id = ?1",
+                    &id,
+                )
                 .await?,
             output_evidence: self
                 .count(
@@ -299,16 +305,28 @@ impl DeletionService {
                 .count("SELECT COUNT(*) FROM speakers WHERE recording_id = ?1", &id)
                 .await?,
             tags: self
-                .count("SELECT COUNT(*) FROM recording_tags WHERE recording_id = ?1", &id)
+                .count(
+                    "SELECT COUNT(*) FROM recording_tags WHERE recording_id = ?1",
+                    &id,
+                )
                 .await?,
             source_items: self
-                .count("SELECT COUNT(*) FROM source_items WHERE recording_id = ?1", &id)
+                .count(
+                    "SELECT COUNT(*) FROM source_items WHERE recording_id = ?1",
+                    &id,
+                )
                 .await?,
             media_revisions: self
-                .count("SELECT COUNT(*) FROM media_revisions WHERE recording_id = ?1", &id)
+                .count(
+                    "SELECT COUNT(*) FROM media_revisions WHERE recording_id = ?1",
+                    &id,
+                )
                 .await?,
             export_events: self
-                .count("SELECT COUNT(*) FROM export_events WHERE recording_id = ?1", &id)
+                .count(
+                    "SELECT COUNT(*) FROM export_events WHERE recording_id = ?1",
+                    &id,
+                )
                 .await?,
             export_derivatives: self
                 .count(
@@ -334,7 +352,10 @@ impl DeletionService {
             media,
             counts,
             bytes_to_free,
-            limits: DELETION_LIMITS.iter().map(|line| (*line).to_owned()).collect(),
+            limits: DELETION_LIMITS
+                .iter()
+                .map(|line| (*line).to_owned())
+                .collect(),
         })
     }
 
@@ -380,7 +401,10 @@ impl DeletionService {
             .map(|media| PendingBlob {
                 relative_path: media.relative_path.clone(),
                 identity: MediaIdentity::new(
-                    media.sha256.parse().unwrap_or(Sha256Digest::from_bytes([0; 32])),
+                    media
+                        .sha256
+                        .parse()
+                        .unwrap_or(Sha256Digest::from_bytes([0; 32])),
                     media.byte_length,
                     String::new(),
                 ),
@@ -459,8 +483,8 @@ impl DeletionService {
     pub async fn reconcile(&self, now: Timestamp) -> DeletionResult<Vec<DeletionReceipt>> {
         let mut receipts = Vec::new();
         for record in self.journal.unfinished().await? {
-            let disclosure: DeletionDisclosure =
-                serde_json::from_str(&record.disclosure_json).map_err(|_| {
+            let disclosure: DeletionDisclosure = serde_json::from_str(&record.disclosure_json)
+                .map_err(|_| {
                     DeletionError::Persistence(PersistenceError::Migration(
                         "deletion disclosure is unreadable".into(),
                     ))
@@ -548,7 +572,12 @@ impl DeletionService {
         now: Timestamp,
     ) -> DeletionResult<()> {
         let id = recording_id.to_string();
-        let mut tx = self.db.pool().begin().await.map_err(PersistenceError::from)?;
+        let mut tx = self
+            .db
+            .pool()
+            .begin()
+            .await
+            .map_err(PersistenceError::from)?;
 
         // Suppressions first: if the transaction commits at all, the deletion
         // is durable against a later sync.
@@ -568,13 +597,12 @@ impl DeletionService {
             .map_err(PersistenceError::from)?;
         }
 
-        let source_items = sqlx::query(
-            "SELECT source_id, external_id FROM source_items WHERE recording_id = ?1",
-        )
-        .bind(&id)
-        .fetch_all(&mut *tx)
-        .await
-        .map_err(PersistenceError::from)?;
+        let source_items =
+            sqlx::query("SELECT source_id, external_id FROM source_items WHERE recording_id = ?1")
+                .bind(&id)
+                .fetch_all(&mut *tx)
+                .await
+                .map_err(PersistenceError::from)?;
         for item in &source_items {
             let Some(external_id) = item.get::<Option<String>, _>("external_id") else {
                 continue;
@@ -655,11 +683,12 @@ impl DeletionService {
                 "DELETE FROM recording_import_metadata WHERE recording_id = ?1",
             ),
         ] {
-            let exists = sqlx::query("SELECT 1 FROM sqlite_master WHERE type='table' AND name = ?1")
-                .bind(table)
-                .fetch_optional(&mut *tx)
-                .await
-                .map_err(PersistenceError::from)?;
+            let exists =
+                sqlx::query("SELECT 1 FROM sqlite_master WHERE type='table' AND name = ?1")
+                    .bind(table)
+                    .fetch_optional(&mut *tx)
+                    .await
+                    .map_err(PersistenceError::from)?;
             if exists.is_some() {
                 sqlx::query(sqlx::AssertSqlSafe(statement.to_owned()))
                     .bind(&id)
@@ -699,21 +728,24 @@ impl DeletionService {
 
     /// Unlink blobs the journal still owns, re-checking that nothing points at
     /// them. Returns `(blobs removed, bytes freed)`.
-    pub async fn unlink_blobs(&self, deletion_id: &str, now: Timestamp) -> DeletionResult<(u64, u64)> {
+    pub async fn unlink_blobs(
+        &self,
+        deletion_id: &str,
+        now: Timestamp,
+    ) -> DeletionResult<(u64, u64)> {
         let mut removed = 0u64;
         let mut freed = 0u64;
         for blob in self.journal.blobs(deletion_id).await? {
             if blob.removed_at.is_some() {
                 continue;
             }
-            let still_referenced = sqlx::query(
-                "SELECT 1 FROM media_assets WHERE sha256 = ?1 AND byte_length = ?2",
-            )
-            .bind(blob.identity.sha256.to_hex())
-            .bind(i64::try_from(blob.identity.byte_length).unwrap_or(i64::MAX))
-            .fetch_optional(self.db.pool())
-            .await
-            .map_err(PersistenceError::from)?;
+            let still_referenced =
+                sqlx::query("SELECT 1 FROM media_assets WHERE sha256 = ?1 AND byte_length = ?2")
+                    .bind(blob.identity.sha256.to_hex())
+                    .bind(i64::try_from(blob.identity.byte_length).unwrap_or(i64::MAX))
+                    .fetch_optional(self.db.pool())
+                    .await
+                    .map_err(PersistenceError::from)?;
             if still_referenced.is_some() {
                 // Something re-imported these bytes between planning and now.
                 // Leave them alone; the row that points at them is valid.

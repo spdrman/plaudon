@@ -191,7 +191,11 @@ pub async fn seed(root: &Path, with_secrets: bool) -> SeededLibrary {
     }
 
     for (asset, quality, obtained) in [
-        (original_asset, "original_device_recording", 1_700_000_000_000i64),
+        (
+            original_asset,
+            "original_device_recording",
+            1_700_000_000_000i64,
+        ),
         (
             compressed_asset,
             "compressed_device_transfer",
@@ -273,7 +277,11 @@ pub async fn seed(root: &Path, with_secrets: bool) -> SeededLibrary {
         None,
         &[
             (0, Some((0, 2_500)), "Welcome to the weekly sync."),
-            (1, Some((2_500, 6_000)), "Dana will send the deck on Friday."),
+            (
+                1,
+                Some((2_500, 6_000)),
+                "Dana will send the deck on Friday.",
+            ),
             (2, Some((6_000, 12_000)), "No budget was agreed today."),
         ],
         Some(&inferred_speaker),
@@ -306,7 +314,11 @@ pub async fn seed(root: &Path, with_secrets: bool) -> SeededLibrary {
         Some(text_only_revision),
         &[
             (0, Some((0, 2_400)), "Welcome to the weekly sync."),
-            (1, Some((2_400, 5_900)), "Dana will send the deck on Friday."),
+            (
+                1,
+                Some((2_400, 5_900)),
+                "Dana will send the deck on Friday.",
+            ),
         ],
         Some(&confirmed_speaker),
         1_700_000_030_000,

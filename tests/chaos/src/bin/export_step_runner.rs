@@ -46,7 +46,8 @@ async fn main() {
         ExportStep::ExportPartialWrite => {
             let destination = ExportDestination::new(&work_dir).expect("destination");
             let _ = destination.write_atomic_with("transcript.txt", |file| {
-                file.write_all(b"half of a transcript export").expect("write");
+                file.write_all(b"half of a transcript export")
+                    .expect("write");
                 file.flush().expect("flush");
                 crash();
             });
@@ -162,10 +163,7 @@ impl EntrySink for FileSink {
     }
 
     fn chunk(&mut self, bytes: &[u8]) -> ExportResult<()> {
-        let (_, file) = self
-            .current
-            .as_mut()
-            .ok_or(ExportError::IntegrityFailed)?;
+        let (_, file) = self.current.as_mut().ok_or(ExportError::IntegrityFailed)?;
         file.write_all(bytes)?;
         Ok(())
     }

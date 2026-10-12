@@ -35,8 +35,7 @@ pub fn write_preamble(
     header: &ArchiveHeader,
 ) -> ExportResult<Vec<u8>> {
     let header_bytes = serde_json::to_vec(header)?;
-    let length =
-        u32::try_from(header_bytes.len()).map_err(|_| malformed("header is too large"))?;
+    let length = u32::try_from(header_bytes.len()).map_err(|_| malformed("header is too large"))?;
     if length > MAX_HEADER_BYTES {
         return Err(malformed("header is too large"));
     }
@@ -67,8 +66,8 @@ pub fn read_preamble(reader: &mut impl Read) -> ExportResult<Preamble> {
             },
         ));
     }
-    let protection = ProtectionKind::from_code(fixed[2])
-        .ok_or_else(|| malformed("unknown protection mode"))?;
+    let protection =
+        ProtectionKind::from_code(fixed[2]).ok_or_else(|| malformed("unknown protection mode"))?;
     if fixed[3] != 0 {
         return Err(malformed("reserved header byte is not zero"));
     }
@@ -92,10 +91,14 @@ pub fn read_preamble(reader: &mut impl Read) -> ExportResult<Preamble> {
     }
     match (protection, &header.encryption) {
         (ProtectionKind::Encrypted, None) => {
-            return Err(malformed("the archive claims encryption without parameters"))
+            return Err(malformed(
+                "the archive claims encryption without parameters",
+            ))
         }
         (ProtectionKind::Plaintext, Some(_)) => {
-            return Err(malformed("a plaintext archive carries encryption parameters"))
+            return Err(malformed(
+                "a plaintext archive carries encryption parameters",
+            ))
         }
         _ => {}
     }
@@ -207,7 +210,10 @@ mod tests {
         let error = read_preamble(&mut buffer.as_slice()).unwrap_err();
         assert!(matches!(
             error,
-            ExportError::ArchiveRejected(ArchiveRejection::UnsupportedFormatVersion { found: 99, .. })
+            ExportError::ArchiveRejected(ArchiveRejection::UnsupportedFormatVersion {
+                found: 99,
+                ..
+            })
         ));
     }
 

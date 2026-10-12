@@ -27,7 +27,7 @@ export function DeleteRecordingDialog({
   useEffect(() => {
     if (open && !disclosure) {
       getDisclosure
-        .mutateAsync({ recording_id: recordingId })
+        .run({ recording_id: recordingId })
         .then(setDisclosure)
         .catch(() => {
           // Error shown by CommandErrorNotice
@@ -45,7 +45,7 @@ export function DeleteRecordingDialog({
     if (!disclosure) return;
 
     try {
-      await deleteRecording.mutateAsync({
+      await deleteRecording.run({
         recording_id: recordingId,
         confirmation_token: disclosure.confirmation_token,
       });
@@ -70,9 +70,9 @@ export function DeleteRecordingDialog({
           <Button
             variant="danger"
             onClick={handleConfirmDelete}
-            disabled={!disclosure || deleteRecording.isPending}
+            disabled={!disclosure || deleteRecording.pending}
           >
-            {deleteRecording.isPending ? "Deleting..." : "Delete permanently"}
+            {deleteRecording.pending ? "Deleting..." : "Delete permanently"}
           </Button>
         </>
       }
@@ -141,13 +141,13 @@ export function DeleteRecordingDialog({
             </section>
           )}
 
-          <CommandErrorNotice mutation={getDisclosure} />
-          <CommandErrorNotice mutation={deleteRecording} />
+          {getDisclosure.error ? <CommandErrorNotice error={getDisclosure.error} /> : null}
+          {deleteRecording.error ? <CommandErrorNotice error={deleteRecording.error} /> : null}
         </div>
       ) : (
         <div>
           <p>Loading deletion disclosure...</p>
-          <CommandErrorNotice mutation={getDisclosure} />
+          {getDisclosure.error ? <CommandErrorNotice error={getDisclosure.error} /> : null}
         </div>
       )}
     </Dialog>

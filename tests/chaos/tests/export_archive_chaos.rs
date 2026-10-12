@@ -21,13 +21,15 @@ use plaudon_persistence::deletion::{DeletionRepository, DeletionState};
 
 const NOW: Timestamp = Timestamp::from_millis(1_700_000_500_000);
 
-fn run_child(library_root: &Path, work_dir: &Path, step: ExportStep, archive: Option<&Path>) -> Vec<String> {
+fn run_child(
+    library_root: &Path,
+    work_dir: &Path,
+    step: ExportStep,
+    archive: Option<&Path>,
+) -> Vec<String> {
     std::fs::create_dir_all(work_dir).expect("work dir");
     let mut command = Command::new(env!("CARGO_BIN_EXE_export-step-runner"));
-    command
-        .arg(library_root)
-        .arg(work_dir)
-        .arg(step.as_str());
+    command.arg(library_root).arg(work_dir).arg(step.as_str());
     if let Some(archive) = archive {
         command.arg(archive);
     }
@@ -46,7 +48,13 @@ fn run_child(library_root: &Path, work_dir: &Path, step: ExportStep, archive: Op
 fn entries(dir: &Path) -> Vec<String> {
     std::fs::read_dir(dir)
         .expect("read dir")
-        .map(|entry| entry.expect("entry").file_name().to_string_lossy().into_owned())
+        .map(|entry| {
+            entry
+                .expect("entry")
+                .file_name()
+                .to_string_lossy()
+                .into_owned()
+        })
         .collect()
 }
 
@@ -134,7 +142,9 @@ async fn a_crash_after_staging_leaves_the_target_library_untouched() {
         Some(&archive_path),
     );
 
-    let db = Database::open(target_root.join("app.sqlite")).await.unwrap();
+    let db = Database::open(target_root.join("app.sqlite"))
+        .await
+        .unwrap();
     let recordings: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM recordings")
         .fetch_one(db.pool())
         .await
@@ -185,7 +195,9 @@ async fn a_crash_after_media_commit_resumes_by_reusing_the_blobs() {
     );
     assert_eq!(committed.len(), 2, "both blobs should have been committed");
 
-    let db = Database::open(target_root.join("app.sqlite")).await.unwrap();
+    let db = Database::open(target_root.join("app.sqlite"))
+        .await
+        .unwrap();
     let recordings: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM recordings")
         .fetch_one(db.pool())
         .await
@@ -210,7 +222,10 @@ async fn a_crash_after_media_commit_resumes_by_reusing_the_blobs() {
         .await
         .expect("resume restore");
     assert_eq!(report.recordings_restored, 1);
-    assert_eq!(report.media_reused, 2, "orphan blobs are reused, not rewritten");
+    assert_eq!(
+        report.media_reused, 2,
+        "orphan blobs are reused, not rewritten"
+    );
     assert_eq!(report.media_committed, 0);
     assert_eq!(
         target_media.list_blobs().unwrap(),
@@ -228,7 +243,12 @@ async fn a_crash_right_after_the_deletion_journal_is_finished_by_the_reconciler(
     let recording_id = seeded.recording_id;
     seeded.db.close().await;
 
-    let printed = run_child(&root, &dir.path().join("work"), ExportStep::DeleteAfterJournal, None);
+    let printed = run_child(
+        &root,
+        &dir.path().join("work"),
+        ExportStep::DeleteAfterJournal,
+        None,
+    );
     assert_eq!(printed.len(), 1, "the journal id must be durable");
 
     let db = Database::open(root.join("app.sqlite")).await.unwrap();
@@ -268,7 +288,12 @@ async fn a_crash_after_the_rows_are_gone_still_frees_the_blobs() {
     let recording_id = seeded.recording_id;
     seeded.db.close().await;
 
-    run_child(&root, &dir.path().join("work"), ExportStep::DeleteAfterRows, None);
+    run_child(
+        &root,
+        &dir.path().join("work"),
+        ExportStep::DeleteAfterRows,
+        None,
+    );
 
     let db = Database::open(root.join("app.sqlite")).await.unwrap();
     let media = MediaArchive::open(&root).unwrap();

@@ -28,9 +28,9 @@ use sha2::{Digest, Sha256};
 
 use super::crypto::{EncryptingWriter, EncryptionHeader, KdfProfile};
 use super::manifest::{
-    in_known_namespace, host_os, ArchiveHeader, Compression, Manifest, ManifestEntry,
-    ManifestLimits, ManifestTotals, ProtectionKind, FORMAT_VERSION, INTEGRITY_NOTE,
-    MANIFEST_PATH, MANIFEST_SCHEMA_VERSION, NONPORTABLE_SETTINGS,
+    host_os, in_known_namespace, ArchiveHeader, Compression, Manifest, ManifestEntry,
+    ManifestLimits, ManifestTotals, ProtectionKind, FORMAT_VERSION, INTEGRITY_NOTE, MANIFEST_PATH,
+    MANIFEST_SCHEMA_VERSION, NONPORTABLE_SETTINGS,
 };
 use super::secrets::ArchiveSecretScanner;
 use super::{container, DEFAULT_LIMITS};
@@ -167,11 +167,9 @@ impl ArchiveBuilder {
         // Commit inside the staging directory itself: the `.part` guard removes
         // a partial file on drop, and the builder removes the whole directory
         // when it is dropped, so nothing escapes either way.
-        let target = canonicalize_and_validate(
-            &self.staging.policy(),
-            &self.staging.path().join(&name),
-        )
-        .map_err(|error| ExportError::DestinationRejected(error.reason().to_string()))?;
+        let target =
+            canonicalize_and_validate(&self.staging.policy(), &self.staging.path().join(&name))
+                .map_err(|error| ExportError::DestinationRejected(error.reason().to_string()))?;
         let staged_path = staged
             .commit_by_rename(&target)
             .map_err(|error| ExportError::DestinationRejected(error.reason().to_string()))?
@@ -233,12 +231,14 @@ impl ArchiveBuilder {
                 },
             ));
         }
-        if self.entries.iter().any(|pending| {
-            pending.entry.path.eq_ignore_ascii_case(path)
-        }) {
-            return Err(ExportError::ArchiveRejected(ArchiveRejection::DuplicatePath(
-                path.to_owned(),
-            )));
+        if self
+            .entries
+            .iter()
+            .any(|pending| pending.entry.path.eq_ignore_ascii_case(path))
+        {
+            return Err(ExportError::ArchiveRejected(
+                ArchiveRejection::DuplicatePath(path.to_owned()),
+            ));
         }
         Ok(())
     }
@@ -266,8 +266,7 @@ impl ArchiveBuilder {
     }
 
     fn manifest(&self) -> Manifest {
-        let entries: Vec<ManifestEntry> =
-            self.entries.iter().map(|p| p.entry.clone()).collect();
+        let entries: Vec<ManifestEntry> = self.entries.iter().map(|p| p.entry.clone()).collect();
         let digest = Manifest::compute_integrity_digest(&entries);
         Manifest {
             schema_version: MANIFEST_SCHEMA_VERSION.to_owned(),
@@ -398,8 +397,9 @@ impl ArchiveBuilder {
             if written != pending.entry.stored_length {
                 return Err(ExportError::IntegrityFailed);
             }
-            if verify && Sha256Digest::from_bytes(hasher.finalize().into()).to_hex()
-                != pending.entry.sha256
+            if verify
+                && Sha256Digest::from_bytes(hasher.finalize().into()).to_hex()
+                    != pending.entry.sha256
             {
                 // A library blob changed between planning and emission.
                 return Err(ExportError::IntegrityFailed);

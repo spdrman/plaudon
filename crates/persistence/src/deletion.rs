@@ -414,11 +414,15 @@ mod tests {
         assert_eq!(unfinished.len(), 1);
         assert_eq!(unfinished[0].state, DeletionState::Planned);
 
-        repo.set_state("d1", DeletionState::RowsRemoved).await.unwrap();
+        repo.set_state("d1", DeletionState::RowsRemoved)
+            .await
+            .unwrap();
         repo.mark_blob_removed("d1", &blob(1).relative_path, Timestamp::from_millis(2))
             .await
             .unwrap();
-        repo.complete("d1", Timestamp::from_millis(3)).await.unwrap();
+        repo.complete("d1", Timestamp::from_millis(3))
+            .await
+            .unwrap();
         assert_eq!(repo.unfinished().await.unwrap(), Vec::new());
         assert_eq!(
             repo.get("d1").await.unwrap().completed_at,
@@ -445,12 +449,21 @@ mod tests {
         // Same digest, different length is a different identity.
         let other = MediaIdentity::new(Sha256Digest::of(b"bytes"), 6, "wav");
         assert!(!repo.is_media_suppressed(&other).await.unwrap());
-        assert!(repo.is_source_item_suppressed("src", "ext-1").await.unwrap());
-        assert!(!repo.is_source_item_suppressed("src", "ext-2").await.unwrap());
+        assert!(repo
+            .is_source_item_suppressed("src", "ext-1")
+            .await
+            .unwrap());
+        assert!(!repo
+            .is_source_item_suppressed("src", "ext-2")
+            .await
+            .unwrap());
 
         assert_eq!(repo.clear_suppressions("d2").await.unwrap(), 2);
         assert!(!repo.is_media_suppressed(&identity).await.unwrap());
-        assert!(!repo.is_source_item_suppressed("src", "ext-1").await.unwrap());
+        assert!(!repo
+            .is_source_item_suppressed("src", "ext-1")
+            .await
+            .unwrap());
         db.close().await;
     }
 
@@ -458,7 +471,10 @@ mod tests {
     async fn completing_an_unknown_deletion_is_a_missing_record() {
         let (_dir, db) = db().await;
         let repo = DeletionRepository::new(db.clone());
-        let error = repo.complete("nope", Timestamp::from_millis(1)).await.unwrap_err();
+        let error = repo
+            .complete("nope", Timestamp::from_millis(1))
+            .await
+            .unwrap_err();
         assert!(matches!(error, PersistenceError::RecordNotFound));
         let error = repo
             .set_state("nope", DeletionState::RowsRemoved)

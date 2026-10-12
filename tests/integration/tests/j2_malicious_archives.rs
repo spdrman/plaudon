@@ -43,12 +43,11 @@ async fn snapshot(db: &Database, archive: &MediaArchive) -> BTreeMap<String, Str
         "speakers",
         "recording_tags",
     ] {
-        let count: i64 = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
-            "SELECT COUNT(*) FROM {table}"
-        )))
-        .fetch_one(db.pool())
-        .await
-        .unwrap();
+        let count: i64 =
+            sqlx::query_scalar(sqlx::AssertSqlSafe(format!("SELECT COUNT(*) FROM {table}")))
+                .fetch_one(db.pool())
+                .await
+                .unwrap();
         out.insert(table.to_owned(), count.to_string());
     }
     let blobs = archive.list_blobs().unwrap();
@@ -110,7 +109,10 @@ async fn assert_rejected(case_file: &Path, attack: &str) {
     );
 
     let after = snapshot(&target.db, &target.archive).await;
-    assert_eq!(before, after, "the library changed while refusing: {attack}");
+    assert_eq!(
+        before, after,
+        "the library changed while refusing: {attack}"
+    );
 
     // Nothing is left in the private staging area either.
     let temp = target.root.join("temp");

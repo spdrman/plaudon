@@ -488,7 +488,7 @@ pub const MAX_PASSWORD_BYTES: usize = 1024;
 pub fn validate_password(password: Option<&str>) -> Result<Option<String>, AppError> {
     match password {
         None => Ok(None),
-        Some(value) if value.is_empty() => Err(invalid_argument(
+        Some("") => Err(invalid_argument(
             "an empty password is not a password; omit it to create a plaintext archive",
         )),
         Some(value) if value.len() > MAX_PASSWORD_BYTES => {

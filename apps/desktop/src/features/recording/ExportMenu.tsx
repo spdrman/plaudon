@@ -61,7 +61,7 @@ export function ExportMenu({
     if (!destination) return;
 
     try {
-      const response = await exportTranscript.mutateAsync({
+      const response = await exportTranscript.run({
         recording_id: detail.recording_id,
         revision_id: currentRevisionId,
         format,
@@ -88,7 +88,7 @@ export function ExportMenu({
     if (!directory) return;
 
     try {
-      const response = await exportMedia.mutateAsync({
+      const response = await exportMedia.run({
         recording_id: detail.recording_id,
         media_asset_id: null,
         destination_directory: directory,
@@ -153,7 +153,7 @@ export function ExportMenu({
             </Button>
           </section>
 
-          <CommandErrorNotice mutation={exportTranscript} />
+          {exportTranscript.error ? <CommandErrorNotice error={exportTranscript.error} /> : null}
         </div>
       </Dialog>
 
@@ -181,9 +181,9 @@ export function ExportMenu({
               <Button
                 variant="primary"
                 onClick={handleAudioExport}
-                disabled={exportMedia.isPending}
+                disabled={exportMedia.pending}
               >
-                {exportMedia.isPending ? "Exporting..." : "Export"}
+                {exportMedia.pending ? "Exporting..." : "Export"}
               </Button>
             </>
           )
@@ -251,7 +251,7 @@ export function ExportMenu({
               </span>
             </label>
 
-            <CommandErrorNotice mutation={exportMedia} />
+            {exportMedia.error ? <CommandErrorNotice error={exportMedia.error} /> : null}
           </div>
         )}
       </Dialog>

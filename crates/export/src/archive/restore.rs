@@ -243,9 +243,7 @@ impl Restorer {
         let mut sink = StagingSink::new(staging.path().to_path_buf());
         let (manifest, _) = reader::stream(archive_path, password, staging.path(), &mut sink)?;
 
-        let report = self
-            .integrate(&manifest, &sink.staged, options)
-            .await;
+        let report = self.integrate(&manifest, &sink.staged, options).await;
         // The staging directory is removed when `staging` drops, whether the
         // integration succeeded or not.
         drop(staging);
@@ -417,7 +415,11 @@ impl Restorer {
                 .bind(asset.codec.as_deref())
                 .bind(asset.sample_rate.map(i64::from))
                 .bind(asset.channels.map(i64::from))
-                .bind(asset.duration_ms.map(|v| i64::try_from(v).unwrap_or(i64::MAX)))
+                .bind(
+                    asset
+                        .duration_ms
+                        .map(|v| i64::try_from(v).unwrap_or(i64::MAX)),
+                )
                 .bind(&asset.quality_class)
                 .bind(asset.created_at)
                 .execute(&mut *tx)
@@ -609,7 +611,11 @@ impl Restorer {
                 .bind(&segment.id)
                 .bind(&revision.id)
                 .bind(i64::from(segment.seq_index))
-                .bind(segment.start_ms.map(|v| i64::try_from(v).unwrap_or(i64::MAX)))
+                .bind(
+                    segment
+                        .start_ms
+                        .map(|v| i64::try_from(v).unwrap_or(i64::MAX)),
+                )
                 .bind(segment.end_ms.map(|v| i64::try_from(v).unwrap_or(i64::MAX)))
                 .bind(segment.speaker_id.as_deref())
                 .bind(&segment.text)
@@ -657,7 +663,11 @@ impl Restorer {
                         .start_ms
                         .map(|v| i64::try_from(v).unwrap_or(i64::MAX)),
                 )
-                .bind(annotation.end_ms.map(|v| i64::try_from(v).unwrap_or(i64::MAX)))
+                .bind(
+                    annotation
+                        .end_ms
+                        .map(|v| i64::try_from(v).unwrap_or(i64::MAX)),
+                )
                 .execute(&mut *tx)
                 .await
                 .map_err(PersistenceError::from)?;
@@ -758,13 +768,11 @@ impl Restorer {
             .await
             .map_err(PersistenceError::from)?;
         if let Some(row) = row {
-            return Ok(Some(
-                if row.get::<Option<i64>, _>("deleted_at").is_some() {
-                    "deleted locally".to_owned()
-                } else {
-                    "already in this library".to_owned()
-                },
-            ));
+            return Ok(Some(if row.get::<Option<i64>, _>("deleted_at").is_some() {
+                "deleted locally".to_owned()
+            } else {
+                "already in this library".to_owned()
+            }));
         }
         let tombstoned = sqlx::query(
             "SELECT 1 FROM tombstones WHERE entity_type = 'recording' AND entity_id = ?1",

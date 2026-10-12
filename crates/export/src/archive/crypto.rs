@@ -172,15 +172,12 @@ impl KdfParams {
                 "salt is not hex".to_owned(),
             ))
         })?;
-        let params = Params::new(
-            self.m_cost_kib,
-            self.t_cost,
-            self.p_cost,
-            Some(KEY_BYTES),
-        )
-        .map_err(|error| {
-            ExportError::ArchiveRejected(ArchiveRejection::KdfParametersRejected(error.to_string()))
-        })?;
+        let params = Params::new(self.m_cost_kib, self.t_cost, self.p_cost, Some(KEY_BYTES))
+            .map_err(|error| {
+                ExportError::ArchiveRejected(ArchiveRejection::KdfParametersRejected(
+                    error.to_string(),
+                ))
+            })?;
         let argon = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
         let mut key = Zeroizing::new([0u8; KEY_BYTES]);
         argon
@@ -460,16 +457,12 @@ impl<R: Read> DecryptingReader<R> {
             aad: &self.aad,
         };
         let plaintext = if last {
-            let plaintext = decryptor
-                .decrypt_last(payload)
-                .map_err(|_| aead_error())?;
+            let plaintext = decryptor.decrypt_last(payload).map_err(|_| aead_error())?;
             self.finished = true;
             plaintext
         } else {
             let mut decryptor = decryptor;
-            let plaintext = decryptor
-                .decrypt_next(payload)
-                .map_err(|_| aead_error())?;
+            let plaintext = decryptor.decrypt_next(payload).map_err(|_| aead_error())?;
             self.decryptor = Some(decryptor);
             plaintext
         };

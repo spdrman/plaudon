@@ -118,18 +118,13 @@ impl InspectionReport {
 ///
 /// `destination_root` is the directory entries would be written into; it does
 /// not need to exist, and nothing under it is touched.
-pub fn validate_manifest_entries(
-    manifest: &Manifest,
-    destination_root: &Path,
-) -> ExportResult<()> {
+pub fn validate_manifest_entries(manifest: &Manifest, destination_root: &Path) -> ExportResult<()> {
     manifest.verify_self_consistency()?;
 
     let mut policy = ArchivePolicy::new(destination_root)
         .with_max_entry_bytes(DEFAULT_LIMITS.max_entry_bytes)
         .with_max_total_bytes(DEFAULT_LIMITS.max_total_bytes)
-        .with_max_entries(
-            usize::try_from(DEFAULT_LIMITS.max_entries).unwrap_or(usize::MAX),
-        )
+        .with_max_entries(usize::try_from(DEFAULT_LIMITS.max_entries).unwrap_or(usize::MAX))
         .with_windows_short_path_compatible(true);
 
     for entry in &manifest.entries {
@@ -150,17 +145,14 @@ pub fn validate_manifest_entries(
             ));
         }
         if entry.sha256.len() != 64 || !entry.sha256.bytes().all(|b| b.is_ascii_hexdigit()) {
-            return Err(ExportError::ArchiveRejected(
-                ArchiveRejection::Malformed(format!("entry {} has no usable digest", entry.path)),
-            ));
+            return Err(ExportError::ArchiveRejected(ArchiveRejection::Malformed(
+                format!("entry {} has no usable digest", entry.path),
+            )));
         }
         if entry.compression == Compression::Store && entry.stored_length != entry.byte_length {
-            return Err(ExportError::ArchiveRejected(
-                ArchiveRejection::Malformed(format!(
-                    "stored entry {} declares two different lengths",
-                    entry.path
-                )),
-            ));
+            return Err(ExportError::ArchiveRejected(ArchiveRejection::Malformed(
+                format!("stored entry {} declares two different lengths", entry.path),
+            )));
         }
         let meta = ArchiveEntryMeta::file(
             entry.path.clone(),
@@ -281,8 +273,7 @@ fn open_body(path: &Path, password: Option<&str>) -> ExportResult<Body> {
                 .encryption
                 .as_ref()
                 .ok_or_else(|| ExportError::ArchiveRejected(ArchiveRejection::NotAnArchive))?;
-            let reader =
-                DecryptingReader::new(file, encryption, &preamble.header_bytes, password)?;
+            let reader = DecryptingReader::new(file, encryption, &preamble.header_bytes, password)?;
             Ok(Body {
                 reader: Box::new(reader),
                 encrypted: true,
@@ -416,8 +407,8 @@ pub fn stream<S: EntrySink>(
             )));
         }
         sink.begin(expected)?;
-        let digest =
-            read_payload(&mut body.reader, expected, |chunk| sink.chunk(chunk)).map_err(classify)?;
+        let digest = read_payload(&mut body.reader, expected, |chunk| sink.chunk(chunk))
+            .map_err(classify)?;
         if digest != expected.sha256 {
             return Err(ExportError::ArchiveRejected(
                 ArchiveRejection::DigestMismatch {

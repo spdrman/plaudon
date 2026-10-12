@@ -354,7 +354,10 @@ mod tests {
             entries,
             integrity_digest: digest,
             integrity_note: INTEGRITY_NOTE.to_owned(),
-            nonportable_settings: NONPORTABLE_SETTINGS.iter().map(|s| (*s).to_owned()).collect(),
+            nonportable_settings: NONPORTABLE_SETTINGS
+                .iter()
+                .map(|s| (*s).to_owned())
+                .collect(),
         }
     }
 

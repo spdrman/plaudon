@@ -297,11 +297,9 @@ async fn render(
         ExportFormat::Markdown => render_markdown(&export),
         ExportFormat::Json => render_json(&export)?,
         ExportFormat::Srt | ExportFormat::Vtt => {
-            let transcript = export
-                .selected_transcript()
-                .ok_or_else(|| {
-                    AppError::from(ExportError::CaptionsUnavailable(CaptionRefusal::NoSegments))
-                })?;
+            let transcript = export.selected_transcript().ok_or_else(|| {
+                AppError::from(ExportError::CaptionsUnavailable(CaptionRefusal::NoSegments))
+            })?;
             let caption_format = if request.format == ExportFormat::Srt {
                 CaptionFormat::Srt
             } else {

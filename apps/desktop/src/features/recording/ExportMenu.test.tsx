@@ -1,10 +1,9 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { describe, it, expect, beforeEach } from "vitest";
+import { screen, waitFor } from "@testing-library/react";
 import { ExportMenu } from "./ExportMenu";
 import type { RecordingDetail } from "../../ipc/contract";
-import { AppStateProvider } from "../../app/AppState";
 import { FakeBackend } from "../../testing/fakeBackend";
-import { IpcProvider } from "../../ipc/client";
+import { renderWithApp } from "../../testing/renderWithApp";
 
 const mockDetail: RecordingDetail = {
   recording_id: "rec-00001",
@@ -47,39 +46,32 @@ describe("ExportMenu", () => {
 
   beforeEach(() => {
     backend = new FakeBackend();
-    vi.clearAllMocks();
   });
 
   it("renders export button", () => {
-    render(
-      <IpcProvider transport={backend}>
-        <AppStateProvider>
-          <ExportMenu
-            detail={mockDetail}
-            currentRevisionId="rev-001"
-            alignmentOrigin="native"
-          />
-        </AppStateProvider>
-      </IpcProvider>
+    renderWithApp(
+      <ExportMenu
+        detail={mockDetail}
+        currentRevisionId="rev-001"
+        alignmentOrigin="native"
+      />,
+      { backend }
     );
 
     expect(screen.getByText("Export")).toBeInTheDocument();
   });
 
   it("shows transcript format options when opened", async () => {
-    render(
-      <IpcProvider transport={backend}>
-        <AppStateProvider>
-          <ExportMenu
-            detail={mockDetail}
-            currentRevisionId="rev-001"
-            alignmentOrigin="native"
-          />
-        </AppStateProvider>
-      </IpcProvider>
+    const { user } = renderWithApp(
+      <ExportMenu
+        detail={mockDetail}
+        currentRevisionId="rev-001"
+        alignmentOrigin="native"
+      />,
+      { backend }
     );
 
-    fireEvent.click(screen.getByText("Export"));
+    await user.click(screen.getByText("Export"));
 
     await waitFor(() => {
       expect(screen.getByText("Plain text")).toBeInTheDocument();
@@ -91,19 +83,16 @@ describe("ExportMenu", () => {
   });
 
   it("disables SRT and VTT when alignment is none", async () => {
-    render(
-      <IpcProvider transport={backend}>
-        <AppStateProvider>
-          <ExportMenu
-            detail={mockDetail}
-            currentRevisionId="rev-001"
-            alignmentOrigin="none"
-          />
-        </AppStateProvider>
-      </IpcProvider>
+    const { user } = renderWithApp(
+      <ExportMenu
+        detail={mockDetail}
+        currentRevisionId="rev-001"
+        alignmentOrigin="none"
+      />,
+      { backend }
     );
 
-    fireEvent.click(screen.getByText("Export"));
+    await user.click(screen.getByText("Export"));
 
     await waitFor(() => {
       const srtButton = screen.getByText(/SubRip captions/);
@@ -116,19 +105,16 @@ describe("ExportMenu", () => {
   });
 
   it("enables SRT and VTT when alignment is native", async () => {
-    render(
-      <IpcProvider transport={backend}>
-        <AppStateProvider>
-          <ExportMenu
-            detail={mockDetail}
-            currentRevisionId="rev-001"
-            alignmentOrigin="native"
-          />
-        </AppStateProvider>
-      </IpcProvider>
+    const { user } = renderWithApp(
+      <ExportMenu
+        detail={mockDetail}
+        currentRevisionId="rev-001"
+        alignmentOrigin="native"
+      />,
+      { backend }
     );
 
-    fireEvent.click(screen.getByText("Export"));
+    await user.click(screen.getByText("Export"));
 
     await waitFor(() => {
       const srtButton = screen.getByText("SubRip captions");
@@ -139,19 +125,16 @@ describe("ExportMenu", () => {
   });
 
   it("enables SRT and VTT when alignment is derived", async () => {
-    render(
-      <IpcProvider transport={backend}>
-        <AppStateProvider>
-          <ExportMenu
-            detail={mockDetail}
-            currentRevisionId="rev-001"
-            alignmentOrigin="derived"
-          />
-        </AppStateProvider>
-      </IpcProvider>
+    const { user } = renderWithApp(
+      <ExportMenu
+        detail={mockDetail}
+        currentRevisionId="rev-001"
+        alignmentOrigin="derived"
+      />,
+      { backend }
     );
 
-    fireEvent.click(screen.getByText("Export"));
+    await user.click(screen.getByText("Export"));
 
     await waitFor(() => {
       const srtButton = screen.getByText("SubRip captions");

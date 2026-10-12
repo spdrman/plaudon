@@ -15,5 +15,8 @@ fn main() {
         PathBuf::from,
     );
     plaudon_integration_tests::fakes::hostile_archive::write_corpus(&directory);
-    println!("wrote the hostile archive corpus to {}", directory.display());
+    println!(
+        "wrote the hostile archive corpus to {}",
+        directory.display()
+    );
 }

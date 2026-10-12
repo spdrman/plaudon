@@ -45,7 +45,7 @@ export function BackupRestoreSection() {
     if (!directory) return;
 
     try {
-      const response = await createBackup.mutateAsync({
+      const response = await createBackup.run({
         destination_directory: directory,
         password: password.trim() || null,
         sensitive_profile: sensitiveProfile,
@@ -73,7 +73,7 @@ export function BackupRestoreSection() {
     if (!archivePath) return;
 
     try {
-      const response = await inspectArchive.mutateAsync({
+      const response = await inspectArchive.run({
         archive_path: archivePath,
         password: restorePassword.trim() || null,
       });
@@ -87,7 +87,7 @@ export function BackupRestoreSection() {
     if (!archivePath || !inspection) return;
 
     try {
-      const response = await restoreArchive.mutateAsync({
+      const response = await restoreArchive.run({
         archive_path: archivePath,
         password: restorePassword.trim() || null,
         mode: restoreMode,
@@ -144,9 +144,9 @@ export function BackupRestoreSection() {
               <Button
                 variant="primary"
                 onClick={handleCreateBackup}
-                disabled={createBackup.isPending}
+                disabled={createBackup.pending}
               >
-                {createBackup.isPending ? "Creating..." : "Create backup"}
+                {createBackup.pending ? "Creating…" : "Create backup now"}
               </Button>
             </>
           )
@@ -245,7 +245,7 @@ export function BackupRestoreSection() {
               </>
             )}
 
-            <CommandErrorNotice mutation={createBackup} />
+            {createBackup.error ? <CommandErrorNotice error={createBackup.error} /> : null}
           </div>
         )}
       </Dialog>
@@ -287,9 +287,9 @@ export function BackupRestoreSection() {
               <Button
                 variant="primary"
                 onClick={handleRestore}
-                disabled={restoreArchive.isPending}
+                disabled={restoreArchive.pending}
               >
-                {restoreArchive.isPending ? "Restoring..." : "Restore"}
+                {restoreArchive.pending ? "Restoring..." : "Restore"}
               </Button>
             </>
           ) : (
@@ -300,9 +300,9 @@ export function BackupRestoreSection() {
               <Button
                 variant="primary"
                 onClick={handleInspectArchive}
-                disabled={!archivePath || inspectArchive.isPending}
+                disabled={!archivePath || inspectArchive.pending}
               >
-                {inspectArchive.isPending ? "Inspecting..." : "Inspect archive"}
+                {inspectArchive.pending ? "Inspecting..." : "Inspect archive"}
               </Button>
             </>
           )
@@ -449,7 +449,7 @@ export function BackupRestoreSection() {
               </label>
             </section>
 
-            <CommandErrorNotice mutation={restoreArchive} />
+            {restoreArchive.error ? <CommandErrorNotice error={restoreArchive.error} /> : null}
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
@@ -474,7 +474,7 @@ export function BackupRestoreSection() {
               />
             )}
 
-            <CommandErrorNotice mutation={inspectArchive} />
+            {inspectArchive.error ? <CommandErrorNotice error={inspectArchive.error} /> : null}
           </div>
         )}
       </Dialog>
