@@ -8,6 +8,11 @@
 //! the harness can compare what the policy *said* with what the process
 //! *actually did* at the libc boundary.
 //!
+//! One scenario, `voice-profile-match`, also repeats its attempts against a
+//! second policy with the network permitted (VP-110, TM-044): a speaker
+//! embedding is refused in both modes, so the summary shows a refusal that
+//! does not depend on Local-only Mode.
+//!
 //! Exit status is 0 only when the scenario observed the outcome the spec
 //! requires; anything else is a non-zero exit with the reason in the summary.
 
@@ -16,13 +21,15 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use plaudon_security::consent::ContentType;
 use plaudon_security::error::SecurityError;
 use plaudon_security::fsguard::{canonicalize_and_validate, PathError, PathPolicy, PrivateTempDir};
 use plaudon_security::outbound::http::GatedHttpClientFactory;
 use plaudon_security::outbound::subprocess::{CliArg, GatedProcessLauncher, SpawnError};
 use plaudon_security::outbound::{
-    DenyReason, DisabledCapability, EffectiveNetworkPolicy, EgressDenied, EgressPurpose,
-    EgressRecord, NetworkMode, OutboundPolicy, PayloadClass, Subsystem,
+    ApprovalSource, DenyReason, Destination, DisabledCapability, EffectiveNetworkPolicy,
+    EgressDenied, EgressPurpose, EgressRecord, EgressRequest, NetworkGrant, NetworkMode,
+    OutboundPolicy, PayloadClass, Subsystem, PLAUD_CLI_PROGRAM,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -62,12 +69,15 @@ pub enum Scenario {
     CloudCli,
     /// §18.6A Local-only row: a cloud-synced folder placeholder.
     FolderPlaceholder,
+    /// VP-110 / TM-044: a voice-profile enrol-and-match flow, followed by
+    /// deliberate attempts to push the speaker embedding out.
+    VoiceProfileMatch,
     /// Deliberately bypasses the gate. Proves the fixture can fail.
     NegativeControl,
 }
 
 impl Scenario {
-    pub const ALL: [Scenario; 10] = [
+    pub const ALL: [Scenario; 11] = [
         Scenario::LocalImport,
         Scenario::OpenRouterDispatch,
         Scenario::UpdateCheck,
@@ -77,6 +87,7 @@ impl Scenario {
         Scenario::AppleAssetFetch,
         Scenario::CloudCli,
         Scenario::FolderPlaceholder,
+        Scenario::VoiceProfileMatch,
         Scenario::NegativeControl,
     ];
 
@@ -92,6 +103,7 @@ impl Scenario {
             Scenario::AppleAssetFetch => "apple-asset-fetch",
             Scenario::CloudCli => "cloud-cli",
             Scenario::FolderPlaceholder => "folder-placeholder",
+            Scenario::VoiceProfileMatch => "voice-profile-match",
             Scenario::NegativeControl => "negative-control",
         }
     }
@@ -120,6 +132,10 @@ impl Scenario {
             Scenario::AppleAssetFetch => Some(Subsystem::AppleAssetFetch),
             Scenario::CloudCli => Some(Subsystem::PlaudCloudCli),
             Scenario::FolderPlaceholder => Some(Subsystem::FolderSyncProbe),
+            // The embedding is attempted at three seams; `OpenRouter` is the
+            // one the summary must explain, and the one §18.6A lists as the
+            // Cloud row.
+            Scenario::VoiceProfileMatch => Some(Subsystem::OpenRouter),
             Scenario::LocalImport | Scenario::NegativeControl => None,
         }
     }
@@ -317,12 +333,17 @@ pub fn run(scenario: Scenario, ctx: &ScenarioContext) -> ScenarioSummary {
         ),
         Scenario::CloudCli => run_cloud_cli(&policy, &mut summary),
         Scenario::FolderPlaceholder => run_folder_placeholder(&policy, ctx, &mut summary),
+        Scenario::VoiceProfileMatch => run_voice_profile_match(&policy, ctx, &mut summary),
         Scenario::NegativeControl => run_negative_control(ctx, &mut summary),
     }
 
     // Refresh the decision list: the calls above went through the gate, which
-    // records every allow and every deny.
-    summary.decisions = policy.observer().records();
+    // records every allow and every deny. A scenario that also drove a second
+    // policy — a different network mode — has already pushed those decisions
+    // into the summary, so they are kept, after this policy's own.
+    let mut decisions = policy.observer().records();
+    decisions.append(&mut summary.decisions);
+    summary.decisions = decisions;
     summary
 }
 
@@ -341,7 +362,7 @@ fn run_local_import(ctx: &ScenarioContext, summary: &mut ScenarioSummary) {
     );
 
     let payload: &[u8] = b"plaudon local import fixture: 1 kHz tone placeholder bytes\n";
-    match stage_and_commit(ctx, payload) {
+    match stage_and_commit(ctx, "import", payload) {
         Ok(artifact) => {
             summary.ok = artifact.verified;
             summary.outcome = if artifact.verified {
@@ -389,6 +410,7 @@ impl From<PathError> for LocalImportError {
 
 fn stage_and_commit(
     ctx: &ScenarioContext,
+    stem: &str,
     payload: &[u8],
 ) -> Result<LocalArtifact, LocalImportError> {
     use std::io::Write;
@@ -399,12 +421,12 @@ fn stage_and_commit(
     fs::create_dir_all(&library_dir)?;
 
     let private = PrivateTempDir::create(Some(&staging_base), "plaudon-egress-import")?;
-    let mut staged = private.stage_file("import")?;
+    let mut staged = private.stage_file(stem)?;
     staged.write_all(payload)?;
     let staging_path = staged.path().as_path().to_path_buf();
 
     let policy = PathPolicy::for_roots([library_dir.clone()]);
-    let target = canonicalize_and_validate(&policy, &library_dir.join("import.bin"))?;
+    let target = canonicalize_and_validate(&policy, &library_dir.join(format!("{stem}.bin")))?;
     let committed_path = staged.commit_by_rename(&target)?;
 
     let committed = fs::read(committed_path.as_path())?;
@@ -424,7 +446,42 @@ fn stage_and_commit(
     })
 }
 
-/// Attempt a real gated HTTP request and require that it is refused.
+/// What the gate said about one HTTP attempt.
+///
+/// An enum rather than a `Result` because a ticket is not the success case
+/// here: every scenario in this fixture requires the refusal.
+enum HttpAttempt {
+    /// The gate handed out a ticket for this destination label.
+    Authorized(String),
+    /// The gate refused, rendered with its §15.4 envelope.
+    Refused(ExplainedDenial),
+}
+
+/// Drive one gated HTTP attempt through the same `GatedHttpClientFactory`
+/// seam the production subsystems use.
+fn gated_http_attempt(
+    policy: &Arc<OutboundPolicy>,
+    subsystem: Subsystem,
+    purpose: EgressPurpose,
+    payload: PayloadClass,
+    url: &str,
+    post: bool,
+) -> HttpAttempt {
+    let factory = GatedHttpClientFactory::new(Arc::clone(policy));
+    let attempt = if post {
+        factory.post(url, subsystem, purpose, payload)
+    } else {
+        factory.get(url, subsystem, purpose, payload)
+    };
+
+    match attempt {
+        Ok(request) => HttpAttempt::Authorized(request.ticket().destination_label().to_owned()),
+        Err(denied) => HttpAttempt::Refused(ExplainedDenial::new(&denied, purpose)),
+    }
+}
+
+/// Attempt a real gated HTTP request and require that it is refused because
+/// Local-only Mode is on.
 fn run_http_case(
     policy: &Arc<OutboundPolicy>,
     summary: &mut ScenarioSummary,
@@ -434,25 +491,16 @@ fn run_http_case(
     url: &str,
     post: bool,
 ) {
-    let factory = GatedHttpClientFactory::new(Arc::clone(policy));
-    let attempt = if post {
-        factory.post(url, subsystem, purpose, payload)
-    } else {
-        factory.get(url, subsystem, purpose, payload)
-    };
-
-    match attempt {
-        Ok(request) => {
+    match gated_http_attempt(policy, subsystem, purpose, payload, url, post) {
+        HttpAttempt::Authorized(destination_label) => {
             summary.ok = false;
             summary.outcome = format!(
-                "POLICY FAILURE: gate authorized {} in Local-only Mode ({})",
+                "POLICY FAILURE: gate authorized {} in Local-only Mode ({destination_label})",
                 subsystem.label(),
-                request.ticket().destination_label()
             );
         }
-        Err(denied) => {
-            let explained = ExplainedDenial::new(&denied, purpose);
-            summary.ok = denied.reason == DenyReason::LocalOnlyMode;
+        HttpAttempt::Refused(explained) => {
+            summary.ok = explained.reason == DenyReason::LocalOnlyMode;
             summary.outcome = format!(
                 "{} refused: {} — {}",
                 subsystem.label(),
@@ -468,6 +516,346 @@ fn run_http_case(
             summary.explained_denials.push(explained);
         }
     }
+}
+
+/// The seams a speaker embedding could plausibly be pushed out of: the
+/// `OpenRouter` HTTPS dispatch, the telemetry/diagnostics upload and the PLAUD
+/// cloud CLI subprocess.
+const BIOMETRIC_SEAMS: usize = 3;
+
+/// Dimension of the stand-in speaker embedding this scenario enrols.
+const EMBEDDING_DIM: usize = 32;
+
+/// Cosine score above which the probe counts as the enrolled speaker. Only the
+/// local half of the scenario depends on it.
+const MATCH_THRESHOLD: f32 = 0.6;
+
+/// §16.2A + VOICE_PROFILES_SPEC VP-110 / TM-044: a speaker embedding never
+/// leaves this machine, in any mode.
+///
+/// Two halves:
+///
+/// 1. an enrol-and-match flow runs end to end **locally** — it reaches no
+///    egress seam, so the gate records nothing for it;
+/// 2. the same embedding is then deliberately offered to three egress seams,
+///    first under this scenario's Local-only policy and then under a second
+///    policy with the network permitted by a deliberately permissive grant
+///    (vendor hosts allowed, model downloads approved, telemetry opted in).
+///
+/// Every one of the six attempts must be refused with
+/// `voice_biometric_never_egresses` — the one reason that does not depend on
+/// the network mode — and the decisions of both policies are recorded.
+fn run_voice_profile_match(
+    policy: &Arc<OutboundPolicy>,
+    ctx: &ScenarioContext,
+    summary: &mut ScenarioSummary,
+) {
+    let enrolment = match enrol_and_match(ctx) {
+        Ok(outcome) => outcome,
+        Err(err) => {
+            summary.ok = false;
+            summary.outcome = format!("local voice-profile enrol and match failed: {err}");
+            return;
+        }
+    };
+    summary.notes.push(format!(
+        "enrolled a speaker and matched a probe locally: probe scored {:.3} against the enrolled \
+         profile and the impostor scored {:.3}; the flow reached no egress seam",
+        enrolment.probe_score, enrolment.impostor_score
+    ));
+    // Sampled before the deliberate attempts below, so it measures the
+    // enrol-and-match flow alone.
+    let local_stage_decisions = policy.observer().records().len();
+    let verified = enrolment.artifact.verified;
+    summary.local_artifact = Some(enrolment.artifact);
+
+    let local_only_reasons = attempt_biometric_egress(policy, summary, "local-only mode");
+
+    let grant = NetworkGrant::new(ApprovalSource::TestHarness, 0, "egress-fixture-disclosure")
+        .with_model_downloads_approved(true)
+        .with_telemetry_opted_in(true)
+        .with_allowed_hosts(vec![
+            "openrouter.ai".to_owned(),
+            "telemetry.example.invalid".to_owned(),
+            "plaud.ai".to_owned(),
+        ]);
+    let permitted = Arc::new(OutboundPolicy::network_permitted(grant));
+    let permitted_policy = permitted.describe();
+    let permitted_reasons = attempt_biometric_egress(&permitted, summary, "network permitted");
+    // `run` prepends this scenario's own Local-only decisions to these.
+    summary.decisions.extend(permitted.observer().records());
+
+    let local_only_policy = policy.describe();
+    let mut problems = Vec::new();
+
+    if local_stage_decisions != 0 {
+        problems.push(format!(
+            "the local enrol-and-match flow reached the egress gate {local_stage_decisions} time(s)"
+        ));
+    }
+    if !verified {
+        problems.push("the enrolled profile was not committed to local storage".to_owned());
+    }
+    if enrolment.probe_score <= MATCH_THRESHOLD || enrolment.impostor_score >= MATCH_THRESHOLD {
+        problems.push(format!(
+            "the local match did not separate the speakers: probe {:.3}, impostor {:.3}",
+            enrolment.probe_score, enrolment.impostor_score
+        ));
+    }
+
+    for (mode_label, reasons) in [
+        ("local-only mode", &local_only_reasons),
+        ("network permitted", &permitted_reasons),
+    ] {
+        if reasons.len() != BIOMETRIC_SEAMS {
+            problems.push(format!(
+                "{mode_label}: {} of {BIOMETRIC_SEAMS} seams refused the embedding",
+                reasons.len()
+            ));
+        }
+        for reason in reasons {
+            if *reason != DenyReason::VoiceBiometricNeverEgresses {
+                problems.push(format!(
+                    "{mode_label}: expected voice_biometric_never_egresses, observed {}",
+                    reason.label()
+                ));
+            }
+        }
+    }
+
+    // Without this the refusal above could be a side effect of a grant that
+    // permits nothing: under the same grant the gate reports the cloud CLI as
+    // launchable and a non-empty host allowlist.
+    if !permitted_policy.cloud_cli_launchable || permitted_policy.allowed_hosts.is_empty() {
+        problems.push(
+            "the permissive grant did not actually permit anything, so the refusal proves nothing"
+                .to_owned(),
+        );
+    }
+    for (mode_label, effective) in [
+        ("local-only mode", &local_only_policy),
+        ("network permitted", &permitted_policy),
+    ] {
+        if !effective.always_refused.iter().any(|entry| {
+            entry.payload == PayloadClass::VoiceBiometric
+                && entry.reason == DenyReason::VoiceBiometricNeverEgresses
+                && !entry.explanation.trim().is_empty()
+        }) {
+            problems.push(format!(
+                "{mode_label}: the policy snapshot does not list voice_biometric as always refused"
+            ));
+        }
+    }
+
+    // The other half of VP-110: a grant cannot name what has no content type.
+    let consentable = ContentType::try_from(PayloadClass::VoiceBiometric).is_ok();
+    if consentable {
+        problems.push(
+            "the payload class has a consent content type, so a consent grant could name it"
+                .to_owned(),
+        );
+    }
+
+    summary.notes.push(format!(
+        "with the network permitted the same policy reports the cloud CLI as launchable and {} \
+         allowed host(s), and still refuses the embedding",
+        permitted_policy.allowed_hosts.len()
+    ));
+    summary.notes.push(
+        "checked: ContentType::try_from(PayloadClass::VoiceBiometric) is an error, so no consent \
+         grant can name this payload class"
+            .to_owned(),
+    );
+    summary.notes.push(
+        "what this shows: the gate refuses a voice_biometric payload at the OpenRouter HTTPS, \
+         telemetry and cloud-CLI seams, in Local-only Mode and with the network permitted, and \
+         the local enrol-and-match flow does not reach the gate at all. It does not show that a \
+         future seam added outside plaudon_security::outbound would be covered, and it says \
+         nothing about other processes on this machine"
+            .to_owned(),
+    );
+
+    summary.ok = problems.is_empty();
+    summary.outcome = if summary.ok {
+        format!(
+            "voice_biometric refused at all {BIOMETRIC_SEAMS} seams in Local-only Mode and all \
+             {BIOMETRIC_SEAMS} with the network permitted: {}",
+            DenyReason::VoiceBiometricNeverEgresses.label()
+        )
+    } else {
+        let detail = problems.join("; ");
+        summary.notes.extend(problems);
+        format!("POLICY FAILURE: {detail}")
+    };
+}
+
+/// Offer the speaker embedding to every egress seam under `policy` and record
+/// what the gate said. Returns the reason given for each refusal, in order.
+fn attempt_biometric_egress(
+    policy: &Arc<OutboundPolicy>,
+    summary: &mut ScenarioSummary,
+    mode_label: &str,
+) -> Vec<DenyReason> {
+    let mut reasons = Vec::with_capacity(BIOMETRIC_SEAMS);
+
+    let http_seams: [(Subsystem, EgressPurpose, &str); 2] = [
+        (
+            Subsystem::OpenRouter,
+            EgressPurpose::InferenceDispatch,
+            "https://openrouter.ai/api/v1/chat/completions",
+        ),
+        (
+            Subsystem::Telemetry,
+            EgressPurpose::TelemetryFlush,
+            "https://telemetry.example.invalid/v1/events",
+        ),
+    ];
+    for (subsystem, purpose, url) in http_seams {
+        match gated_http_attempt(
+            policy,
+            subsystem,
+            purpose,
+            PayloadClass::VoiceBiometric,
+            url,
+            true,
+        ) {
+            HttpAttempt::Authorized(destination_label) => summary.notes.push(format!(
+                "POLICY FAILURE ({mode_label}): the gate authorized {} to carry a voice_biometric \
+                 payload to {destination_label}",
+                subsystem.label()
+            )),
+            HttpAttempt::Refused(explained) => {
+                reasons.push(explained.reason);
+                summary.notes.push(format!(
+                    "{mode_label}: {} {} refused — {}",
+                    subsystem.label(),
+                    purpose.label(),
+                    explained.reason.label()
+                ));
+                summary.explained_denials.push(explained);
+            }
+        }
+    }
+
+    // The cloud CLI seam. `GatedProcessLauncher::prepare_cloud_cli` pins its
+    // payload class to `metadata`, so an embedding cannot be handed to it
+    // through that signature at all; what is driven here is the same
+    // `OutboundPolicy::authorize` call the launcher makes, with the payload
+    // class a caller would have to use to ship an embedding to the CLI.
+    let request = EgressRequest::new(
+        Subsystem::PlaudCloudCli,
+        Destination::subprocess(PLAUD_CLI_PROGRAM),
+        EgressPurpose::AccountSync,
+        PayloadClass::VoiceBiometric,
+    );
+    match policy.authorize(&request) {
+        Ok(ticket) => summary.notes.push(format!(
+            "POLICY FAILURE ({mode_label}): the gate authorized the cloud CLI to carry a \
+             voice_biometric payload to {}",
+            ticket.destination_label()
+        )),
+        Err(denied) => {
+            let explained = ExplainedDenial::new(&denied, EgressPurpose::AccountSync);
+            reasons.push(explained.reason);
+            summary.notes.push(format!(
+                "{mode_label}: {} {} refused — {}",
+                explained.subsystem.label(),
+                EgressPurpose::AccountSync.label(),
+                explained.reason.label()
+            ));
+            summary.explained_denials.push(explained);
+        }
+    }
+
+    reasons
+}
+
+/// What the local half of the voice-profile scenario produced.
+struct EnrolmentOutcome {
+    artifact: LocalArtifact,
+    probe_score: f32,
+    impostor_score: f32,
+}
+
+/// Enrol one speaker and match a probe against them, entirely locally.
+///
+/// The vectors are derived from fixture bytes with SHA-256, not from audio: no
+/// model runs here, and this scenario is about where a speaker embedding may
+/// go, not about how well the real matcher scores. The enrolled vector is
+/// committed through the same `fsguard` staging path the local import uses, so
+/// the summary carries evidence that biometric bytes really were written —
+/// locally, and nowhere else.
+fn enrol_and_match(ctx: &ScenarioContext) -> Result<EnrolmentOutcome, LocalImportError> {
+    let enrolled = embedding(b"plaudon voice profile fixture: speaker A enrolment");
+    let session_noise = embedding(b"plaudon voice profile fixture: session noise");
+    let probe = blend(&enrolled, &session_noise, 0.08);
+    let impostor = embedding(b"plaudon voice profile fixture: speaker B");
+
+    let probe_score = cosine(&enrolled, &probe);
+    let impostor_score = cosine(&enrolled, &impostor);
+
+    let mut bytes = Vec::with_capacity(EMBEDDING_DIM * 4);
+    for value in enrolled {
+        bytes.extend_from_slice(&value.to_le_bytes());
+    }
+    let artifact = stage_and_commit(ctx, "voice-profile", &bytes)?;
+
+    Ok(EnrolmentOutcome {
+        artifact,
+        probe_score,
+        impostor_score,
+    })
+}
+
+/// A deterministic unit vector derived from `seed`.
+fn embedding(seed: &[u8]) -> [f32; EMBEDDING_DIM] {
+    let mut values = [0.0f32; EMBEDDING_DIM];
+    for (index, slot) in values.iter_mut().enumerate() {
+        let mut hasher = Sha256::new();
+        hasher.update(seed);
+        hasher.update((index as u32).to_le_bytes());
+        let digest = hasher.finalize();
+        let raw = u32::from_le_bytes([digest[0], digest[1], digest[2], digest[3]]);
+        *slot = (f64::from(raw) / f64::from(u32::MAX)).mul_add(2.0, -1.0) as f32;
+    }
+    normalise(&mut values);
+    values
+}
+
+/// `base` nudged toward `other`, as a within-speaker probe is nudged by the
+/// session it was recorded in.
+fn blend(
+    base: &[f32; EMBEDDING_DIM],
+    other: &[f32; EMBEDDING_DIM],
+    weight: f32,
+) -> [f32; EMBEDDING_DIM] {
+    let mut values = [0.0f32; EMBEDDING_DIM];
+    for (slot, (from, toward)) in values.iter_mut().zip(base.iter().zip(other.iter())) {
+        *slot = from * (1.0 - weight) + toward * weight;
+    }
+    normalise(&mut values);
+    values
+}
+
+fn normalise(values: &mut [f32; EMBEDDING_DIM]) {
+    let norm = values
+        .iter()
+        .map(|value| f64::from(*value) * f64::from(*value))
+        .sum::<f64>()
+        .sqrt();
+    if norm > f64::EPSILON {
+        for value in values.iter_mut() {
+            *value = (f64::from(*value) / norm) as f32;
+        }
+    }
+}
+
+/// Cosine similarity of two unit vectors.
+fn cosine(left: &[f32; EMBEDDING_DIM], right: &[f32; EMBEDDING_DIM]) -> f32 {
+    left.iter()
+        .zip(right.iter())
+        .map(|(a, b)| f64::from(*a) * f64::from(*b))
+        .sum::<f64>() as f32
 }
 
 /// §16.2A: the cloud CLI must never be launched in Local-only Mode. The
@@ -799,5 +1187,115 @@ mod tests {
         assert!(is_cloud_placeholder(Path::new("/w/.a.m4a.icloud.tmp")));
         assert!(!is_cloud_placeholder(Path::new("/w/a.m4a")));
         assert!(!is_cloud_placeholder(Path::new("/w")));
+    }
+
+    fn voice_profile_summary(tag: &str) -> (PathBuf, ScenarioSummary) {
+        let dir = std::env::temp_dir().join(format!("plaudon-egress-{tag}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let ctx = ScenarioContext {
+            workdir: dir.clone(),
+        };
+        let summary = run(Scenario::VoiceProfileMatch, &ctx);
+        (dir, summary)
+    }
+
+    #[test]
+    fn a_voice_biometric_attempt_is_refused_in_both_modes() {
+        let (dir, summary) = voice_profile_summary("ut-vp-modes");
+        assert!(summary.ok, "{}", summary.outcome);
+        assert_eq!(summary.mode, NetworkMode::LocalOnly);
+
+        // Three seams under this scenario's Local-only policy, the same three
+        // under a second policy with the network permitted.
+        assert_eq!(summary.decisions.len(), 2 * BIOMETRIC_SEAMS);
+        assert_eq!(summary.explained_denials.len(), 2 * BIOMETRIC_SEAMS);
+        for seam in [
+            "openrouter.ai",
+            "telemetry.example.invalid",
+            PLAUD_CLI_PROGRAM,
+        ] {
+            let hits = summary
+                .decisions
+                .iter()
+                .filter(|d| d.destination_label.contains(seam))
+                .count();
+            assert_eq!(hits, 2, "{seam} must be attempted in both modes");
+        }
+
+        let note_count = |prefix: &str| {
+            summary
+                .notes
+                .iter()
+                .filter(|note| note.starts_with(prefix))
+                .count()
+        };
+        assert_eq!(note_count("local-only mode: "), BIOMETRIC_SEAMS);
+        assert_eq!(note_count("network permitted: "), BIOMETRIC_SEAMS);
+        assert!(summary.explains(Subsystem::OpenRouter));
+
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn the_voice_biometric_refusal_names_its_own_reason_and_allows_nothing() {
+        let (dir, summary) = voice_profile_summary("ut-vp-reason");
+        assert!(summary.ok, "{}", summary.outcome);
+
+        for decision in &summary.decisions {
+            assert!(!decision.allowed, "{decision:?}");
+            assert_eq!(decision.payload, PayloadClass::VoiceBiometric);
+            assert_eq!(
+                decision.deny_reason,
+                Some(DenyReason::VoiceBiometricNeverEgresses),
+                "{decision:?}"
+            );
+        }
+        for denial in &summary.explained_denials {
+            assert_eq!(denial.reason, DenyReason::VoiceBiometricNeverEgresses);
+            assert_eq!(
+                denial.message,
+                DenyReason::VoiceBiometricNeverEgresses.explanation()
+            );
+            assert!(!denial.retryable);
+        }
+
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn enrol_and_match_separates_the_speakers_and_writes_only_locally() {
+        let dir =
+            std::env::temp_dir().join(format!("plaudon-egress-ut-vp-local-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let ctx = ScenarioContext {
+            workdir: dir.clone(),
+        };
+
+        let outcome = enrol_and_match(&ctx).unwrap();
+        assert!(outcome.artifact.verified);
+        assert_eq!(outcome.artifact.byte_length, (EMBEDDING_DIM * 4) as u64);
+        let committed = Path::new(&outcome.artifact.committed_path);
+        assert!(committed.is_file());
+        assert_eq!(
+            committed.file_name().and_then(|name| name.to_str()),
+            Some("voice-profile.bin")
+        );
+        // The library path is canonical, so compare against the canonical dir.
+        assert!(committed.starts_with(fs::canonicalize(&dir).unwrap()));
+        assert!(!Path::new(&outcome.artifact.staging_path).exists());
+        assert!(
+            outcome.probe_score > MATCH_THRESHOLD,
+            "probe scored {}",
+            outcome.probe_score
+        );
+        assert!(
+            outcome.impostor_score < MATCH_THRESHOLD,
+            "impostor scored {}",
+            outcome.impostor_score
+        );
+
+        fs::remove_dir_all(&dir).unwrap();
     }
 }

@@ -60,7 +60,6 @@ route is advertised as anything other than Experimental or Unavailable.
 | F-036 | TM-036 | Medium | `crates/security/src/secrets.rs` | D | §22.16 | Needs zeroizing buffers for transient secret material. The accompanying honesty statement (memory cannot be perfectly protected from privileged malware) is already published. |
 | F-040 | TM-040 | High | `crates/ui/src/screens/devices/presentation.rs` | E | §22.3; §16.6 operational privacy | The device transfer screen derives its cloud sentence from the DTO's own `cloud_route`, in exactly one place, so no screen can print `Cloud: not used` on its own authority. Remaining: the same per-route labelling on the recording and job surfaces, so a user can tell local from cloud processing for a given recording. |
 | F-043 | TM-043 | High | `crates/domain/src/error.rs` | B | §22.8; §1.5 "Secrets in application logs: 0" | Found by D2.4 fuzzing. `plaudon_domain::error::Redactor` only matches a URL scheme at the *start* of a token, so a parenthesised, quoted, angle-bracketed or `url=`-prefixed URL is persisted verbatim with its signed query string; and `looks_like_opaque_secret` rejects any token containing `.`, `+` or `/`, so dotted JWTs and base64 credentials survive. Both run on untrusted vendor text in `AppError::from_unmapped_vendor` and `DiagnosticLog::record`. Regression test `domain_redactor_redacts_separator_bearing_credentials` is committed and `#[ignore]`d against this finding; Team-AB has a confirmed fix on `epic-a-spikes`. Closes when that merges here and the ignore is deleted. |
-| F-044 | TM-044 | Medium | `crates/security/src/outbound.rs` | D | Voice-profiles feature gate (EPIC P) | Planned; the egress controls do not exist. Needs the unconsentable `VoiceBiometric` payload class refused by `OutboundPolicy::authorize` in every mode, the egress watch extended over the enrol-and-match flow, and embedding-shaped diagnostics redaction, per `docs/specs/VOICE_PROFILES_SPEC.md` VP-110–VP-113 and ADR-0080. One piece has landed: `crates/security/src/response.rs` recognises a `voice_embedding` secret shape, so a response carrying a field named like an embedding is refused by the §6.3A scanner (`a_response_carrying_a_speaker_embedding_is_rejected`). |
 | F-045 | TM-045 | Medium | `crates/app-core/src/voice_profiles/store.rs` | D | Voice-profiles feature gate (EPIC P) | Partially present (P1.2 + P2.3). The storage leg exists: migration 0900 stores embeddings only as XChaCha20-Poly1305 ciphertext, `SecretScope::VoiceProfileKey` holds the per-library data key in the OS vault with no plaintext fallback, the ciphertext is bound to person, model id, model version and dimensionality as AEAD additional data, an unavailable vault locks the biometric tier while the name-only roster keeps working (ADR-0014, spec §12.2A), and destroying the key is the VP-095 erasure, now implemented end to end with retention expiry beside it. Embeddings are excluded from exports and plaintext backups (that export leg is now implemented and its finding retired). P1.3 extended the same posture to the job that computes them: the resumable match pipeline parks its per-cluster vectors in migration 0901's scratch as XChaCha20-Poly1305 ciphertext bound to job, run and cluster, and destroys that scratch when the job settles (`crates/app-core/src/voice_profiles/pipeline.rs`, `a_kill_as_the_embed_stage_commits_resumes_at_match`). Remaining: the re-embed path (VP-076) does not exist, and encryption protects data at rest, not data in use — vectors are plaintext in process memory while a job runs. |
 | F-047 | TM-047 | Medium | `crates/app-core/src/voice_profiles/enroll.rs` | M | Voice-profiles feature gate (EPIC P) | Partially present (P1.5); enrolment now exists. The matching half has landed in `crates/app-core/src/voice_profiles/matching/`: cosine over L2-normalised vectors with the polarity in the type system, AS-Norm against a model-pack cohort, two bands with no tier above `suggest`, multi-exemplar scoring, the 1 s/3 s/10 s speech minima, model-version-mismatch refusal and per-profile calibration bounded by the harness-validated limit (`crates/app-core/tests/voice_matching.rs`, `an_identical_vector_still_only_produces_a_suggestion`). P1.3 added the pipeline half: embeddings are computed only over spans the reconciliation attributed to exactly one cluster, a cluster below the three-second minimum is reported as "not enough clean speech" instead of being embedded, and the job's last stage writes `speaker_suggestions` rows and can reach no name-setting code at all (`crates/app-core/tests/voice_match_pipeline.rs`, `an_enrolled_voice_becomes_a_suggestion_and_nothing_is_assigned`). Still needed before this row closes: enrolment over clean single-speaker speech with exemplar provenance and split-by-provenance repair, and rejections remembered in the store rather than passed in by the caller, per VP-060–VP-066 and ADR-0082. P1.5 added the enrolment leg itself: `crates/app-core/src/voice_profiles/enroll.rs` reads the stored reconciliation, enforces the 10 s enrolment and 3 s exemplar minima before the embedder is called, records provenance per exemplar and splits an enrolment by that provenance with every moved ciphertext re-sealed under the new owner's binding; the consent gate is a `ConsentProof` with no public constructor, so the ungated roster path cannot reach embedding code, proved at runtime by a scripted embedder that panics on call (`no_embedding_is_reachable_while_ungated_or_while_matching_is_off`). Remaining: the egui surfaces that present suggestions, the rename/merge/dedupe disclosures (P2.1) and the real ONNX embedder. |
 | F-048 | TM-048 | Medium | `crates/app-core/src/voice_profiles/mod.rs` | D | Voice-profiles feature gate (EPIC P) | Partially present (P2.3). No sync exists, each library holds its own AEAD key, voice data is excluded from exports by default and a plaintext backup carrying it is unrepresentable, so there is no plaintext artifact to compare across libraries; a restore re-runs the consent gate. Remaining: the absence of a stable cross-library identifier is a property of the schema rather than of a test, and the residual risk that a user restores one encrypted backup into two libraries stands, documented rather than denied (VP-079). |
@@ -76,24 +75,39 @@ platform's runtime protections — is now the packaging entitlement and manifest
 audit, which is `implemented` with named tests in the matrix and therefore does
 not belong in this file. The id is retired, not reused.
 
+**Closed, 2026-10-12.** F-044 — "voice profile embedding leaves the device
+through any egress path" — is closed by P2.2. The egress gate now has a payload
+class it refuses before it looks at the network mode, the grant, the subsystem
+or the destination, and that class has no consent content type, so no grant can
+name it; the egress-evidence suite drives an enrol-and-match flow and offers a
+biometric payload at the OpenRouter, telemetry and cloud-CLI seams under a
+local-only **and** a deliberately permissive policy; the diagnostics redactor
+gained the embedding shapes and a display-name registry fed from the roster.
+Its matrix row is `implemented` with named tests and therefore does not belong
+in this file. The id is retired, not reused. What is *not* claimed: the gate
+governs app-initiated traffic from this process, and redaction cannot recognise
+a name it was never told about.
+
 ## Summary by severity
 
 | Severity | Count | Ids |
 |---|---|---|
 | Critical | 0 | — |
 | High | 12 | F-003, F-004, F-005, F-006, F-011, F-013, F-015, F-018, F-020, F-023, F-040, F-043 |
-| Medium | 21 | F-001, F-002, F-008, F-010, F-012, F-017, F-019, F-021, F-022, F-024, F-025, F-028, F-029, F-031, F-035, F-036, F-044, F-045, F-046, F-047, F-048 |
+| Medium | 20 | F-001, F-002, F-008, F-010, F-012, F-017, F-019, F-021, F-022, F-024, F-025, F-028, F-029, F-031, F-035, F-036, F-045, F-046, F-047, F-048 |
 | Low | 0 | — |
 
 The High set is the §22.8 release blocker list. Of it, F-003, F-004, F-005 and
 F-006 block only the direct-device track; F-011 and F-015 block only the
 cloud-AI track; the remainder block core V1.
 
-F-044 through F-048 are planned controls for the speaker voice-profiles
+F-045 through F-048 are the remaining controls for the speaker voice-profiles
 feature ([`docs/specs/VOICE_PROFILES_SPEC.md`](../specs/VOICE_PROFILES_SPEC.md),
-ADR-0080/0081/0082); no code for that feature exists, so nothing is reachable
-today. They block the voice-profiles feature gate (EPIC P), not core V1, and
-each must be re-rated the moment the subsystem lands.
+ADR-0080/0081/0082). Each is partially present: the storage, enrolment,
+matching, export and egress legs have landed in phases, and each row above says
+which part of its control is still missing. They block the voice-profiles
+feature gate (EPIC P), not core V1, and each must be re-rated as the subsystem
+grows.
 
 No finding is currently rated Critical. The controls that would carry a
 Critical rating if they were missing — the OS-backed secret store with no
