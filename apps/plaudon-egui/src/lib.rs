@@ -1,7 +1,14 @@
-//! The egui shell: the view, the host hooks and the window.
+//! The egui binary: the window, the host hooks and the engine wiring.
 //!
-//! EPIC O task O1.2 (#200). This is the spike that proves the architecture the
-//! rest of EPIC O is built on, end to end and with no stubs:
+//! Two things live here.
+//!
+//! [`shell_app::PlaudonShell`] is what the binary runs from O1.3 (#201)
+//! onwards: the [`plaudon_ui::shell::Shell`] over the engine, with the
+//! screens registered one line each.
+//!
+//! [`PlaudonEgui`] is the O1.2 (#200) spike that proved the architecture the
+//! rest of EPIC O is built on, and it stays as the engine-integration
+//! harness `tests/spike_kittest.rs` drives against a real library:
 //!
 //! * one owned Tokio runtime and one set of ports, from
 //!   [`plaudon_app::runtime::AppEngine`];
@@ -17,9 +24,8 @@
 //! * the split between the library list and the activity log is drawn with the
 //!   vendored `plaudon_craft_ui::layout::ResizeHandle`, which carries
 //!   `Role::Splitter`, a numeric value and keyboard resizing.
-//!
-//! What it is not: the finished interface. Screens, theming, navigation and the
-//! command palette are O1.3 and later, and they live in `plaudon-ui`.
+
+pub mod shell_app;
 
 use std::fmt;
 use std::path::PathBuf;
