@@ -17,3 +17,7 @@ To contribute a compatibility cell:
    archived record. `CompatibilityCell::validate` rejects the row otherwise.
 4. Repeat the whole setup on a clean machine before promoting a cell to
    `status: supported` (spec 7.9 hardware shipping gate).
+
+The opt-in suite and evidence emitter live in this package
+(`plaudon-hardware-tests`); runner instructions are in
+`docs/hardware/macos-apple-silicon.md` and `docs/hardware/windows-11-x86-64.md`.

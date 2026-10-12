@@ -3370,6 +3370,30 @@ name = "plaudon-export"
 version = "0.1.0"
 
 [[package]]
+name = "plaudon-hardware-tests"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "btleplug",
+ "futures",
+ "jsonschema",
+ "plaudon-plaud-ble",
+ "plaudon-plaud-protocol",
+ "plaudon-recording-sources",
+ "plaudon-security",
+ "plaudon-source-plaud-device",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "thiserror 2.0.21",
+ "time",
+ "tokio",
+ "tokio-util",
+ "uuid",
+]
+
+[[package]]
 name = "plaudon-integration-tests"
 version = "0.1.0"
 dependencies = [
