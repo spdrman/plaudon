@@ -1,4 +1,4 @@
-# ADR-0040: A device transfer is a replayable wire script, and a derivative is never an original
+# ADR-0050: A device transfer is a replayable wire script, and a derivative is never an original
 
 - **Status:** Accepted
 - **Date:** 2026-10-11
