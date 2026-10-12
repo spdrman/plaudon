@@ -15,6 +15,7 @@
 
 pub mod activity;
 pub mod capabilities;
+pub mod device_radio;
 pub mod devices;
 pub mod export;
 pub mod import;

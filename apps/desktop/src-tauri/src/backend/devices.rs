@@ -37,10 +37,19 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use plaudon_domain::error::{AppError, AppErrorCode};
+use plaudon_domain::ids::{DeviceId, TransferId};
 use plaudon_domain::time::Timestamp;
+use plaudon_persistence::archive::MediaArchive;
+use plaudon_persistence::db::Database;
+use plaudon_persistence::device::{
+    DeviceRecord, DeviceRepository, TransferRecord as DeviceTransferRow, TransferStatus,
+    TransferVerification as RowVerification, TrustState,
+};
 use plaudon_plaud_ble::discovery::{AdvertisementVerdict, DiscoveryPolicy, ObservedAdvertisement};
 use plaudon_plaud_protocol::payload::{DeltaListing, ListedRecording};
-use plaudon_plaud_protocol::profile::{profile_for, ProtocolProfile, LEGACY_NOTE_V0095};
+use plaudon_plaud_protocol::profile::{
+    profile_for, ProfileAuthMode, ProtocolProfile, LEGACY_NOTE_V0095,
+};
 use plaudon_security::secrets::{SecretStore as VaultStore, SecretString};
 use plaudon_source_plaud_device::audit::AuditOutcome;
 use plaudon_source_plaud_device::{
@@ -49,9 +58,8 @@ use plaudon_source_plaud_device::{
     ProbedProfile, ProvisioningRoute, SupportStatus, SyncEligibility, TransferEvent,
     TransferLedger, TransferState, LEGACY_DISCLOSURES,
 };
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use sqlx::SqlitePool;
+use sha2::{Digest, Sha256};
 use tokio::task::JoinHandle;
 
 use crate::dto::{
@@ -69,8 +77,9 @@ use crate::secrets::SecretValue;
 /// strings this module shows (spec §2.5B).
 const COMPATIBILITY_YAML: &str = include_str!("../../../../../compatibility.yaml");
 
-/// `app_preferences` key holding the serialized [`LinkedDevice`] list.
-const LINKS_KEY: &str = "desktop.device_links";
+/// `app_preferences` key holding the peripheral identifiers whose user opted in
+/// to read-only sync when nearby. Identifiers only; no credential material.
+const SYNC_KEY: &str = "desktop.device_sync";
 
 /// `source_type` of a direct BLE profile in the register.
 const SOURCE_TYPE_BLE: &str = "plaud_device_ble";
@@ -152,6 +161,26 @@ pub struct TransferUpdate {
     pub bytes_received: Option<u64>,
     /// Milliseconds since the first byte arrived, as the actor measured it.
     pub elapsed_ms: Option<u64>,
+    /// Throughput the actor measured; preferred over one derived from
+    /// `elapsed_ms`.
+    pub bytes_per_second: Option<u64>,
+    /// The actor's estimate of the seconds remaining. Always an estimate.
+    pub eta_seconds: Option<u64>,
+}
+
+impl TransferUpdate {
+    /// A step that carries no byte count.
+    #[must_use]
+    pub fn step(recording_id: impl Into<String>, event: TransferEvent) -> Self {
+        Self {
+            recording_id: recording_id.into(),
+            event,
+            bytes_received: None,
+            elapsed_ms: None,
+            bytes_per_second: None,
+            eta_seconds: None,
+        }
+    }
 }
 
 /// Where the radio actor reports transfer steps.
@@ -166,10 +195,11 @@ pub trait TransferReporter: Send + Sync {
 pub struct TransferRequest<'a> {
     /// Host-assigned peripheral identifier.
     pub peripheral_id: &'a str,
-    /// Device-scoped recording identifier from the device's own listing.
-    pub recording_id: &'a str,
-    /// Byte length the device declared. A claim, not a measurement.
-    pub declared_byte_length: u64,
+    /// The ledger row of this transfer (already `in_flight`).
+    pub transfer_id: TransferId,
+    /// The recording as the device's own listing described it; its declared
+    /// length is a claim, not a measurement.
+    pub recording: &'a ListedRecording,
     /// The device credential, loaded from the vault for this transfer only.
     pub token: &'a SecretString,
     /// Process the result locally only.
@@ -326,8 +356,12 @@ pub fn os_version_key(host_os: &str, raw: Option<&str>) -> String {
 
 /* ----------------------------------------------------------- persistence */
 
+/// One `devices` ⨝ `device_credential_refs` row: peripheral identifier, model,
+/// advertised name, firmware and last-seen time.
+type LinkRow = (String, String, Option<String>, Option<String>, i64);
+
 /// A device the user authorized: durable, secret-free.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct LinkedDevice {
     binding: DeviceBinding,
     advertised_name: Option<String>,
@@ -390,8 +424,12 @@ pub struct DevicesDeps {
     pub radio: Arc<dyn DeviceRadio>,
     /// The OS credential vault.
     pub vault: Arc<dyn VaultStore>,
-    /// The library database, for the secret-free link list.
-    pub pool: SqlitePool,
+    /// The library database: the device ledger lives in its `devices`,
+    /// `device_credential_refs`, `device_transfers` and
+    /// `device_firmware_observations` tables.
+    pub db: Database,
+    /// The media archive, for the durable commit of transferred bytes.
+    pub archive: MediaArchive,
     /// The sequenced UI event stream.
     pub events: EventPublisher,
 }
@@ -406,7 +444,8 @@ impl DevicesDeps {
     /// Production wiring: the committed register, this host, no radio unless
     /// one is supplied, the OS vault.
     pub fn production(
-        pool: SqlitePool,
+        db: Database,
+        archive: MediaArchive,
         events: EventPublisher,
         radio: Arc<dyn DeviceRadio>,
     ) -> Result<Self, AppError> {
@@ -417,7 +456,8 @@ impl DevicesDeps {
             host: HostProfile::detect(),
             radio,
             vault: Arc::from(plaudon_security::secrets::os_store()),
-            pool,
+            db,
+            archive,
             events,
         })
     }
@@ -428,7 +468,8 @@ struct Inner {
     host: HostProfile,
     radio: Arc<dyn DeviceRadio>,
     vault: Arc<dyn VaultStore>,
-    pool: SqlitePool,
+    db: Database,
+    devices: DeviceRepository,
     events: EventPublisher,
     state: Mutex<State>,
 }
@@ -573,6 +614,30 @@ fn credential_error(err: &CredentialError) -> AppError {
     AppError::new(code, err.to_string())
 }
 
+/// The ledger identifier of a peripheral: a stable, salted digest, so the same
+/// device is the same row on every run and a renamed device is not a new one.
+fn device_row_id(peripheral_id: &str) -> DeviceId {
+    let mut hasher = Sha256::new();
+    hasher.update(b"plaudon.device-row.v1");
+    hasher.update([0x1f]);
+    hasher.update(peripheral_id.as_bytes());
+    let digest = hasher.finalize();
+    let mut bytes = [0u8; 16];
+    bytes.copy_from_slice(&digest[..16]);
+    uuid::Uuid::from_bytes(bytes)
+        .to_string()
+        .parse()
+        .expect("a formatted UUID is a canonical device identifier")
+}
+
+/// The register spelling of the authentication mode a profile implements.
+fn auth_mode_name(profile: &ProtocolProfile) -> &'static str {
+    match profile.auth_mode {
+        ProfileAuthMode::LegacyStaticToken => "legacy_static_token",
+        ProfileAuthMode::EncryptedHandshake => "encrypted_handshake",
+    }
+}
+
 fn timestamp_string(millis: i64) -> Option<String> {
     Timestamp::from_millis(millis).to_rfc3339()
 }
@@ -616,11 +681,18 @@ impl DevicesBackend {
                 host: deps.host,
                 radio: deps.radio,
                 vault: deps.vault,
-                pool: deps.pool,
+                devices: DeviceRepository::new(deps.db.clone()),
+                db: deps.db,
                 events: deps.events,
                 state: Mutex::new(State::default()),
             }),
         }
+    }
+
+    /// Mark every transfer a previous run left `in_flight` as `interrupted`.
+    /// Called once at start-up, before the UI can ask for anything.
+    pub async fn recover_interrupted(&self) -> Result<u64, AppError> {
+        self.inner.recover_interrupted().await
     }
 
     /// Record the outcome of a non-destructive audit for a protocol profile.
@@ -643,35 +715,114 @@ impl Inner {
         self.events.publish(draft).await;
     }
 
+    /// Every authorized device, from the ledger: a `devices` row joined with
+    /// its `device_credential_refs` row. No token bytes are stored there.
     async fn load_links(&self) -> Result<Vec<LinkedDevice>, AppError> {
+        let rows: Vec<LinkRow> = sqlx::query_as(
+            "SELECT d.serial_fingerprint, d.model, d.discovered_name, d.observed_firmware, \
+                        d.last_seen_at \
+                 FROM devices d JOIN device_credential_refs c ON c.device_id = d.id \
+                 WHERE d.serial_fingerprint IS NOT NULL ORDER BY d.first_seen_at",
+        )
+        .fetch_all(self.db.pool())
+        .await
+        .map_err(|err| internal(format!("cannot read device links: {err}")))?;
+        let synced = self.synced_devices().await?;
+        Ok(rows
+            .into_iter()
+            .map(
+                |(peripheral_id, model, name, firmware, last_seen)| LinkedDevice {
+                    sync_enabled: synced.contains(&peripheral_id),
+                    binding: DeviceBinding::new(
+                        peripheral_id,
+                        model,
+                        firmware.unwrap_or_default(),
+                        ProvisioningRoute::ImportedExistingToken,
+                        IdentityAssurance::Unverified,
+                    ),
+                    advertised_name: name,
+                    last_contact_ms: Some(last_seen),
+                },
+            )
+            .collect())
+    }
+
+    async fn synced_devices(&self) -> Result<Vec<String>, AppError> {
         let raw: Option<String> =
             sqlx::query_scalar("SELECT value_json FROM app_preferences WHERE key = ?1")
-                .bind(LINKS_KEY)
-                .fetch_optional(&self.pool)
+                .bind(SYNC_KEY)
+                .fetch_optional(self.db.pool())
                 .await
-                .map_err(|err| internal(format!("cannot read device links: {err}")))?;
+                .map_err(|err| internal(format!("cannot read device sync flags: {err}")))?;
         raw.map_or_else(
             || Ok(Vec::new()),
             |value| {
                 serde_json::from_str(&value)
-                    .map_err(|err| internal(format!("stored device links are invalid: {err}")))
+                    .map_err(|err| internal(format!("stored device sync flags are invalid: {err}")))
             },
         )
     }
 
-    async fn save_links(&self, links: &[LinkedDevice]) -> Result<(), AppError> {
-        let encoded = serde_json::to_string(links)
-            .map_err(|err| internal(format!("cannot serialize device links: {err}")))?;
+    async fn set_synced(&self, peripheral_id: &str, enabled: bool) -> Result<(), AppError> {
+        let mut synced = self.synced_devices().await?;
+        synced.retain(|id| id != peripheral_id);
+        if enabled {
+            synced.push(peripheral_id.to_owned());
+        }
+        let encoded = serde_json::to_string(&synced)
+            .map_err(|err| internal(format!("cannot serialize device sync flags: {err}")))?;
         sqlx::query(
             "INSERT INTO app_preferences (key, version, value_json) VALUES (?1, 1, ?2) \
              ON CONFLICT(key) DO UPDATE SET value_json = ?2",
         )
-        .bind(LINKS_KEY)
+        .bind(SYNC_KEY)
         .bind(encoded)
-        .execute(&self.pool)
+        .execute(self.db.pool())
         .await
-        .map_err(|err| internal(format!("cannot write device links: {err}")))?;
+        .map_err(|err| internal(format!("cannot write device sync flags: {err}")))?;
         Ok(())
+    }
+
+    /// Upsert the ledger row of a device. The peripheral identifier is kept in
+    /// `serial_fingerprint`: it is the host-stable fingerprint of this device.
+    async fn upsert_device_row(
+        &self,
+        peripheral_id: &str,
+        model: &str,
+        firmware: Option<&str>,
+        name: Option<&str>,
+        trust: TrustState,
+    ) -> Result<DeviceId, AppError> {
+        let id = device_row_id(peripheral_id);
+        self.devices
+            .upsert_device(
+                &DeviceRecord {
+                    id,
+                    vendor: "PLAUD".to_owned(),
+                    model: model.to_owned(),
+                    serial_fingerprint: Some(peripheral_id.to_owned()),
+                    discovered_name: name.map(str::to_owned),
+                    observed_firmware: firmware.map(str::to_owned),
+                    trust_state: trust,
+                },
+                Timestamp::now(),
+            )
+            .await
+            .map_err(|err| internal(format!("cannot record the device: {err}")))?;
+        Ok(id)
+    }
+
+    /// A restart must never see a transfer that claims to be in flight.
+    async fn recover_interrupted(&self) -> Result<u64, AppError> {
+        let result = sqlx::query(
+            "UPDATE device_transfers SET transfer_status = 'interrupted', ended_at = ?1 \
+             WHERE transfer_status = 'in_flight'",
+        )
+        .bind(Timestamp::now().as_millis())
+        .execute(self.db.pool())
+        .await
+        .map_err(|err| internal(format!("cannot recover device transfers: {err}")))?;
+        Ok(result.rows_affected())
     }
 
     fn identity_of(state: &State, peripheral_id: &str) -> IdentityAssurance {
@@ -910,14 +1061,20 @@ impl Inner {
         if let Some(bytes) = update.bytes_received {
             record.bytes_received = Some(bytes);
             record.observed_bytes_per_sec = update
-                .elapsed_ms
-                .and_then(|elapsed| observed_rate(bytes, elapsed))
+                .bytes_per_second
+                .or_else(|| {
+                    update
+                        .elapsed_ms
+                        .and_then(|elapsed| observed_rate(bytes, elapsed))
+                })
                 .or(record.observed_bytes_per_sec);
-            record.eta_seconds_estimate = estimate_eta(
-                record.declared_byte_length,
-                bytes,
-                record.observed_bytes_per_sec,
-            );
+            record.eta_seconds_estimate = update.eta_seconds.or_else(|| {
+                estimate_eta(
+                    record.declared_byte_length,
+                    bytes,
+                    record.observed_bytes_per_sec,
+                )
+            });
         }
         if next.is_terminal()
             || matches!(next, TransferState::Verifying | TransferState::Committing)
@@ -960,11 +1117,12 @@ impl Inner {
     async fn run_transfer(
         self: Arc<Self>,
         link: LinkedDevice,
-        recording_id: String,
-        declared_byte_length: u64,
+        transfer_id: TransferId,
+        recording: ListedRecording,
         local_only: bool,
     ) {
         let peripheral_id = link.binding.peripheral_id.clone();
+        let recording_id = recording.id.clone();
         let reporter = LedgerReporter {
             inner: Arc::clone(&self),
             peripheral_id: peripheral_id.clone(),
@@ -981,8 +1139,8 @@ impl Inner {
                     .transfer(
                         TransferRequest {
                             peripheral_id: &peripheral_id,
-                            recording_id: &recording_id,
-                            declared_byte_length,
+                            transfer_id,
+                            recording: &recording,
                             token: &token,
                             local_only,
                         },
@@ -997,13 +1155,21 @@ impl Inner {
                 code = err.code().as_str(),
                 "a device transfer did not finish"
             );
+            // Idempotent with the committer's own row update: a transfer that
+            // did not commit is `interrupted`, never `in_flight`.
+            let _ = sqlx::query(
+                "UPDATE device_transfers SET transfer_status = 'interrupted', ended_at = ?2 \
+                 WHERE id = ?1 AND transfer_status = 'in_flight'",
+            )
+            .bind(transfer_id.to_string())
+            .bind(Timestamp::now().as_millis())
+            .execute(self.db.pool())
+            .await;
             reporter
-                .report(TransferUpdate {
+                .report(TransferUpdate::step(
                     recording_id,
-                    event: TransferEvent::Disconnected,
-                    bytes_received: None,
-                    elapsed_ms: None,
-                })
+                    TransferEvent::Disconnected,
+                ))
                 .await;
         }
     }
@@ -1193,11 +1359,43 @@ impl DevicesPort for DevicesBackend {
             None => None,
         };
 
+        // Ledger: the device row and its firmware history. A changed firmware
+        // forces revalidation of the cell (spec §13.3).
+        let mut firmware_changed = false;
+        if let (Some(model), Some(firmware)) = (&observed.model, &observed.firmware) {
+            let name = lock(&inner.state)
+                .nearby
+                .get(peripheral_id)
+                .and_then(|seen| seen.advertised_name.clone());
+            let id = inner
+                .upsert_device_row(
+                    peripheral_id,
+                    model,
+                    Some(firmware),
+                    name.as_deref(),
+                    TrustState::Unverified,
+                )
+                .await?;
+            firmware_changed = inner
+                .devices
+                .record_firmware_observation(
+                    id,
+                    firmware,
+                    "ble_probe",
+                    protocol.map_or("none", |profile| profile.name),
+                    observed.auth_mode.as_deref().unwrap_or("unknown"),
+                    Timestamp::now(),
+                )
+                .await
+                .map_err(|err| internal(format!("cannot record the firmware: {err}")))?;
+        }
+
         let (changed, dto) = {
             let mut state = lock(&inner.state);
-            let changed = state.probes.get(peripheral_id).is_none_or(|previous| {
-                previous.decision != decision || previous.radio.firmware != observed.firmware
-            });
+            let changed = firmware_changed
+                || state.probes.get(peripheral_id).is_none_or(|previous| {
+                    previous.decision != decision || previous.radio.firmware != observed.firmware
+                });
             state.experimental.remove(peripheral_id);
             if experimental_probe_approved {
                 let grant = ExperimentalProbeGrant::new(peripheral_id, unix_millis_now() / 1000);
@@ -1284,7 +1482,7 @@ impl DevicesPort for DevicesBackend {
             .authorize(&binding, protocol, token_hex.expose())
             .map_err(|err| credential_error(&err))?;
 
-        let mut links = inner.load_links().await?;
+        let links = inner.load_links().await?;
         if let Some(existing) = links
             .iter()
             .find(|link| link.binding.peripheral_id == peripheral_id)
@@ -1295,14 +1493,30 @@ impl DevicesPort for DevicesBackend {
                 let _ = credentials.revoke(&existing.binding);
             }
         }
-        links.retain(|link| link.binding.peripheral_id != peripheral_id);
-        links.push(LinkedDevice {
-            binding,
-            advertised_name,
-            last_contact_ms: None,
-            sync_enabled: false,
-        });
-        inner.save_links(&links).await?;
+        let scope = binding
+            .scope()
+            .map_err(|err| credential_error(&CredentialError::Scope(err)))?;
+        let id = inner
+            .upsert_device_row(
+                peripheral_id,
+                &binding.device_model,
+                Some(&binding.firmware_fingerprint),
+                advertised_name.as_deref(),
+                TrustState::Unverified,
+            )
+            .await?;
+        // Only the vault coordinates are stored, never the token.
+        inner
+            .devices
+            .record_credential_ref(
+                id,
+                scope.service(),
+                &scope.account(),
+                auth_mode_name(protocol),
+                Timestamp::now(),
+            )
+            .await
+            .map_err(|err| internal(format!("cannot record the credential reference: {err}")))?;
         lock(&inner.state).authenticated.remove(peripheral_id);
 
         Ok(DeviceAuthStatusDto {
@@ -1315,7 +1529,7 @@ impl DevicesPort for DevicesBackend {
 
     async fn revoke(&self, peripheral_id: &str) -> Result<DeviceAuthStatusDto, AppError> {
         let inner = &self.inner;
-        let mut links = inner.load_links().await?;
+        let links = inner.load_links().await?;
         if let Some(link) = links
             .iter()
             .find(|link| link.binding.peripheral_id == peripheral_id)
@@ -1328,8 +1542,12 @@ impl DevicesPort for DevicesBackend {
                 Err(err) => return Err(credential_error(&err)),
             }
         }
-        links.retain(|link| link.binding.peripheral_id != peripheral_id);
-        inner.save_links(&links).await?;
+        inner
+            .devices
+            .remove_credential_ref(device_row_id(peripheral_id))
+            .await
+            .map_err(|err| internal(format!("cannot remove the credential reference: {err}")))?;
+        inner.set_synced(peripheral_id, false).await?;
         lock(&inner.state).authenticated.remove(peripheral_id);
         Ok(DeviceAuthStatusDto {
             peripheral_id: peripheral_id.to_owned(),
@@ -1341,7 +1559,7 @@ impl DevicesPort for DevicesBackend {
 
     async fn list_recordings(&self, peripheral_id: &str) -> Result<DeviceListingDto, AppError> {
         let inner = &self.inner;
-        let mut links = inner.load_links().await?;
+        let links = inner.load_links().await?;
         {
             let state = lock(&inner.state);
             let record = state
@@ -1389,13 +1607,15 @@ impl DevicesPort for DevicesBackend {
         let newly_connected = lock(&inner.state)
             .authenticated
             .insert(peripheral_id.to_owned());
-        if let Some(stored) = links
-            .iter_mut()
-            .find(|link| link.binding.peripheral_id == peripheral_id)
-        {
-            stored.last_contact_ms = Some(unix_millis_now());
-        }
-        inner.save_links(&links).await?;
+        inner
+            .upsert_device_row(
+                peripheral_id,
+                &link.binding.device_model,
+                Some(&link.binding.firmware_fingerprint),
+                link.advertised_name.as_deref(),
+                TrustState::ProfileAuthenticated,
+            )
+            .await?;
 
         let dto = {
             let mut state = lock(&inner.state);
@@ -1495,7 +1715,7 @@ impl DevicesPort for DevicesBackend {
         let links = inner.load_links().await?;
         let link = Inner::require_link(&links, peripheral_id)?;
 
-        let accepted: Vec<(String, u64, ListedRecording)> = {
+        let accepted: Vec<(TransferId, u64, ListedRecording)> = {
             let mut state = lock(&inner.state);
             let record = state
                 .probes
@@ -1557,21 +1777,18 @@ impl DevicesPort for DevicesBackend {
                         ));
                     }
                 }
-                accepted.push((
-                    uuid::Uuid::new_v4().to_string(),
-                    entry.declared_byte_length,
-                    entry,
-                ));
+                accepted.push((TransferId::new(), entry.declared_byte_length, entry));
             }
 
             for (transfer_id, declared, entry) in &accepted {
+                let transfer_id = transfer_id.to_string();
                 let mut ledger = TransferLedger::new();
                 // `Discovered -> Queued` is always legal from a fresh ledger.
                 let _ = ledger.apply(&TransferEvent::Queued);
                 state.transfers.insert(
                     (peripheral_id.to_owned(), entry.id.clone()),
                     TransferRecord {
-                        transfer_id: transfer_id.clone(),
+                        transfer_id,
                         ledger,
                         display_name: entry.display_name.clone(),
                         declared_byte_length: *declared,
@@ -1586,32 +1803,50 @@ impl DevicesPort for DevicesBackend {
             accepted
         };
 
+        let device_id = device_row_id(peripheral_id);
         let mut transfer_ids = Vec::with_capacity(accepted.len());
         for (transfer_id, declared, entry) in accepted {
+            let transfer_text = transfer_id.to_string();
+            inner
+                .devices
+                .start_transfer(
+                    &DeviceTransferRow {
+                        id: transfer_id,
+                        device_id,
+                        transport: TRANSPORT_BLE.to_owned(),
+                        native_format: Some("asr_opus".to_owned()),
+                        expected_bytes: Some(declared),
+                        received_bytes: 0,
+                        sha256: None,
+                        status: TransferStatus::InFlight,
+                        verification: RowVerification::Unverified,
+                    },
+                    Timestamp::now(),
+                )
+                .await
+                .map_err(|err| internal(format!("cannot start the transfer record: {err}")))?;
             inner
                 .publish(
                     EventKind::DeviceTransferProgress,
                     &[
                         ("peripheral_id", Value::from(peripheral_id)),
                         ("recording_id", Value::from(entry.id.as_str())),
-                        ("transfer_id", Value::from(transfer_id.as_str())),
+                        ("transfer_id", Value::from(transfer_text.as_str())),
                         ("state", Value::from(state_slug(TransferState::Queued))),
                     ],
                 )
                 .await;
+            let key = (peripheral_id.to_owned(), entry.id.clone());
             let handle = tokio::spawn(Arc::clone(inner).run_transfer(
                 link.clone(),
-                entry.id.clone(),
-                declared,
+                transfer_id,
+                entry,
                 local_only,
             ));
-            if let Some(record) = lock(&inner.state)
-                .transfers
-                .get_mut(&(peripheral_id.to_owned(), entry.id.clone()))
-            {
+            if let Some(record) = lock(&inner.state).transfers.get_mut(&key) {
                 record.handle = Some(handle);
             }
-            transfer_ids.push(transfer_id);
+            transfer_ids.push(transfer_text);
         }
         Ok(transfer_ids)
     }
@@ -1640,6 +1875,19 @@ impl DevicesPort for DevicesBackend {
             cancelled
         };
         for (recording_id, transfer_id) in cancelled {
+            if let Ok(id) = transfer_id.parse::<TransferId>() {
+                let _ = inner
+                    .devices
+                    .finish_transfer(
+                        id,
+                        0,
+                        None,
+                        TransferStatus::Cancelled,
+                        RowVerification::Unverified,
+                        Timestamp::now(),
+                    )
+                    .await;
+            }
             inner
                 .publish(
                     EventKind::DeviceTransferProgress,
@@ -1671,7 +1919,7 @@ impl DevicesPort for DevicesBackend {
         enable_when_nearby: bool,
     ) -> Result<DeviceSyncPolicyDto, AppError> {
         let inner = &self.inner;
-        let mut links = inner.load_links().await?;
+        let links = inner.load_links().await?;
         let link = Inner::require_link(&links, peripheral_id)?;
         let mut dto = {
             let state = lock(&inner.state);
@@ -1686,13 +1934,7 @@ impl DevicesPort for DevicesBackend {
                 "automatic sync is not available for this device profile",
             ));
         }
-        if let Some(stored) = links
-            .iter_mut()
-            .find(|stored| stored.binding.peripheral_id == peripheral_id)
-        {
-            stored.sync_enabled = enable_when_nearby;
-        }
-        inner.save_links(&links).await?;
+        inner.set_synced(peripheral_id, enable_when_nearby).await?;
         dto.enabled = enable_when_nearby && dto.may_advertise;
         Ok(dto)
     }
@@ -1795,7 +2037,7 @@ cells:
                 .lock()
                 .unwrap()
                 .iter()
-                .filter(|update| update.recording_id == request.recording_id)
+                .filter(|update| update.recording_id == request.recording.id)
                 .cloned()
                 .collect();
             for update in script {
@@ -1817,7 +2059,7 @@ cells:
         radio: Arc<FakeRadio>,
         vault: Arc<InMemorySecretStore>,
         sink: Arc<RecordingEventSink>,
-        pool: SqlitePool,
+        pool: sqlx::SqlitePool,
         _dir: tempfile::TempDir,
     }
 
@@ -1879,7 +2121,8 @@ cells:
             },
             radio: radio.clone(),
             vault: vault.clone(),
-            pool: store.pool().clone(),
+            db: store.db().clone(),
+            archive: store.archive().clone(),
             events,
         });
         Harness {
@@ -1975,7 +2218,7 @@ cells:
         assert_eq!(decision_status(&decision), SupportStatus::NotEvaluated);
         assert!(!decision.permits_transfer());
         assert!(decision.offers_experimental_probe());
-        assert!(!decision.known_limitations().is_empty());
+        assert_ne!(decision.known_limitations(), Vec::<String>::new());
     }
 
     #[test]
@@ -2039,7 +2282,7 @@ cells:
         assert_eq!(scan.radio.state, RadioState::UnavailableInBuild);
         assert_eq!(scan.radio.code.as_deref(), Some("SOURCE_UNAVAILABLE"));
         assert!(scan.radio.message.contains("not the same as no devices"));
-        assert!(scan.devices.is_empty());
+        assert_eq!(scan.devices, Vec::new());
         assert_eq!(scan.scanned_at, None, "nothing was scanned");
     }
 
@@ -2050,7 +2293,7 @@ cells:
         let scan = h.backend.list_nearby(5_000).await.unwrap();
         assert_eq!(scan.radio.state, RadioState::PermissionDenied);
         assert_eq!(scan.radio.code.as_deref(), Some("RADIO_PERMISSION_DENIED"));
-        assert!(scan.devices.is_empty());
+        assert_eq!(scan.devices, Vec::new());
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -2222,14 +2465,29 @@ cells:
         assert_eq!(h.vault.entry_count(), 1);
 
         assert!(!serde_json::to_string(&status).unwrap().contains(TOKEN));
-        let stored: Option<String> =
-            sqlx::query_scalar("SELECT value_json FROM app_preferences WHERE key = ?1")
-                .bind(LINKS_KEY)
-                .fetch_optional(&h.pool)
-                .await
-                .unwrap();
-        let stored = stored.expect("the link was persisted");
-        assert!(!stored.contains(TOKEN), "the database holds no token bytes");
+        // The ledger holds the device and the vault coordinates, nothing else.
+        let refs: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM device_credential_refs")
+            .fetch_one(&h.pool)
+            .await
+            .unwrap();
+        assert_eq!(refs, 1);
+        let rows: Vec<(String, String, String)> = sqlx::query_as(
+            "SELECT vault_service, vault_account_reference, auth_mode FROM device_credential_refs",
+        )
+        .fetch_all(&h.pool)
+        .await
+        .unwrap();
+        assert!(rows
+            .iter()
+            .all(|(a, b, c)| ![a, b, c].iter().any(|v| v.contains(TOKEN))));
+        let device_rows: Vec<String> = sqlx::query_scalar(
+            "SELECT COALESCE(serial_fingerprint,'') || COALESCE(discovered_name,'') || model || \
+             COALESCE(observed_firmware,'') FROM devices",
+        )
+        .fetch_all(&h.pool)
+        .await
+        .unwrap();
+        assert!(device_rows.iter().all(|row| !row.contains(TOKEN)));
         let all: Vec<String> = sqlx::query_scalar("SELECT value_json FROM app_preferences")
             .fetch_all(&h.pool)
             .await
@@ -2414,7 +2672,7 @@ cells:
         *h.radio.listing.lock().unwrap() = Some(listing(&[], false));
         let empty = h.backend.list_recordings(DEVICE).await.unwrap();
         assert_eq!(empty.file_count, 0);
-        assert!(empty.items.is_empty());
+        assert_eq!(empty.items, Vec::new());
         assert!(empty
             .completeness_label
             .contains("not a complete recording history"));
@@ -2433,6 +2691,8 @@ cells:
             event,
             bytes_received: bytes,
             elapsed_ms: elapsed,
+            bytes_per_second: None,
+            eta_seconds: None,
         }
     }
 
