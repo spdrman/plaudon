@@ -1075,8 +1075,12 @@ version = "0.1.0"
 name = "plaudon-chaos-tests"
 version = "0.1.0"
 dependencies = [
+ "hex",
  "plaudon-domain",
+ "plaudon-jobs",
  "plaudon-persistence",
+ "serde_json",
+ "sha2 0.10.9",
  "sqlx",
  "tempfile",
  "tokio",
@@ -1127,6 +1131,22 @@ dependencies = [
 [[package]]
 name = "plaudon-jobs"
 version = "0.1.0"
+dependencies = [
+ "hex",
+ "plaudon-domain",
+ "plaudon-persistence",
+ "proptest",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "sqlx",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "uuid",
+]
 
 [[package]]
 name = "plaudon-notifications"

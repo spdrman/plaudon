@@ -50,6 +50,12 @@ pub const MIGRATIONS: &[Migration] = &[
         name: "core",
         sql: include_str!("../migrations/0002_core.sql"),
     },
+    // Owned by EPIC C (job engine). Versions 100-199 are reserved for it.
+    Migration {
+        version: 100,
+        name: "job_engine",
+        sql: include_str!("../migrations/0100_job_engine.sql"),
+    },
 ];
 
 /// An applied migration as recorded in the database.

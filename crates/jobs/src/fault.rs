@@ -43,6 +43,8 @@ pub const CRASH_POINTS: &[&str] = &[
     "journal:intent_recorded",
     "journal:renamed",
     "journal:committed",
+    "journal:abandoned",
+    "journal:quarantined",
     "checkpoint:prepared",
     "checkpoint:committed",
     "dispatch:before_record",
@@ -169,6 +171,25 @@ mod imp {
 
 pub use imp::{hits, trip};
 
+/// Trip a crash point whose name is computed at runtime.
+///
+/// Used for `transition:<state>` and `journal:<step>` points, whose names are
+/// derived from an enum variant. Unknown names are ignored so a caller can
+/// never accidentally arm something outside [`CRASH_POINTS`].
+#[cfg(feature = "fault-injection")]
+pub fn trip_dynamic(name: &str) {
+    if let Some(known) = CRASH_POINTS.iter().find(|p| **p == name) {
+        trip(known);
+    } else {
+        debug_assert!(false, "crash point `{name}` is not in CRASH_POINTS");
+    }
+}
+
+/// No-op in builds without the `fault-injection` feature.
+#[cfg(not(feature = "fault-injection"))]
+#[inline(always)]
+pub fn trip_dynamic(_name: &str) {}
+
 #[cfg(feature = "fault-injection")]
 pub(crate) fn write_stderr(message: &str) {
     use std::io::Write;
@@ -181,6 +202,12 @@ pub(crate) fn write_stderr(message: &str) {
 /// written.
 pub fn transition_point(state: crate::state::JobState) -> String {
     format!("transition:{}", state.as_str())
+}
+
+/// Name of the crash point fired around one durable import step
+/// (`plaudon_persistence::journal`, §13.3A).
+pub fn journal_point(state: plaudon_persistence::journal::JournalState) -> String {
+    format!("journal:{}", state.as_str())
 }
 
 /// Name of the crash point fired just after the transition into `state`
@@ -210,10 +237,19 @@ mod tests {
 
     #[test]
     fn every_durable_import_step_has_a_registered_crash_point() {
-        for step in crate::journal::JournalStep::ALL {
+        for state in [
+            plaudon_persistence::journal::JournalState::Staged,
+            plaudon_persistence::journal::JournalState::Hashed,
+            plaudon_persistence::journal::JournalState::Flushed,
+            plaudon_persistence::journal::JournalState::IntentRecorded,
+            plaudon_persistence::journal::JournalState::Renamed,
+            plaudon_persistence::journal::JournalState::Committed,
+            plaudon_persistence::journal::JournalState::Abandoned,
+            plaudon_persistence::journal::JournalState::Quarantined,
+        ] {
             assert!(
-                is_registered(&format!("journal:{}", step.as_str())),
-                "missing crash point for durable import step {step:?}"
+                is_registered(&journal_point(state)),
+                "missing crash point for durable import step {state:?}"
             );
         }
     }

@@ -1,0 +1,195 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.local/schemas/events/job-events.v1.schema.json",
+  "title": "Plaudon UI job event (v1)",
+  "description": "Sanitized event delivered from the Rust job engine to the desktop frontend (SPEC v1.3 \u00a715.3). Carries the durable, strictly monotonic local sequence number. Contains no bearer token, signed URL, device secret, platform pointer or absolute filesystem path (\u00a76.3A).",
+  "type": "object",
+  "required": ["version", "seq", "kind", "occurred_at", "payload"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1,
+      "description": "UI event contract version."
+    },
+    "seq": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Durable, strictly monotonic and gap-free local sequence number."
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "job.updated",
+        "job.failed",
+        "recording.imported",
+        "recording.source_updated",
+        "recording.deleted",
+        "transcript.completed",
+        "tool.completed",
+        "model.availability_changed",
+        "consent.required",
+        "library.changed"
+      ]
+    },
+    "job_id": { "type": "string", "format": "uuid" },
+    "recording_id": { "type": "string", "format": "uuid" },
+    "occurred_at": {
+      "type": "integer",
+      "description": "Milliseconds since the Unix epoch, UTC."
+    },
+    "payload": { "$ref": "#/$defs/payload" }
+  },
+  "$defs": {
+    "jobState": {
+      "type": "string",
+      "enum": [
+        "queued",
+        "preflight",
+        "waiting_for_user",
+        "waiting_for_network",
+        "waiting_for_model",
+        "waiting_for_source",
+        "waiting_for_authorization",
+        "running_local",
+        "cloud_ready",
+        "cloud_sending",
+        "cloud_outcome_unknown",
+        "verifying",
+        "committing",
+        "completed",
+        "failed_retryable",
+        "failed_terminal",
+        "cancelling",
+        "cancelled"
+      ]
+    },
+    "waitReason": {
+      "type": "string",
+      "enum": [
+        "insufficient_disk",
+        "insufficient_memory",
+        "model_asset_missing",
+        "source_unavailable",
+        "power_saver",
+        "network_unavailable",
+        "keychain_locked",
+        "user_decision_required",
+        "consent_required",
+        "system_suspend"
+      ]
+    },
+    "sourceChange": {
+      "type": "string",
+      "enum": [
+        "new",
+        "unchanged",
+        "metadata_changed",
+        "audio_changed",
+        "remote_trashed",
+        "removed_from_listing"
+      ]
+    },
+    "sha256Hex": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "payload": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["type", "state", "previous_state", "possibly_billed"],
+          "additionalProperties": false,
+          "properties": {
+            "type": { "const": "job_updated" },
+            "state": { "$ref": "#/$defs/jobState" },
+            "previous_state": { "$ref": "#/$defs/jobState" },
+            "wait_reason": { "$ref": "#/$defs/waitReason" },
+            "possibly_billed": { "type": "boolean" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "state", "code", "retryable"],
+          "additionalProperties": false,
+          "properties": {
+            "type": { "const": "job_failed" },
+            "state": { "$ref": "#/$defs/jobState" },
+            "code": {
+              "type": "string",
+              "description": "Stable AppErrorCode from the shared closed set (\u00a715.4)."
+            },
+            "retryable": { "type": "boolean" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "media_sha256", "byte_length"],
+          "additionalProperties": false,
+          "properties": {
+            "type": { "const": "recording_imported" },
+            "media_sha256": { "$ref": "#/$defs/sha256Hex" },
+            "byte_length": { "type": "integer", "minimum": 0 }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "change"],
+          "additionalProperties": false,
+          "properties": {
+            "type": { "const": "recording_source_updated" },
+            "change": { "$ref": "#/$defs/sourceChange" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type"],
+          "additionalProperties": false,
+          "properties": { "type": { "const": "recording_deleted" } }
+        },
+        {
+          "type": "object",
+          "required": ["type", "transcript_revision", "segment_count"],
+          "additionalProperties": false,
+          "properties": {
+            "type": { "const": "transcript_completed" },
+            "transcript_revision": { "type": "string" },
+            "segment_count": { "type": "integer", "minimum": 0 }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "tool", "output_id"],
+          "additionalProperties": false,
+          "properties": {
+            "type": { "const": "tool_completed" },
+            "tool": { "type": "string" },
+            "output_id": { "type": "string" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "engine", "available"],
+          "additionalProperties": false,
+          "properties": {
+            "type": { "const": "model_availability_changed" },
+            "engine": { "type": "string" },
+            "available": { "type": "boolean" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "purpose"],
+          "additionalProperties": false,
+          "properties": {
+            "type": { "const": "consent_required" },
+            "purpose": { "type": "string" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type"],
+          "additionalProperties": false,
+          "properties": { "type": { "const": "library_changed" } }
+        }
+      ]
+    }
+  }
+}
