@@ -71,7 +71,7 @@ pub const MIGRATIONS: &[Migration] = &[
         name: "transcript_provenance",
         sql: include_str!("../migrations/0200_transcript_provenance.sql"),
     },
-    // Desktop shell display metadata. Owned by apps/desktop/src-tauri.
+    // Desktop shell display metadata. Owned by the application layer, crates/app.
     Migration {
         version: 300,
         name: "desktop_shell",

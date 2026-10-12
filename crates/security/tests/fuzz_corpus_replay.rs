@@ -1,8 +1,8 @@
 //! D2.4 — shared fuzz invariants + stable-toolchain corpus replay.
 //!
 //! Spec: §18.5 (fuzz media metadata parsers and output schemas, hostile
-//! filenames and symlinks, shell metacharacters in PLAUD search/display fields,
-//! Tauri capability escalation), §16.2 rows "Arbitrary command execution" and
+//! filenames and symlinks, shell metacharacters in PLAUD search/display
+//! fields), §16.2 rows "Arbitrary command execution" and
 //! "Malicious audio decoder input", §18.6A (hostile cases per cluster),
 //! App. B.7 (defensive bounds + fuzz tests on untrusted input parsers).
 //!
@@ -69,12 +69,7 @@ pub mod checks {
     };
     use plaudon_security::outbound::subprocess::{ArgError, CliArg, MAX_ARG_LEN};
     use plaudon_security::outbound::Destination;
-    use plaudon_security::tauri_guard::response::secret_shape_of;
-    use plaudon_security::tauri_guard::validate::{MAX_CURSOR_LEN, MAX_IDENTIFIER_LEN};
-    use plaudon_security::tauri_guard::{
-        assert_no_secret_in_response, reject_raw_path, validate_bounded_string, validate_cursor,
-        validate_identifier, CommandAllowlist, WindowLabel,
-    };
+    use plaudon_security::response::{assert_no_secret_in_response, secret_shape_of};
 
     /// Upper bound on the input we feed a parser. Corpus files are far smaller;
     /// this only stops a pathological libFuzzer input from making the *harness*
@@ -416,67 +411,13 @@ pub mod checks {
             "untrusted input introduced an extra flag: {rendered:?}"
         );
 
-        // 6. The UI boundary for the same hostile string (§18.5: "inject shell
-        //    metacharacters into PLAUD search/display fields"). A title, search
-        //    term or cursor arrives from the webview through
-        //    `tauri_guard::validate` before it can ever reach the CLI, so the
-        //    two boundaries are fuzzed with the same bytes.
-        if let Ok(accepted) = validate_identifier("fuzz_id", &s) {
-            assert!(
-                accepted
-                    .chars()
-                    .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-')),
-                "identifier charset escaped at the UI boundary: {accepted:?}"
-            );
-            assert!(!accepted.is_empty() && accepted.len() <= MAX_IDENTIFIER_LEN);
-            assert!(!accepted.chars().any(|c| SHELL_METACHARACTERS.contains(&c)));
-            // Defence in depth: the CLI layer is strictly stronger, so the only
-            // reason a UI-accepted identifier may still be refused downstream is
-            // flag injection (a leading `-`, which the UI charset permits).
-            match CliArg::Identifier(accepted.to_owned()).render() {
-                Ok(_) => assert!(!accepted.starts_with('-')),
-                Err(e) => assert_eq!(
-                    e,
-                    ArgError::FlagInjection,
-                    "UI-accepted identifier {accepted:?} refused by the CLI layer for {e:?}"
-                ),
-            }
-        }
-        if let Ok(accepted) = validate_bounded_string("fuzz_title", &s, 512) {
-            assert!(
-                !accepted
-                    .chars()
-                    .any(|c| c.is_control() && c != '\n' && c != '\t'),
-                "control character accepted in display text: {accepted:?}"
-            );
-            assert!(!accepted.contains('\0'), "NUL accepted in display text");
-            assert!(accepted.chars().count() <= 512);
-        }
-        if let Ok(accepted) = validate_cursor("fuzz_cursor", &s) {
-            assert!(
-                accepted
-                    .chars()
-                    .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '=' | '.')),
-                "cursor charset escaped: {accepted:?}"
-            );
-            assert!(!accepted.is_empty() && accepted.len() <= MAX_CURSOR_LEN);
-        }
-        if reject_raw_path("fuzz_title", &s).is_ok() {
-            assert!(
-                !s.contains('/') && !s.contains('\\'),
-                "path separator slipped through: {s:?}"
-            );
-            assert!(!s.contains(".."), "traversal slipped through: {s:?}");
-            assert!(
-                !s.starts_with('/') && !s.starts_with('~'),
-                "absolute path slipped: {s:?}"
-            );
-            assert!(
-                !s.to_ascii_lowercase().starts_with("file:")
-                    && !s.to_ascii_lowercase().starts_with("asset:"),
-                "local-file URL scheme slipped through: {s:?}"
-            );
-        }
+        // The display/search-field boundary for the same hostile string
+        // (§18.5: "inject shell metacharacters into PLAUD search/display
+        // fields") is validated in `plaudon_app::validate`, which this crate
+        // cannot call — `plaudon-app` depends on `plaudon-security`, not the
+        // other way round — and which carries its own unit tests. What is
+        // asserted here is the layer `plaudon-security` actually owns: nothing
+        // that reaches `CliArg` can introduce shell syntax or an extra flag.
 
         alloc_meter::stop();
         assert_allocation_bounded("cli_arg_render", input_len);
@@ -599,147 +540,6 @@ pub mod checks {
             !contains_control(label),
             "destination label contains a control character: {label:?}"
         );
-    }
-
-    // ---------------------------------------------------------------------
-    // fuzz_allowlist_manifest
-    // ---------------------------------------------------------------------
-
-    /// §6.3A, §15.1, §18.5 (attempt Tauri capability escalation).
-    ///
-    /// The manifest is the single source of truth for which Tauri commands
-    /// exist and which window may invoke them. A manifest that parses but
-    /// smuggles a forbidden command through is a capability escalation, so the
-    /// fuzzer drives arbitrary bytes into `from_json` and checks the
-    /// post-conditions of a successful parse.
-    ///
-    /// Invariants:
-    /// * `from_json` never panics, however deeply nested or malformed;
-    /// * an accepted allowlist contains no command matching any of its own
-    ///   `forbidden_command_patterns`;
-    /// * every accepted command name is `snake_case`, unique, non-empty,
-    ///   declares at least one plain-literal window and never returns a secret;
-    /// * the accepted version equals the one the embedded manifest uses, so an
-    ///   unknown schema can never be best-effort parsed;
-    /// * `authorize` agrees with the parsed table: a listed command is
-    ///   authorized from a window it lists and refused from one it does not,
-    ///   and an unlisted command is always refused.
-    // One straight-line list of invariants is easier to audit against §15.1 and
-    // §18.5 than the same assertions split up.
-    #[allow(clippy::too_many_lines)]
-    pub fn check_allowlist_manifest(data: &[u8]) {
-        let input_len = data.len();
-        let json = lossy(data);
-
-        alloc_meter::start();
-        let parsed = CommandAllowlist::from_json(&json);
-        let peak = alloc_meter::stop();
-        assert!(
-            peak <= allocation_ceiling(input_len),
-            "allowlist_manifest: peak allocation {peak} B exceeded the ceiling {} B for a \
-             {input_len} B document",
-            allocation_ceiling(input_len)
-        );
-
-        let Ok(allowlist) = parsed else { return };
-
-        let supported = CommandAllowlist::load_default()
-            .expect("the embedded manifest must parse")
-            .version();
-        assert_eq!(
-            allowlist.version(),
-            supported,
-            "unknown schema version accepted"
-        );
-
-        assert!(
-            !allowlist.commands().is_empty(),
-            "empty command table accepted"
-        );
-        assert!(
-            !allowlist.required_csp().is_empty(),
-            "manifest without a required CSP accepted"
-        );
-        assert!(
-            allowlist.release_requirements().violations().is_empty(),
-            "manifest accepted with a release-posture violation"
-        );
-
-        let mut seen: Vec<&str> = Vec::with_capacity(allowlist.commands().len());
-        for command in allowlist.commands() {
-            let name = command.name.as_str();
-            assert!(
-                allowlist.forbidden_name_match(name).is_none(),
-                "forbidden command {name:?} survived into an accepted allowlist"
-            );
-            assert!(
-                allowlist
-                    .forbidden_command_patterns()
-                    .iter()
-                    .all(|p| !p.matches(name)),
-                "forbidden pattern matched accepted command {name:?}"
-            );
-            assert!(!name.is_empty(), "empty command name accepted");
-            let mut chars = name.chars();
-            assert!(
-                chars.next().is_some_and(|c| c.is_ascii_lowercase()),
-                "command name must start with [a-z]: {name:?}"
-            );
-            assert!(
-                chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_'),
-                "command name escaped the snake_case charset: {name:?}"
-            );
-            assert!(
-                !seen.contains(&name),
-                "duplicate command name accepted: {name:?}"
-            );
-            seen.push(name);
-            assert!(
-                !command.returns_secret,
-                "secret-returning command accepted: {name:?}"
-            );
-            assert!(
-                !command.windows.is_empty(),
-                "command with no window accepted: {name:?}"
-            );
-            assert!(
-                !command.spec.trim().is_empty(),
-                "command without a spec reference: {name:?}"
-            );
-            for window in &command.windows {
-                assert!(
-                    window.is_plain_literal(),
-                    "non-literal window label accepted for {name:?}: {:?}",
-                    window.as_str()
-                );
-            }
-
-            // The runtime check must agree with the table.
-            let permitted = &command.windows[0];
-            assert!(
-                allowlist.authorize(permitted, name).is_ok(),
-                "listed command {name:?} refused from its own window"
-            );
-            let foreign = WindowLabel::new("not-a-declared-window");
-            if !command.permits_window(&foreign) {
-                assert!(
-                    allowlist.authorize(&foreign, name).is_err(),
-                    "command {name:?} authorized from an undeclared window"
-                );
-            }
-        }
-
-        for unlisted in ["exec", "shell_execute", "read_file", "", "../../etc/passwd"] {
-            if seen.contains(&unlisted) {
-                continue;
-            }
-            assert!(
-                allowlist
-                    .authorize(&WindowLabel::new("main"), unlisted)
-                    .is_err(),
-                "unlisted command {unlisted:?} was authorized"
-            );
-        }
     }
 
     // ---------------------------------------------------------------------
@@ -1291,10 +1091,9 @@ pub mod checks {
 
     /// §15.4 (error envelope), §6.6 (versioned inter-module contracts).
     ///
-    /// The envelope is the one structure that crosses the Rust/TypeScript
-    /// boundary on every failure, so an envelope document is untrusted input
-    /// the moment it is replayed from a log, a crash report or a persisted
-    /// diagnostics entry.
+    /// The envelope is the one structure every failure is reported through, and
+    /// it is persisted, so an envelope document is untrusted input the moment it
+    /// is replayed from a log, a crash report or a diagnostics entry.
     ///
     /// Invariants:
     /// * `serde_json::from_str::<ErrorEnvelope>` never panics, however
@@ -1838,7 +1637,6 @@ mod replay {
         for target in [
             "cli_arg_render",
             "destination_url",
-            "allowlist_manifest",
             "redactor",
             "path_validation",
             "archive_entry",
@@ -1923,12 +1721,6 @@ mod replay {
     fn destination_url_corpus_holds_its_invariants() {
         let n = replay("destination_url", checks::check_destination_url);
         assert!(n >= 30, "destination_url corpus shrank to {n} entries");
-    }
-
-    #[test]
-    fn allowlist_manifest_corpus_holds_its_invariants() {
-        let n = replay("allowlist_manifest", checks::check_allowlist_manifest);
-        assert!(n >= 40, "allowlist_manifest corpus shrank to {n} entries");
     }
 
     #[test]

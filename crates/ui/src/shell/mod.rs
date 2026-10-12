@@ -20,6 +20,7 @@
 //!   a running animation. It asks for a frame only when it has a reason.
 
 pub mod activation;
+pub mod bell;
 pub mod commands;
 pub mod host;
 pub mod intents;
@@ -46,12 +47,16 @@ pub use window_state::WindowTracker;
 use std::collections::BTreeMap;
 
 use plaudon_app::command::{AppCommand, AppResponse, CommandId, Dispatcher};
-use plaudon_app::dto::{Capabilities, DuplicatePolicy, ImportFilesRequest, ImportOutcome, UiEvent};
+use plaudon_app::dto::{
+    Capabilities, DuplicatePolicy, EventKind, ImportFilesRequest, ImportOutcome,
+    ListActivityRequest, UiEvent,
+};
 use plaudon_app::event::{AppEvent, ResyncReason};
 use plaudon_app::shell_state::{PanelLayout, ShellState, SIDEBAR_WIDTH_RANGE};
 use plaudon_craft_ui::layout::SplitSize;
 use plaudon_domain::error::ErrorEnvelope;
 
+use crate::activity::{unread, PAGE_SIZE as ACTIVITY_PAGE_SIZE};
 use crate::theme::{ThemeState, Tokens, COMPACT_LAYOUT_WIDTH};
 use crate::widgets::toast::{ToastTone, Toasts};
 
@@ -106,6 +111,9 @@ pub struct Shell {
     focus_main: bool,
     dirty: bool,
     pending_import: Option<CommandId>,
+    /// Unread activity entries, as the last `list_activity` answer counted
+    /// them. The header bell is the only reader (parity row J12).
+    activity_unread: usize,
     activation_requested: bool,
     in_window_menu: bool,
 }
@@ -141,6 +149,7 @@ impl Shell {
             focus_main: false,
             dirty: false,
             pending_import: None,
+            activity_unread: 0,
             activation_requested: false,
             in_window_menu: true,
         }
@@ -279,6 +288,16 @@ impl Shell {
         &self.palette
     }
 
+    /// Unread activity entries, as the header bell shows them (row J12).
+    ///
+    /// The count the last `list_activity` answer carried, counted with
+    /// [`crate::activity::unread`]; a host that mirrors the bell — a dock
+    /// badge, say — reads it here rather than counting a second time.
+    #[must_use]
+    pub const fn activity_unread(&self) -> usize {
+        self.activity_unread
+    }
+
     /// Whether the keyboard reference is open.
     #[must_use]
     pub const fn shortcuts_open(&self) -> bool {
@@ -364,6 +383,11 @@ impl Shell {
                 self.startup = Startup::Ready;
                 "Ready".clone_into(&mut self.status);
             }
+            Ok(AppResponse::ListActivity(page)) => {
+                // One count, from the function the history itself counts
+                // with: the bell cannot disagree with the page (row J12).
+                self.activity_unread = unread(&page.items);
+            }
             Ok(AppResponse::CompleteOnboarding(preferences)) => {
                 // The gate is the shell's, so the shell is what lifts it:
                 // the stored preferences have changed, and the capabilities
@@ -427,10 +451,31 @@ impl Shell {
     }
 
     fn handle_ui_event(&mut self, event: &UiEvent, host: &ShellHost<'_>) {
-        if event.kind == plaudon_app::dto::EventKind::ActivationRequested {
+        if event.kind == EventKind::ActivationRequested {
             self.activate(event);
         }
+        // §15.3: the event says an entry exists, never what it is. The count
+        // is read back from the library rather than incremented locally,
+        // which is also what keeps it right when an entry is read elsewhere.
+        if event.kind == EventKind::ActivityAdded {
+            self.request_activity(host);
+        }
         self.for_each_screen(host, |screen, cx| screen.on_ui_event(event, cx));
+    }
+
+    /// Read the first page of the activity history, for the header bell.
+    ///
+    /// The answer lands in [`Shell::handle_response`] like any other. The
+    /// page the bell counts is the same first page the history shows, which
+    /// is the point: two reads of one thing, never two definitions of it.
+    fn request_activity(&mut self, host: &ShellHost<'_>) {
+        self.send(
+            host,
+            AppCommand::ListActivity(ListActivityRequest {
+                cursor: None,
+                limit: ACTIVITY_PAGE_SIZE,
+            }),
+        );
     }
 
     /// A notification was clicked (parity row J15).
@@ -688,6 +733,12 @@ impl Shell {
         }
         if self.capabilities.is_none() && self.capabilities_request.is_none() {
             self.request_capabilities(host);
+            // The header bell has nothing to show until the history has been
+            // read once, and this is that read. It is sent beside the
+            // capabilities rather than behind them so start-up stays one
+            // round trip; everything after it is driven by `activity.added`,
+            // so the shell still never polls.
+            self.request_activity(host);
         }
 
         for id in shortcuts::pressed_commands(&ctx, &self.commands, &self.keymap) {
@@ -796,10 +847,15 @@ impl Shell {
                 }
             });
         }
+        let mut bell_rung = false;
         egui::Panel::top("plaudon-toolbar").show(ui, |ui| {
             let items = toolbar_items();
             let title = self.route.title();
+            let unread = self.activity_unread;
             if let Some(id) = toolbar::toolbar(ui, &self.commands, &self.keymap, &items, |ui| {
+                // Right-to-left: the bell sits at the far right of the
+                // header, the route title to its left (parity row J12).
+                bell_rung = bell::activity_bell(ui, unread);
                 ui.label(
                     egui::RichText::new(title)
                         .size(self.tokens.text.lg)
@@ -809,6 +865,9 @@ impl Shell {
                 invoked.push(id);
             }
         });
+        if bell_rung {
+            self.navigate(Route::SettingsActivity);
+        }
         let notice = statusbar::narrow_notice(ui.ctx().content_rect().width());
         egui::Panel::bottom("plaudon-status-bar").show(ui, |ui| {
             statusbar::status_bar(ui, &self.status, self.in_flight, notice.as_deref());

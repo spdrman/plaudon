@@ -5,8 +5,11 @@
 //! Cargo applies `rustc-link-arg` only to targets of the package that emitted
 //! it, so the binary that actually links the Swift static library has to
 //! restate the flags. `crates/ai-apple` publishes them as `links` metadata so
-//! the list is written once; this copies them onto the application binary,
-//! exactly as `apps/desktop/src-tauri/build.rs` did for the Tauri shell.
+//! the list is written once; this copies them onto the application binary.
+//! `plaudon-ai-apple` is a direct dependency of this package under the
+//! `apple-bridge` feature for exactly that reason: Cargo publishes
+//! `DEP_<LINKS>_*` to the build script of a direct dependent and to no one
+//! else.
 //!
 //! Without the `/usr/lib/swift` rpath the bundle cannot resolve
 //! `libswift_Concurrency.dylib` and fails to launch; without the weak

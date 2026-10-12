@@ -142,8 +142,8 @@ number = 18
 title = "Accessibility -> all critical flows keyboard-completable, tested with screen readers."
 platforms = ["macos", "windows"]
 status = "implemented"
-harness = "playwright"
-test = "keyboard-flow.spec.ts"
+harness = "kittest"
+test = "every_destination_is_reachable_with_the_tab_key_alone"
 
 [[scenarios]]
 number = 19

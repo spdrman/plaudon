@@ -5,6 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+publish.workspace = true
 description = "Deterministic egui_kittest harness and snapshot policy for Plaudon's user-interface tests."
 
 [lib]

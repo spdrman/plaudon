@@ -53,8 +53,8 @@ pub const CONTRACT_VERSION: u32 = 1;
 
 /// The four completion notices named in spec 5.5.
 ///
-/// The wire form matches `NOTIFICATION_CATEGORIES` in
-/// `apps/desktop/src/ipc/contract.ts`.
+/// The wire form is the `categories` enumeration of
+/// `schemas/commands/v1/set_notification_settings.request.schema.json`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NotificationCategory {
@@ -318,8 +318,11 @@ mod tests {
         assert_eq!(PACKAGE_NAME, env!("CARGO_PKG_NAME"));
     }
 
+    /// The names are the ones `set_notification_settings.request.schema.json`
+    /// enumerates; they were also the TypeScript contract's until the EPIC O
+    /// cutover (ADR-0024) made the schema the only published copy.
     #[test]
-    fn categories_use_the_typescript_wire_names() {
+    fn categories_use_the_published_wire_names() {
         let wire: Vec<String> = NotificationCategory::ALL
             .iter()
             .map(|category| {

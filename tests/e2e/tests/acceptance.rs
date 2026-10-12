@@ -6,8 +6,8 @@
 //! test here: the registry entry would still claim it is implemented and the
 //! registry self-test below would fail.
 
-use plaudon_desktop::commands::{import, jobs, library, settings, transcript};
-use plaudon_desktop::dto::{
+use plaudon_app::commands::{import, jobs, library, settings, transcript};
+use plaudon_app::dto::{
     DuplicatePolicy, ExportFormat, ExportRecordingRequest, GetTranscriptRequest,
     ImportFilesRequest, ImportOutcome, JobState, ListActivityRequest, ListJobsRequest,
     ListRecordingsRequest, RecordingFilter, RecordingSort, RecordingSortField,
@@ -338,9 +338,13 @@ async fn scenario_24_denied_os_notice_still_records_activity() {
 }
 
 /// Harness self-test: the registry is complete and every scenario it claims is
-/// implemented in this crate has a test function with the matching name.
+/// implemented resolves to a test function that actually exists — a `rust`
+/// claim to a function in this file, a `kittest` claim to one in the egui
+/// shell's own `egui_kittest` suites. Before the EPIC O cutover (ADR-0024)
+/// the second kind was a `playwright` spec file under `apps/desktop/e2e`;
+/// that runner, and the directory, no longer exist.
 #[test]
-fn the_registry_is_complete_and_its_rust_claims_resolve_to_tests() {
+fn the_registry_is_complete_and_its_claims_resolve_to_tests() {
     let root = plaudon_e2e::repo_root();
     let registry =
         scenarios::load(&root.join("tests/e2e/scenarios.toml")).expect("the registry loads");
@@ -348,16 +352,27 @@ fn the_registry_is_complete_and_its_rust_claims_resolve_to_tests() {
     assert!(errors.is_empty(), "{errors:?}");
 
     let this_file = include_str!("acceptance.rs");
+    let kittest_dir = root.join("apps/plaudon-egui/tests");
+    let kittest_sources: String = std::fs::read_dir(&kittest_dir)
+        .expect("the egui shell's test directory is readable")
+        .filter_map(Result::ok)
+        .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "rs"))
+        .filter_map(|entry| std::fs::read_to_string(entry.path()).ok())
+        .collect();
+
     for entry in &registry.scenarios {
         let scenarios::ScenarioStatus::Implemented { harness, test } = &entry.status else {
             continue;
         };
-        if harness != "rust" {
-            continue;
-        }
+        let (haystack, where_) = match harness.as_str() {
+            "rust" => (this_file, "tests/e2e/tests/acceptance.rs"),
+            "kittest" => (kittest_sources.as_str(), "apps/plaudon-egui/tests"),
+            // `gate` claims name a pipeline step, not a test function.
+            _ => continue,
+        };
         assert!(
-            this_file.contains(test.as_str()),
-            "scenario {} claims rust test `{test}`, which does not exist",
+            haystack.contains(test.as_str()),
+            "scenario {} claims {harness} test `{test}`, which is not in {where_}",
             entry.number
         );
     }

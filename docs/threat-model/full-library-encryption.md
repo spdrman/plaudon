@@ -33,7 +33,7 @@ While the application is running and the library is unlocked, **any process runn
 
 - The application holds decrypted data in memory (transcript text, audio buffers, database rows).
 - A malicious process can attach a debugger, use `ptrace` (Linux/macOS), read `/proc/[pid]/mem` (Linux), or call `ReadProcessMemory` (Windows) to scrape memory.
-- A malicious Tauri plugin, compromised WebView renderer, or malicious browser extension with access to the Tauri IPC can read any exposed command response.
+- A compromised dependency linked into the process — the application is one native binary since the egui cutover (ADR-0024), so a malicious crate in the graph runs with the application's own authority — can read any command response or key the process holds.
 - A keylogger or screen recorder running as the user can capture plaintext displayed on screen.
 
 **Conclusion:** Application-level encryption does not defend against malware in the user session. A compromised user account can read decrypted data.
@@ -46,9 +46,9 @@ While the application is running and the library is unlocked, **any process runn
 
 **Conclusion:** Encryption protects data at rest, not data in use. An attacker with debug/memory-read access while the app is unlocked can read plaintext.
 
-### 3. A Tauri or WebView compromise
+### 3. A compromise of the application process itself
 
-- If the Tauri shell, Rust backend, or WebView renderer is compromised (via a vulnerability, malicious plugin, or supply-chain attack), the attacker can invoke any Tauri command, read any exposed data, or extract keys from memory.
+- If the application binary or any crate linked into it is compromised (a vulnerability, a supply-chain attack, a tampered build), the attacker can dispatch any command, read any data the process can reach, or extract keys from memory. This section used to name a Tauri plugin and a WebView renderer; those are gone with the webview, and the remaining surface is one Rust process.
 - Encryption does not sandbox the application's own code; it protects against external offline access, not internal compromise.
 
 **Conclusion:** Full-library encryption does not defend against a compromise of the application itself.
@@ -131,7 +131,7 @@ Even with full-library encryption enabled, while the application is running and 
 - Any process running as the user can read memory.
 - Any privileged process (root, admin) can attach a debugger or read memory.
 - Any screen recording or keylogger can capture displayed content.
-- Any malicious Tauri command or WebView script can invoke application functions.
+- Any code running inside the application process — including a compromised dependency — can dispatch a command and read its response.
 - Any OS-level backup or snapshot captures the library in whatever state it is in (unlocked keys in keychain, temp files on disk).
 
 Encryption protects data **at rest** (disk powered off, device stolen, backup copied to unencrypted media). It does not protect data **in use** (app running, user logged in, session active).
@@ -148,7 +148,7 @@ Encryption protects data **at rest** (disk powered off, device stolen, backup co
 | Backup copied to unencrypted media | ✗ | ✓ | Or use encrypted portable archive (§13.8) |
 | Malware in user session | ✗ | ✗ | Neither protects; OS-level security required |
 | Memory scraping / debugger | ✗ | ✗ | Data in use is not encrypted |
-| Compromised Tauri/WebView | ✗ | ✗ | Internal compromise bypasses encryption |
+| Compromised application process | ✗ | ✗ | Internal compromise bypasses encryption |
 | Cloud exfiltration after consent | ✗ | ✗ | Controlled by Local-only Mode, not encryption |
 | Lost password | N/A | ⚠ | Unrecoverable; library permanently inaccessible |
 

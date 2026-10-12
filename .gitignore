@@ -1,5 +1,4 @@
 target/
-node_modules/
 *.part
 .DS_Store
 native/apple-bridge/build/
@@ -7,20 +6,9 @@ native/apple-bridge/build/
 # Local STT model fixtures are seeded by scripts/fetch-stt-fixtures.sh
 tests/fixtures/stt/models/
 
-# Desktop UI build and test output
-apps/desktop/dist/
-apps/desktop/src-tauri/gen/
-apps/desktop/test-results/
-apps/desktop/playwright-report/
+# Opt-in hardware-suite records (tests/hardware writes them here; the release
+# evidence bundle collects them).
 target/hardware-evidence/
-
-# `tsc` emitted next to the sources once and the output shadowed every module,
-# because Vite resolves .js before .ts. Never commit compiled output again.
-apps/desktop/src/**/*.js
-apps/desktop/e2e/**/*.js
-apps/desktop/*.config.js
-apps/desktop/vitest.setup.js
-apps/desktop/*.tsbuildinfo
 
 # Release and CI working artifacts
 ci-artifacts/

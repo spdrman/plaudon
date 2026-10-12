@@ -503,21 +503,45 @@ fn progress_update(
 }
 
 #[cfg(feature = "hardware-scan")]
-pub use hardware::BtleplugFactory;
+pub use hardware::{host_bluetooth, BtleplugFactory};
 
 /// The `btleplug` factory. Compiled only with the `hardware-scan` feature, so
 /// the default build and CI never contain or touch a Bluetooth stack.
 #[cfg(feature = "hardware-scan")]
 mod hardware {
+    use std::sync::Arc;
+
     use btleplug::api::{Central, Manager as _, Peripheral as _};
     use btleplug::platform::{Manager, Peripheral};
+    use plaudon_persistence::archive::MediaArchive;
+    use plaudon_persistence::db::Database;
+    use plaudon_persistence::device::DeviceRepository;
+    use plaudon_persistence::journal::ImportJournal;
     use plaudon_plaud_ble::discovery::DiscoveryPolicy;
     use plaudon_plaud_ble::hardware::RadioTransport;
+    use plaudon_source_plaud_device::DeviceImportCommitter;
 
     use super::{
-        async_trait, fmt, AppError, AppErrorCode, Duration, GattTransport, ObservedAdvertisement,
-        ProtocolProfile, RadioAvailability, TransportFactory,
+        async_trait, fmt, ActorRadio, AppError, AppErrorCode, DeviceRadio, Duration, GattTransport,
+        ObservedAdvertisement, ProtocolProfile, RadioAvailability, TransportFactory,
     };
+
+    /// The radio a `hardware-scan` build runs with: the host's own Bluetooth
+    /// adapter, committing what it transfers into `db` and `archive`.
+    ///
+    /// Built here rather than by the binary because the committer needs the
+    /// open library, which only [`crate::build_ports_with`] holds. Nothing is
+    /// opened, scanned or connected by this call: the adapter is touched for
+    /// the first time when a user asks for a scan or a transfer, so a
+    /// `hardware-scan` build that is merely started still touches no radio.
+    #[must_use]
+    pub fn host_bluetooth(db: &Database, archive: &MediaArchive) -> Arc<dyn DeviceRadio> {
+        let committer = DeviceImportCommitter::new(
+            ImportJournal::new(db.clone(), archive.clone()),
+            DeviceRepository::new(db.clone()),
+        );
+        Arc::new(ActorRadio::new(BtleplugFactory, committer))
+    }
 
     /// Scans and connects through the host's Bluetooth adapter.
     #[derive(Debug, Default, Clone, Copy)]

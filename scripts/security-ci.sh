@@ -52,19 +52,12 @@ step "secret and signed-URL scanner (§1.5, §18.5)" \
 step "network-deny egress fixture (§16.2A, §22.15)" \
     ./scripts/egress-deny-test.sh
 
-# 5. §6.3A / §2.4: the Tauri command surface and capability set must match the
-#    checked-in allowlist. Passing --allow-missing-app keeps this green on
-#    branches where apps/desktop/src-tauri has not landed; it still audits the
-#    manifest and says plainly that the app itself was not verified.
-step "Tauri least-privilege audit (§6.3A, §2.4)" \
-    ./scripts/audit-tauri.sh --allow-missing-app
-
-# 6. §18.5 / §16.2: the fuzz targets must build and the committed crash and
+# 5. §18.5 / §16.2: the fuzz targets must build and the committed crash and
 #    hostile-input corpora must replay cleanly, on a stable toolchain.
 step "fuzz corpus replay and sanitizer pass (§18.5)" \
     ./scripts/fuzz-ci.sh
 
-# 7. §16.2 / §22.8: every threat row maps to an owned control and a named test,
+# 6. §16.2 / §22.8: every threat row maps to an owned control and a named test,
 #    or to an explicit open finding.
 step "threat-model traceability (§16.2, §22.8)" \
     python3 scripts/check-threat-model.py

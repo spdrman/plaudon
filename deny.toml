@@ -34,11 +34,42 @@ allow = [
     # own and reserves the font names, which we do not do and do not rename.
     "OFL-1.1",
     "Ubuntu-font-1.0",
+    # `webpki-roots`, reached through `reqwest`'s rustls stack. The crate is
+    # the Mozilla CA root store repackaged; CDLA-Permissive-2.0 is the
+    # Linux Foundation's permissive *data* licence. Reviewed for EPIC O task
+    # O2.5: it permits redistribution of the data in any form with no
+    # obligation beyond not misrepresenting its provenance, imposes nothing on
+    # the code that reads it, and has no copyleft or patent-termination term.
+    # It reaches our binary as bytes, not as source.
+    "CDLA-Permissive-2.0",
+    # `borrow-or-share`, a two-type utility crate reached through
+    # `fluent-uri` -> `jsonschema`. MIT-0 is the MIT licence with the
+    # attribution clause removed, so it is strictly weaker than MIT, which is
+    # already allowed. Nothing is required of us; the row exists so the
+    # allow-list stays an explicit review record rather than a pattern match.
+    "MIT-0",
+]
+
+[advisories]
+ignore = [
+    # RUSTSEC-2024-0384: `instant` is unmaintained. It arrives only through
+    # `notify 7` -> `notify-types`, and no upgrade of `notify` drops it (the
+    # advisory itself records "no safe upgrade is available"). `instant` is a
+    # monotonic-clock shim with no network, no parsing and no unsafe beyond
+    # the platform clock call, and on our targets it compiles to
+    # `std::time::Instant`. Reviewed for EPIC O task O2.5; revisit when
+    # `notify` releases a `web-time` build.
+    "RUSTSEC-2024-0384",
 ]
 
 [bans]
 multiple-versions = "warn"
 wildcards = "deny"
+# Our own crates depend on each other through `[workspace.dependencies]` path
+# entries, which carry no version and therefore read as wildcards. A path
+# dependency inside this repository is not a supply-chain surface: it is the
+# repository. Registry wildcards stay denied.
+allow-wildcard-paths = true
 # Never link a GPL/AGPL implementation into the shipped binary (ADR-0009).
 deny = []
 

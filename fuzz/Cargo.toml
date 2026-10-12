@@ -70,13 +70,6 @@ doc = false
 bench = false
 
 [[bin]]
-name = "fuzz_allowlist_manifest"
-path = "fuzz_targets/fuzz_allowlist_manifest.rs"
-test = false
-doc = false
-bench = false
-
-[[bin]]
 name = "fuzz_redactor"
 path = "fuzz_targets/fuzz_redactor.rs"
 test = false

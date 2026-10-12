@@ -1,6 +1,6 @@
 # ADR-0020: Desktop command surface and the two additions to the §15.2 table
 
-- **Status:** accepted
+- **Status:** accepted; amended 2026-10-12 — the decision stands, the transport is no longer Tauri IPC
 - **Date:** 2026-10-11
 - **Deciders:** EPIC E (desktop shell)
 - **Spec:** §15.1–§15.4, §5.5, §22(13)
@@ -113,3 +113,51 @@ command and still not express the one-shot nature of an activation.
 - If a future revision of the specification adds activity and onboarding
   commands with different names, this ADR is superseded and the names change in
   one place.
+
+## Amendment, 2026-10-12: the same surface, without an IPC boundary
+
+The EPIC O cutover (#209, [ADR-0024](ADR-0024-delete-the-tauri-react-stack-at-the-egui-cutover.md))
+deleted the Tauri shell, so every sentence above that describes *how* a command
+travels is out of date. Nothing above that describes *what* the surface is, or
+why it is narrow, has changed — which is the point of recording it separately.
+
+**The transport.** A command is a `plaudon_app::command::AppCommand` value and
+its answer is an `AppResponse`. `Dispatcher::send` takes the command, hands the
+work to the Tokio runtime and returns a `CommandId` immediately; the outcome
+arrives as `AppEvent::Response` on the `plaudon_app::event` channel, which
+wakes the interface through an injected `Waker` (`egui::Context::request_repaint`
+in the shipped binary, a counting one in tests, `NoopWaker` headless). A render
+loop cannot await, and this is how it does not have to.
+
+**The allowlist is now a generated table, which is stronger than an audited
+one.** `COMMAND_NAMES`, the `AppCommand`/`AppResponse` enums and the dispatch
+arms are all expanded from a single macro table in `crates/app/src/command.rs`,
+so a command cannot be registered in one place and forgotten in another, and
+the generic-execution pattern test (`^exec`, `^run_`, `^shell`, `^http_`,
+`^read_file$`, `^write_file$`) runs against that table rather than against a
+`tauri::generate_handler!` list. The surface is 78 published names, each
+appearing exactly once: the Tauri allowlist listed the six archive commands
+twice, and the duplication was not carried forward.
+
+**Events.** The §15.3 events, including `ui.activation_requested`, are
+`AppEvent::Ui` values on the same bounded, coalescing channel. The rule they
+were written under is unchanged and is now enforced by the channel itself: an
+event says what changed and never carries the state, so a second event with the
+same kind and subject supersedes the first, and an overflow becomes one
+`ResyncReason::Overflow` that makes the interface refetch everything.
+
+**Media playback.** The `plaudon-media` URI scheme is gone with the webview it
+existed for; a native player opens a file. The published command
+`resolve_media` turns a recording id into a `MediaLocation` through the same
+`LibraryPort::resolve_media` the scheme used, so an unknown, deleted or
+blob-less recording is still an error and never a path guess. The view layer
+still never supplies a path.
+
+**What this amendment does not change.** The two additions this record exists
+to justify — `list_activity` and `complete_onboarding` — are unchanged, as are
+EPIC K's nine source and connector commands and the three properties asserted
+of them. The consequence paragraph that named `apps/desktop/src/ipc/contract.ts`
+now has one side instead of two: the versioned JSON schemas under
+`schemas/commands/v1/` are the published artifact, and
+`every_published_name_has_a_request_schema` is what keeps them and the Rust
+table in step.

@@ -533,7 +533,8 @@ mod tests {
     fn an_oversized_file_is_refused_rather_than_read() {
         let dir = tempfile::tempdir().expect("temporary directory");
         let store = ShellStateStore::new(dir.path());
-        let filler = "x".repeat(usize::try_from(MAX_SHELL_STATE_BYTES).expect("fits") as usize + 1);
+        let limit = usize::try_from(MAX_SHELL_STATE_BYTES).expect("the limit fits a usize");
+        let filler = "x".repeat(limit + 1);
         std::fs::write(store.path(), filler).expect("write");
         assert_eq!(store.load(), ShellState::default());
     }

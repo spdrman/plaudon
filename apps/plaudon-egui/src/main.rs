@@ -42,7 +42,11 @@ fn main() -> ExitCode {
     let store = ShellStateStore::new(config.data_dir());
     let state = store.load();
 
-    let engine = match AppEngine::start(config) {
+    // Matrix row D12: what this build can actually talk to. With
+    // `hardware-scan` the engine gets the host's Bluetooth adapter; without
+    // it the engine keeps `NoRadio` and the device screen says the build
+    // cannot scan, which is true.
+    let engine = match AppEngine::start(plaudon_egui::with_build_hardware(config)) {
         Ok(engine) => engine,
         Err(error) => {
             tracing::error!(

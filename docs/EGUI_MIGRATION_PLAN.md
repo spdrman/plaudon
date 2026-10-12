@@ -516,6 +516,23 @@ after the O2.7 integration), read out of the code rather than inferred from a ta
 `done as designed` means the row will not be built and says why. A row that says `done` with a
 trailing clause names the task that completed it.
 
+**Re-audited at the cutover (O2.5, #209, 2026-10-12).** Every one of the 126 rows was read against
+the tree again before `apps/desktop` was deleted. The sweep is recorded in
+`docs/EGUI_MIGRATION_REPORT.md`; what it changed here:
+
+* **D18** said `done`. `WatchedFolderPump::start` existed but had no caller outside its own unit
+  tests, so no timer ran in the shipped binary. Wired at the cutover; the row now names the owner
+  and the test.
+* **J12** said `done`. `activity::unread()` existed and nothing in the shell drew a bell. Built at
+  the cutover.
+* **D12** said `partial` for the right reason but understated the gap: `EngineConfig::with_radio`
+  had no caller, so even a `--features hardware-scan` build ran `NoRadio`. Wired at the cutover;
+  the row stays short of `done` because no radio has been exercised here.
+* The **Crate / module** column records where each row was *planned* to live during O1.1. Several
+  landed elsewhere and the column was not kept in step; it is a planning record, not a map of the
+  tree. The real locations are listed in `docs/EGUI_ARCHITECTURE.md` and in the cutover report's
+  module-location table.
+
 ### 4.1 Application shell
 
 | # | Feature today | Source of truth | egui replacement | Crate / module | Reuse | Issue | Status |
@@ -573,7 +590,7 @@ trailing clause names the task that completed it.
 | P5 | Scrubber as a slider with `aria-valuetext`; arrows ±5 s, PageUp/Down ∓30 s, Home, End; pointer-ratio seek | `AudioPlayer.tsx` | an egui slider reporting the same value text | `plaudon-ui::player::scrubber` | R | O1.5 | done |
 | P6 | Unknown duration → no slider, "Duration unknown", skips disabled | `playerState.ts` | identical | same | R | O1.5 | done |
 | P7 | Keyboard Space / J / K / L / `,` / `.`, suppressed in text entry and dialogs | `usePlayerShortcuts` | same, through the central command map | `plaudon-ui::shell::shortcuts` | R | O1.5 | done |
-| P8 | Position/duration as text, `h:mm:ss` dropping hours below one hour | `playerState.ts` | ported formatter + its 13 unit tests | `plaudon-ui::format` | R | O1.5 | done |
+| P8 | Position/duration as text, `h:mm:ss` dropping hours below one hour | `playerState.ts` | ported formatter | `plaudon-audio-playback::ruler::format_clock` | R | O1.5 | done — the O1.1 plan said "its 13 unit tests"; the formatter landed as one function in `crates/audio-playback/src/ruler.rs` and the file carries 5 tests, which cover the same cases the 13 vitest assertions did (zero, sub-hour, hour boundary, negative) rather than one test per assertion |
 | P9 | Waveform: ≤2,000 absolute-peak buckets decoded in the webview | `usePeaks` | **multiresolution peaks built in Rust in the background**, cached, progressive, cancellable | `plaudon-audio::peaks` (new) | **N** | O1.5 | done |
 | P10 | Waveform canvas, played/remaining colouring | `useWaveformCanvas` | one `egui::Mesh` of 1-px columns | `plaudon-ui::player::waveform` | **N** | O1.5 | done |
 | P11 | Timeline ruler, zoom, scroll — *not present* | — | integer-time timeline model with ruler ticks and anchored zoom | `plaudon-ui::player::timeline` | **N** | O1.5 | done |
@@ -600,7 +617,7 @@ trailing clause names the task that completed it.
 | T11 | Copy passage as `[m:ss] text` | `formatPassage` | same | same | R | O2.1 | done |
 | T12 | Speaker reassignment — *orphaned component, not mounted* | `list_speakers`, `rename_speaker`, `confirm_speaker`, `reset_speaker` | mount it: per-segment speaker picker + a speaker panel | `plaudon-ui::screens::speakers` | R (mount) | O2.1 | done for speaker identity, honestly short of per-segment reassignment — O2.8 mounted `rename_speaker`/`confirm_speaker`/`reset_speaker` end to end: the UI refuses what the command would refuse (empty name, 120-character limit, nothing to confirm, nothing to reset), the `SpeakerOperationResponse` patches the speaker panel *and* every transcript chip in the same frame, and a refusal surfaces with its message and diagnostic id. The qualifier is one rule in one place — the new `plaudon_domain::speaker::display`, which `plaudon-export` now delegates to — so a transcript row, the speaker panel and an exported bundle all read `{name} (confirmed)` or `{label} (inferred cluster)`, and a renamed-but-unconfirmed speaker is still an inferred cluster. Fixing the row also uncovered that **no rename or confirmation had ever been persisted**: the backend bound `renamed_at`/`confirmed_at` as RFC-3339 TEXT into the INTEGER columns of a STRICT table (migration `0400`), so every write failed; `list_speakers` also read the nullable `original_label` as a `String` and `ensure_speakers` never wrote it. All three are fixed and pinned by a `plaudon-app` test against a real SQLite library. `SpeakerDto` gained `name` (schemas and the TypeScript contract updated). **Still missing on the wire:** nothing can persist a segment→speaker assignment — `SegmentEdit` is `{index, text}` and `TranscriptSegmentDto` carries only `speaker_label` — so the per-segment picker, which silently discarded every reassignment it appeared to make, was removed rather than faked: the chip is a read-only label pointing at the speaker panel. Speaker identity is editable per cluster only until a command and a DTO field for per-segment assignment exist |
 | T13 | Autosave — *not present* | — | debounced autosave of drafts | same | **N** | O2.1 | done — autosave fires on the session debounce and is flushed on navigation and on window close |
-| T14 | 3-hour transcript performance | 100k-segment vitest case | same scale target under kittest | same | R | O2.1 | done |
+| T14 | 3-hour transcript performance | 100k-segment vitest case | same scale target under kittest | same | R | O2.1 | done at a corrected scale — `crates/ui/tests/transcript_editor.rs:430,577` and `plaudon-transcript-doc`'s `synthetic_transcript` use **30,000** segments, which is what three hours of speech is at the segment rate this pipeline produces; the React case's 100,000 was three hours at a rate nothing in this product emits. The budget assertions (viewport-sized working set, frame budget) are unchanged |
 
 ### 4.5 Jobs, activity and notifications
 
@@ -893,32 +910,41 @@ replaces the placeholder. Rows A11 and A12.
 
 ### Cutover checklist (O2.5)
 
-- [ ] Every matrix row is either implemented or explicitly deferred with the user's approval.
-- [ ] `tests/e2e/README.md` and `workspace_layout.rs` `REQUIRED_DIRECTORIES` updated together if
-      `tests/e2e/` is removed.
-- [ ] Root `Cargo.toml` members: `apps/desktop/src-tauri` removed, `apps/plaudon-egui` present.
-- [ ] `docs/licensing/third-party-register.md`: the Tauri 2 row retired, egui/eframe/wgpu/winit/
-      AccessKit/rfd/cpal rows added with licence, redistribution, attribution and decision.
-- [ ] `deny.toml` allow-list reviewed for the egui dependency tree (§11).
-- [ ] ADR superseding ADR-0001 merged, with the accessibility evidence it demands (§11).
-- [ ] ADR-0020 (command surface) amended: no Tauri window, no capability manifest.
-- [ ] `docs/threat-model/trust-boundaries.md` updated: the IPC boundary becomes an in-process one.
-- [ ] `docs/accessibility/manual-screen-reader-script.md` updated to six destinations and egui
-      semantics, and re-run on both platforms.
-- [ ] `crates/persistence/src/migrations.rs:74` ownership comment re-pointed.
-- [ ] `crates/notifications` doc reference to `apps/desktop/src/ipc/contract.ts` removed, and the
-      two `*_typescript_wire_*` tests renamed to describe the schema they really pin.
-- [ ] The data directory resolves to the same path as `app_data_dir()` did, proven by the
-      upgrade-with-data test.
+- [x] Every matrix row is either implemented or explicitly deferred with the user's approval. The
+      cutover re-audit closed D18, J12 and D12's wiring; D12 stays short of `done` (no radio has
+      been exercised) and D13 stays `blocked`, both recorded in `docs/EGUI_MIGRATION_REPORT.md`.
+- [x] `tests/e2e/README.md` rewritten and `workspace_layout.rs` `REQUIRED_DIRECTORIES` now names
+      `apps/plaudon-egui`. `tests/e2e/` stays; it is the acceptance harness over `plaudon-app`.
+- [x] Root `Cargo.toml` members: `apps/desktop/src-tauri` removed, `apps/plaudon-egui` present.
+- [x] `docs/licensing/third-party-register.md`: the Tauri 2 row retired; the egui row restated in
+      the past tense; a row added for `tauri-winrt-notification`, which survives on its merits.
+- [x] `deny.toml` reviewed for the egui dependency tree: `CDLA-Permissive-2.0` (webpki-roots) and
+      `MIT-0` (borrow-or-share) allowed with recorded reasons, `RUSTSEC-2024-0384` ignored with a
+      recorded reason, and every workspace member marked `publish = false` so `allow-wildcard-paths`
+      applies to our own path dependencies. `cargo deny check` is clean on all four checks.
+- [x] ADR-0024 supersedes ADR-0001, with the accessibility evidence and the honest gaps.
+- [x] ADR-0020 (command surface) and ADR-0021 (notifications) amended, dated 2026-10-12.
+- [x] `docs/threat-model/trust-boundaries.md` updated: the IPC boundary becomes an in-process one;
+      `traceability.json`, `open-findings.md` and the generated matrix follow.
+- [x] `docs/accessibility/manual-screen-reader-script.md` is now the egui script (the React one was
+      deleted and the egui counterpart moved into its place). **Not** re-run: no VoiceOver or
+      Narrator pass exists, and the document says so in its own words.
+- [x] `crates/persistence/src/migrations.rs` ownership comment re-pointed at `crates/app`.
+- [x] `crates/notifications` no longer references `contract.ts`; the two wire-shape tests are
+      `categories_use_the_published_wire_names` and `settings_serialise_to_the_published_wire_shape`.
+- [x] The data directory resolves to the same path `app_data_dir()` did, proven by
+      `crates/app/tests/data_dir_parity.rs` and by launching the packaged bundle, which reported
+      `~/Library/Application Support/app.plaudon.desktop`.
 
 ---
 
 ## 7. Test strategy
 
-**Decision in force:** all UI, e2e and visual tests move to `egui_kittest`. No new vitest or
-Playwright test may be written. The legacy suites remain a parity oracle until O2.5, then are deleted
-with the frontend. `scripts/e2e-remote.sh` becomes a generic MARS-Docker runner for arbitrary
-`cargo test` commands (software wgpu, snapshots copied back) in addition to its legacy Playwright mode.
+**Decision in force:** all UI, e2e and visual tests are `egui_kittest`. The vitest and Playwright
+suites served as the parity oracle until O2.5 and were deleted with the frontend on 2026-10-12
+(ADR-0024); no JavaScript or browser-driver runner exists in this repository any more.
+`scripts/e2e-remote.sh` is now a generic MARS-Docker runner for arbitrary `cargo test` commands
+(software wgpu, snapshots copied back); its Playwright mode went with the suite.
 
 Unchanged and unaffected: `tests/integration`, `tests/chaos`, `tests/egress`, `tests/hardware`,
 `fuzz/`, and the Rust-side `schema_conformance.rs` / `source_schema_conformance.rs` (which keep the

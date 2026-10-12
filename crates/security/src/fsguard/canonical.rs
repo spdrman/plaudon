@@ -3,7 +3,7 @@
 //!
 //! Externally supplied means: a file-dialog selection, a drag-and-drop payload,
 //! a watched-folder event, a path read out of a portable backup, a path echoed
-//! by the PLAUD Cloud CLI, or anything that arrived over the Tauri boundary.
+//! by the PLAUD Cloud CLI, or a path typed into the interface by the user.
 //! None of those may reach `std::fs` directly; they go through
 //! [`canonicalize_and_validate`] and come back as a [`ValidatedPath`], which has
 //! a private field and therefore cannot be forged from an arbitrary `PathBuf`.
