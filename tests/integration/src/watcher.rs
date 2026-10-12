@@ -317,11 +317,8 @@ impl WatcherHarness {
 
         let clock = ManualClock::starting_at(1_700_000_000_000);
         let placeholder = Arc::new(ScriptedPlaceholderProbe::always_local());
-        let barrier = CompletionBarrier::with_probes(
-            policy,
-            placeholder.clone(),
-            Arc::new(OsDiskSpaceProbe),
-        );
+        let barrier =
+            CompletionBarrier::with_probes(policy, placeholder.clone(), Arc::new(OsDiskSpaceProbe));
         let service = WatchedFolderService::with_barrier(
             folder_config(&root, rule, false),
             database.clone(),

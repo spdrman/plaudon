@@ -389,7 +389,9 @@ fn read_ends(path: &Path, size_bytes: u64) -> std::io::Result<Vec<u8>> {
         ));
     }
     let mut file = File::open(path)?;
-    let head_len = usize::try_from(size_bytes).unwrap_or(PROBE_BLOCK_BYTES).min(PROBE_BLOCK_BYTES);
+    let head_len = usize::try_from(size_bytes)
+        .unwrap_or(PROBE_BLOCK_BYTES)
+        .min(PROBE_BLOCK_BYTES);
     let mut head = vec![0_u8; head_len];
     file.read_exact(&mut head)?;
     if head.len() < SNIFF_WINDOW_BYTES && size_bytes > head.len() as u64 {
@@ -399,7 +401,9 @@ fn read_ends(path: &Path, size_bytes: u64) -> std::io::Result<Vec<u8>> {
         ));
     }
 
-    let tail_len = u64::try_from(PROBE_BLOCK_BYTES).unwrap_or(u64::MAX).min(size_bytes);
+    let tail_len = u64::try_from(PROBE_BLOCK_BYTES)
+        .unwrap_or(u64::MAX)
+        .min(size_bytes);
     let offset = size_bytes - tail_len;
     file.seek(SeekFrom::Start(offset))?;
     let mut tail = vec![0_u8; usize::try_from(tail_len).unwrap_or(PROBE_BLOCK_BYTES)];

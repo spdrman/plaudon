@@ -93,12 +93,16 @@ pub fn stable_file_id(path: &Path, _metadata: &Metadata) -> Option<StableFileId>
     // SAFETY: `file` owns a valid handle for the duration of the call and
     // `information` is a live, correctly sized, correctly aligned struct.
     let ok = unsafe {
-        GetFileInformationByHandle(file.as_raw_handle().cast(), std::ptr::addr_of_mut!(information))
+        GetFileInformationByHandle(
+            file.as_raw_handle().cast(),
+            std::ptr::addr_of_mut!(information),
+        )
     };
     if ok == 0 {
         return None;
     }
-    let index = (u64::from(information.file_index_high) << 32) | u64::from(information.file_index_low);
+    let index =
+        (u64::from(information.file_index_high) << 32) | u64::from(information.file_index_low);
     Some(StableFileId(format!(
         "{}:{index}",
         information.volume_serial_number

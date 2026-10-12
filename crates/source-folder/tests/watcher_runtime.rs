@@ -12,7 +12,9 @@ use std::io::Write;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-use plaudon_source_folder::barrier::{BarrierOutcome, BarrierPolicy, CompletionBarrier, DeferReason};
+use plaudon_source_folder::barrier::{
+    BarrierOutcome, BarrierPolicy, CompletionBarrier, DeferReason,
+};
 use plaudon_source_folder::clock::{Clock, ManualClock};
 use plaudon_source_folder::config::{FolderRule, WatchedFolderConfig};
 use plaudon_source_folder::queue::CoalescingQueue;

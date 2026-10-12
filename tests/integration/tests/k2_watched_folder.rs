@@ -16,8 +16,8 @@ use std::sync::Arc;
 
 use plaudon_domain::media::Sha256Digest;
 use plaudon_integration_tests::watcher::{
-    append_file, assert_tree_unchanged, read_file, snapshot_tree, wav_bytes, write_by_atomic_rename,
-    write_file, SourceSnapshot, WatcherHarness, QUIESCENCE_MS,
+    append_file, assert_tree_unchanged, read_file, snapshot_tree, wav_bytes,
+    write_by_atomic_rename, write_file, SourceSnapshot, WatcherHarness, QUIESCENCE_MS,
 };
 use plaudon_security::consent::{
     ConsentGrant, ConsentPurpose, ContentType, DispatchRequest, GrantScope, ProviderRoute,
@@ -801,7 +801,10 @@ async fn the_inventory_sweep_respects_its_entry_cap() {
     let dir = tempfile::tempdir().expect("tempdir");
     let harness = WatcherHarness::open(dir.path(), FolderRule::ImportOnly).await;
     for index in 0..12 {
-        write_file(&harness.path(&format!("many-{index}.wav")), &wav_bytes(1, 64));
+        write_file(
+            &harness.path(&format!("many-{index}.wav")),
+            &wav_bytes(1, 64),
+        );
     }
     let queue = CoalescingQueue::new(QUIESCENCE_MS, 64);
     let mut capped = harness.service.config().clone();
@@ -809,19 +812,15 @@ async fn the_inventory_sweep_respects_its_entry_cap() {
         max_entries: 4,
         ..*harness.service.config().caps()
     });
-    let report = plaudon_source_folder::inventory::sweep(
-        &capped,
-        &queue,
-        &BTreeSet::new(),
-        &harness.clock,
-    );
+    let report =
+        plaudon_source_folder::inventory::sweep(&capped, &queue, &BTreeSet::new(), &harness.clock);
     assert!(report.truncated_by_entries, "{report:?}");
     assert!(report.scanned <= 4, "{report:?}");
     assert!(
         !report.is_complete(),
         "a truncated sweep may not conclude anything vanished"
     );
-    assert!(report.vanished.is_empty());
+    assert_eq!(report.vanished, Vec::<PathBuf>::new());
 }
 
 #[tokio::test]
@@ -863,9 +862,10 @@ async fn the_whole_source_tree_is_byte_identical_after_a_full_sync() {
         let source_digest = Sha256Digest::of(&read_file(path)).to_hex();
         let blobs = harness.archive.list_blobs().expect("blobs");
         assert!(
-            blobs.iter().any(|(relative, _)| relative.contains(
-                &source_digest[..2]
-            ) && relative.contains(&source_digest)),
+            blobs
+                .iter()
+                .any(|(relative, _)| relative.contains(&source_digest[..2])
+                    && relative.contains(&source_digest)),
             "archive is missing {source_digest}"
         );
     }
@@ -1005,8 +1005,8 @@ async fn the_barrier_reports_every_check_it_applies() {
 #[tokio::test]
 async fn the_fixtures_detect_a_barrier_with_its_quiescence_gate_removed() {
     let dir = tempfile::tempdir().expect("tempdir");
-    let weakened = BarrierPolicy::strict(QUIESCENCE_MS, 2, 8 * 1024 * 1024 * 1024, 1024)
-        .skipping_quiescence();
+    let weakened =
+        BarrierPolicy::strict(QUIESCENCE_MS, 2, 8 * 1024 * 1024 * 1024, 1024).skipping_quiescence();
     assert!(!weakened.enforces_quiescence());
 
     let harness =

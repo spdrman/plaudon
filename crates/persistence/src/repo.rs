@@ -688,7 +688,10 @@ impl SourceRepository {
     /// Every association belonging to one configured source, in insertion
     /// order. Used by a reconciliation pass to find items the listing no
     /// longer mentions (spec 7.5 "removed from listing").
-    pub async fn list_items(&self, source_id: SourceId) -> PersistenceResult<Vec<SourceAssociation>> {
+    pub async fn list_items(
+        &self,
+        source_id: SourceId,
+    ) -> PersistenceResult<Vec<SourceAssociation>> {
         let rows = sqlx::query(
             "SELECT si.id, si.source_id, si.external_id, si.recording_id, si.import_status,
                     si.last_seen_at, si.remote_version, si.remote_state, si.tombstone_reason,
@@ -1381,7 +1384,10 @@ impl WatchedFolderRepository {
     }
 
     /// Look a folder up by its canonical root.
-    pub async fn find_folder(&self, root_path: &str) -> PersistenceResult<Option<WatchedFolderRow>> {
+    pub async fn find_folder(
+        &self,
+        root_path: &str,
+    ) -> PersistenceResult<Option<WatchedFolderRow>> {
         let row = sqlx::query(
             "SELECT id, root_path, recursive, rule, quiescence_ms, status, last_inventory_at,
                     created_at

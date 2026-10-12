@@ -30,7 +30,9 @@ use plaudon_domain::transcript::{RevisionOrigin, RevisionStatus};
 use plaudon_integration_tests::watcher::wav_bytes;
 use plaudon_persistence::archive::MediaArchive;
 use plaudon_persistence::migrations::MigrationRunner;
-use plaudon_persistence::repo::{AcquisitionState, SourceRepository, TranscriptProvenanceRepository};
+use plaudon_persistence::repo::{
+    AcquisitionState, SourceRepository, TranscriptProvenanceRepository,
+};
 use plaudon_persistence::transcript::{RevisionContext, TranscriptRepository};
 use plaudon_persistence::Database;
 
@@ -374,12 +376,7 @@ async fn a2_changed_version_with_changed_bytes_appends_a_media_revision() {
         .await
         .expect("recording");
     assert_eq!(recording.preferred_media_asset_id(), Some(original_asset));
-    assert!(library
-        .imports
-        .assets()
-        .get(original_asset)
-        .await
-        .is_ok());
+    assert!(library.imports.assets().get(original_asset).await.is_ok());
 }
 
 // ------------------------- App. A.2: same bytes from a different source ----
@@ -467,7 +464,10 @@ async fn a2_remotely_trashed_marks_remote_state_and_retains_everything() {
     assert!(!association.remote_state.grants_local_deletion());
     assert_eq!(library.count("recordings").await, 1);
     assert_eq!(library.count("media_assets").await, 1);
-    assert_eq!(library.archive.list_blobs().expect("blobs").len(), blobs_before);
+    assert_eq!(
+        library.archive.list_blobs().expect("blobs").len(),
+        blobs_before
+    );
 }
 
 #[tokio::test]
@@ -526,7 +526,12 @@ async fn a_remote_trash_followed_by_a_restore_round_trips_without_data_loss() {
         .await
         .expect("trash");
     assert_eq!(
-        library.sources().get_item(item).await.expect("row").remote_state,
+        library
+            .sources()
+            .get_item(item)
+            .await
+            .expect("row")
+            .remote_state,
         RemoteState::Trashed
     );
 
@@ -556,23 +561,26 @@ async fn a2_a_local_tombstone_outranks_every_source_state() {
 
     let deletion = library
         .reconcile
-        .record_local_deletion(&identity, "user deleted the meeting", Timestamp::from_millis(20))
+        .record_local_deletion(
+            &identity,
+            "user deleted the meeting",
+            Timestamp::from_millis(20),
+        )
         .await
         .expect("tombstone");
     assert_eq!(deletion.event, SourceEvent::LocallyDeleted);
-    assert!(deletion.actions.iter().any(|action| matches!(
-        action,
-        ReconcileAction::PersistTombstone { .. }
-    )));
+    assert!(deletion
+        .actions
+        .iter()
+        .any(|action| matches!(action, ReconcileAction::PersistTombstone { .. })));
 
     // The source still lists it, in perfect health. It stays deleted.
     let decisions = library
         .reconcile
         .reconcile_listing(
             source_id,
-            &[observed(&identity, "v2").with_observed_content(
-                Sha256Digest::of(&wav_bytes(9, 900)).to_hex(),
-            )],
+            &[observed(&identity, "v2")
+                .with_observed_content(Sha256Digest::of(&wav_bytes(9, 900)).to_hex())],
             Timestamp::from_millis(30),
         )
         .await
@@ -681,8 +689,7 @@ fn a2_a_folder_file_still_changing_defers_without_any_dispatch() {
         SourceAccountScope::new("/tmp/watched"),
         None,
     );
-    let decision =
-        classify_folder_candidate(&identity, FolderCandidateState::StillChanging, 2_000);
+    let decision = classify_folder_candidate(&identity, FolderCandidateState::StillChanging, 2_000);
     assert_eq!(decision.event, SourceEvent::FolderFileStillChanging);
     assert_eq!(
         decision.actions,
@@ -780,7 +787,9 @@ async fn the_production_default_refuses_vendor_imports_with_a_stated_reason() {
             assert_eq!(refusal, VendorImportRefusal::CapabilityNotVerified);
             assert!(refusal.reason().contains("official export path"));
         }
-        other => panic!("the default build must refuse: {other:?}"),
+        imported @ VendorImportOutcome::Imported { .. } => {
+            panic!("the default build must refuse: {imported:?}")
+        }
     }
     assert_eq!(library.count("transcript_revisions").await, 0);
     // The observation is still recorded, so the UI can explain itself.
@@ -921,7 +930,10 @@ async fn import_vendor_only_creates_a_labelled_revision_and_charges_nothing() {
     // The original bytes stay attributable.
     let artifacts = importer.artifacts_for(item).await.expect("artifacts");
     assert_eq!(artifacts.len(), 1);
-    assert_eq!(artifacts[0].artifact_kind, VendorArtifactKind::Transcript.as_str());
+    assert_eq!(
+        artifacts[0].artifact_kind,
+        VendorArtifactKind::Transcript.as_str()
+    );
     assert_eq!(
         artifacts[0].content_sha256,
         Sha256Digest::of(body.as_bytes()).to_hex()
@@ -1048,11 +1060,10 @@ async fn a2_re_transcription_creates_a_new_revision_and_old_outputs_keep_their_i
     let second = insert_machine_revision(&library, recording_id, "second pass").await;
     assert_ne!(first, second);
 
-    let cited: String =
-        sqlx::query_scalar("SELECT transcript_revision_id FROM ai_outputs LIMIT 1")
-            .fetch_one(library.database.pool())
-            .await
-            .expect("output");
+    let cited: String = sqlx::query_scalar("SELECT transcript_revision_id FROM ai_outputs LIMIT 1")
+        .fetch_one(library.database.pool())
+        .await
+        .expect("output");
     assert_eq!(
         cited,
         first.to_string(),

@@ -219,8 +219,7 @@ impl MetricsRegistry {
             source_preservation_checks: self.count(WatcherMetric::SourcePreservationChecks),
             source_preservation_failures: self.count(WatcherMetric::SourcePreservationFailures),
             changes_missed: self.count(WatcherMetric::ChangesMissedByWatcher),
-            changes_recovered_by_inventory: self
-                .count(WatcherMetric::ChangesRecoveredByInventory),
+            changes_recovered_by_inventory: self.count(WatcherMetric::ChangesRecoveredByInventory),
         }
     }
 
@@ -241,7 +240,9 @@ mod tests {
         assert_eq!(registry.series(WatcherMetric::ImportLatencyMs).mean(), None);
         assert_eq!(registry.watcher_snapshot().coalescing_ratio(), None);
         assert_eq!(
-            registry.watcher_snapshot().missed_change_recovery_fraction(),
+            registry
+                .watcher_snapshot()
+                .missed_change_recovery_fraction(),
             None
         );
     }
@@ -263,7 +264,10 @@ mod tests {
         registry.observe(WatcherMetric::ImportLatencyMs, 40);
         registry.observe(WatcherMetric::ImportLatencyMs, 100);
         let series = registry.series(WatcherMetric::ImportLatencyMs);
-        assert_eq!((series.min, series.max, series.count), (Some(40), Some(100), 2));
+        assert_eq!(
+            (series.min, series.max, series.count),
+            (Some(40), Some(100), 2)
+        );
         assert!((series.mean().unwrap() - 70.0).abs() < 1e-9);
     }
 

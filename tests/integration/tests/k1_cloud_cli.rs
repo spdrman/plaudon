@@ -84,9 +84,10 @@ fn load_fixture(id: &str) -> (FixtureMeta, String, ExpectedPage) {
         serde_json::from_str(&std::fs::read_to_string(dir.join("fixture.json")).expect("meta"))
             .expect("meta parses");
     let stdout = std::fs::read_to_string(dir.join("files.stdout")).expect("stdout");
-    let expected: ExpectedPage =
-        serde_json::from_str(&std::fs::read_to_string(dir.join("expected.json")).expect("expected"))
-            .expect("expected parses");
+    let expected: ExpectedPage = serde_json::from_str(
+        &std::fs::read_to_string(dir.join("expected.json")).expect("expected"),
+    )
+    .expect("expected parses");
     (meta, stdout, expected)
 }
 
@@ -257,8 +258,9 @@ fn jsonl_script(port: Option<u16>) -> serde_json::Value {
         "unknown_exit_code": 64,
     });
     if let Some(port) = port {
-        script["audio_url_template"] =
-            serde_json::json!(format!("http://127.0.0.1:{port}/{{id}}.bin?sig=deadbeefcafe"));
+        script["audio_url_template"] = serde_json::json!(format!(
+            "http://127.0.0.1:{port}/{{id}}.bin?sig=deadbeefcafe"
+        ));
     }
     script
 }
@@ -306,7 +308,11 @@ fn golden_snapshots_match_the_parser_for_every_tested_release() {
         assert_eq!(page.items.len(), expected.items.len(), "{}", row.version);
         for (actual, want) in page.items.iter().zip(&expected.items) {
             assert_eq!(
-                actual.identity.external_id.as_ref().map(ToString::to_string),
+                actual
+                    .identity
+                    .external_id
+                    .as_ref()
+                    .map(ToString::to_string),
                 Some(want.external_id.clone())
             );
             assert_eq!(actual.identity.source_kind, SourceKind::PlaudCloudCli);
@@ -333,7 +339,10 @@ fn golden_snapshots_match_the_parser_for_every_tested_release() {
         );
         covered += 1;
     }
-    assert_eq!(covered, 3, "every observed fixture release must be exercised");
+    assert_eq!(
+        covered, 3,
+        "every observed fixture release must be exercised"
+    );
 }
 
 #[test]
@@ -481,7 +490,10 @@ async fn a_release_that_was_never_run_is_refused_even_though_it_is_in_the_table(
             .unwrap_err(),
         SourceError::CliUnsupported
     );
-    assert_eq!(connector.status().state, ConnectorState::IncompatibleVersion);
+    assert_eq!(
+        connector.status().state,
+        ConnectorState::IncompatibleVersion
+    );
 }
 
 #[tokio::test]
@@ -500,7 +512,10 @@ async fn enumerating_plaud_cloud_recordings_yields_identity_scoped_items() {
     let listing = connector.enumerate(None, &intent()).await.expect("listed");
 
     assert_eq!(listing.page.items.len(), 3);
-    assert_eq!(listing.completeness, ListingCompleteness::PossiblyIncomplete);
+    assert_eq!(
+        listing.completeness,
+        ListingCompleteness::PossiblyIncomplete
+    );
     assert!(listing.empty_account_advisory.is_none());
     assert_eq!(listing.page.next_cursor, None);
     for item in &listing.page.items {
@@ -581,7 +596,10 @@ async fn pagination_is_followed_only_for_a_release_that_observed_it() {
 
     // Spec 4.2.7: this release records a supported logout command, so the
     // disconnect copy may claim a sign-out.
-    assert_eq!(connector.disconnect_copy(), DisconnectCopy::WithVendorLogout);
+    assert_eq!(
+        connector.disconnect_copy(),
+        DisconnectCopy::WithVendorLogout
+    );
     let copy = connector.disconnect(&intent()).await.expect("disconnected");
     assert_eq!(copy, DisconnectCopy::WithVendorLogout);
     assert_eq!(connector.status().state, ConnectorState::Unconfigured);
@@ -741,7 +759,10 @@ async fn a_cloud_recording_is_downloaded_verified_and_committed_to_the_archive()
     // Commit it into the real library through the durable import journal.
     let db_path = library.path().join("app.sqlite");
     let database = Database::open(&db_path).await.expect("open db");
-    MigrationRunner::new().run(&database).await.expect("migrate");
+    MigrationRunner::new()
+        .run(&database)
+        .await
+        .expect("migrate");
     let archive = MediaArchive::open(library.path().join("media")).expect("archive");
     let service = ImportService::new(database.clone(), archive);
 
@@ -756,7 +777,11 @@ async fn a_cloud_recording_is_downloaded_verified_and_committed_to_the_archive()
     };
     let mut staged = std::fs::File::open(&target).expect("open staged");
     let outcome = service
-        .import(&request, &mut staged, Timestamp::from_millis(1_760_000_000_000))
+        .import(
+            &request,
+            &mut staged,
+            Timestamp::from_millis(1_760_000_000_000),
+        )
         .await
         .expect("import");
     let recording_id = match outcome {
@@ -773,15 +798,17 @@ async fn a_cloud_recording_is_downloaded_verified_and_committed_to_the_archive()
     .fetch_one(database.pool())
     .await
     .expect("stored digest");
-    assert_eq!(stored, expected_digest, "committed bytes must match the download");
+    assert_eq!(
+        stored, expected_digest,
+        "committed bytes must match the download"
+    );
 
-    let external: String = sqlx::query_scalar(
-        "SELECT si.external_id FROM source_items si WHERE si.recording_id = ?1",
-    )
-    .bind(recording_id.to_string())
-    .fetch_one(database.pool())
-    .await
-    .expect("source identity");
+    let external: String =
+        sqlx::query_scalar("SELECT si.external_id FROM source_items si WHERE si.recording_id = ?1")
+            .bind(recording_id.to_string())
+            .fetch_one(database.pool())
+            .await
+            .expect("source identity");
     assert_eq!(external, "rec_01HF8ZT9");
 
     // Spec 7.3: the signed URL is never persisted. Scan the whole database

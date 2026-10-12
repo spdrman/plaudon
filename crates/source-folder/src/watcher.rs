@@ -57,24 +57,25 @@ impl NotifyWatcher {
     /// to the folder, for example because the path became unreachable.
     pub fn start(config: &WatchedFolderConfig) -> FolderResult<Self> {
         let (sender, hints) = channel();
-        let mut watcher = notify::recommended_watcher(move |event: notify::Result<notify::Event>| {
-            match event {
-                Ok(event) => {
-                    if event.need_rescan() {
+        let mut watcher =
+            notify::recommended_watcher(move |event: notify::Result<notify::Event>| {
+                match event {
+                    Ok(event) => {
+                        if event.need_rescan() {
+                            let _ = sender.send(FsHint::Rescan);
+                            return;
+                        }
+                        for path in event.paths {
+                            let _ = sender.send(FsHint::Touched(path));
+                        }
+                    }
+                    // A watcher error is a lost-event condition, not a silence.
+                    Err(_) => {
                         let _ = sender.send(FsHint::Rescan);
-                        return;
-                    }
-                    for path in event.paths {
-                        let _ = sender.send(FsHint::Touched(path));
                     }
                 }
-                // A watcher error is a lost-event condition, not a silence.
-                Err(_) => {
-                    let _ = sender.send(FsHint::Rescan);
-                }
-            }
-        })
-        .map_err(|error| FolderError::Watcher(error.to_string()))?;
+            })
+            .map_err(|error| FolderError::Watcher(error.to_string()))?;
 
         let mode = if config.is_recursive() {
             RecursiveMode::Recursive

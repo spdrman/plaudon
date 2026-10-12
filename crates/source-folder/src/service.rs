@@ -35,15 +35,16 @@ use plaudon_domain::source::{SourceAccountScope, SourceIdentityKey, SourceKind};
 use plaudon_domain::time::Timestamp;
 use plaudon_persistence::archive::MediaArchive;
 use plaudon_persistence::db::Database;
-use plaudon_persistence::repo::{
-    WatchedFolderItemRow, WatchedFolderRepository, WatchedFolderRow,
+use plaudon_persistence::repo::{WatchedFolderItemRow, WatchedFolderRepository, WatchedFolderRow};
+use plaudon_security::consent::{
+    dispatch_preflight, ConsentError, ConsentGrant, DispatchApproval, DispatchRequest,
 };
-use plaudon_security::consent::{dispatch_preflight, ConsentError, ConsentGrant, DispatchApproval,
-    DispatchRequest};
 use plaudon_security::outbound::OutboundPolicy;
 use uuid::Uuid;
 
-use crate::barrier::{BarrierOutcome, BarrierPolicy, CompletionBarrier, DeferReason, ReadyCandidate};
+use crate::barrier::{
+    BarrierOutcome, BarrierPolicy, CompletionBarrier, DeferReason, ReadyCandidate,
+};
 use crate::clock::{Clock, SystemClock};
 use crate::config::{FolderRule, WatchedFolderConfig};
 use crate::error::{FolderError, FolderResult};
@@ -210,8 +211,7 @@ impl WatchedFolderService {
         space: Arc<dyn DiskSpaceProbe>,
         clock: Arc<dyn Clock>,
     ) -> FolderResult<Self> {
-        let barrier =
-            CompletionBarrier::with_probes(Self::policy_for(&config), placeholder, space);
+        let barrier = CompletionBarrier::with_probes(Self::policy_for(&config), placeholder, space);
         Self::assemble(config, db, archive, barrier, clock).await
     }
 
@@ -622,16 +622,21 @@ impl WatchedFolderService {
     }
 
     /// Absorb hints the watcher produced into the queue.
-    pub fn pump(&self, source: &mut dyn crate::watcher::FsEventSource) -> crate::watcher::PumpReport {
+    pub fn pump(
+        &self,
+        source: &mut dyn crate::watcher::FsEventSource,
+    ) -> crate::watcher::PumpReport {
         let report = crate::watcher::pump(source, &self.config, &self.queue, self.clock.as_ref());
         for _ in 0..report.hints {
             self.metrics.increment(WatcherMetric::EventHintsObserved);
         }
         if report.rescan_requested {
-            self.metrics.increment(WatcherMetric::ChangesMissedByWatcher);
+            self.metrics
+                .increment(WatcherMetric::ChangesMissedByWatcher);
         }
         for _ in 0..report.overflowed {
-            self.metrics.increment(WatcherMetric::ChangesMissedByWatcher);
+            self.metrics
+                .increment(WatcherMetric::ChangesMissedByWatcher);
         }
         report
     }

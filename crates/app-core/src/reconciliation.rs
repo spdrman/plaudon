@@ -426,7 +426,10 @@ impl ReconciliationService {
             });
         }
 
-        if matches!(item.remote_state, RemoteState::Trashed | RemoteState::Absent) {
+        if matches!(
+            item.remote_state,
+            RemoteState::Trashed | RemoteState::Absent
+        ) {
             self.sources
                 .set_remote_state(association.id, item.remote_state, at)
                 .await?;
@@ -442,7 +445,10 @@ impl ReconciliationService {
         let acquisition = self.sources.acquisition_state(association.id).await?;
         if association.remote_version.as_deref() == item.remote_version.as_deref() {
             let (event, action) = if acquisition.complete {
-                (SourceEvent::UnchangedVersion, ReconcileAction::SkipAcquisition)
+                (
+                    SourceEvent::UnchangedVersion,
+                    ReconcileAction::SkipAcquisition,
+                )
             } else {
                 (
                     SourceEvent::UnchangedVersionIncompleteAcquisition,
