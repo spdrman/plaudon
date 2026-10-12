@@ -373,7 +373,7 @@ pub fn decode_to_canonical_pcm(
         .or_else(|| format.tracks().first())
         .ok_or_else(|| AudioError::MalformedHeader("container declares no audio track".into()))?;
     let track_id = track.id;
-    let mut decoder = symphonia::default::get_codecs()
+    let mut decoder = crate::codecs::registry()
         .make(&track.codec_params, &DecoderOptions::default())
         .map_err(|error| map_probe_error(error, media.container()))?;
 

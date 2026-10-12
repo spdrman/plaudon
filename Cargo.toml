@@ -79,6 +79,11 @@ hex = "0.4"
 jsonschema = { version = "0.26", default-features = false }
 libc = "0.2"
 notify = { version = "7", default-features = false, features = ["macos_fsevent"] }
+# Pure-Rust Opus decoder (BSD-3-Clause, no dependencies, no build script, no C
+# toolchain and no system library). Chosen in O1.6 (#214) on measured evidence
+# against libopus; see docs/licensing/third-party-register.md and
+# docs/spikes/O1.2-audio-playback-and-opus.md §2.
+opus-pure = "0.2.2"
 parking_lot = "0.12"
 proptest = "1"
 rand = "0.8"

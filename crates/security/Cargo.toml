@@ -50,6 +50,11 @@ windows-sys = { version = "0.59", features = [
 ] }
 
 [dev-dependencies]
+# `tests/fuzz_corpus_replay.rs` is compiled twice: as this crate's integration
+# test and as a module of every `fuzz/fuzz_targets/*.rs`, so anything it uses
+# must be declared in both manifests. The Opus check (O1.6) decodes untrusted
+# packets through `plaudon_audio`.
+plaudon-audio = { workspace = true }
 rusqlite = { workspace = true }
 tempfile = { workspace = true }
 

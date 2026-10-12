@@ -9,7 +9,7 @@ use std::io::Read;
 use std::path::Path;
 
 use plaudon_ai_contracts::Known;
-use symphonia::core::codecs::CodecParameters;
+use symphonia::core::codecs::{CodecParameters, CODEC_TYPE_OPUS};
 use symphonia::core::errors::Error as SymphoniaError;
 use symphonia::core::formats::{FormatOptions, FormatReader};
 use symphonia::core::io::{MediaSourceStream, MediaSourceStreamOptions};
@@ -222,10 +222,19 @@ fn resolve_frames(
 ) -> Result<(Known<u64>, Option<DurationSource>), AudioError> {
     if let Some(n_frames) = params.n_frames {
         if n_frames > 0 {
-            return Ok((
-                Known::Known(n_frames),
-                Some(DurationSource::ContainerHeader),
-            ));
+            // An Ogg Opus granule position counts the pre-skip samples that
+            // RFC 7845 §4.2 requires the player to discard, so the container's
+            // frame count is that many frames longer than the audio the
+            // decoder emits. Reporting the raw number would make the library's
+            // duration disagree with the waveform and the transport.
+            let frames = if params.codec == CODEC_TYPE_OPUS {
+                n_frames.saturating_sub(u64::from(params.delay.unwrap_or(0)))
+            } else {
+                n_frames
+            };
+            if frames > 0 {
+                return Ok((Known::Known(frames), Some(DurationSource::ContainerHeader)));
+            }
         }
     }
 
@@ -263,7 +272,7 @@ fn resolve_frames(
 }
 
 fn codec_short_name(params: &CodecParameters) -> Known<String> {
-    symphonia::default::get_codecs()
+    crate::codecs::registry()
         .get_codec(params.codec)
         .map(|descriptor| descriptor.short_name.to_string())
         .into()
