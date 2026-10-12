@@ -18,6 +18,7 @@
 //! | [`evidence`] | the hardware evidence record a `Supported` cell requires | §7.9, App. B.9 |
 
 pub mod audit;
+pub mod commit;
 pub mod credentials;
 pub mod evidence;
 pub mod gating;
@@ -26,6 +27,10 @@ pub mod register;
 pub mod transfer;
 
 pub use audit::{AuditObservation, AuditOutcome, NonDestructiveAudit, SyncEligibility};
+pub use commit::{
+    derivative_to_commit, CommitError, CommittedImport, DeviceCommitRequest, DeviceImportCommitter,
+    DeviceStaging, StagedBytes,
+};
 pub use credentials::{
     CredentialError, DeviceBinding, DeviceCredentials, IdentityAssurance, ProvisioningRoute,
     RouteDisposition, LEGACY_DISCLOSURES,

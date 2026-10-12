@@ -3595,6 +3595,7 @@ version = "0.1.0"
 dependencies = [
  "jsonschema",
  "plaudon-domain",
+ "plaudon-persistence",
  "plaudon-plaud-ble",
  "plaudon-plaud-protocol",
  "plaudon-recording-sources",
@@ -3604,6 +3605,7 @@ dependencies = [
  "serde_json",
  "serde_norway",
  "sha2 0.10.9",
+ "sqlx",
  "tempfile",
  "thiserror 2.0.21",
  "tokio",
