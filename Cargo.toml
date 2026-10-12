@@ -48,10 +48,12 @@ async-trait = "0.1"
 hex = "0.4"
 jsonschema = { version = "0.26", default-features = false }
 libc = "0.2"
+notify = { version = "7", default-features = false, features = ["macos_fsevent"] }
 parking_lot = "0.12"
 proptest = "1"
 rand = "0.8"
 regex = "1"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream", "multipart", "json"] }
 rusqlite = { version = "0.32", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -61,7 +63,7 @@ sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio",
 tempfile = "3"
 thiserror = "2"
 time = { version = "0.3", features = ["formatting", "parsing", "macros"] }
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs", "io-util", "sync", "time"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs", "io-util", "process", "sync", "time"] }
 tokio-util = "0.7"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
