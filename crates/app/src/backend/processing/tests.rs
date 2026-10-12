@@ -570,3 +570,131 @@ async fn a_cloud_stage_is_never_queued_without_a_key() {
     );
     pipeline.stop().await;
 }
+
+/* ------------------------------------------------- opt-in real-model run */
+
+/// One real local transcription, end to end, with real whisper.cpp weights.
+///
+/// Opt-in manual evidence (spec §18.3: real artifacts are fetched once,
+/// explicitly, never by a test run). It needs
+///
+/// * this crate built with `--features local-whisper`, which links
+///   whisper.cpp, and
+/// * `PLAUDON_WHISPER_MODEL` pointing at a weight file — `scripts/fetch-stt-fixtures.sh`
+///   puts `ggml-tiny.en.bin` in `tests/fixtures/stt/models`.
+///
+/// The audio is the committed `tests/fixtures/stt/audio/jfk.wav`.
+#[cfg(feature = "local-whisper")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[ignore = "opt-in: needs whisper.cpp weights and the local-whisper feature"]
+async fn a_real_whisper_model_transcribes_the_committed_clip() {
+    let Ok(model) = std::env::var("PLAUDON_WHISPER_MODEL") else {
+        panic!("set PLAUDON_WHISPER_MODEL to a whisper.cpp weight file");
+    };
+    let clip = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/stt/audio/jfk.wav");
+    assert!(clip.is_file(), "the committed clip is missing: {clip:?}");
+
+    let fixture = backend_fixture().await;
+    // Install the weights where the executor looks for them.
+    let installed = fixture
+        .backend
+        .store()
+        .models_dir()
+        .join("whisper.cpp")
+        .join("tiny.en");
+    std::fs::create_dir_all(&installed).expect("the model directory");
+    std::fs::copy(&model, installed.join("ggml-tiny.en.bin")).expect("the weights are installed");
+
+    let backend = Arc::new(fixture.backend.clone());
+    let pool = ProcessingHandle::start(Arc::clone(&backend), Some(1));
+
+    let staged = fixture.imports.path().join("jfk.wav");
+    std::fs::copy(&clip, &staged).expect("the clip is staged");
+    let response = backend
+        .import_files(
+            vec![staged.to_string_lossy().into_owned()],
+            DuplicatePolicy::Ask,
+        )
+        .await
+        .expect("the import is accepted");
+    let ImportOutcome::Accepted { job_id, .. } = &response.results[0] else {
+        panic!("the import is accepted");
+    };
+    let recording_id = crate::backend::jobs::load(backend.pool(), *job_id)
+        .await
+        .unwrap()
+        .recording_id
+        .unwrap();
+    backend
+        .set_model_preference(ValidatedPreference {
+            stage: Stage::Transcribe,
+            scope: ValidatedPreferenceScope::Default,
+            engine: "whisper.cpp".to_owned(),
+            model_id: Some("tiny.en".to_owned()),
+        })
+        .await
+        .unwrap();
+
+    let started = Instant::now();
+    let transcribe: JobId = backend
+        .start_processing(ValidatedStartProcessing {
+            recording_id,
+            stage: Stage::Transcribe,
+            model_override: None,
+            cost_acknowledged: false,
+            rerun: false,
+        })
+        .await
+        .unwrap()
+        .job_id
+        .parse()
+        .unwrap();
+    let deadline = Instant::now() + Duration::from_secs(600);
+    let summary = loop {
+        let summary = crate::backend::jobs::load(backend.pool(), transcribe)
+            .await
+            .unwrap();
+        if summary.state.is_terminal() {
+            break summary;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "the real run stalled in {}",
+            summary.state.as_str()
+        );
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    };
+    let elapsed = started.elapsed();
+    assert_eq!(
+        summary.state,
+        JobState::Completed,
+        "the real run failed: {:?}",
+        summary.error.as_ref().map(|envelope| envelope.code)
+    );
+
+    let revision_id = head(&backend, recording_id)
+        .await
+        .expect("the real run committed a revision");
+    let page = backend
+        .get_transcript(ValidatedGetTranscript {
+            revision_id,
+            cursor: 0,
+            limit: 100,
+        })
+        .await
+        .expect("the revision is readable");
+    let text = page
+        .segments
+        .iter()
+        .map(|segment| segment.text.trim())
+        .collect::<Vec<_>>()
+        .join(" ");
+    println!("whisper.cpp tiny.en: {elapsed:?} for {} segment(s)", page.segments.len());
+    println!("transcript: {text}");
+    assert!(
+        text.to_lowercase().contains("ask not"),
+        "the real transcript does not contain the clip's words: {text}"
+    );
+    pool.stop(Duration::from_secs(5)).await;
+}
