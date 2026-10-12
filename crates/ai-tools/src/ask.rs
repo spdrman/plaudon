@@ -321,7 +321,7 @@ mod tests {
     fn capable() -> TextModelCapabilities {
         TextModelCapabilities {
             payload_version: 1,
-            status: CapabilityStatus::Verified,
+            status: CapabilityStatus::Supported,
             engine_id: EngineId::new("openrouter"),
             model: ModelIdentity::new(EngineId::new("openrouter"), "test/model"),
             offline: Tri::No,

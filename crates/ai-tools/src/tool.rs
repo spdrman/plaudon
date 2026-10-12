@@ -269,7 +269,7 @@ impl TranscriptToolDefinition {
     ) -> Result<(), Vec<CapabilityGap>> {
         let mut gaps = Vec::new();
 
-        if !self.model_policy.allow_unverified_models && caps.status != CapabilityStatus::Verified {
+        if !self.model_policy.allow_unverified_models && caps.status != CapabilityStatus::Supported {
             gaps.push(CapabilityGap::ModelNotVerified {
                 status: caps.status,
             });
@@ -405,7 +405,7 @@ mod tests {
     fn capable() -> TextModelCapabilities {
         TextModelCapabilities {
             payload_version: 1,
-            status: CapabilityStatus::Verified,
+            status: CapabilityStatus::Supported,
             engine_id: EngineId::new("openrouter"),
             model: ModelIdentity::new(EngineId::new("openrouter"), "test/model"),
             offline: Tri::No,
@@ -462,7 +462,7 @@ mod tests {
     #[test]
     fn an_unverified_model_is_refused_unless_the_policy_allows_it() {
         let mut caps = capable();
-        caps.status = CapabilityStatus::Unverified;
+        caps.status = CapabilityStatus::Unknown;
         let tool = summary_tool();
         assert!(tool.check_capabilities(&caps).is_err());
         assert_eq!(tool.ensure_runnable(&caps), Err(ToolError::CapabilityUnmet));

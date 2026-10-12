@@ -18,6 +18,9 @@ use crate::prompt::FencedPassage;
 const K1: f64 = 1.2;
 /// BM25 length-normalization weight.
 const B: f64 = 0.75;
+/// Below this many segments, document frequency is too coarse to call a term
+/// ubiquitous, so the high-frequency term cutoff is not applied.
+const MIN_SEGMENTS_FOR_CUTOFF: usize = 4;
 
 /// A retrieved passage with its score.
 #[derive(Debug, Clone, PartialEq)]
@@ -141,11 +144,36 @@ impl Retriever {
     /// insufficient evidence without dispatching anything.
     #[must_use]
     pub fn retrieve(&self, query: &str, limit: usize) -> Vec<ScoredPassage> {
-        let terms = tokenize(query);
-        if terms.is_empty() || self.documents.is_empty() {
+        let all_terms = tokenize(query);
+        if all_terms.is_empty() || self.documents.is_empty() {
             return Vec::new();
         }
         let n = self.documents.len() as f64;
+
+        // Terms present in at least half the segments carry no discriminative
+        // signal: "the" matching every passage is not evidence that the
+        // recording discusses the question. Dropping them is what makes an
+        // off-topic question retrieve nothing, so the caller can answer
+        // "not supported by this recording" without dispatching anything.
+        //
+        // Below `MIN_SEGMENTS_FOR_CUTOFF` segments the document frequency of
+        // any term is too coarse to call a term ubiquitous, so every term is
+        // kept and the BM25 ranking alone decides.
+        let terms: Vec<String> = if self.documents.len() >= MIN_SEGMENTS_FOR_CUTOFF {
+            all_terms
+                .iter()
+                .filter(|term| {
+                    let df = *self.document_frequency.get(*term).unwrap_or(&0) as f64;
+                    df > 0.0 && df / n < 0.5
+                })
+                .cloned()
+                .collect()
+        } else {
+            all_terms
+        };
+        if terms.is_empty() {
+            return Vec::new();
+        }
 
         let mut scored: Vec<ScoredPassage> = self
             .documents

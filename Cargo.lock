@@ -3198,6 +3198,22 @@ dependencies = [
 [[package]]
 name = "plaudon-ai-tools"
 version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "hex",
+ "jsonschema",
+ "parking_lot",
+ "plaudon-ai-contracts",
+ "plaudon-domain",
+ "proptest",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "uuid",
+]
 
 [[package]]
 name = "plaudon-ai-whisper"
