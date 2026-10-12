@@ -17,9 +17,21 @@
 //! "no speaker"; what it never offers is a guess — every entry in the list is
 //! a row a human can point at, and nothing is pre-selected on the strength of
 //! a similarity score.
+//!
+//! The list it opens is the **person picker** (`VOICE_PROFILES_SPEC` VP-210,
+//! `crate::screens::people::picker`), the same searchable list with the same
+//! keyboard path and the same "Unknown/none" entry that the per-cluster row
+//! and the review queue use. It offers no "Create new person…": the command
+//! behind a chip sets an existing speaker row of this recording, so offering
+//! to create a roster entry here would promise a write the application cannot
+//! make — a cluster row is where a new person is created and assigned.
 
 use egui::{Align, Button, Label, Layout, Rect, Response, Ui};
 use plaudon_domain::ids::SpeakerId;
+
+use crate::screens::people::picker::{
+    name_as_combo_box, PersonPick, PersonPicker, PersonPickerState, PickerPerson, UNKNOWN_ENTRY,
+};
 use plaudon_domain::timerange::SourceTimeMs;
 use plaudon_domain::transcript::AlignmentOrigin;
 use plaudon_transcript_doc::clipboard::format_clock;
@@ -132,7 +144,11 @@ pub const SPEAKER_READ_ONLY_HINT: &str =
 /// Clearing an attribution is a first-class answer: overlapping speech and
 /// unattributable audio are what `transcript_segments.speaker_id` NULL means,
 /// and a user has to be able to say so.
-pub const NO_SPEAKER: &str = "No speaker";
+///
+/// It is the picker's own entry ([`UNKNOWN_ENTRY`]), not a second wording:
+/// one widget that clears an assignment in three places has to call it the
+/// same thing in all three (VP-210).
+pub const NO_SPEAKER: &str = UNKNOWN_ENTRY;
 
 /// What a user picked in the speaker chip.
 ///
@@ -168,6 +184,7 @@ pub fn speaker(
     speaker_id: Option<SpeakerId>,
     speakers: &[SpeakerChoice],
     editable: bool,
+    picker: &mut PersonPickerState,
 ) -> Option<SpeakerPick> {
     let current = speaker_id.and_then(|id| speakers.iter().find(|choice| choice.id == id));
     let shown = current.map_or_else(|| NO_SPEAKER.to_owned(), SpeakerChoice::render);
@@ -196,30 +213,57 @@ pub fn speaker(
     });
     let response = response.on_hover_text(format!("{spoken}\n\n{SPEAKER_EDIT_HINT}"));
 
+    // The role is the picker's (`Role::ComboBox`, VP-210); the name stays the
+    // chip's, because what a screen reader must hear first is who this
+    // segment is attributed to, qualifier included.
+    name_as_combo_box(ui, &response, &format!("Speaker: {spoken}"));
+
+    let people: Vec<PickerPerson> = speakers.iter().map(entry).collect();
+    let selected = speaker_id.map(|id| id.to_string());
     let mut chosen = None;
-    egui::Popup::menu(&response).show(|ui| {
-        ui.label("Assign this segment to");
-        for choice in speakers {
-            if ui
-                .selectable_label(Some(choice.id) == speaker_id, choice.render_with_origin())
-                .clicked()
-            {
-                chosen = Some(SpeakerPick::Speaker(choice.id));
-                ui.close();
+    egui::Popup::menu(&response)
+        .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+        .show(|ui| {
+            let picked = PersonPicker::new("segment-picker", "Assign this segment to", &people)
+                .selected(selected.as_deref())
+                .neutral_label(NO_SPEAKER)
+                .show_list(ui, picker);
+            match picked {
+                Some(PersonPick::Person(id)) => {
+                    chosen = speakers
+                        .iter()
+                        .find(|choice| choice.id.to_string() == id)
+                        .map(|choice| SpeakerPick::Speaker(choice.id));
+                    ui.close();
+                }
+                Some(PersonPick::Unknown) => {
+                    chosen = Some(SpeakerPick::Nobody);
+                    ui.close();
+                }
+                // The chip's picker does not offer to create a person, so this
+                // cannot arrive; ignoring it is the honest answer to a pick the
+                // command behind this control could not carry out.
+                Some(PersonPick::Create(_)) | None => {}
             }
-        }
-        if ui
-            .selectable_label(speaker_id.is_none(), NO_SPEAKER)
-            .clicked()
-        {
-            chosen = Some(SpeakerPick::Nobody);
-            ui.close();
-        }
-    });
+        });
 
     // Choosing what is already there is not a change, and must not cost a
     // write or an undo step.
     chosen.filter(|picked| picked.speaker_id() != speaker_id)
+}
+
+/// One speaker row as the picker offers it.
+///
+/// The name is the row's rendered label, qualifier included, so the picker
+/// cannot present an inferred cluster as a person; the machine label travels
+/// as the context line, which is how a renamed row stays identifiable.
+fn entry(choice: &SpeakerChoice) -> PickerPerson {
+    let person = PickerPerson::new(choice.id.to_string(), choice.render());
+    if choice.label == choice.machine_label {
+        person
+    } else {
+        person.with_detail(format!("machine label {}", choice.machine_label))
+    }
 }
 
 fn elide(text: &str, max_chars: usize) -> String {

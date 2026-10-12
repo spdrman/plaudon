@@ -283,6 +283,51 @@ Open a recording with audio and a transcript (§5 step 10).
 4. On the Export tab. **Expect:** a format that needs timestamps announces that it is unavailable
    **and why**, on a transcript without alignment.
 
+## 11A. People and voice profiles
+
+New with P2.1 (#244); the rules are `VOICE_PROFILES_SPEC` §9A and VP-096, and
+ADR-0082's wording rules apply to every line read aloud here.
+
+1. Press `Mod+7`, or arrow to **People** in the rail. The destination
+   announces its name and the sentence "One list of people for the whole
+   library."
+2. Tab to **Search people**, type part of a name, and confirm the roster list
+   changes. Every row announces the person's name, their aliases if they have
+   any, and how many recordings they are assigned in — never "0 recordings"
+   where the honest answer is "Not assigned in any recording yet".
+3. Open **Edit <name>…**. The dialog must announce how many recordings show
+   this name *before* the save control is reachable, and that renaming changes
+   no assignment. Escape must close it with nothing saved.
+4. Open **Merge <name> into…** and choose a person. The confirmation must stay
+   unavailable until the counts arrive, and must say that a merge is not in the
+   transcript's undo stack.
+5. Where entries share a name, the **Possible duplicates** group must read as a
+   suggestion: "Nothing is merged automatically — merging is always your
+   decision."
+6. With biometric matching **off** (the default), confirm that nothing in this
+   destination mentions a voiceprint, an enrolment or a match.
+7. Turn matching on in Settings → Privacy. The disclosure must be readable in
+   full with the keyboard, nothing may be pre-ticked, and the accepted version
+   must be announced afterwards.
+8. Back on People, open **Suggestions to review**. The queue announces how many
+   are waiting and that nothing has been assigned. Walk it with `j`/`k`,
+   confirm with Enter, reject with Delete and press `n` to reject and be asked
+   who it really was. Every row must read "sounds like <name> — strong match,
+   0.82" — never "identified", "verified" or "recognised as".
+9. In a recording's **Outputs** tab, the speaker panel's picker must announce
+   "Assign all of Speaker 1 to: …" with its current value, open with Enter,
+   filter as you type, announce how many people match, and offer
+   "Unknown/none" and "Create new person…". The transcript chip opens the same
+   list and announces "Speaker: …" with its qualifier.
+10. Where a cluster assignment would overwrite segments set individually, the
+    question must be announced politely, not shown silently.
+11. **Enrol this speaker's voice…** must be unavailable until a person is
+    assigned and must say why. Its gate must be readable to the end before the
+    attestation can be ticked, and the attestation must never start ticked.
+12. In Settings → Privacy, "Forget all voice profiles" must disclose its counts
+    and every limitation sentence, require the typed phrase, and state
+    afterwards that the people themselves were kept.
+
 ## 12. Search
 
 1. `Mod+Shift+F`. **Expect:** the search field takes focus and announces its name.

@@ -71,6 +71,9 @@ pub enum SettingsDestination {
     Activity,
     /// The jobs list.
     Jobs,
+    /// The people roster (VP-090, VP-091). Reachable whether or not voice
+    /// matching is on: the list is names, not voiceprints.
+    People,
 }
 
 /// One thing a section wants the host to do.

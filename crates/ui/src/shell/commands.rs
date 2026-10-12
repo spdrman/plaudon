@@ -227,7 +227,7 @@ impl CommandRegistry {
 
 /// The commands the shell itself provides.
 ///
-/// `Mod+1`…`Mod+6` are the destination shortcuts of `app/shortcuts.ts` and
+/// `Mod+1`…`Mod+7` are the destination shortcuts of `app/shortcuts.ts` and
 /// their order is the navigation order; everything else is new in O1.3 and is
 /// named in the parity matrix (S6, S9, S10).
 #[must_use]
@@ -242,7 +242,8 @@ pub fn builtin_commands() -> Vec<CommandSpec> {
                 2 => "Mod+3",
                 3 => "Mod+4",
                 4 => "Mod+5",
-                _ => "Mod+6",
+                5 => "Mod+6",
+                _ => "Mod+7",
             };
             CommandSpec::new(
                 destination_command_id(*destination),
@@ -362,6 +363,7 @@ pub const fn destination_command_id(destination: Destination) -> &'static str {
         Destination::Templates => "nav_templates",
         Destination::Settings => "nav_settings",
         Destination::Devices => "nav_devices",
+        Destination::People => "nav_people",
     }
 }
 
@@ -370,7 +372,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_six_destination_shortcuts_are_mod_one_to_mod_six_in_nav_order() {
+    fn the_seven_destination_shortcuts_are_mod_one_to_mod_seven_in_nav_order() {
         let registry = CommandRegistry::with_builtins();
         for (index, destination) in Destination::ALL.iter().enumerate() {
             let spec = registry

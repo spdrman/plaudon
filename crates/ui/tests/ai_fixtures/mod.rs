@@ -335,6 +335,11 @@ pub fn speaker(name: Option<&str>, confirmed: bool) -> SpeakerDto {
     SpeakerDto {
         speaker_id: SPEAKER_ID.parse().expect("speaker id"),
         recording_id: RECORDING_ID.parse().expect("recording id"),
+        // The cluster this row stands for, as a diarized recording has.
+        cluster_key: Some("SPEAKER_00".to_owned()),
+        // No roster person: these fixtures are a recording nobody has
+        // assigned yet.
+        person_id: None,
         // A rename overwrites the label, exactly as the store does.
         label: name.unwrap_or("Speaker 1").to_owned(),
         name: name.map(ToOwned::to_owned),

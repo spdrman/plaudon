@@ -14,7 +14,7 @@
 use std::collections::BTreeMap;
 
 use plaudon_ai_diarization::contract::ClusterKey;
-use plaudon_domain::ids::{RecordingId, SpeakerId};
+use plaudon_domain::ids::{PersonId, RecordingId, SpeakerId};
 use plaudon_domain::time::Timestamp;
 use serde::{Deserialize, Serialize};
 
@@ -50,6 +50,8 @@ pub struct Speaker {
     pub recording_id: RecordingId,
     /// Diarization cluster, when the row came from a diarization run.
     pub cluster_key: Option<ClusterKey>,
+    /// Roster person this row is linked to, when one has been linked (VP-010).
+    pub person_id: Option<PersonId>,
     /// The machine-assigned label this row started with, e.g. `Speaker 2`.
     pub original_label: String,
     /// Current label. Equals `original_label` until a rename.
@@ -157,6 +159,7 @@ impl SpeakerRegistry {
                     id: SpeakerId::new(),
                     recording_id,
                     cluster_key: Some(cluster.clone()),
+                    person_id: None,
                     original_label: label.clone(),
                     label,
                     name: None,

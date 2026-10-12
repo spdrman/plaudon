@@ -314,6 +314,7 @@ fn the_outputs_viewer_groups_the_section_nine_two_field_sets() {
                         context,
                         Some(&app.outputs),
                         Some(&app.speakers),
+                        plaudon_ui::ai::VoiceContext::default(),
                         fx::NOW_MS,
                     );
                     app.collected.absorb(output);

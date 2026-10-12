@@ -260,7 +260,7 @@ fn the_speaker_chip_states_who_is_speaking_and_reassigns_the_segment() {
 
     // The picker offers the known rows and the honest "nobody"; it proposes
     // nothing on its own.
-    harness.get_by_label("No speaker");
+    harness.get_by_label(plaudon_ui::transcript::NO_SPEAKER);
     harness
         .get_by_label("Sam (confirmed), machine label Speaker 2")
         .click();
@@ -316,7 +316,9 @@ fn a_read_only_revision_offers_no_speaker_picker() {
     let mut harness = harness(app);
     harness.run();
 
-    harness.get_by_label("Speaker: No speaker").click();
+    harness
+        .get_by_label(&format!("Speaker: {}", plaudon_ui::transcript::NO_SPEAKER))
+        .click();
     harness.run();
 
     assert!(
