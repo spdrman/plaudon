@@ -15,6 +15,7 @@ plaudon-domain = { workspace = true }
 plaudon-plaud-ble = { workspace = true }
 plaudon-plaud-protocol = { workspace = true }
 plaudon-security = { workspace = true }
+plaudon-persistence = { workspace = true }
 plaudon-recording-sources = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -26,5 +27,6 @@ thiserror = { workspace = true }
 jsonschema = { workspace = true }
 plaudon-security = { workspace = true, features = ["test-support"] }
 proptest = { workspace = true }
+sqlx = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true }
