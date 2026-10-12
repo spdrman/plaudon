@@ -48,7 +48,7 @@ impl std::fmt::Debug for RadioTransport {
         f.debug_struct("RadioTransport")
             .field("profile", &self.profile.name)
             .field("connected", &self.control.is_some())
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
@@ -69,7 +69,7 @@ impl RadioTransport {
         }
     }
 
-    fn find(&self, characteristics: &[Characteristic], short: u16) -> Option<Characteristic> {
+    fn find(characteristics: &[Characteristic], short: u16) -> Option<Characteristic> {
         let wanted = long_uuid(short);
         characteristics
             .iter()
@@ -92,11 +92,9 @@ impl GattTransport for RadioTransport {
 
         let characteristics: Vec<Characteristic> =
             self.peripheral.characteristics().into_iter().collect();
-        let control = self
-            .find(&characteristics, self.profile.characteristic_control)
+        let control = Self::find(&characteristics, self.profile.characteristic_control)
             .ok_or(DeviceError::UnsupportedFirmware)?;
-        let notify = self
-            .find(&characteristics, self.profile.characteristic_notify)
+        let notify = Self::find(&characteristics, self.profile.characteristic_notify)
             .ok_or(DeviceError::UnsupportedFirmware)?;
         if !control
             .properties
@@ -110,7 +108,7 @@ impl GattTransport for RadioTransport {
         {
             return Err(DeviceError::UnsupportedFirmware);
         }
-        let battery = self.find(&characteristics, self.profile.characteristic_battery);
+        let battery = Self::find(&characteristics, self.profile.characteristic_battery);
 
         self.peripheral
             .subscribe(&notify)

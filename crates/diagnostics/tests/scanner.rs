@@ -257,6 +257,12 @@ fn committed_fixtures_pass_the_repository_gate() {
         allowlist.to_str().unwrap(),
         "--exclude",
         "**/fuzz-corpus/**",
+        // Build output is not a committed fixture. `scripts/ci-selftest.sh`
+        // compiles the deliberately-broken crates under ci-selftest/, and a
+        // target/ directory is full of dependency files and cache tags whose
+        // hashes read as device tokens.
+        "--exclude",
+        "**/target/**",
         root.to_str().unwrap(),
     ]);
     assert_eq!(
