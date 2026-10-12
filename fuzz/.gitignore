@@ -1,0 +1,8 @@
+# cargo-fuzz working directories. Reproducers that matter are promoted by hand
+# into tests/fixtures/fuzz-corpus/<target>/ so they become permanent regression
+# cases in the stable corpus-replay test; nothing else here is committed.
+target/
+corpus/
+artifacts/
+coverage/
+Cargo.lock

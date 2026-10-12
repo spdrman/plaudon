@@ -1,0 +1,13 @@
+{"timestamp":"2026-02-03T09:12:44.118Z","level":"INFO","message":"plaudon starting","version":"0.1.0","mode":"local_only"}
+{"timestamp":"2026-02-03T09:12:44.942Z","level":"INFO","message":"watched folder registered","source_id":"src_8bd41fa2","path_label":"<user folder>"}
+{"timestamp":"2026-02-03T09:12:51.004Z","level":"INFO","message":"import staged","recording_id":"rec_7hd92kfa","media_asset_id":"med_21c7b004","bytes":18446272}
+{"timestamp":"2026-02-03T09:13:02.771Z","level":"INFO","message":"transcription job queued","job_id":"job_4f10aa9c","engine":"local_whisper","device":"cpu"}
+{"timestamp":"2026-02-03T09:14:38.210Z","level":"INFO","message":"transcription complete","job_id":"job_4f10aa9c","segments":418,"duration_ms":95439}
+{"timestamp":"2026-02-03T09:14:38.260Z","level":"INFO","message":"credential loaded from OS keychain","scope":"openrouter","value":"<redacted:registered>"}
+{"timestamp":"2026-02-03T09:14:39.001Z","level":"INFO","message":"outbound request authorized","host":"openrouter.ai","purpose":"chat_completion","url":"https://openrouter.ai/api/v1/chat/completions"}
+{"timestamp":"2026-02-03T09:14:41.517Z","level":"WARN","message":"provider returned 429","host":"openrouter.ai","retry_after_s":12,"attempt":1}
+{"timestamp":"2026-02-03T09:14:55.883Z","level":"INFO","message":"signed url consumed","url":"<redacted:signed_url host=plaud-media.s3.amazonaws.com>","outcome":"ok"}
+{"timestamp":"2026-02-03T09:15:00.004Z","level":"INFO","message":"device profile authenticated","device_id":"dev_0a7c31","assurance":"profile-authenticated","transport":"ble"}
+{"timestamp":"2026-02-03T09:15:00.455Z","level":"DEBUG","message":"gatt frame received","subsystem":"plaud-ble","frame_bytes":244,"wire_payload_logging":"disabled"}
+{"timestamp":"2026-02-03T09:15:12.770Z","level":"INFO","message":"egress denied in local-only mode","subsystem":"update_checker","destination_label":"network:https://updates.example.com"}
+{"timestamp":"2026-02-03T09:16:44.000Z","level":"INFO","message":"export written","export_id":"exp_55ab12","format":"markdown","recordings":3}

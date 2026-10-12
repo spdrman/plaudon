@@ -10,4 +10,38 @@ repository.workspace = true
 [lints]
 workspace = true
 
+[features]
+default = []
+# Opt-in wire-payload diagnostics (BLE/GATT frames, HTTP bodies). The
+# `WirePayloadLogging::Enabled` constructor additionally requires
+# `debug_assertions`, so a release build cannot turn wire logging on even with
+# this feature compiled in (spec App. B.7).
+wire-diagnostics = []
+# The `plaudon-secret-scan` binary and the `scan` module. Kept optional so the
+# production logging path does not pull bundled SQLite into the app binary; the
+# pattern set itself lives in the always-compiled `patterns`/`redact` modules,
+# so there is still exactly one source of truth.
+scanner = ["dep:rusqlite", "dep:walkdir"]
+
+[[bin]]
+name = "plaudon-secret-scan"
+path = "src/bin/secret_scan.rs"
+required-features = ["scanner"]
+
 [dependencies]
+rand = { workspace = true }
+regex = { workspace = true }
+rusqlite = { workspace = true, optional = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+url = { workspace = true }
+walkdir = { workspace = true, optional = true }
+zeroize = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+tempfile = { workspace = true }

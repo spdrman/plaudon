@@ -1,0 +1,35 @@
+{
+  "snapshot_version": 1,
+  "generated_at": 1770108000,
+  "privacy": {
+    "mode": "local_only",
+    "cloud_consent": null,
+    "telemetry_opted_in": false
+  },
+  "recordings": [
+    {
+      "recording_id": "rec_7hd92kfa",
+      "source": { "kind": "folder", "source_id": "src_8bd41fa2" },
+      "media_asset_id": "med_21c7b004",
+      "duration_ms": 95439,
+      "content_fingerprint": "sha256-prefix:9f3c2b1a0d4e",
+      "transcript_revision": 3
+    },
+    {
+      "recording_id": "rec_a013mq8x",
+      "source": { "kind": "device_ble", "device_id": "dev_0a7c31" },
+      "media_asset_id": "med_7731be0f",
+      "duration_ms": 184102,
+      "content_fingerprint": "sha256-prefix:71ac90be44d1",
+      "transcript_revision": 1
+    }
+  ],
+  "credentials": {
+    "openrouter": { "stored_in": "os_keychain", "reference": "plaudon/openrouter", "value": null },
+    "device_dev_0a7c31": { "stored_in": "os_keychain", "reference": "plaudon/device/dev_0a7c31", "value": null }
+  },
+  "jobs": [
+    { "job_id": "job_4f10aa9c", "state": "completed", "job_type": "transcribe" },
+    { "job_id": "job_91ce0022", "state": "failed", "job_type": "summarize", "last_error_code": "EGRESS_DENIED" }
+  ]
+}
