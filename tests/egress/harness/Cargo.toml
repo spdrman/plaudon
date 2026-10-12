@@ -1,0 +1,21 @@
+[package]
+name = "plaudon-egress-harness"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+# No `interpose` feature: the harness links this crate only for the wire-format
+# helpers and the platform constants. Installing the hooks here would interpose
+# the harness's own libc calls.
+plaudon-egress-monitor = { path = "../monitor", default-features = false }
+plaudon-egress-scenario = { path = "../scenario" }
+plaudon-security = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

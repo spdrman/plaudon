@@ -1,0 +1,24 @@
+[package]
+name = "plaudon-egress-monitor"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[lib]
+path = "src/lib.rs"
+# `cdylib` is what gets injected with DYLD_INSERT_LIBRARIES / LD_PRELOAD.
+# `rlib` lets the harness link the pure wire-format helpers for a round-trip test.
+crate-type = ["cdylib", "rlib"]
+
+[features]
+# Installs the libc hooks. Deliberately NOT a default: the harness links this
+# crate for its wire-format helpers, and a default-on hook would interpose the
+# harness's own libc calls. The injected artifact is built with
+# `cargo build -p plaudon-egress-monitor --features interpose`.
+interpose = []
+
+[dependencies]
+libc = { workspace = true }
+
+[lints]
+workspace = true
