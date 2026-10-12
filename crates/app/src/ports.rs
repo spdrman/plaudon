@@ -656,3 +656,102 @@ pub trait ArchivePort: Send + Sync {
         restore_tombstoned: bool,
     ) -> Result<crate::dto::RestoreArchiveResponse, AppError>;
 }
+
+/// Transcript tools, grounded question answering, study artifacts and the
+/// per-recording conversations they are recorded in (spec §9.7, §9.8, matrix
+/// row A11).
+///
+/// Every method is user-initiated and runs one tool. The port owns the three
+/// decisions a command must not make for itself: which text model answers,
+/// whether that route may be used right now, and whether an answer survived
+/// anchor verification.
+#[async_trait]
+pub trait ToolsPort: Send + Sync {
+    /// Registered tools at their highest version, with the route they would
+    /// run on.
+    async fn list_transcript_tools(
+        &self,
+        recording_id: Option<RecordingId>,
+    ) -> Result<crate::dto::ListTranscriptToolsResponse, AppError>;
+
+    /// Answer one question from one pinned transcript revision.
+    ///
+    /// A refusal outcome is a successful answer: only an infrastructure
+    /// failure, a refused route or an invalid argument is an `AppError`.
+    async fn ask_recording(
+        &self,
+        request: crate::validate::ValidatedAskRecording,
+    ) -> Result<crate::dto::AskRecordingResponse, AppError>;
+
+    /// Conversations recorded against one recording, newest first.
+    async fn list_conversations(
+        &self,
+        recording_id: RecordingId,
+    ) -> Result<crate::dto::ListConversationsResponse, AppError>;
+
+    /// Generate and store one set of study artifacts.
+    async fn generate_study_artifacts(
+        &self,
+        request: crate::validate::ValidatedGenerateStudyArtifacts,
+    ) -> Result<crate::dto::GenerateStudyArtifactsResponse, AppError>;
+
+    /// Study artifacts already stored for one recording.
+    async fn list_study_artifacts(
+        &self,
+        recording_id: RecordingId,
+    ) -> Result<crate::dto::ListStudyArtifactsResponse, AppError>;
+
+    /// Recorded tool runs of one recording, newest first.
+    async fn list_tool_runs(
+        &self,
+        recording_id: RecordingId,
+    ) -> Result<crate::dto::ListToolRunsResponse, AppError>;
+}
+
+/// Output templates: the shipped built-ins and the user's editable copies
+/// (spec §9.3, matrix row A12).
+///
+/// A built-in is never edited in place and never shadowed. An edit to a user
+/// copy stores a new version and keeps the previous one, so an output that
+/// recorded `(template_id, template_version)` still resolves to the document
+/// that produced it.
+#[async_trait]
+pub trait TemplatesPort: Send + Sync {
+    /// Every template this installation can run.
+    async fn list_templates(&self) -> Result<crate::dto::ListTemplatesResponse, AppError>;
+
+    /// One template at one version; the current version when none is named.
+    async fn get_template(
+        &self,
+        template_id: String,
+        version: Option<String>,
+    ) -> Result<crate::dto::TemplateDocumentDto, AppError>;
+
+    /// Create an editable copy of a built-in.
+    async fn create_template_copy(
+        &self,
+        base_id: String,
+        new_id: String,
+        display_name: Option<String>,
+    ) -> Result<crate::dto::TemplateDocumentDto, AppError>;
+
+    /// Store an edited user copy as a new version.
+    async fn save_template(
+        &self,
+        template_id: String,
+        document: String,
+        expected_version: Option<String>,
+    ) -> Result<crate::dto::SaveTemplateResponse, AppError>;
+
+    /// Check a document without storing anything.
+    async fn validate_template(
+        &self,
+        document: String,
+    ) -> Result<crate::dto::ValidateTemplateResponse, AppError>;
+
+    /// Stored versions of one template, newest first.
+    async fn list_template_versions(
+        &self,
+        template_id: String,
+    ) -> Result<crate::dto::ListTemplateVersionsResponse, AppError>;
+}

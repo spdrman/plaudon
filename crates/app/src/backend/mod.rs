@@ -27,6 +27,8 @@ pub mod models;
 pub mod outputs;
 pub mod sources;
 pub mod store;
+pub mod templates;
+pub mod tools;
 pub mod update;
 
 use std::collections::BTreeMap;

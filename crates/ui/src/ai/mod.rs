@@ -29,6 +29,7 @@ pub mod review;
 mod stage;
 pub mod summarize;
 pub mod templates;
+pub mod tools;
 pub mod transcription;
 
 pub use badge::{tone_color, Badge};
@@ -41,7 +42,8 @@ pub use models::ModelPicker;
 pub use outputs::OutputsViewer;
 pub use review::{ClaimFilter, ReviewPanel};
 pub use summarize::SummarizationPanel;
-pub use templates::TemplatesPlaceholder;
+pub use templates::TemplateManager;
+pub use tools::{AskPanel, StudyPanel, ToolRunsPanel};
 pub use transcription::TranscriptionPanel;
 
 use plaudon_app::command::AppCommand;

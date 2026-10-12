@@ -11,3 +11,4 @@ pub mod library;
 pub mod recording;
 pub mod search;
 pub mod sources;
+pub mod templates;

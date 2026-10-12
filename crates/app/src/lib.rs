@@ -44,6 +44,7 @@ pub mod settings_presentation;
 pub mod shell_state;
 pub mod shortcuts;
 pub mod tone;
+pub mod tool_presentation;
 pub mod updater;
 pub mod validate;
 
@@ -58,7 +59,7 @@ use crate::events::EventSink;
 use crate::ports::{
     ActivityPort, ArchivePort, CapabilitiesPort, CloudPort, DeletionPort, DevicesPort, ExportPort,
     ImportPort, JobsPort, LibraryPort, MediaExportPort, ModelsPort, OutputsPort, SearchPort,
-    SettingsPort, SourcesPort, SpeakersPort, TranscriptPort, UpdatePort,
+    SettingsPort, SourcesPort, SpeakersPort, TemplatesPort, ToolsPort, TranscriptPort, UpdatePort,
 };
 use crate::secrets::SecretStore;
 
@@ -89,6 +90,10 @@ pub struct AppPorts {
     pub devices: Arc<dyn DevicesPort>,
     /// Generated outputs and claim review.
     pub outputs: Arc<dyn OutputsPort>,
+    /// Transcript tools, ask-about-recording and study artifacts.
+    pub tools: Arc<dyn ToolsPort>,
+    /// Output templates and the user's editable copies.
+    pub templates: Arc<dyn TemplatesPort>,
     /// Original-audio and sanitized-derivative export.
     pub media_export: Arc<dyn MediaExportPort>,
     /// Deletion with disclosure and tombstones.
@@ -203,6 +208,10 @@ pub async fn build_ports_with_radio(
         )),
         cloud: Arc::clone(&backend) as Arc<dyn CloudPort>,
         outputs: Arc::clone(&backend) as Arc<dyn OutputsPort>,
+        tools: Arc::clone(&backend) as Arc<dyn ToolsPort>,
+        templates: Arc::new(crate::backend::templates::TemplatesBackend::new(
+            app_data_dir,
+        )),
         devices: Arc::new(devices),
         media_export: Arc::clone(&backend) as Arc<dyn MediaExportPort>,
         deletion: Arc::clone(&backend) as Arc<dyn DeletionPort>,

@@ -1,0 +1,147 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/list_study_artifacts.response.schema.json",
+  "title": "list_study_artifacts.response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "sets"
+  ],
+  "properties": {
+    "sets": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/study_artifact_set"}
+    }
+  },
+  "$defs": {
+    "study_artifact_set": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "output_id",
+        "tool_id",
+        "tool_version",
+        "transcript_revision_id",
+        "revision_is_current",
+        "created_at",
+        "artifacts"
+      ],
+      "properties": {
+        "output_id": {"type": "string"},
+        "tool_id": {"type": "string"},
+        "tool_version": {"type": "integer", "minimum": 0},
+        "transcript_revision_id": {"type": "string"},
+        "revision_is_current": {"type": "boolean"},
+        "created_at": {"type": "string"},
+        "artifacts": {"$ref": "#/$defs/study_artifacts"}
+      }
+    },
+    "study_artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "flashcards",
+        "quiz",
+        "definitions"
+      ],
+      "properties": {
+        "flashcards": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/flashcard"}
+        },
+        "quiz": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/quiz_item"}
+        },
+        "definitions": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/definition"}
+        }
+      }
+    },
+    "flashcard": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["front", "back", "anchors"],
+      "properties": {
+        "front": {"type": "string"},
+        "back": {"type": "string"},
+        "anchors": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/anchor"}
+        }
+      }
+    },
+    "quiz_item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["question", "options", "answer_index", "anchors"],
+      "properties": {
+        "question": {"type": "string"},
+        "options": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "answer_index": {"type": "integer", "minimum": 0},
+        "anchors": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/anchor"}
+        }
+      }
+    },
+    "definition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["term", "definition", "anchors"],
+      "properties": {
+        "term": {"type": "string"},
+        "definition": {"type": "string"},
+        "anchors": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/anchor"}
+        }
+      }
+    },
+    "anchor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "seq_index",
+        "char_start",
+        "char_end",
+        "excerpt",
+        "verified",
+        "alignment_origin"
+      ],
+      "properties": {
+        "seq_index": {"type": "integer", "minimum": 0},
+        "char_start": {"type": "integer", "minimum": 0},
+        "char_end": {"type": "integer", "minimum": 0},
+        "excerpt": {"type": "string"},
+        "verified": {"type": "boolean"},
+        "rejection_code": {
+          "anyOf": [
+            {"type": "string"},
+            {"type": "null"}
+          ]
+        },
+        "matched_text": {
+          "anyOf": [
+            {"type": "string"},
+            {"type": "null"}
+          ]
+        },
+        "alignment_origin": {
+          "type": "string",
+          "enum": ["none", "native", "derived"]
+        },
+        "seek_ms": {
+          "anyOf": [
+            {"type": "integer", "minimum": 0},
+            {"type": "null"}
+          ]
+        }
+      }
+    }
+  }
+}

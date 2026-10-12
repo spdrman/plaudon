@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/ask_recording.request.schema.json",
+  "title": "ask_recording.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "recording_id",
+    "question",
+    "revision_id",
+    "model_override",
+    "cost_acknowledged"
+  ],
+  "properties": {
+    "recording_id": {"type": "string"},
+    "question": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000
+    },
+    "revision_id": {
+      "anyOf": [
+        {"type": "string"},
+        {"type": "null"}
+      ]
+    },
+    "model_override": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["engine", "model_id"],
+          "properties": {
+            "engine": {"type": "string"},
+            "model_id": {"type": "string"}
+          }
+        },
+        {"type": "null"}
+      ]
+    },
+    "cost_acknowledged": {"type": "boolean"}
+  }
+}

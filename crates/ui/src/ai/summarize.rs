@@ -7,11 +7,15 @@
 //! [`super::stage`].
 //!
 //! **Templates.** A stored output names the template and template version it
-//! was produced with, and those facts are shown. There is no command that
-//! lists templates or stores a user-authored one
-//! (`docs/EGUI_MIGRATION_PLAN.md` row A12 keeps the templates screen an
-//! honest placeholder until a backend exists), so the panel says exactly that
-//! instead of offering a picker that would write nowhere.
+//! was produced with, and those facts are shown. The panel still offers no
+//! choice, and that is a property of the command it dispatches:
+//! `start_processing` carries a recording, a stage, a model override, a cost
+//! acknowledgement and a re-run flag, and no field that selects a template.
+//! Templates themselves — the built-ins, a user's own copies, the editor, the
+//! validation problems and the version history — are managed on the Templates
+//! destination ([`crate::screens::templates`]), over the six commands
+//! `list_templates`, `get_template`, `create_template_copy`, `save_template`,
+//! `validate_template` and `list_template_versions`.
 
 use egui::Ui;
 use plaudon_app::cloud_presentation::ProcessingStage;
@@ -29,11 +33,16 @@ const SUMMARY_STAGES: &[ProcessingStage] = &[
     ProcessingStage::CitationVerification,
 ];
 
-/// What a template picker would need before it can exist.
-pub const TEMPLATES_PLACEHOLDER: &str =
-    "Templates are fixed in this build. No command publishes the template catalogue or stores a \
-     custom template yet, so this panel shows the template each output was produced with rather \
-     than offering a choice that would not be saved.";
+/// What this panel can and cannot say about templates.
+///
+/// Rendered next to the provenance of the latest output, so the absence of a
+/// picker here reads as a statement about `start_processing` rather than as a
+/// missing feature.
+pub const TEMPLATE_PROVENANCE_NOTE: &str =
+    "Each output records the template and template version it was produced with, which is what is \
+     shown here. Starting a stage does not select a template: `start_processing` has no field for \
+     one. Templates themselves — the built-ins, your own copies and their version history — are \
+     managed on the Templates screen.";
 
 /// Choosing a summary stage and a model, and watching the job.
 #[derive(Debug)]
@@ -99,7 +108,7 @@ impl SummarizationPanel {
                 ui.label("No output has been generated for this recording yet.");
             }
         }
-        ui.label(TEMPLATES_PLACEHOLDER);
+        ui.label(TEMPLATE_PROVENANCE_NOTE);
 
         ui.separator();
         output.extend(self.models.ui(
