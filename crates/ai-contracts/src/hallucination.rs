@@ -1,4 +1,4 @@
-//! Non-destructive hallucination detection (spec §8.6A).
+//! Non-destructive hallucination detection (spec §8.6A — task F1.5).
 //!
 //! > We will detect low-confidence/non-speech hallucinations using a measured
 //! > evaluation corpus, not silently delete questionable text.
@@ -9,28 +9,28 @@
 //! over silence and to fall into repetition loops; we surface both rather than
 //! pretending they did not happen.
 
-use crate::transcript::{
-    AnnotationKind, Confidence, SourceTime, TranscriptAnnotation, TranscriptDraft,
-    TranscriptSegmentDraft,
-};
+use plaudon_domain::model::EngineId;
+use plaudon_domain::transcript::{Confidence, ConfidenceScale};
+
+use crate::stt::{TranscriptDraft, TranscriptSegmentDraft};
+use crate::transcript::{AnnotationKind, SourceTime, TranscriptAnnotation};
 
 /// Measured speech/non-speech map over the source timeline.
 ///
-/// Produced by the audio pipeline's energy analysis (`plaudon_audio::silence`),
-/// never by the engine itself: using the engine's own output to judge the
-/// engine would be circular.
+/// Produced by the audio pipeline's energy analysis
+/// (`plaudon_audio::silence`), never by the engine itself: judging the engine
+/// with its own output would be circular.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SpeechActivity {
     sample_rate_hz: u32,
-    /// Half-open `[start, end)` sample ranges measured as speech, sorted and
-    /// non-overlapping.
+    /// Half-open `[start, end)` sample ranges measured as speech; sorted,
+    /// merged and clamped by the constructor.
     speech_intervals: Vec<(u64, u64)>,
     total_samples: u64,
 }
 
 impl SpeechActivity {
-    /// `speech_intervals` is normalised: sorted, merged, and clamped to
-    /// `total_samples`.
+    /// Build from raw intervals, which are sorted, merged and clamped.
     #[must_use]
     pub fn new(sample_rate_hz: u32, total_samples: u64, speech_intervals: Vec<(u64, u64)>) -> Self {
         let mut intervals: Vec<(u64, u64)> = speech_intervals
@@ -53,25 +53,37 @@ impl SpeechActivity {
         }
     }
 
+    /// Rate the interval offsets are expressed in.
     #[must_use]
     pub const fn sample_rate_hz(&self) -> u32 {
         self.sample_rate_hz
     }
 
+    /// Length of the measured timeline, in samples.
     #[must_use]
     pub const fn total_samples(&self) -> u64 {
         self.total_samples
     }
 
+    /// Measured speech intervals, sorted and non-overlapping.
     #[must_use]
     pub fn speech_intervals(&self) -> &[(u64, u64)] {
         &self.speech_intervals
     }
 
+    /// Total measured speech, in samples.
+    #[must_use]
+    pub fn speech_samples(&self) -> u64 {
+        self.speech_intervals
+            .iter()
+            .map(|(start, end)| end - start)
+            .sum()
+    }
+
     /// Fraction of `[start, end)` measured as speech, in `0.0..=1.0`.
     ///
-    /// An empty or inverted range reports `1.0` ("nothing to suspect"), because
-    /// an absent range is a timestamp problem, not a hallucination signal.
+    /// An empty or inverted range reports `1.0` ("nothing to suspect"): an
+    /// absent range is a timestamp problem, not a hallucination signal.
     #[must_use]
     pub fn speech_ratio(&self, start: u64, end: u64) -> f32 {
         if end <= start {
@@ -92,10 +104,25 @@ impl SpeechActivity {
     }
 }
 
-/// Tunable thresholds. Defaults are the documented starting point; §17.2/§17.6
-/// require they be re-derived from the measured corpus before any quality
-/// claim is published, and the values live in one place so that recalibration
-/// is a data change, not a code change.
+/// A confidence floor, scoped to the engine and scale it was calibrated on.
+///
+/// §8.5 forbids cross-vendor confidence comparison, so a floor never applies
+/// outside its own engine and scale.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ConfidenceFloor {
+    /// Engine the floor was calibrated for.
+    pub engine: EngineId,
+    /// Scale the floor is expressed on.
+    pub scale: ConfidenceScale,
+    /// Values at or below this are flagged.
+    pub floor: f64,
+}
+
+/// Tunable thresholds.
+///
+/// Defaults are the documented starting point. §17.2/§17.6 require they be
+/// re-derived from the measured corpus before any quality claim is published;
+/// keeping them in one struct makes recalibration a data change.
 #[derive(Debug, Clone, PartialEq)]
 pub struct HallucinationPolicy {
     /// A phrase repeated at least this many times consecutively (across
@@ -105,12 +132,10 @@ pub struct HallucinationPolicy {
     /// is flagged as suspected non-speech.
     pub max_non_speech_ratio: f32,
     /// Minimum characters a repeated phrase must have before repetition is
-    /// considered suspicious. Guards against flagging "yes. yes. yes.".
+    /// suspicious. Stops "yes. yes. yes." from being flagged.
     pub min_repeat_phrase_chars: usize,
-    /// Per-scale confidence floor. A segment whose confidence is below the
-    /// floor *for its own scale* is flagged. Scales are never compared
-    /// across engines (§8.5).
-    pub confidence_floors: Vec<(String, f32)>,
+    /// Per-engine, per-scale confidence floors.
+    pub confidence_floors: Vec<ConfidenceFloor>,
 }
 
 impl Default for HallucinationPolicy {
@@ -119,27 +144,32 @@ impl Default for HallucinationPolicy {
             max_consecutive_repeats: 3,
             max_non_speech_ratio: 0.10,
             min_repeat_phrase_chars: 4,
-            // whisper.cpp average log-probability: values at or below -1.0 are
-            // the documented "very unsure" band used by whisper's own
-            // `no_speech`/`logprob` filters.
-            confidence_floors: vec![("whisper.avg_logprob".to_string(), -1.0)],
+            // whisper.cpp average log-probability: at or below -1.0 is the
+            // band whisper's own `logprob_threshold` treats as a failed decode.
+            confidence_floors: vec![ConfidenceFloor {
+                engine: EngineId::new("whisper.cpp"),
+                scale: ConfidenceScale::AverageLogProbability,
+                floor: -1.0,
+            }],
         }
     }
 }
 
 impl HallucinationPolicy {
-    fn floor_for(&self, confidence: &Confidence) -> Option<f32> {
+    fn floor_for(&self, confidence: &Confidence) -> Option<f64> {
         self.confidence_floors
             .iter()
-            .find(|(scale, _)| *scale == confidence.scale)
-            .map(|(_, floor)| *floor)
+            .find(|candidate| {
+                candidate.engine == confidence.engine && candidate.scale == confidence.scale
+            })
+            .map(|candidate| candidate.floor)
     }
 }
 
 /// Run every detector and return the annotations to attach to the draft.
 ///
-/// `activity` is optional: without a measured speech map we simply skip the
-/// non-speech detector rather than guessing.
+/// `activity` is optional: without a measured speech map the non-speech
+/// detector is skipped rather than guessing.
 #[must_use]
 pub fn detect_hallucinations(
     draft: &TranscriptDraft,
@@ -153,8 +183,18 @@ pub fn detect_hallucinations(
         detect_non_speech(draft, activity, policy, &mut annotations);
     }
     detect_low_confidence(draft, policy, &mut annotations);
-    annotations.sort_by_key(|annotation| (annotation.segment_index, annotation.kind.as_str()));
+    annotations.sort_by_key(|annotation| (annotation.segment_index, annotation.kind));
     annotations
+}
+
+/// Attach detected annotations to a draft. Text is never touched.
+pub fn annotate(
+    draft: &mut TranscriptDraft,
+    activity: Option<&SpeechActivity>,
+    policy: &HallucinationPolicy,
+) {
+    let detected = detect_hallucinations(draft, activity, policy);
+    draft.annotations.extend(detected);
 }
 
 fn normalise(text: &str) -> String {
@@ -172,7 +212,11 @@ fn detect_cross_segment_repetition(
     policy: &HallucinationPolicy,
     out: &mut Vec<TranscriptAnnotation>,
 ) {
-    let normalised: Vec<String> = draft.segments.iter().map(|s| normalise(&s.text)).collect();
+    let normalised: Vec<String> = draft
+        .segments
+        .iter()
+        .map(|segment| normalise(&segment.text))
+        .collect();
     let mut run_start = 0usize;
     while run_start < normalised.len() {
         let mut run_end = run_start + 1;
@@ -209,7 +253,7 @@ fn detect_intra_segment_repetition(
         if words.is_empty() {
             continue;
         }
-        // Look for a repeating unit of 1..=6 words tiling the segment.
+        // Look for a repeating unit of 1..=6 words that tiles the segment.
         for unit in 1..=6usize.min(words.len()) {
             let pattern = &words[..unit];
             if pattern.join(" ").len() < policy.min_repeat_phrase_chars {
@@ -226,7 +270,9 @@ fn detect_intra_segment_repetition(
                     draft,
                     index,
                     AnnotationKind::SuspectedRepetitionLoop,
-                    format!("segment consists of the same {unit}-word phrase repeated {repeats} times"),
+                    format!(
+                        "segment consists of the same {unit}-word phrase repeated {repeats} times"
+                    ),
                 ));
                 break;
             }
@@ -258,7 +304,7 @@ fn detect_non_speech(
                 AnnotationKind::SuspectedNonSpeech,
                 format!(
                     "text claimed over a region measured as {:.0}% speech",
-                    ratio * 100.0
+                    f64::from(ratio) * 100.0
                 ),
             ));
         }
@@ -283,8 +329,9 @@ fn detect_low_confidence(
                 index,
                 AnnotationKind::LowConfidence,
                 format!(
-                    "confidence {:.3} on scale `{}` is at or below the calibrated floor {:.3}",
-                    confidence.value, confidence.scale, floor
+                    "confidence {:.3} from engine `{}` is at or below its calibrated floor {floor:.3}",
+                    confidence.value,
+                    confidence.engine.as_str()
                 ),
             ));
         }
@@ -302,57 +349,63 @@ fn annotation(
         kind,
         reason,
         segment_index,
-        start: segment.and_then(|s| s.start),
-        end: segment.and_then(|s| s.end),
+        start: segment.and_then(|segment| segment.start),
+        end: segment.and_then(|segment| segment.end),
     }
 }
 
-/// Convenience: attach detected annotations to a draft without touching text.
-pub fn annotate(
-    draft: &mut TranscriptDraft,
-    activity: Option<&SpeechActivity>,
-    policy: &HallucinationPolicy,
-) {
-    let detected = detect_hallucinations(draft, activity, policy);
-    draft.annotations.extend(detected);
-}
-
-/// Helper for tests and callers: the source-time range a draft covers.
+/// The source-time range a draft covers, when it carries times.
 #[must_use]
 pub fn draft_span(draft: &TranscriptDraft) -> Option<(SourceTime, SourceTime)> {
-    let start = draft.segments.iter().filter_map(|s| s.start).min_by_key(|t| t.sample_offset)?;
-    let end = draft.segments.iter().filter_map(|s| s.end).max_by_key(|t| t.sample_offset)?;
+    let start = draft
+        .segments
+        .iter()
+        .filter_map(|segment| segment.start)
+        .min_by_key(|time| time.sample_offset)?;
+    let end = draft
+        .segments
+        .iter()
+        .filter_map(|segment| segment.end)
+        .max_by_key(|time| time.sample_offset)?;
     Some((start, end))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::transcript::{AlignmentOrigin, TimePrecision};
+    use crate::transcript::TimePrecision;
+    use plaudon_domain::media::Sha256Digest;
+    use plaudon_domain::model::ModelIdentity;
+
+    fn engine() -> EngineId {
+        EngineId::new("whisper.cpp")
+    }
 
     fn time(offset: u64) -> SourceTime {
         SourceTime::new(offset, 16_000, TimePrecision::Segment)
     }
 
     fn timed_draft(segments: Vec<TranscriptSegmentDraft>) -> TranscriptDraft {
-        let mut draft = TranscriptDraft::text_only("whisper.cpp", "tiny.en", segments);
-        draft.alignment_origin = AlignmentOrigin::Native;
-        draft
+        TranscriptDraft::native(
+            engine(),
+            ModelIdentity::new(engine(), "tiny.en"),
+            Sha256Digest::of(b"fixture"),
+            segments,
+        )
     }
 
     #[test]
     fn repeated_segments_are_flagged_not_removed() {
         let draft = timed_draft(vec![
-            TranscriptSegmentDraft::timed(time(0), time(16_000), "thank you."),
-            TranscriptSegmentDraft::timed(time(16_000), time(32_000), "Thank you!"),
-            TranscriptSegmentDraft::timed(time(32_000), time(48_000), "thank you"),
+            TranscriptSegmentDraft::timed(0, time(0), time(16_000), "thank you."),
+            TranscriptSegmentDraft::timed(1, time(16_000), time(32_000), "Thank you!"),
+            TranscriptSegmentDraft::timed(2, time(32_000), time(48_000), "thank you"),
         ]);
         let annotations = detect_hallucinations(&draft, None, &HallucinationPolicy::default());
         assert_eq!(annotations.len(), 3);
         assert!(annotations
             .iter()
-            .all(|a| a.kind == AnnotationKind::SuspectedRepetitionLoop));
-        // Text is untouched.
+            .all(|annotation| annotation.kind == AnnotationKind::SuspectedRepetitionLoop));
         assert_eq!(draft.segments.len(), 3);
         assert_eq!(draft.segments[0].text, "thank you.");
     }
@@ -360,15 +413,19 @@ mod tests {
     #[test]
     fn two_repeats_are_not_flagged() {
         let draft = timed_draft(vec![
-            TranscriptSegmentDraft::timed(time(0), time(16_000), "thank you."),
-            TranscriptSegmentDraft::timed(time(16_000), time(32_000), "thank you."),
+            TranscriptSegmentDraft::timed(0, time(0), time(16_000), "thank you."),
+            TranscriptSegmentDraft::timed(1, time(16_000), time(32_000), "thank you."),
         ]);
-        assert!(detect_hallucinations(&draft, None, &HallucinationPolicy::default()).is_empty());
+        assert_eq!(
+            detect_hallucinations(&draft, None, &HallucinationPolicy::default()).len(),
+            0
+        );
     }
 
     #[test]
     fn intra_segment_loop_is_flagged() {
         let draft = timed_draft(vec![TranscriptSegmentDraft::timed(
+            0,
             time(0),
             time(160_000),
             "subscribe to the channel subscribe to the channel subscribe to the channel subscribe to the channel",
@@ -381,11 +438,11 @@ mod tests {
     #[test]
     fn text_over_measured_silence_is_flagged() {
         let draft = timed_draft(vec![TranscriptSegmentDraft::timed(
+            0,
             time(0),
             time(16_000),
             "Thanks for watching!",
         )]);
-        // Entire minute measured as non-speech.
         let activity = SpeechActivity::new(16_000, 960_000, vec![]);
         let annotations =
             detect_hallucinations(&draft, Some(&activity), &HallucinationPolicy::default());
@@ -398,24 +455,31 @@ mod tests {
     #[test]
     fn text_over_measured_speech_is_not_flagged() {
         let draft = timed_draft(vec![TranscriptSegmentDraft::timed(
+            0,
             time(0),
             time(16_000),
             "Thanks for watching!",
         )]);
         let activity = SpeechActivity::new(16_000, 960_000, vec![(0, 16_000)]);
-        assert!(
-            detect_hallucinations(&draft, Some(&activity), &HallucinationPolicy::default())
-                .is_empty()
+        assert_eq!(
+            detect_hallucinations(&draft, Some(&activity), &HallucinationPolicy::default()).len(),
+            0
         );
     }
 
     #[test]
-    fn low_confidence_uses_matching_scale_only() {
-        let mut low = TranscriptSegmentDraft::timed(time(0), time(16_000), "mumble");
-        low.confidence = Some(Confidence::new(-1.5, "whisper.avg_logprob"));
-        let mut other_scale = TranscriptSegmentDraft::timed(time(16_000), time(32_000), "clear");
-        other_scale.confidence = Some(Confidence::new(-1.5, "apple.confidence"));
-        let draft = timed_draft(vec![low, other_scale]);
+    fn low_confidence_floor_never_crosses_engines() {
+        let low =
+            TranscriptSegmentDraft::timed(0, time(0), time(16_000), "mumble").with_confidence(
+                Confidence::new(engine(), ConfidenceScale::AverageLogProbability, -1.5),
+            );
+        let other_engine = TranscriptSegmentDraft::timed(1, time(16_000), time(32_000), "clear")
+            .with_confidence(Confidence::new(
+                EngineId::new("apple.speech"),
+                ConfidenceScale::AverageLogProbability,
+                -1.5,
+            ));
+        let draft = timed_draft(vec![low, other_engine]);
         let annotations = detect_hallucinations(&draft, None, &HallucinationPolicy::default());
         assert_eq!(annotations.len(), 1);
         assert_eq!(annotations[0].segment_index, 0);
@@ -423,11 +487,25 @@ mod tests {
     }
 
     #[test]
-    fn speech_ratio_is_fraction_of_overlap() {
+    fn low_confidence_floor_never_crosses_scales() {
+        let segment =
+            TranscriptSegmentDraft::timed(0, time(0), time(16_000), "mumble").with_confidence(
+                Confidence::new(engine(), ConfidenceScale::Probability, -1.5),
+            );
+        let draft = timed_draft(vec![segment]);
+        assert_eq!(
+            detect_hallucinations(&draft, None, &HallucinationPolicy::default()).len(),
+            0
+        );
+    }
+
+    #[test]
+    fn speech_ratio_is_the_fraction_of_overlap() {
         let activity = SpeechActivity::new(16_000, 1000, vec![(0, 250), (500, 750)]);
         assert!((activity.speech_ratio(0, 1000) - 0.5).abs() < 1e-6);
         assert!((activity.speech_ratio(250, 500) - 0.0).abs() < 1e-6);
         assert!((activity.speech_ratio(0, 250) - 1.0).abs() < 1e-6);
+        assert_eq!(activity.speech_samples(), 500);
     }
 
     #[test]
@@ -439,14 +517,25 @@ mod tests {
     #[test]
     fn annotate_appends_without_mutating_text() {
         let mut draft = timed_draft(vec![
-            TranscriptSegmentDraft::timed(time(0), time(16_000), "thank you."),
-            TranscriptSegmentDraft::timed(time(16_000), time(32_000), "thank you."),
-            TranscriptSegmentDraft::timed(time(32_000), time(48_000), "thank you."),
+            TranscriptSegmentDraft::timed(0, time(0), time(16_000), "thank you."),
+            TranscriptSegmentDraft::timed(1, time(16_000), time(32_000), "thank you."),
+            TranscriptSegmentDraft::timed(2, time(32_000), time(48_000), "thank you."),
         ]);
         let before: Vec<String> = draft.segments.iter().map(|s| s.text.clone()).collect();
         annotate(&mut draft, None, &HallucinationPolicy::default());
         let after: Vec<String> = draft.segments.iter().map(|s| s.text.clone()).collect();
         assert_eq!(before, after);
         assert_eq!(draft.annotations.len(), 3);
+    }
+
+    #[test]
+    fn draft_span_covers_every_timed_segment() {
+        let draft = timed_draft(vec![
+            TranscriptSegmentDraft::timed(0, time(100), time(200), "a"),
+            TranscriptSegmentDraft::timed(1, time(300), time(900), "b"),
+        ]);
+        let (start, end) = draft_span(&draft).unwrap();
+        assert_eq!(start.sample_offset, 100);
+        assert_eq!(end.sample_offset, 900);
     }
 }

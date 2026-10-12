@@ -17,6 +17,7 @@ pub mod error;
 pub mod journal;
 pub mod migrations;
 pub mod repo;
+pub mod transcript;
 
 pub use db::Database;
 pub use error::{PersistenceError, PersistenceResult};

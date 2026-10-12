@@ -56,6 +56,12 @@ pub const MIGRATIONS: &[Migration] = &[
         name: "job_engine",
         sql: include_str!("../migrations/0100_job_engine.sql"),
     },
+    // 200+ is EPIC F's range (task F2.4).
+    Migration {
+        version: 200,
+        name: "transcript_provenance",
+        sql: include_str!("../migrations/0200_transcript_provenance.sql"),
+    },
 ];
 
 /// An applied migration as recorded in the database.
@@ -309,7 +315,10 @@ mod tests {
         let runner = MigrationRunner::new();
         let report = runner.run(&db).await.unwrap();
 
-        assert_eq!(report.applied, vec![1, 2]);
+        assert_eq!(
+            report.applied,
+            MIGRATIONS.iter().map(|m| m.version).collect::<Vec<_>>()
+        );
         assert_eq!(
             report.backup_path, None,
             "a fresh library has nothing to back up"
@@ -346,7 +355,13 @@ mod tests {
 
         let full = MigrationRunner::new();
         let report = full.run(&db).await.unwrap();
-        assert_eq!(report.applied, vec![2]);
+        assert_eq!(
+            report.applied,
+            MIGRATIONS[1..]
+                .iter()
+                .map(|m| m.version)
+                .collect::<Vec<_>>()
+        );
         let backup = report.backup_path.expect("an upgrade must back up first");
         assert!(
             backup.exists(),
