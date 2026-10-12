@@ -80,8 +80,8 @@ pub use embedder::{
     SCRIPTED_EMBEDDER_ID,
 };
 pub use enroll::{
-    reseal_exemplars, EnrolError, EnrolmentSource, ExemplarOutcome, SplitOutcome,
-    VoiceEnrolmentService, ENROL_SPEECH_MS, EXEMPLAR_SPEECH_MS,
+    cluster_clean_speech, reseal_exemplars, EnrolError, EnrolmentSource, ExemplarOutcome,
+    SplitOutcome, VoiceEnrolmentService, ENROL_SPEECH_MS, EXEMPLAR_SPEECH_MS,
 };
 pub use erasure::{ForgetAllDisclosure, ForgetAllReceipt, VoiceProfileEraser, FORGET_ALL_LIMITS};
 pub use pipeline::{

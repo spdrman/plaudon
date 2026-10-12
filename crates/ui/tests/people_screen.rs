@@ -19,11 +19,12 @@ use egui_kittest::Harness;
 use plaudon_app::command::{AppCommand, AppResponse};
 use plaudon_app::dto::{
     ActivationDisclosureDto, ConsentGateDto, DeletePersonResponse, ListPeopleResponse,
-    ListSpeakerSuggestionsResponse, MergeCandidateGroupDto, MergePeopleResponse, PersonDto,
-    PersonRefDto, PersonResponse, PersonVoiceDto, SpeakerSuggestionDto, VoiceProfileSettingsDto,
+    ListSpeakerSuggestionsResponse, ListVoiceExemplarsResponse, MergeCandidateGroupDto,
+    MergePeopleResponse, PersonDto, PersonRefDto, PersonResponse, PersonVoiceDto,
+    SpeakerSuggestionDto, VoiceExemplarDto, VoiceProfileSettingsDto,
 };
 use plaudon_domain::error::ErrorEnvelope;
-use plaudon_domain::ids::{PersonId, RecordingId, SpeakerSuggestionId};
+use plaudon_domain::ids::{PersonId, RecordingId, SpeakerSuggestionId, VoiceExemplarId};
 use plaudon_domain::time::Timestamp;
 use plaudon_ui::screens::people::picker::{CREATE_ENTRY, UNKNOWN_ENTRY};
 use plaudon_ui::screens::people::{PeopleScreen, PeopleTab};
@@ -727,6 +728,176 @@ fn every_control_of_the_merge_disclosure_is_named() {
     harness.get_by_label("Merge into Dana").click();
     harness.run();
     a11y::assert_every_control_is_named(&harness, "People — the merge disclosure", &[]);
+}
+
+/* ------------------------------------- split by provenance (VP-091, §3.5) */
+
+fn exemplar(
+    title: &str,
+    cluster: &str,
+    start_ms: u64,
+    end_ms: u64,
+    speech_ms: u32,
+) -> VoiceExemplarDto {
+    VoiceExemplarDto {
+        exemplar_id: VoiceExemplarId::new(),
+        recording_id: Some(RecordingId::new()),
+        recording_title: Some(title.to_owned()),
+        cluster_key: Some(cluster.to_owned()),
+        source_start_ms: Some(start_ms),
+        source_end_ms: Some(end_ms),
+        speech_ms,
+        model_id: "ecapa".to_owned(),
+        model_version: "1".to_owned(),
+        created_at: Timestamp::from_millis(NOW_MS),
+    }
+}
+
+/// The roster with Priya enrolled from two recordings, matching on.
+fn enrolled_roster() -> Harness<'static, PeopleApp> {
+    let mut app = PeopleApp::new();
+    let people = vec![enrolled(person("Priya", 14)), person("Dana", 2)];
+    app.screen.data_mut().people = Some(roster(people));
+    app.screen.data_mut().settings = Some(settings(true));
+    let mut harness = harness(app);
+    harness.run();
+    harness
+}
+
+/// Open the split dialog and answer its provenance read.
+fn open_split(harness: &mut Harness<'_, PeopleApp>) -> ListVoiceExemplarsResponse {
+    activate(harness, "Split Priya's voiceprint…");
+    let person_id = harness.state().screen.data().people()[0].person_id;
+    let list = ListVoiceExemplarsResponse {
+        person_id,
+        exemplars: vec![
+            exemplar("Monday stand-up", "S1", 12_000, 96_000, 24_000),
+            exemplar("Thursday review", "S2", 0, 30_000, 18_000),
+        ],
+        total_speech_ms: 42_000,
+        source_recordings: 2,
+    };
+    harness.state_mut().answer(
+        "list_voice_exemplars",
+        AppResponse::ListVoiceExemplars(list.clone()),
+    );
+    harness.run();
+    list
+}
+
+#[test]
+fn the_split_dialog_reads_the_provenance_and_shows_it_without_any_vector() {
+    let mut harness = enrolled_roster();
+    activate(&mut harness, "Split Priya's voiceprint…");
+    assert!(
+        harness.state().sent("list_voice_exemplars"),
+        "the dialog did not ask what the voiceprint is made of; sent {:?}",
+        harness.state().names()
+    );
+    assert!(
+        says(&harness, "Reading what this voiceprint is made of…"),
+        "{:?}",
+        labels(&harness)
+    );
+
+    let list = open_split(&mut harness);
+    let lines = labels(&harness);
+    for exemplar in &list.exemplars {
+        let expected = plaudon_ui::screens::people::exemplar_line(exemplar);
+        assert!(
+            lines.iter().any(|line| line.contains(&expected)),
+            "the provenance line is missing: {expected:?} in {lines:?}"
+        );
+    }
+    assert!(
+        lines.iter().any(|line| line.contains("Monday stand-up")
+            && line.contains("cluster S1")
+            && line.contains("0:12 to 1:36")),
+        "a provenance line must name the recording, the cluster and the span: {lines:?}"
+    );
+    assert!(
+        !lines.iter().any(|line| line.contains("embedding")
+            || line.contains("vector")
+            || line.contains("dimension")),
+        "the screen showed something about the stored vector: {lines:?}"
+    );
+}
+
+#[test]
+fn a_split_moves_the_ticked_exemplars_to_a_new_person_under_their_own_attestation() {
+    let mut harness = enrolled_roster();
+    let list = open_split(&mut harness);
+    let moving = plaudon_ui::screens::people::exemplar_line(&list.exemplars[1]);
+    activate(&mut harness, &moving);
+    assert!(
+        says(&harness, "1 of 2 exemplar(s) move; 1 stay."),
+        "{:?}",
+        labels(&harness)
+    );
+
+    type_into(&mut harness, "Their name", "Sam");
+    activate(&mut harness, "Sam has agreed to this");
+    activate(&mut harness, "Move the ticked exemplars");
+
+    let AppCommand::SplitVoiceEnrollment(request) = harness.state().last("split_voice_enrollment")
+    else {
+        panic!("the dialog splits with split_voice_enrollment");
+    };
+    assert_eq!(
+        request.exemplar_ids,
+        vec![list.exemplars[1].exemplar_id.to_string()],
+        "the split moved exemplars the user did not tick"
+    );
+    assert_eq!(request.new_person_display_name.as_deref(), Some("Sam"));
+    assert_eq!(request.target_person_id, None);
+    assert!(
+        request.consent.person_attested,
+        "the target's attestation is what a split needs"
+    );
+    assert_eq!(request.consent.disclosure_version, "2026-10-12");
+}
+
+#[test]
+fn moving_every_exemplar_is_a_merge_and_the_dialog_says_so_rather_than_sending_it() {
+    let mut harness = enrolled_roster();
+    let list = open_split(&mut harness);
+    for exemplar in &list.exemplars {
+        let line = plaudon_ui::screens::people::exemplar_line(exemplar);
+        activate(&mut harness, &line);
+    }
+    assert!(
+        says(&harness, "Moving all of them is a merge, not a split"),
+        "{:?}",
+        labels(&harness)
+    );
+    type_into(&mut harness, "Their name", "Sam");
+    activate(&mut harness, "Sam has agreed to this");
+    activate(&mut harness, "Move the ticked exemplars");
+    assert!(
+        !harness.state().sent("split_voice_enrollment"),
+        "a split the application is bound to refuse was sent anyway"
+    );
+}
+
+#[test]
+fn a_split_is_not_offered_where_there_is_nothing_to_split_off() {
+    // Dana has no enrolment at all, and matching off hides every enrolment
+    // affordance (VP-215).
+    let harness = enrolled_roster();
+    assert!(
+        !says(&harness, "Split Dana's voiceprint…"),
+        "{:?}",
+        labels(&harness)
+    );
+    let off = loaded(false);
+    assert!(!says(&off, "Split Priya's voiceprint…"));
+}
+
+#[test]
+fn every_control_of_the_split_dialog_is_named() {
+    let mut harness = enrolled_roster();
+    open_split(&mut harness);
+    a11y::assert_every_control_is_named(&harness, "People — the split dialog", &[]);
 }
 
 /* --------------------------------------------------------- refusals */

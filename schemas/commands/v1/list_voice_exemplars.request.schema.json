@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/list_voice_exemplars.request.schema.json",
+  "title": "list_voice_exemplars.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "person_id"
+  ],
+  "properties": {
+    "person_id": {
+      "type": "string",
+      "format": "uuid"
+    }
+  }
+}

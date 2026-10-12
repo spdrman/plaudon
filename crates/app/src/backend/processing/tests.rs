@@ -1991,6 +1991,158 @@ async fn splitting_an_enrolment_re_seals_the_exemplars_it_moves() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_cluster_reports_its_clean_speech_before_anything_is_enrolled() {
+    use crate::ports::VoiceProfilesPort;
+
+    let pipeline = VoicePipeline::open().await;
+    let recording_id = pipeline.transcribed("meter.wav").await;
+    let backend = Arc::clone(&pipeline.inner.backend);
+    pipeline.diarize_only(recording_id).await;
+
+    // The gate is shut and nobody is enrolled: the meter still answers,
+    // because it reads the stored reconciliation and computes nothing
+    // (VP-094, §12.2).
+    let speech = backend
+        .cluster_speech(recording_id, "S1")
+        .await
+        .expect("the cluster's clean speech");
+    assert_eq!(speech.cluster_key, "S1");
+    assert_eq!(speech.recording_id, recording_id);
+    assert_eq!(
+        speech.enrol_speech_ms,
+        plaudon_app_core::voice_profiles::ENROL_SPEECH_MS
+    );
+    assert_eq!(
+        speech.exemplar_speech_ms,
+        plaudon_app_core::voice_profiles::EXEMPLAR_SPEECH_MS
+    );
+    assert!(speech.clean_speech_ms > 0, "the cluster has speech");
+    assert_eq!(
+        speech.meets_enrol_minimum,
+        speech.clean_speech_ms >= speech.enrol_speech_ms
+    );
+    assert!(speech.spans > 0);
+    assert!(speech.first_span_start_ms.is_some());
+    assert!(speech.last_span_end_ms >= speech.first_span_start_ms);
+    assert!(
+        !backend
+            .voice_profile_settings()
+            .await
+            .expect("settings")
+            .enabled,
+        "measuring speech must not arm the feature"
+    );
+
+    let unknown = backend
+        .cluster_speech(recording_id, "nobody")
+        .await
+        .expect_err("an unknown cluster is an error, not a zero");
+    assert_eq!(unknown.code(), AppErrorCode::RecordNotFound);
+
+    pipeline.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn an_enrolment_lists_its_exemplars_with_provenance_and_never_a_vector() {
+    use crate::ports::{PeoplePort, VoiceProfilesPort};
+
+    let pipeline = VoicePipeline::open().await;
+    let first = pipeline.transcribed("provenance-one.wav").await;
+    let second = pipeline.transcribed("provenance-two.wav").await;
+    let backend = Arc::clone(&pipeline.inner.backend);
+    backend
+        .set_voice_profiles_enabled(
+            true,
+            Some(plaudon_app_core::voice_profiles::ACTIVATION_DISCLOSURE.version),
+        )
+        .await
+        .expect("the gate opens");
+    pipeline.diarize_only(first).await;
+    pipeline.diarize_only(second).await;
+
+    let priya = backend
+        .create_person(&plaudon_persistence::people::PersonDraft::named("Priya"))
+        .await
+        .expect("a roster entry");
+    backend
+        .enroll_person_voice(&crate::ports::EnrolmentRequest {
+            person_id: priya.person_id,
+            recording_id: first,
+            cluster_key: "S1".to_owned(),
+            attestation: Some(
+                crate::commands::voice_profiles::attestation(&consent_dto())
+                    .expect("a valid attestation"),
+            ),
+        })
+        .await
+        .expect("enrolled from the first recording");
+    backend
+        .add_voice_exemplar(&crate::ports::EnrolmentRequest {
+            person_id: priya.person_id,
+            recording_id: second,
+            cluster_key: "S2".to_owned(),
+            attestation: None,
+        })
+        .await
+        .expect("extended from the second recording");
+
+    let listed = backend
+        .list_voice_exemplars(priya.person_id)
+        .await
+        .expect("the provenance list");
+    assert_eq!(listed.person_id, priya.person_id);
+    assert_eq!(listed.exemplars.len(), 2);
+    assert_eq!(listed.source_recordings, 2);
+    assert_eq!(
+        listed.total_speech_ms,
+        listed
+            .exemplars
+            .iter()
+            .map(|exemplar| exemplar.speech_ms)
+            .sum::<u32>()
+    );
+    let sources: Vec<_> = listed
+        .exemplars
+        .iter()
+        .filter_map(|exemplar| exemplar.recording_id)
+        .collect();
+    assert!(sources.contains(&first) && sources.contains(&second));
+    for exemplar in &listed.exemplars {
+        assert!(
+            exemplar.cluster_key.is_some(),
+            "provenance names the cluster"
+        );
+        assert!(exemplar.speech_ms > 0);
+        assert!(exemplar.source_start_ms.is_some());
+    }
+
+    // The published shape is what the wire carries, and it carries no vector
+    // and no key material (VP-085).
+    let json = serde_json::to_value(&listed).expect("the response serialises");
+    plaudon_security::response::assert_no_secret_in_response(&json)
+        .expect("a provenance listing is free of biometric payload");
+    let rendered = json.to_string();
+    for forbidden in ["embedding", "cipher", "nonce"] {
+        assert!(
+            !rendered.contains(forbidden),
+            "the listing leaked {forbidden}: {rendered}"
+        );
+    }
+
+    let nobody = backend
+        .create_person(&plaudon_persistence::people::PersonDraft::named("Dana"))
+        .await
+        .expect("a second roster entry");
+    let refused = backend
+        .list_voice_exemplars(nobody.person_id)
+        .await
+        .expect_err("a person with no enrolment has no exemplars to list");
+    assert_eq!(refused.code(), AppErrorCode::RecordNotFound);
+
+    pipeline.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn forgetting_everyone_keeps_the_roster_and_turns_the_feature_off() {
     use crate::ports::{PeoplePort, VoiceProfilesPort};
 
