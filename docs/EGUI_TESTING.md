@@ -123,6 +123,7 @@ regenerated baseline is committed **with the change that caused it**, never on i
 | `plaudon-ui-testkit` self-tests | anywhere (software raster) | `cargo test -p plaudon-ui-testkit` |
 | `plaudon-craft-ui` vendored widget tests | anywhere, no GPU | `cargo test -p plaudon-craft-ui` |
 | kittest interaction tests | locally for logic, MARS for pixels | `cargo test -p plaudon-egui --test spike_kittest` |
+| AI workflow panels (O2.2): consent, claim review, stale/regenerate, Local-only refusal | anywhere, no GPU | `cargo test -p plaudon-ui --test ai_workflows --test ai_review --test ai_summarize` |
 | Snapshot comparison, scale and performance runs | **MARS only** | `scripts/e2e-remote.sh …` |
 
 The resource policy is part of the test strategy: heavy or renderer-dependent runs go to MARS Docker
