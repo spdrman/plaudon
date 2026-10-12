@@ -14,6 +14,12 @@ workspace = true
 egui = { workspace = true }
 plaudon-domain = { workspace = true }
 plaudon-transcript-doc = { workspace = true }
+# The workspace entry carries `default-features = false`, which keeps cpal out
+# of the view layer: the widgets never touch a device, and the kittest suite
+# must build in a container with no audio stack. The binary turns the device
+# backend back on with `features = ["cpal-output"]`.
+plaudon-audio-playback = { workspace = true }
 
 [dev-dependencies]
 egui_kittest = { workspace = true }
+tempfile = { workspace = true }

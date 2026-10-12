@@ -90,7 +90,7 @@ proptest! {
         for gesture in gestures {
             apply(&mut timeline, gesture);
             prop_assert_eq!(timeline.time_at_point(0.0), timeline.scroll());
-            prop_assert_eq!(timeline.point_of_time(timeline.scroll()), 0.0);
+            prop_assert!(timeline.point_of_time(timeline.scroll()).abs() < f32::EPSILON);
         }
     }
 

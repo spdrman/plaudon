@@ -1267,6 +1267,38 @@ mod tests {
     }
 
     #[test]
+    fn the_default_lead_buffer_configuration_produces_audio() {
+        // The deterministic configuration is what every other test uses, so
+        // this one exercises the production path: a mixing thread filling
+        // the ring ahead of the device. Timing-tolerant by necessity.
+        let out = FakeAudioOut::new(16_000, 1);
+        let device = out.device();
+        let mut player = Player::new(Box::new(out));
+        player.load(Box::new(MemoryPcmSource::sine(
+            16_000,
+            16_000 * 5,
+            220.0,
+            0.6,
+        )));
+        device.capture(true);
+        player.play().expect("play");
+
+        let mut heard = false;
+        for _ in 0..40 {
+            let block = device.render(512);
+            if block.iter().any(|sample| sample.abs() > 0.05) {
+                heard = true;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+        player.pump();
+        assert!(heard, "the lead buffer never delivered audio");
+        assert!(player.position() > Micros::ZERO);
+        assert!(player.stats().callbacks.load(Ordering::Relaxed) >= 40);
+        player.pause();
+    }
+
+    #[test]
     fn speed_labels_read_the_way_the_react_select_did() {
         assert_eq!(Speed::HALF.label(), "0.5×");
         assert_eq!(Speed::NORMAL.label(), "1×");
