@@ -53,6 +53,7 @@ plaudon-eval = { path = "crates/eval" }
 plaudon-updater = { path = "crates/updater" }
 plaudon-extraction-eval = { path = "crates/extraction-eval" }
 plaudon-release-tools = { path = "crates/release-tools" }
+plaudon-transcript-doc = { path = "crates/transcript-doc" }
 
 argon2 = { version = "0.6", features = ["kdf"] }
 async-trait = "0.1"

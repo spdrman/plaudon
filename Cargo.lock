@@ -4325,6 +4325,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "plaudon-transcript-doc"
+version = "0.1.0"
+dependencies = [
+ "plaudon-domain",
+ "proptest",
+ "serde",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "plaudon-updater"
 version = "0.1.0"
 dependencies = [
