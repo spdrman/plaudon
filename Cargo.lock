@@ -3293,12 +3293,14 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "clap",
+ "jsonschema",
  "plaudon-ai-contracts",
  "plaudon-ai-tools",
  "plaudon-domain",
  "proptest",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror 2.0.21",
  "time",
  "tokio",
@@ -3377,9 +3379,11 @@ dependencies = [
 name = "plaudon-app-core"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "fs4",
  "plaudon-ai-contracts",
  "plaudon-ai-diarization",
+ "plaudon-ai-tools",
  "plaudon-domain",
  "plaudon-persistence",
  "proptest",

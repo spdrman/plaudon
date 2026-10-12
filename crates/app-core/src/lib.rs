@@ -12,6 +12,7 @@ pub mod models;
 pub mod search;
 pub mod speakers;
 pub mod stt;
+pub mod transcript_tools;
 
 pub use dedup::{BlobDecision, DedupPolicy};
 pub use diarization::{reconcile, Reconciliation, SegmentAssignment};
@@ -21,6 +22,7 @@ pub use models::{ModelError, ModelId, ModelInstaller, ModelPack, ModelRegistry};
 pub use search::{LibrarySearch, SearchResult};
 pub use speakers::{Speaker, SpeakerDisplay, SpeakerProvenance, SpeakerRegistry};
 pub use stt::{select_engine, EngineCandidate, EngineDecision, SelectionRequest};
+pub use transcript_tools::{AnsweredQuestion, ConversationService, StudyOutputWriter};
 
 /// Cargo package name of this crate, used by the workspace layout conformance test.
 pub const PACKAGE_NAME: &str = "plaudon-app-core";

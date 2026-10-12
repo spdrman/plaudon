@@ -134,13 +134,13 @@ fn score_fixture(fixture: &Fixture) -> Result<DerReport, String> {
         .reference
         .iter()
         .map(|t| {
-            ReferenceTurn::new(
+            Ok(ReferenceTurn::new(
                 t.speaker
                     .as_ref()
                     .ok_or_else(|| format!("Reference turn missing speaker in {}", fixture.name))?,
                 t.start_ms,
                 t.end_ms,
-            )
+            ))
         })
         .collect::<Result<Vec<_>, String>>()?;
 

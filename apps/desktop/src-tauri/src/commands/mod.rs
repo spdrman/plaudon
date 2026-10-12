@@ -11,17 +11,22 @@ pub mod jobs;
 pub mod library;
 pub mod settings;
 pub mod transcript;
+pub mod search;
+pub mod speakers;
 
 use tauri::State;
 
 use crate::dto::{
-    ActivityPage, CancelJobRequest, Capabilities, CompleteOnboardingRequest, EmptyRequest,
-    ExportRecordingRequest, ExportRecordingResponse, GetRecordingRequest, GetTranscriptRequest,
-    ImportFilesRequest, ImportFilesResponse, JobPage, JobSummary, ListActivityRequest,
-    ListJobsRequest, ListRecordingsRequest, LocalOnlyModeResponse, NotificationSettingsResponse,
-    Preferences, RecordingDetail, RecordingPage, RetryJobRequest, SaveTranscriptRevisionRequest,
-    SaveTranscriptRevisionResponse, SetLocalOnlyModeRequest, SetNotificationSettingsRequest,
-    SetOpenRouterKeyRequest, StatusResponse, TranscriptPage,
+    ActivityPage, CancelJobRequest, Capabilities, CompleteOnboardingRequest,
+    ConfirmSpeakerRequest, EmptyRequest, ExportRecordingRequest, ExportRecordingResponse,
+    GetRecordingRequest, GetTranscriptRequest, ImportFilesRequest, ImportFilesResponse, JobPage,
+    JobSummary, ListActivityRequest, ListJobsRequest, ListRecordingsRequest,
+    ListSpeakersRequest, ListSpeakersResponse, LocalOnlyModeResponse,
+    NotificationSettingsResponse, Preferences, RecordingDetail, RecordingPage,
+    RenameSpeakerRequest, ResetSpeakerRequest, RetryJobRequest, SaveTranscriptRevisionRequest,
+    SaveTranscriptRevisionResponse, SearchLibraryRequest, SearchLibraryResponse,
+    SetLocalOnlyModeRequest, SetNotificationSettingsRequest, SetOpenRouterKeyRequest,
+    SpeakerOperationResponse, StatusResponse, TranscriptPage,
 };
 use crate::error::{to_command_result, CommandResult};
 use crate::AppState;
@@ -42,6 +47,11 @@ pub const COMMAND_ALLOWLIST: &[&str] = &[
     "set_notification_settings",
     "set_local_only_mode",
     "set_openrouter_key",
+    "search_library",
+    "list_speakers",
+    "rename_speaker",
+    "confirm_speaker",
+    "reset_speaker",
     "remove_openrouter_key",
     "list_activity",
     "complete_onboarding",
@@ -67,6 +77,11 @@ pub fn handler<R: tauri::Runtime>() -> impl Fn(tauri::ipc::Invoke<R>) -> bool + 
         set_openrouter_key,
         remove_openrouter_key,
         list_activity,
+        search_library,
+        list_speakers,
+        rename_speaker,
+        confirm_speaker,
+        reset_speaker,
         complete_onboarding
     ]
 }
@@ -197,6 +212,47 @@ pub async fn complete_onboarding(
     request: CompleteOnboardingRequest,
 ) -> CommandResult<Preferences> {
     to_command_result(settings::complete_onboarding(&state.ports, request).await)
+}
+
+
+#[tauri::command]
+pub async fn search_library(
+    state: State<'_, AppState>,
+    request: SearchLibraryRequest,
+) -> CommandResult<SearchLibraryResponse> {
+    to_command_result(search::search_library(&state.ports, request).await)
+}
+
+#[tauri::command]
+pub async fn list_speakers(
+    state: State<'_, AppState>,
+    request: ListSpeakersRequest,
+) -> CommandResult<ListSpeakersResponse> {
+    to_command_result(speakers::list_speakers(&state.ports, request).await)
+}
+
+#[tauri::command]
+pub async fn rename_speaker(
+    state: State<'_, AppState>,
+    request: RenameSpeakerRequest,
+) -> CommandResult<SpeakerOperationResponse> {
+    to_command_result(speakers::rename_speaker(&state.ports, request).await)
+}
+
+#[tauri::command]
+pub async fn confirm_speaker(
+    state: State<'_, AppState>,
+    request: ConfirmSpeakerRequest,
+) -> CommandResult<SpeakerOperationResponse> {
+    to_command_result(speakers::confirm_speaker(&state.ports, request).await)
+}
+
+#[tauri::command]
+pub async fn reset_speaker(
+    state: State<'_, AppState>,
+    request: ResetSpeakerRequest,
+) -> CommandResult<SpeakerOperationResponse> {
+    to_command_result(speakers::reset_speaker(&state.ports, request).await)
 }
 
 #[cfg(test)]

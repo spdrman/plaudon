@@ -125,12 +125,12 @@ fn two_speaker_clean_matches_hand_calculation() {
     let reference: Vec<ReferenceTurn> = fixture
         .reference
         .iter()
-        .map(|t| ReferenceTurn::new(&t.speaker.as_ref().unwrap(), t.start_ms, t.end_ms))
+        .map(|t| ReferenceTurn::new(t.speaker.as_ref().unwrap(), t.start_ms, t.end_ms))
         .collect();
     let hypothesis: Vec<SpeakerTurn> = fixture
         .hypothesis
         .iter()
-        .map(|t| SpeakerTurn::new(&t.cluster.as_ref().unwrap(), t.start_ms, t.end_ms))
+        .map(|t| SpeakerTurn::new(t.cluster.as_ref().unwrap(), t.start_ms, t.end_ms))
         .collect();
     let report = diarization_error_rate(&reference, &hypothesis, DerOptions::default());
     assert!(
@@ -151,12 +151,12 @@ fn three_speaker_overlap_matches_hand_calculation() {
     let reference: Vec<ReferenceTurn> = fixture
         .reference
         .iter()
-        .map(|t| ReferenceTurn::new(&t.speaker.as_ref().unwrap(), t.start_ms, t.end_ms))
+        .map(|t| ReferenceTurn::new(t.speaker.as_ref().unwrap(), t.start_ms, t.end_ms))
         .collect();
     let hypothesis: Vec<SpeakerTurn> = fixture
         .hypothesis
         .iter()
-        .map(|t| SpeakerTurn::new(&t.cluster.as_ref().unwrap(), t.start_ms, t.end_ms))
+        .map(|t| SpeakerTurn::new(t.cluster.as_ref().unwrap(), t.start_ms, t.end_ms))
         .collect();
     let report = diarization_error_rate(&reference, &hypothesis, DerOptions::default());
     assert!(
