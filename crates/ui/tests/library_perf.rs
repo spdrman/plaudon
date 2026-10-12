@@ -10,10 +10,11 @@
 //!    on the machine running the test, so it is meaningful everywhere,
 //!    unlike an absolute millisecond figure.
 //!
-//! The absolute numbers are printed, not asserted: `docs/benchmarks/README.md`
-//! forbids quoting a target before a measured baseline, and the baseline has
-//! to come from the MARS runner (`docs/EGUI_TESTING.md` §6). See §6 for the
-//! state of that measurement.
+//! 3. **The measured budget**, which is only enforced where it was measured:
+//!    the MARS runner signals that with `PLAUDON_PERF=1`. Everywhere else the
+//!    cost is printed, so a developer sees the number without the suite
+//!    failing on a machine the budget does not describe
+//!    (`docs/EGUI_TESTING.md` §6.1).
 
 use egui_kittest::kittest::Queryable as _;
 use egui_kittest::Harness;
@@ -27,6 +28,22 @@ const SCALE_ROWS: usize = 10_000;
 
 /// Frames measured after the warm-up.
 const MEASURED_FRAMES: usize = 60;
+
+/// Environment variable that enforces the budget.
+const ENFORCE_ENV: &str = "PLAUDON_PERF";
+
+/// Mean frame cost allowed for a ten-thousand-row library, in milliseconds.
+///
+/// Measured on the MARS runner (`rust:1-bookworm`, 8 CPUs, software raster)
+/// on 2026-10-12: 4.930 ms for 100 rows and 5.848 ms for 10,000 rows in the
+/// `test` profile. The budget is that measurement with headroom, so it
+/// catches a change in the order of growth rather than runner noise.
+/// `docs/EGUI_TESTING.md` §6.1 records the run.
+const FRAME_BUDGET_MS: f64 = 10.0;
+
+fn enforced() -> bool {
+    std::env::var(ENFORCE_ENV).is_ok_and(|value| value == "1" || value == "true")
+}
 
 struct TableApp {
     rows: Vec<plaudon_app::dto::RecordingSummary>,
@@ -79,6 +96,13 @@ fn the_cost_of_a_frame_does_not_grow_with_the_library() {
     // here is that it is not. A hundredfold more rows must not cost
     // noticeably more per frame.
     let ratio = large / small.max(f64::EPSILON);
+    if enforced() {
+        assert!(
+            large <= FRAME_BUDGET_MS,
+            "a {SCALE_ROWS}-row frame took {large:.3} ms, over the {FRAME_BUDGET_MS} ms budget"
+        );
+    }
+
     assert!(
         ratio < 3.0,
         "a {SCALE_ROWS}-row frame cost {ratio:.1}x a 100-row frame \
