@@ -218,7 +218,7 @@ fn gap_text(gap: &CapabilityGap) -> String {
 /// computed without a dispatcher so that listing tools cannot open a job row
 /// or touch the network. Anything the catalogue does not state stays
 /// `Unknown`, and `Unknown` satisfies no requirement (spec §6.6).
-fn cloud_capabilities(card: &DomainCard) -> TextModelCapabilities {
+pub(super) fn cloud_capabilities(card: &DomainCard) -> TextModelCapabilities {
     let engine = EngineId::new(OPENROUTER_ENGINE_ID);
     let mut capabilities = TextModelCapabilities::unknown(
         engine.clone(),
@@ -232,6 +232,11 @@ fn cloud_capabilities(card: &DomainCard) -> TextModelCapabilities {
     capabilities.offline = plaudon_domain::capability::Tri::No;
     capabilities.can_cancel = plaudon_domain::capability::Tri::Yes;
     capabilities.max_context_tokens = card.context_length.clone();
+    // The catalogue publishes no output ceiling and no schema-enforcement
+    // flag; both come from the capability check's observed exchange, and
+    // stay Unknown until one has run (spec 6.6, 8.6A).
+    capabilities.max_output_tokens = card.max_output_tokens.clone();
+    capabilities.supports_structured_output = card.supports_structured_output;
     capabilities.privacy_class = match card.privacy.as_ref().map(|privacy| privacy.posture) {
         Some(plaudon_security::consent::RetentionPosture::ZeroRetention) => {
             Known::Known(PrivacyClass::CloudZeroRetention)
@@ -505,7 +510,7 @@ impl LocalBackend {
                 }))
             }
             Some(choice) if choice.engine == plaudon_ai_apple::APPLE_FOUNDATION_ENGINE => {
-                Ok(Some(Self::apple_route()))
+                Ok(Some(self.apple_route().await))
             }
             Some(choice) => Ok(Some(RouteDescription {
                 engine: choice.engine.clone(),
@@ -526,18 +531,39 @@ impl LocalBackend {
             // Nothing configured: the on-device model is the only route that
             // needs no configuration at all, so it is the fallback.
             None => {
-                let apple = Self::apple_route();
+                let apple = self.apple_route().await;
                 Ok(apple.available().then_some(apple))
             }
         }
     }
 
-    /// The Apple on-device route as the probe currently reports it.
-    fn apple_route() -> RouteDescription {
+    /// The Apple on-device route as the probe and the capability evidence
+    /// currently report it.
+    ///
+    /// The Foundation Models framework publishes no output ceiling, so the
+    /// probe alone can never satisfy a tool that needs one. The only thing
+    /// that can establish it is an on-device generation that answered within
+    /// a declared budget, which `verify_model` records exactly like a cloud
+    /// probe; that evidence is read back here. Nothing else is taken from
+    /// the stored card: availability is a live fact, not a remembered one.
+    async fn apple_route(&self) -> RouteDescription {
         let cache = crate::backend::capabilities::apple_probe_cache();
         let (availability, _) = cache.availability(None);
-        let capabilities =
+        let mut capabilities =
             plaudon_ai_apple::probe::text_model_capabilities(&availability.text_model);
+        if !capabilities.max_output_tokens.is_known() {
+            if let Ok(card) = self
+                .card_for(
+                    ModelTask::TextGeneration,
+                    plaudon_ai_apple::APPLE_FOUNDATION_ENGINE,
+                )
+                .await
+            {
+                if card.verification.is_verified() {
+                    capabilities.max_output_tokens = card.max_output_tokens.clone();
+                }
+            }
+        }
         let unavailable_reason = (capabilities.status != CapabilityStatus::Supported).then(|| {
             plaudon_app_core::engine_policy::explain(
                 &capabilities.engine_id,
@@ -626,7 +652,7 @@ impl LocalBackend {
         };
 
         if choice.engine == plaudon_ai_apple::APPLE_FOUNDATION_ENGINE {
-            return Self::apple_model(tool, local_only);
+            return self.apple_model(tool, local_only).await;
         }
         if choice.engine != OPENROUTER_ENGINE_ID {
             return Err(AppError::new(
@@ -751,11 +777,12 @@ impl LocalBackend {
 
     /// The Apple on-device model, which needs no consent, no job row and no
     /// budget because nothing leaves the device.
-    fn apple_model(
+    async fn apple_model(
+        &self,
         tool: &TranscriptToolDefinition,
         local_only: bool,
     ) -> Result<ResolvedRoute, AppError> {
-        let route = Self::apple_route();
+        let route = self.apple_route().await;
         if let Some(reason) = route.unavailable_reason {
             return Err(AppError::new(AppErrorCode::ModelUnavailable, reason));
         }
@@ -799,7 +826,7 @@ impl LocalBackend {
     /// citation that resolved against someone else's transcript would verify
     /// and still be wrong, so a foreign revision is
     /// [`AppErrorCode::RecordNotFound`] rather than a successful answer.
-    async fn domain_revision(
+    pub(super) async fn domain_revision(
         &self,
         recording_id: RecordingId,
         revision_id: Option<TranscriptRevisionId>,

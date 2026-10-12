@@ -137,6 +137,16 @@ pub struct ModelCard {
     pub max_duration_ms: Known<u64>,
     /// Context length the catalog reported.
     pub context_length: Known<u64>,
+    /// Output budget an observed exchange accepted, for a text model.
+    ///
+    /// The catalogue publishes no output ceiling, so this is `Unknown` until
+    /// a capability check answers within a declared budget. A tool that needs
+    /// an output budget treats `Unknown` as "not available" (spec 6.6).
+    #[serde(default)]
+    pub max_output_tokens: Known<u64>,
+    /// Whether an observed exchange returned schema-valid structured output.
+    #[serde(default)]
+    pub supports_structured_output: Tri,
     /// Per-unit prices.
     pub pricing: PricingUnits,
     /// Resolved destination and retention posture, when resolution ran.
@@ -164,6 +174,8 @@ impl ModelCard {
             max_input_bytes: Known::Unknown,
             max_duration_ms: Known::Unknown,
             context_length: Known::Unknown,
+            max_output_tokens: Known::Unknown,
+            supports_structured_output: Tri::Unknown,
             pricing: PricingUnits::unknown(),
             privacy: None,
             declares_audio_input: Tri::Unknown,
@@ -187,6 +199,8 @@ impl ModelCard {
             max_input_bytes: Known::Unknown,
             max_duration_ms: Known::Unknown,
             context_length: Known::Unknown,
+            max_output_tokens: Known::Unknown,
+            supports_structured_output: Tri::Unknown,
             pricing: PricingUnits::unknown(),
             privacy: None,
             declares_audio_input: Tri::Unknown,
@@ -311,9 +325,10 @@ impl ModelRegistry {
     /// Apply an observed probe record.
     ///
     /// The only path to [`Verification::Verified`], and it still refuses when
-    /// the record itself is not evidence: a catalog-only record, a family with
-    /// no builder, or an unresolved route all leave the card unverified with
-    /// the matching reason (spec 10.1, 10.8).
+    /// the record itself is not evidence: a catalog-only record, an audio
+    /// family with no builder, a text exchange that produced no schema-valid
+    /// body, or an unresolved route all leave the card unverified with the
+    /// matching reason (spec 10.1, 10.8).
     pub fn apply_probe(&mut self, task: ModelTask, record: &ModelProbeRecord, fixture_id: &str) {
         let card = self
             .cards
@@ -337,6 +352,8 @@ impl ModelRegistry {
             card.pricing.audio_tokens_per_second = Known::Known(rate);
         }
         card.max_duration_ms = record.max_duration_ms.clone();
+        card.max_output_tokens = record.max_output_tokens.clone();
+        card.supports_structured_output = record.structured_output;
 
         if record.evidence != ProbeEvidence::ObservedExchange {
             card.verification = Verification::NotVerified {
@@ -348,6 +365,18 @@ impl ModelRegistry {
         if task == ModelTask::Transcription && !record.request_family.has_builder() {
             card.verification = Verification::NotVerified {
                 reason: NotVerifiedReason::NoRequestBuilder,
+            };
+            return;
+        }
+        // Text generation has no request family to establish (App. A.3). What
+        // an observed text exchange has to demonstrate instead is that the
+        // provider returned a body satisfying the schema the request sent; an
+        // exchange that returned prose is evidence of the opposite, so the
+        // card reports that no qualifying exchange has been observed rather
+        // than inheriting a verification from the fact that bytes moved.
+        if task == ModelTask::TextGeneration && !record.structured_output.satisfies() {
+            card.verification = Verification::NotVerified {
+                reason: NotVerifiedReason::NoObservedExchange,
             };
             return;
         }
@@ -435,6 +464,8 @@ mod tests {
             pricing_unit: Known::Unknown,
             observed_on: "2026-10-11".to_owned(),
             audio_tokens_per_second: Known::Unknown,
+            structured_output: Tri::Unknown,
+            max_output_tokens: Known::Unknown,
             notes: String::new(),
         }
     }
@@ -632,6 +663,75 @@ mod tests {
         assert_eq!(
             card.privacy.as_ref().expect("privacy").posture,
             RetentionPosture::ZeroRetention
+        );
+    }
+
+    /// A text record as the text capability check leaves it: no audio family,
+    /// schema-valid output observed, and the budget the exchange answered
+    /// within.
+    fn observed_text(model_id: &str) -> ModelProbeRecord {
+        ModelProbeRecord {
+            request_family: RequestFamily::Unsupported,
+            timestamps: TimestampSupport::NotObserved,
+            diarization: Tri::No,
+            language_detection: Tri::No,
+            structured_output: Tri::Yes,
+            max_output_tokens: Known::Known(1_024),
+            ..observed(model_id)
+        }
+    }
+
+    #[test]
+    fn an_observed_text_exchange_verifies_the_card_with_its_output_budget() {
+        let mut registry = registry();
+        registry.apply_probe(
+            ModelTask::TextGeneration,
+            &observed_text("vendor/text-a"),
+            "capability-check",
+        );
+        let card = registry
+            .card("vendor/text-a", ModelTask::TextGeneration)
+            .expect("card");
+        assert!(card.verification.is_verified());
+        assert!(card.is_selectable());
+        assert_eq!(card.max_output_tokens, Known::Known(1_024));
+        assert_eq!(card.supports_structured_output, Tri::Yes);
+    }
+
+    #[test]
+    fn a_text_exchange_without_schema_valid_output_does_not_verify() {
+        let mut registry = registry();
+        let mut record = observed_text("vendor/text-b");
+        record.structured_output = Tri::No;
+        record.max_output_tokens = Known::Unknown;
+        registry.apply_probe(ModelTask::TextGeneration, &record, "capability-check");
+        let card = registry
+            .card("vendor/text-b", ModelTask::TextGeneration)
+            .expect("card");
+        assert_eq!(
+            card.verification,
+            Verification::NotVerified {
+                reason: NotVerifiedReason::NoObservedExchange
+            }
+        );
+        assert!(!card.is_selectable());
+        assert_eq!(card.max_output_tokens, Known::Unknown);
+    }
+
+    #[test]
+    fn a_text_exchange_on_an_unresolved_route_does_not_verify() {
+        let mut registry = registry();
+        let mut record = observed_text("vendor/text-c");
+        record.provider_route = Known::Unknown;
+        registry.apply_probe(ModelTask::TextGeneration, &record, "capability-check");
+        assert_eq!(
+            registry
+                .card("vendor/text-c", ModelTask::TextGeneration)
+                .expect("card")
+                .verification,
+            Verification::NotVerified {
+                reason: NotVerifiedReason::PrivacyRouteUnresolved
+            }
         );
     }
 }

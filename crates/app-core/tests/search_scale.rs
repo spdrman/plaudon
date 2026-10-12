@@ -36,7 +36,7 @@ const FILLER: &[&str] = &[
 const NEEDLE: &str = "the zarquon telemetry spike remains unexplained";
 
 async fn seed(db: &Database) {
-    let mut tx = db.pool().begin().await.expect("begin");
+    let mut tx = db.begin_write().await.expect("begin");
     for recording_index in 0..RECORDINGS {
         let recording_id = Uuid::now_v7().to_string();
         let revision_id = Uuid::now_v7().to_string();

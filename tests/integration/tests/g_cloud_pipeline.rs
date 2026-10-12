@@ -540,6 +540,8 @@ async fn a_stored_probe_record_is_what_makes_a_model_offerable() {
                 pricing_unit: Known::Unknown,
                 observed_on: "2026-10-11".to_owned(),
                 audio_tokens_per_second: Known::Unknown,
+                structured_output: Tri::Unknown,
+                max_output_tokens: Known::Unknown,
                 notes: String::new(),
             },
             "capability-check",

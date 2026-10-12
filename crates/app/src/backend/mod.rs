@@ -25,11 +25,13 @@ pub mod import;
 pub mod jobs;
 pub mod models;
 pub mod outputs;
+pub mod processing;
 pub mod sources;
 pub mod store;
 pub mod templates;
 pub mod tools;
 pub mod update;
+pub(crate) mod verify_text;
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -99,6 +101,7 @@ pub struct LocalBackend {
     approved_roots: Vec<PathBuf>,
     source_runtime: sources::SourcesRuntime,
     cloud: cloud::CloudRuntime,
+    processing: processing::ProcessingEngine,
 }
 
 impl LocalBackend {
@@ -116,6 +119,8 @@ impl LocalBackend {
         let imports = ImportService::new(db.clone(), store.archive().clone());
         let events = EventPublisher::new(store.pool().clone(), sink);
         let notifications = NotificationService::new(notifications, store.pool().clone());
+        let processing =
+            processing::ProcessingEngine::open(root, store.archive().staging_dir()).await?;
         let backend = Self {
             recordings: RecordingRepository::new(db.clone()),
             assets: MediaAssetRepository::new(db.clone()),
@@ -127,6 +132,7 @@ impl LocalBackend {
             approved_roots,
             source_runtime: sources::SourcesRuntime::production(),
             cloud,
+            processing,
             store,
         };
         // The dispatcher starts with whatever the user last chose; nothing
@@ -150,7 +156,31 @@ impl LocalBackend {
         self
     }
 
-    /// Reconcile any import interrupted by a crash (spec §13.3A).
+    /// Replace the local speech engines the transcribe executor would probe
+    /// for. Tests use this to run the whole pipeline with no model file.
+    #[must_use]
+    pub fn with_stt_engines(
+        mut self,
+        engines: Vec<Arc<dyn plaudon_ai_contracts::stt::SpeechToText>>,
+    ) -> Self {
+        self.processing = self.processing.with_stt_engines(engines);
+        self
+    }
+
+    /// Reconcile the work a crash interrupted (spec §13.3A, §14.3, §14.7).
+    ///
+    /// Three sweeps, in the order a restart needs them:
+    ///
+    /// 1. the import journal, against the bytes actually on disk;
+    /// 2. the job engine, which is the only component allowed to move a job
+    ///    whose row it owns — an interrupted local run becomes retryable, a
+    ///    dispatch with no recorded response becomes possibly billed, a
+    ///    half-cancelled job finishes cancelling;
+    /// 3. the cloud ledger, for any attempt left in flight by a job the
+    ///    engine does not own.
+    ///
+    /// Runs before the worker pool starts: the reconciler assumes nothing is
+    /// running.
     pub async fn reconcile_startup(&self) -> Result<usize, AppError> {
         let outcomes = self
             .imports
@@ -158,10 +188,12 @@ impl LocalBackend {
             .reconcile(Timestamp::now())
             .await
             .map_err(AppError::from)?;
-        // Spec §14.3: a cloud attempt a crash left in flight may have been
-        // billed, so its job is parked rather than requeued.
+        let report = self.processing.recover().await?;
+        let recovered = report.jobs_retryable.len()
+            + report.jobs_outcome_unknown.len()
+            + report.jobs_cancelled.len();
         let parked = self.reconcile_cloud_attempts().await?;
-        Ok(outcomes.len() + parked)
+        Ok(outcomes.len() + recovered + parked)
     }
 
     /// The connection pool.
@@ -1104,9 +1136,7 @@ impl LocalBackend {
             .ensure_speakers(revision.recording_id, speakers)
             .await?;
 
-        let mut tx = self
-            .pool()
-            .begin()
+        let mut tx = plaudon_persistence::begin_write(self.pool())
             .await
             .map_err(|err| storage_error("cannot begin a revision write", &err))?;
 

@@ -163,7 +163,7 @@ impl OutputRepository {
             )));
         }
 
-        let mut tx = self.db.pool().begin().await?;
+        let mut tx = self.db.begin_write().await?;
 
         sqlx::query(
             "INSERT INTO ai_outputs (
@@ -510,7 +510,7 @@ impl OutputRepository {
         if superseded.is_empty() {
             return Ok(Vec::new());
         }
-        let mut tx = self.db.pool().begin().await?;
+        let mut tx = self.db.begin_write().await?;
         let mut marked = Vec::new();
         for revision in superseded {
             let rows = sqlx::query(

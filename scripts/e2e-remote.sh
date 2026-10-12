@@ -21,6 +21,14 @@
 #
 # Results land in $PLAUDON_E2E_RESULTS (default: target/e2e-results).
 #
+# Packages are installed as root, then the command itself runs as an
+# unprivileged user in local mode: the host's own uid/gid, which owns the
+# mounted working copy. Root ignores read-only permissions, which would turn a
+# test that asserts a permission failure (tests/chaos' unwritable archive) into
+# a false pass. On MARS the command keeps running as the container's root,
+# because rootless Docker already maps it onto an unprivileged host uid and it
+# is the only id that can write the working copy.
+#
 # Environment overrides:
 #   PLAUDON_E2E_HOST         auto (default) | local | ssh destination
 #                            auto: MARS (devshell@192.168.0.100) unless it is unreachable or
@@ -57,16 +65,28 @@ if [[ "$HOST" == "auto" ]]; then
   fi
 fi
 
+# Writable HOME inside the container; the image's /root is not reachable once
+# the command drops privileges.
+CONTAINER_HOME=/tmp/plaudon-home
 if [[ "$HOST" == "local" ]]; then
   LOCAL=1
   REMOTE_ROOT="${PLAUDON_E2E_REMOTE_ROOT:-${TMPDIR:-/tmp}/plaudon-e2e}"
   CPUS="${PLAUDON_E2E_CPUS:-4}"
   MEMORY="${PLAUDON_E2E_MEMORY:-12g}"
+  # Rootful Docker: the command runs as this user, who owns the bind-mounted
+  # working copy, so a test that makes a directory read-only really cannot
+  # write to it.
+  RUN_UID="$(id -u)"
+  RUN_GID="$(id -g)"
 else
   LOCAL=0
   REMOTE_ROOT="${PLAUDON_E2E_REMOTE_ROOT:-/home/devshell/.plaudon-e2e}"
   CPUS="${PLAUDON_E2E_CPUS:-8}"
   MEMORY="${PLAUDON_E2E_MEMORY:-12g}"
+  # MARS is rootless: container root is already an unprivileged host uid, and
+  # it is the only id that can write the bind-mounted working copy.
+  RUN_UID=""
+  RUN_GID=""
 fi
 
 # Run a shell snippet on the target (stdin is forwarded for `bash -s`).
@@ -75,7 +95,7 @@ rexec() {
 }
 
 usage() {
-  sed -n '2,32p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  sed -n '2,44p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
 }
 
 MODE="${1:-}"
@@ -170,13 +190,12 @@ libasound2-dev libssl-dev ${PLAUDON_E2E_APT_PACKAGES:-}"
 case "$MODE" in
   playwright)
     docker_mounts=()
-    inner="umask 0002
-set -euo pipefail
-mkdir -p /tmp/home
-cd /work/apps/desktop
+    root_setup=""
+    payload="cd /work/apps/desktop
 npm ci --no-audit --no-fund
 npx playwright test$quoted_args"
-    docker_env=(-e CI=1 -e PLAUDON_E2E_ALLOW_LOCAL=1 -e HOME=/tmp/home -e npm_config_cache=/tmp/home/.npm)
+    docker_env=(-e CI=1 -e PLAUDON_E2E_ALLOW_LOCAL=1 -e HOME="$CONTAINER_HOME"
+      -e npm_config_cache="$CONTAINER_HOME/.npm")
     ;;
   cargo | shell)
     if [[ "$MODE" == "cargo" ]]; then
@@ -184,18 +203,17 @@ npx playwright test$quoted_args"
     else
       command_line="$*"
     fi
-    inner="umask 0002
-set -euo pipefail
-export DEBIAN_FRONTEND=noninteractive
+    root_setup="export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
-apt-get install -y -qq --no-install-recommends $apt_packages >/dev/null
-cd /work
+apt-get install -y -qq --no-install-recommends $apt_packages >/dev/null"
+    payload="cd /work
 $command_line"
     docker_env=(
       -e CARGO_TERM_COLOR=always
       -e CARGO_HOME=/cache/cargo
       -e CARGO_TARGET_DIR=/cache/target
       -e CARGO_BUILD_JOBS="$CPUS"
+      -e HOME="$CONTAINER_HOME"
       -e LIBGL_ALWAYS_SOFTWARE=1
       -e GALLIUM_DRIVER=llvmpipe
       -e WGPU_BACKEND=vulkan
@@ -210,6 +228,35 @@ $command_line"
     fi
     ;;
 esac
+
+# The container starts as root because the image still has packages to install,
+# and then hands the test command itself to an unprivileged user whenever
+# RUN_UID is set (local mode). Root is not a neutral place to run tests: it
+# writes straight through a read-only directory, so a suite that asserts a
+# permission failure — tests/chaos' unwritable archive — passes for the wrong
+# reason. On MARS, RUN_UID is empty: rootless Docker already maps the
+# container's root onto an unprivileged host uid, and dropping again would make
+# the bind-mounted working copy unwritable.
+if [[ -n "$RUN_UID" ]]; then
+  drop_privileges="chown -R $RUN_UID:$RUN_GID $CONTAINER_HOME
+if [ -d /cache ]; then find /cache ! -uid $RUN_UID -exec chown -h $RUN_UID:$RUN_GID {} + ; fi
+exec setpriv --reuid $RUN_UID --regid $RUN_GID --clear-groups bash $CONTAINER_HOME/payload.sh"
+else
+  drop_privileges="exec bash $CONTAINER_HOME/payload.sh"
+fi
+
+# The command goes into a file rather than onto the `setpriv` line, so it keeps
+# working whatever shell syntax the caller used.
+inner="umask 0002
+set -euo pipefail
+$root_setup
+mkdir -p $CONTAINER_HOME
+cat >$CONTAINER_HOME/payload.sh <<'PLAUDON_PAYLOAD_EOF'
+set -euo pipefail
+$payload
+PLAUDON_PAYLOAD_EOF
+chmod 0775 $CONTAINER_HOME/payload.sh
+$drop_privileges"
 
 mount_args=""
 for m in ${docker_mounts[@]+"${docker_mounts[@]}"}; do

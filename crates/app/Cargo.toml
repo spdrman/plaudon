@@ -18,6 +18,15 @@ apple-bridge = ["plaudon-ai-apple/apple-bridge"]
 # The real Bluetooth radio. Off by default so the workspace builds and tests
 # without a Bluetooth stack and CI never touches a radio (spec 18.3A).
 hardware-scan = ["plaudon-plaud-ble/hardware-scan", "dep:btleplug"]
+# The local whisper.cpp speech engine. Off by default because
+# `plaudon-ai-whisper` links whisper.cpp, which every build of this crate
+# would otherwise have to compile; with it off the transcribe executor
+# reports the engine as unavailable in this build rather than pretending a
+# model could run.
+local-whisper = ["dep:plaudon-ai-whisper"]
+# Scripted speech and text engines, so a dependent crate's tests can drive
+# the whole processing pipeline without a model file or a network.
+test-support = []
 
 [dependencies]
 plaudon-domain = { workspace = true }
@@ -35,6 +44,9 @@ plaudon-diagnostics = { workspace = true }
 plaudon-source-plaud-cli = { workspace = true }
 plaudon-source-folder = { workspace = true }
 plaudon-ai-openrouter = { workspace = true }
+plaudon-ai-local-llm = { workspace = true }
+plaudon-ai-whisper = { workspace = true, optional = true }
+plaudon-jobs = { workspace = true }
 plaudon-source-plaud-device = { workspace = true }
 plaudon-plaud-ble = { workspace = true }
 plaudon-plaud-protocol = { workspace = true }

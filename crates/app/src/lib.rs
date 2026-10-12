@@ -43,6 +43,9 @@ pub mod secrets;
 pub mod settings_presentation;
 pub mod shell_state;
 pub mod shortcuts;
+/// Scripted AI engines, for tests in this crate and in the shell.
+#[cfg(any(test, feature = "test-support"))]
+pub mod testing_engines;
 pub mod tone;
 pub mod tool_presentation;
 pub mod updater;
@@ -112,6 +115,8 @@ pub struct AppPorts {
     pub update: Arc<dyn UpdatePort>,
     /// The UI event stream, shared with the notification activation route.
     pub events: crate::events::EventPublisher,
+    /// The running job workers, stopped when the engine shuts down.
+    pub processing: crate::backend::processing::ProcessingHandle,
 }
 
 impl std::fmt::Debug for AppPorts {
@@ -161,15 +166,40 @@ pub async fn build_ports_with_radio(
         approved_roots,
         radio,
         None,
+        EngineOverrides::default(),
     )
     .await
 }
 
-/// [`build_ports_with_radio`] with the cloud HTTPS transport replaced.
+/// AI engines a caller substitutes for the ones this build would probe for.
 ///
-/// The one reason to replace it is a test that must prove nothing left the
-/// process: a transport that records and refuses is the only way to tell
-/// "no request was made" apart from "a request was made and failed".
+/// Production leaves every field empty. A test fills them so the whole
+/// processing path — job states, arbitration, cancellation, progress, the
+/// commit and the events — runs against engines that need no model file, no
+/// Apple framework and no network.
+#[derive(Clone, Default)]
+pub struct EngineOverrides {
+    /// Speech engines offered to the transcribe executor.
+    pub stt: Vec<Arc<dyn plaudon_ai_contracts::stt::SpeechToText>>,
+    /// The text model every summarization and tool run uses.
+    pub text: Option<Arc<dyn plaudon_ai_contracts::text::TextModel>>,
+}
+
+impl std::fmt::Debug for EngineOverrides {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("EngineOverrides")
+            .field("stt", &self.stt.len())
+            .field("text", &self.text.is_some())
+            .finish()
+    }
+}
+
+/// [`build_ports_with_radio`] with the cloud HTTPS transport and the AI
+/// engines replaced.
+///
+/// The one reason to replace the transport is a test that must prove nothing
+/// left the process: a transport that records and refuses is the only way to
+/// tell "no request was made" apart from "a request was made and failed".
 pub async fn build_ports_with(
     app_data_dir: &Path,
     sink: Arc<dyn EventSink>,
@@ -178,8 +208,9 @@ pub async fn build_ports_with(
     approved_roots: Vec<PathBuf>,
     radio: Arc<dyn DeviceRadio>,
     cloud_transport: Option<Arc<dyn plaudon_ai_openrouter::transport::AsyncHttpTransport>>,
+    engines: EngineOverrides,
 ) -> Result<AppPorts, AppError> {
-    let opened = LocalBackend::open(
+    let mut opened = LocalBackend::open(
         app_data_dir,
         sink,
         notifications,
@@ -187,18 +218,27 @@ pub async fn build_ports_with(
         approved_roots,
     )
     .await?;
-    let backend = Arc::new(match cloud_transport {
-        Some(transport) => opened.with_cloud_transport(transport),
-        None => opened,
-    });
-    // Spec §13.3A: an import interrupted by a crash is reconciled against the
-    // actual file hashes before the UI can ask for anything.
+    if let Some(transport) = cloud_transport {
+        opened = opened.with_cloud_transport(transport);
+    }
+    if !engines.stt.is_empty() {
+        opened = opened.with_stt_engines(engines.stt);
+    }
+    if let Some(text) = engines.text {
+        opened = opened.with_text_model(text);
+    }
+    let backend = Arc::new(opened);
+    // Spec §13.3A, §14.3, §14.7: the import journal, the cloud ledger and the
+    // job engine are all reconciled against what is actually on disk before
+    // the UI can ask for anything and before a worker starts.
     if let Err(err) = backend.reconcile_startup().await {
         tracing::warn!(
             code = err.code().as_str(),
-            "import reconciliation did not complete"
+            "startup reconciliation did not complete"
         );
     }
+    let processing =
+        crate::backend::processing::ProcessingHandle::start(Arc::clone(&backend), None);
     let events = backend.events().clone();
     let devices = DevicesBackend::new(DevicesDeps::production(
         backend.store().db().clone(),
@@ -246,6 +286,7 @@ pub async fn build_ports_with(
         archive: backend as Arc<dyn ArchivePort>,
         secrets,
         events,
+        processing,
     })
 }
 

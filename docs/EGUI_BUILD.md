@@ -30,6 +30,14 @@ performance run goes through `scripts/e2e-remote.sh` (MARS Docker, falling back 
 container when MARS is busy). The packaging scripts default to `-j 2` for the same reason;
 `CARGO_BUILD_JOBS` overrides it on a CI runner.
 
+**Who the container runs as.** Both modes install packages as root and then run the command itself
+under an ordinary user. In local mode (`PLAUDON_E2E_HOST=local`, rootful Docker Desktop) that is the
+host's own uid/gid, which owns the bind-mounted working copy and the `/cache` volume; root would
+write straight through a read-only directory and turn a test that asserts a permission failure —
+`tests/chaos`' unwritable archive — into a false pass. On MARS the command keeps running as the
+container's root, because rootless Docker already maps that onto an unprivileged host uid and it is
+the only id that can write the working copy.
+
 ---
 
 ## 2. Build
