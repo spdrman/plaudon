@@ -171,7 +171,7 @@ impl Library {
     /// Turns: `S1` over segments 0-2, `S2` over segments 3-4, and both over the
     /// last segment, which is therefore overlap and must never be embedded
     /// (VP-022).
-    fn turns(&self) -> Vec<SpeakerTurn> {
+    fn turns() -> Vec<SpeakerTurn> {
         vec![
             SpeakerTurn::new("S1", 0, 6_000),
             SpeakerTurn::new("S2", 6_000, 10_000),
@@ -263,7 +263,7 @@ impl Library {
             self.jobs.clone(),
             self.db.clone(),
             self.cipher.clone(),
-            Arc::new(FakeDiarizationProvider::new(self.turns())),
+            Arc::new(FakeDiarizationProvider::new(Self::turns())),
             embedder,
         )
     }

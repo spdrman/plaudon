@@ -145,7 +145,7 @@ async fn a_staged_voice_entry_cannot_be_emitted_as_a_plaintext_archive() {
     let dir = tempfile::tempdir().unwrap();
     let staging = out_dir(dir.path(), "staging");
     let destination =
-        plaudon_export::destination::ExportDestination::new(&out_dir(dir.path(), "out")).unwrap();
+        plaudon_export::destination::ExportDestination::new(out_dir(dir.path(), "out")).unwrap();
     let encrypted = Protection::Encrypted {
         password: PASSWORD.to_owned(),
         profile: plaudon_export::archive::crypto::KdfProfile::Backup,
