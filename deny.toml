@@ -24,6 +24,14 @@ allow = [
     "CC0-1.0",
     "Unlicense",
     "BSL-1.0",
+    # Font licences carried by `epaint_default_fonts` (Hack, Ubuntu-Light,
+    # NotoEmoji, emoji-icon-font), which egui bundles as its default fonts.
+    # Both permit redistributing the unmodified font files inside a larger
+    # work provided their licence texts travel with it; neither imposes any
+    # condition on our own sources. Reviewed for EPIC O and recorded in
+    # docs/licensing/third-party-register.md.
+    "OFL-1.1",
+    "Ubuntu-font-1.0",
 ]
 
 [bans]
