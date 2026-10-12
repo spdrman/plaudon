@@ -1,6 +1,6 @@
 [package]
 name = "plaudon-plaud-ble"
-description = "BLE central transport for PLAUD devices (read-only scanner and session)."
+description = "BLE central transport for PLAUD devices: read-only discovery policy and an opt-in hardware scanner."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -10,4 +10,27 @@ repository.workspace = true
 [lints]
 workspace = true
 
+[features]
+# The real radio scanner. Off by default so the workspace builds and tests
+# without a Bluetooth stack, and so CI never touches a radio (spec 18.3A).
+hardware-scan = ["dep:btleplug", "dep:futures", "dep:uuid"]
+
 [dependencies]
+btleplug = { version = "0.11", optional = true }
+futures = { version = "0.3", optional = true }
+plaudon-domain = { workspace = true }
+plaudon-plaud-protocol = { workspace = true }
+plaudon-recording-sources = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+uuid = { workspace = true, optional = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+serde_json = { workspace = true }
+
+[[bin]]
+name = "plaud-ble-scan"
+path = "src/bin/scan.rs"
+required-features = ["hardware-scan"]

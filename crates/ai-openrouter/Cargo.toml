@@ -1,6 +1,6 @@
 [package]
 name = "plaudon-ai-openrouter"
-description = "OpenRouter REST clients and typed request families."
+description = "OpenRouter REST client contracts: typed request families, catalog records and error classification."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -11,3 +11,11 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
+plaudon-ai-contracts = { workspace = true }
+plaudon-domain = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }

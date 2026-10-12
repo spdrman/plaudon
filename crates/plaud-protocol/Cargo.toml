@@ -1,6 +1,6 @@
 [package]
 name = "plaudon-plaud-protocol"
-description = "Validated PLAUD legacy frame codec with a static read-only opcode allowlist."
+description = "Validated PLAUD legacy frames and codecs with a static read-only opcode allowlist."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -11,3 +11,10 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
+plaudon-domain = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+serde_json = { workspace = true }

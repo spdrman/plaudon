@@ -1,0 +1,75 @@
+{
+  "_source": "GET https://openrouter.ai/api/v1/models/openai/gpt-audio/endpoints (no credential required)",
+  "_captured_on": "2026-10-11",
+  "_note": "Per-provider routing detail. Observed keys are listed verbatim below; note the absence of any field naming a supported endpoint family, and the absence of any retention or zero-data-retention field.",
+  "_observed_endpoint_keys": [
+    "name",
+    "model_id",
+    "model_name",
+    "context_length",
+    "pricing",
+    "provider_name",
+    "tag",
+    "quantization",
+    "max_completion_tokens",
+    "max_prompt_tokens",
+    "supported_parameters",
+    "supports_tool_choice",
+    "status",
+    "uptime_last_30m",
+    "uptime_last_5m",
+    "uptime_last_1d",
+    "supports_implicit_caching",
+    "native_tools",
+    "supports_voice_cloning",
+    "supports_multiple_audio_references",
+    "supports_image_reference",
+    "latency_last_30m",
+    "throughput_last_30m"
+  ],
+  "data": {
+    "id": "openai/gpt-audio",
+    "architecture": {
+      "input_modalities": [
+        "text",
+        "audio"
+      ],
+      "output_modalities": [
+        "text",
+        "audio"
+      ]
+    },
+    "endpoints": [
+      {
+        "name": "OpenAI | openai/gpt-audio",
+        "provider_name": "OpenAI",
+        "tag": "openai",
+        "context_length": 128000,
+        "max_completion_tokens": 16384,
+        "max_prompt_tokens": null,
+        "pricing": {
+          "prompt": "0.0000025",
+          "completion": "0.00001",
+          "audio": "0.000032",
+          "audio_output": "0.000064"
+        },
+        "supported_parameters": [
+          "seed",
+          "max_tokens",
+          "response_format",
+          "structured_outputs",
+          "tools",
+          "tool_choice",
+          "frequency_penalty",
+          "logit_bias",
+          "logprobs",
+          "presence_penalty",
+          "stop",
+          "temperature",
+          "top_logprobs",
+          "top_p"
+        ]
+      }
+    ]
+  }
+}

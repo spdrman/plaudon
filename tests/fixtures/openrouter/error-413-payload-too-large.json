@@ -1,0 +1,10 @@
+{
+  "_shape": "Payload above a provider limit.",
+  "status": 413,
+  "body": {
+    "error": {
+      "code": 413,
+      "message": "Request entity too large"
+    }
+  }
+}

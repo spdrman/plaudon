@@ -1,0 +1,11 @@
+{
+  "_shape": "Rate limited with a Retry-After hint.",
+  "status": 429,
+  "retry_after_seconds": 30,
+  "body": {
+    "error": {
+      "code": 429,
+      "message": "Rate limit exceeded"
+    }
+  }
+}

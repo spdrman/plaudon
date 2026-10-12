@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.local/schemas/benchmark-result.v1.schema.json",
+  "title": "Local STT benchmark result v1",
+  "description": "One measured run (task A1.1). Spec 17.5 derives its performance targets from these files and from nothing else; a result without an identified host is not citable.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "host_os",
+    "host_cpu",
+    "host_ram_bytes",
+    "backend",
+    "model_id",
+    "audio_duration_ms",
+    "wall_clock_ms",
+    "peak_rss_bytes",
+    "segments_reported",
+    "word_timestamps_reported",
+    "run_on"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "host_os": {
+      "type": "string",
+      "minLength": 1
+    },
+    "host_cpu": {
+      "type": "string",
+      "minLength": 1
+    },
+    "host_ram_bytes": {
+      "type": "integer",
+      "exclusiveMinimum": 0
+    },
+    "backend": {
+      "type": "string",
+      "enum": [
+        "cpu",
+        "metal",
+        "cuda",
+        "vulkan"
+      ]
+    },
+    "model_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "audio_duration_ms": {
+      "type": "integer",
+      "exclusiveMinimum": 0
+    },
+    "wall_clock_ms": {
+      "type": "integer",
+      "exclusiveMinimum": 0
+    },
+    "peak_rss_bytes": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "cancellation_latency_ms": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "segments_reported": {
+      "type": "boolean"
+    },
+    "word_timestamps_reported": {
+      "type": "boolean"
+    },
+    "run_on": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    }
+  }
+}

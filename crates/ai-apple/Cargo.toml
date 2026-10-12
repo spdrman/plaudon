@@ -10,4 +10,20 @@ repository.workspace = true
 [lints]
 workspace = true
 
+[features]
+# Links the Swift static library built by scripts/build-apple-bridge.sh.
+# Off by default so the workspace builds and tests on every platform without
+# a Swift toolchain, and so a Windows build links nothing Apple (spec 11.1).
+apple-bridge = []
+
 [dependencies]
+plaudon-ai-contracts = { workspace = true }
+plaudon-domain = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+[[bin]]
+name = "plaud-apple-probe"
+path = "src/bin/probe.rs"
+required-features = ["apple-bridge"]

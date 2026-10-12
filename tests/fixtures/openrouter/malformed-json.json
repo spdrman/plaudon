@@ -1,0 +1,7 @@
+{
+  "_shape": "Status 200 with a body that is not the documented shape.",
+  "status": 200,
+  "body": {
+    "unexpected": "shape"
+  }
+}

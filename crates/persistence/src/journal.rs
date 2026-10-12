@@ -17,6 +17,7 @@
 use std::io::Read;
 use std::path::PathBuf;
 
+use plaudon_domain::error::AppErrorCode;
 use plaudon_domain::ids::{ImportIntentId, JobId, MediaAssetId, RecordingId};
 use plaudon_domain::media::{
     MediaAsset, MediaIdentity, QualityClass, Sha256Digest, VerificationState,
@@ -134,6 +135,17 @@ pub enum ReconcileOutcome {
     Quarantined(ImportIntentId),
     /// An app-owned staging file with no live intent was removed.
     OrphanRemoved(PathBuf),
+    /// An intent could not be settled on this pass and was left for the next
+    /// one.
+    ///
+    /// Startup must not abort because one intent is unrecoverable right now:
+    /// a single stuck import would make the whole library unopenable.
+    Deferred {
+        /// The intent that could not be settled.
+        intent_id: ImportIntentId,
+        /// Stable code describing why.
+        code: AppErrorCode,
+    },
 }
 
 /// The import journal.
@@ -335,40 +347,12 @@ impl ImportJournal {
         let incomplete = self.incomplete().await?;
 
         for intent in &incomplete {
-            let archived = self.archive.exists(&intent.target_relative_path)?;
-            if archived {
-                match self
-                    .archive
-                    .verify(&intent.target_relative_path, &intent.identity)
-                {
-                    Ok(()) => {
-                        let asset_id = self.commit(intent, at).await?;
-                        debug_assert_ne!(asset_id.to_string(), String::new());
-                        outcomes.push(ReconcileOutcome::Committed(intent.id));
-                        continue;
-                    }
-                    Err(PersistenceError::IntegrityFailed) => {
-                        self.quarantine(intent.id, "INTEGRITY_FAILED", at).await?;
-                        outcomes.push(ReconcileOutcome::Quarantined(intent.id));
-                        continue;
-                    }
-                    Err(other) => return Err(other),
-                }
-            }
-
-            if intent.staging_path.is_file() {
-                let (digest, length) = MediaArchive::digest_file(&intent.staging_path)?;
-                if digest == intent.identity.sha256 && length == intent.identity.byte_length {
-                    self.rename_into_archive(intent, at).await?;
-                    self.commit(intent, at).await?;
-                    outcomes.push(ReconcileOutcome::Committed(intent.id));
-                } else {
-                    self.quarantine(intent.id, "INTEGRITY_FAILED", at).await?;
-                    outcomes.push(ReconcileOutcome::Quarantined(intent.id));
-                }
-            } else {
-                self.abandon(intent.id, "DOWNLOAD_INTERRUPTED", at).await?;
-                outcomes.push(ReconcileOutcome::Abandoned(intent.id));
+            match self.reconcile_one(intent, at).await {
+                Ok(outcome) => outcomes.push(outcome),
+                Err(error) => outcomes.push(ReconcileOutcome::Deferred {
+                    intent_id: intent.id,
+                    code: error.code(),
+                }),
             }
         }
 
@@ -383,6 +367,46 @@ impl ImportJournal {
             outcomes.push(ReconcileOutcome::OrphanRemoved(orphan));
         }
         Ok(outcomes)
+    }
+
+    /// Settle one intent against the bytes actually on disk.
+    async fn reconcile_one(
+        &self,
+        intent: &PreparedIntent,
+        at: Timestamp,
+    ) -> PersistenceResult<ReconcileOutcome> {
+        let archived = self.archive.exists(&intent.target_relative_path)?;
+        if archived {
+            return match self
+                .archive
+                .verify(&intent.target_relative_path, &intent.identity)
+            {
+                Ok(()) => {
+                    self.commit(intent, at).await?;
+                    Ok(ReconcileOutcome::Committed(intent.id))
+                }
+                Err(PersistenceError::IntegrityFailed) => {
+                    self.quarantine(intent.id, "INTEGRITY_FAILED", at).await?;
+                    Ok(ReconcileOutcome::Quarantined(intent.id))
+                }
+                Err(other) => Err(other),
+            };
+        }
+
+        if intent.staging_path.is_file() {
+            let (digest, length) = MediaArchive::digest_file(&intent.staging_path)?;
+            if digest == intent.identity.sha256 && length == intent.identity.byte_length {
+                self.rename_into_archive(intent, at).await?;
+                self.commit(intent, at).await?;
+                Ok(ReconcileOutcome::Committed(intent.id))
+            } else {
+                self.quarantine(intent.id, "INTEGRITY_FAILED", at).await?;
+                Ok(ReconcileOutcome::Quarantined(intent.id))
+            }
+        } else {
+            self.abandon(intent.id, "DOWNLOAD_INTERRUPTED", at).await?;
+            Ok(ReconcileOutcome::Abandoned(intent.id))
+        }
     }
 
     /// Intents whose staging file must be preserved: everything that has not
@@ -906,6 +930,68 @@ mod tests {
             .await
             .unwrap_err();
         assert!(matches!(error, PersistenceError::IntegrityFailed));
+    }
+
+    #[tokio::test]
+    async fn an_unrecoverable_intent_is_deferred_rather_than_aborting_startup() {
+        let h = harness().await;
+
+        // A stuck intent: the staging file is gone and the archive target is
+        // occupied by bytes that do not match, so neither commit nor
+        // quarantine-by-staging applies.
+        let stuck = h
+            .journal
+            .stage(&mut std::io::Cursor::new(b"stuck".to_vec()), "wav")
+            .unwrap();
+        let stuck_intent = h
+            .journal
+            .record_intent(
+                &stuck,
+                "wav",
+                QualityClass::UserSuppliedFile,
+                None,
+                None,
+                Timestamp::EPOCH,
+            )
+            .await
+            .unwrap();
+        let occupied = h
+            .journal
+            .archive()
+            .absolute(&stuck_intent.target_relative_path)
+            .unwrap();
+        std::fs::create_dir_all(occupied.parent().unwrap()).unwrap();
+        std::fs::write(&occupied, b"different bytes entirely").unwrap();
+
+        // A healthy intent queued behind it.
+        let healthy = h
+            .journal
+            .stage(&mut std::io::Cursor::new(b"healthy".to_vec()), "wav")
+            .unwrap();
+        let healthy_intent = h
+            .journal
+            .record_intent(
+                &healthy,
+                "wav",
+                QualityClass::UserSuppliedFile,
+                None,
+                None,
+                Timestamp::EPOCH,
+            )
+            .await
+            .unwrap();
+
+        let outcomes = h.journal.reconcile(Timestamp::EPOCH).await.unwrap();
+        assert!(
+            outcomes.contains(&ReconcileOutcome::Committed(healthy_intent.id)),
+            "one stuck intent must not block the rest of startup: {outcomes:?}"
+        );
+        assert!(
+            outcomes
+                .iter()
+                .any(|outcome| matches!(outcome, ReconcileOutcome::Quarantined(id) | ReconcileOutcome::Deferred { intent_id: id, .. } if *id == stuck_intent.id)),
+            "the stuck intent must be reported, not silently dropped: {outcomes:?}"
+        );
     }
 
     #[tokio::test]

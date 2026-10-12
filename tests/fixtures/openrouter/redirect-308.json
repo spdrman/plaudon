@@ -1,0 +1,5 @@
+{
+  "_shape": "Permanent redirect returned by the API host.",
+  "status": 308,
+  "location": "https://openrouter.ai/api/v1/audio/transcriptions"
+}
