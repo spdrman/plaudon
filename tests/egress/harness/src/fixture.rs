@@ -337,24 +337,32 @@ pub fn workspace_root() -> PathBuf {
 
 /// `(target dir, profile dir)` derived from the running test executable, so a
 /// custom `CARGO_TARGET_DIR` or `--release` run is honoured.
+///
+/// The path from the target directory down to a test binary is not fixed.
+/// Cargo has long used `<target>/<profile>/deps/<test>`, and the
+/// build-directory layout the coverage run's toolchain produces uses
+/// `<target>/<profile>/build/<package>/<hash>/out/<test>`. Counting
+/// components therefore mistakes a hash for the profile name — observed as
+/// the child build failing with ``profile `e9765538642806e4` is not
+/// defined``. The target directory is instead found by the marker cargo
+/// writes into it, and the profile directory is its child on the way down.
 pub fn target_dirs() -> Result<(PathBuf, PathBuf), FixtureError> {
     let exe = std::env::current_exe()?;
-    // <target>/<profile>/deps/<test binary>
-    let deps = exe.parent().ok_or_else(|| FixtureError::ArtifactMissing {
-        what: "the test executable's directory".to_owned(),
+    let mut profile_dir = None;
+    for directory in exe.ancestors().skip(1) {
+        if directory.join("CACHEDIR.TAG").is_file() {
+            let profile_dir = profile_dir.ok_or_else(|| FixtureError::ArtifactMissing {
+                what: "the profile directory below the cargo target directory".to_owned(),
+                hint: exe.display().to_string(),
+            })?;
+            return Ok((directory.to_path_buf(), profile_dir));
+        }
+        profile_dir = Some(directory.to_path_buf());
+    }
+    Err(FixtureError::ArtifactMissing {
+        what: "the cargo target directory above the test executable".to_owned(),
         hint: exe.display().to_string(),
-    })?;
-    let profile_dir = deps.parent().ok_or_else(|| FixtureError::ArtifactMissing {
-        what: "the profile directory".to_owned(),
-        hint: deps.display().to_string(),
-    })?;
-    let target_dir = profile_dir
-        .parent()
-        .ok_or_else(|| FixtureError::ArtifactMissing {
-            what: "the cargo target directory".to_owned(),
-            hint: profile_dir.display().to_string(),
-        })?;
-    Ok((target_dir.to_path_buf(), profile_dir.to_path_buf()))
+    })
 }
 
 /// Translate a profile *directory* name back into the cargo flag that selects
@@ -425,8 +433,16 @@ mod tests {
     #[test]
     fn target_dirs_point_at_a_real_cargo_target_directory() {
         let (target_dir, profile_dir) = target_dirs().unwrap();
-        assert!(profile_dir.starts_with(&target_dir));
-        assert!(profile_dir.join("deps").is_dir());
+        assert!(target_dir.join("CACHEDIR.TAG").is_file());
+        assert_eq!(profile_dir.parent(), Some(target_dir.as_path()));
+        // The name is handed to the child build as `--profile`, so it has to
+        // be the profile cargo built this test with and not an intermediate
+        // directory on the way down to the executable.
+        let name = profile_dir.file_name().unwrap().to_str().unwrap();
+        assert!(
+            matches!(name, "debug" | "release") || !name.chars().all(|c| c.is_ascii_hexdigit()),
+            "{name} does not look like a cargo profile directory"
+        );
     }
 
     #[test]

@@ -152,6 +152,9 @@ archive is intact; it does not prove who made it."
             .to_owned(),
         manifest_schema_version: "archive/v1".to_owned(),
         nonportable_settings: vec!["OpenRouter key (stays in the system keychain)".to_owned()],
+        // Nothing voice-derived travels in this fixture: VP-078 keeps profiles
+        // out of an archive unless the user asked for them.
+        voice_profiles_included: 0,
     }
 }
 
