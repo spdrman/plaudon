@@ -29,6 +29,13 @@ use plaudon_ui::shell::{HostHooks, Shell, ShellHost};
 /// would hit the disk sixty times a second for no benefit.
 pub const SAVE_DEBOUNCE: Duration = Duration::from_secs(2);
 
+/// How long the engine is given to finish what the closing window started.
+///
+/// The last frame can dispatch a `save_transcript_revision`; the process
+/// must not exit before it has committed. Everything durable commits before
+/// it reports, so anything still running after this is safe to abandon.
+pub const SHUTDOWN_GRACE: Duration = Duration::from_secs(5);
+
 /// The waker the engine calls: one repaint per batch of events, no polling.
 #[derive(Debug, Clone)]
 struct RepaintWaker {
@@ -44,7 +51,9 @@ impl Waker for RepaintWaker {
 /// The application the binary runs.
 #[derive(Debug)]
 pub struct PlaudonShell {
-    engine: AppEngine,
+    /// `None` only after [`PlaudonShell::on_exit`] has wound the runtime
+    /// down, which is the last thing that happens to this value.
+    engine: Option<AppEngine>,
     hooks: HostHooks,
     shell: Shell,
     waker_installed: bool,
@@ -56,7 +65,7 @@ impl PlaudonShell {
     #[must_use]
     pub fn new(engine: AppEngine, hooks: HostHooks, state: ShellState) -> Self {
         Self {
-            engine,
+            engine: Some(engine),
             hooks,
             shell: Shell::new(state),
             waker_installed: false,
@@ -76,27 +85,38 @@ impl PlaudonShell {
     }
 
     /// The engine, for tests that assert on the application layer.
+    ///
+    /// # Panics
+    ///
+    /// Panics after the window has closed and the runtime has been wound
+    /// down, which is the only point at which there is no engine.
     #[must_use]
     pub fn engine(&self) -> &AppEngine {
-        &self.engine
+        self.engine
+            .as_ref()
+            .expect("the engine is owned until the window closes")
     }
 
     /// Install the repaint waker once the interface's context exists.
     pub fn install_waker(&mut self, ctx: &egui::Context) {
         if !self.waker_installed {
-            self.engine
-                .set_waker(Arc::new(RepaintWaker { ctx: ctx.clone() }));
+            if let Some(engine) = self.engine.as_ref() {
+                engine.set_waker(Arc::new(RepaintWaker { ctx: ctx.clone() }));
+            }
             self.waker_installed = true;
         }
     }
 
     /// Hand everything the engine produced to the shell.
     pub fn pump_events(&mut self) {
+        let Some(engine) = self.engine.as_ref() else {
+            return;
+        };
         let host = ShellHost {
-            dispatcher: self.engine.dispatcher(),
+            dispatcher: engine.dispatcher(),
             hooks: &self.hooks,
         };
-        for event in self.engine.events().drain() {
+        for event in engine.events().drain() {
             self.shell.handle_event(event, &host);
         }
     }
@@ -104,11 +124,22 @@ impl PlaudonShell {
     /// Paint one frame.
     pub fn view(&mut self, ui: &mut egui::Ui) {
         self.pump_events();
+        let Some(engine) = self.engine.as_ref() else {
+            return;
+        };
         let host = ShellHost {
-            dispatcher: self.engine.dispatcher(),
+            dispatcher: engine.dispatcher(),
             hooks: &self.hooks,
         };
         self.shell.ui(ui, &host);
+        // Parity row J15: a notification click routes the shell and raises
+        // the window. The shell decided where to go; only the host can
+        // un-minimise and focus a viewport.
+        if self.shell.take_activation() {
+            ui.ctx()
+                .send_viewport_cmd(egui::ViewportCommand::Minimized(false));
+            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Focus);
+        }
         self.persist(ui.ctx());
     }
 
@@ -143,6 +174,26 @@ impl PlaudonShell {
             (self.hooks.save_shell_state)(state);
         }
     }
+
+    /// Give every screen its last turn, then write the shell state.
+    ///
+    /// The order matters: a screen's `on_shutdown` can dispatch a command —
+    /// the transcript editor's pending autosave is exactly that — so the
+    /// commands go out first and the runtime is wound down afterwards, with
+    /// [`SHUTDOWN_GRACE`] to finish them.
+    pub fn shutdown(&mut self) {
+        if let Some(engine) = self.engine.as_ref() {
+            let host = ShellHost {
+                dispatcher: engine.dispatcher(),
+                hooks: &self.hooks,
+            };
+            self.shell.shutdown(&host);
+        }
+        self.flush_state();
+        if let Some(engine) = self.engine.take() {
+            engine.shutdown(SHUTDOWN_GRACE);
+        }
+    }
 }
 
 impl eframe::App for PlaudonShell {
@@ -154,6 +205,6 @@ impl eframe::App for PlaudonShell {
     }
 
     fn on_exit(&mut self) {
-        self.flush_state();
+        self.shutdown();
     }
 }

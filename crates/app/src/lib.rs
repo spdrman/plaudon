@@ -153,16 +153,44 @@ pub async fn build_ports_with_radio(
     approved_roots: Vec<PathBuf>,
     radio: Arc<dyn DeviceRadio>,
 ) -> Result<AppPorts, AppError> {
-    let backend = Arc::new(
-        LocalBackend::open(
-            app_data_dir,
-            sink,
-            notifications,
-            Arc::clone(&secrets),
-            approved_roots,
-        )
-        .await?,
-    );
+    build_ports_with(
+        app_data_dir,
+        sink,
+        notifications,
+        secrets,
+        approved_roots,
+        radio,
+        None,
+    )
+    .await
+}
+
+/// [`build_ports_with_radio`] with the cloud HTTPS transport replaced.
+///
+/// The one reason to replace it is a test that must prove nothing left the
+/// process: a transport that records and refuses is the only way to tell
+/// "no request was made" apart from "a request was made and failed".
+pub async fn build_ports_with(
+    app_data_dir: &Path,
+    sink: Arc<dyn EventSink>,
+    notifications: Arc<plaudon_notifications::Dispatcher>,
+    secrets: Arc<dyn SecretStore>,
+    approved_roots: Vec<PathBuf>,
+    radio: Arc<dyn DeviceRadio>,
+    cloud_transport: Option<Arc<dyn plaudon_ai_openrouter::transport::AsyncHttpTransport>>,
+) -> Result<AppPorts, AppError> {
+    let opened = LocalBackend::open(
+        app_data_dir,
+        sink,
+        notifications,
+        Arc::clone(&secrets),
+        approved_roots,
+    )
+    .await?;
+    let backend = Arc::new(match cloud_transport {
+        Some(transport) => opened.with_cloud_transport(transport),
+        None => opened,
+    });
     // Spec §13.3A: an import interrupted by a crash is reconciled against the
     // actual file hashes before the UI can ask for anything.
     if let Err(err) = backend.reconcile_startup().await {

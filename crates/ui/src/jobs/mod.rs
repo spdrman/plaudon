@@ -12,6 +12,8 @@
 //! sent, no percentage that was not reported, no free-space figure this
 //! process guessed.
 
+pub mod shell_adapter;
+
 use egui::{RichText, Ui};
 use plaudon_app::command::AppCommand;
 use plaudon_app::dto::{

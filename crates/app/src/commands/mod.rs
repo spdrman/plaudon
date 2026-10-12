@@ -13,6 +13,7 @@ pub mod devices;
 pub mod import;
 pub mod jobs;
 pub mod library;
+pub mod media;
 pub mod models;
 pub mod outputs;
 pub mod search;
