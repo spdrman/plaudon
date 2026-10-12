@@ -1996,8 +1996,16 @@ pub struct SpeakerDto {
     pub speaker_id: SpeakerId,
     /// Recording.
     pub recording_id: RecordingId,
-    /// Current label.
+    /// Current label. A rename overwrites it; a reset restores
+    /// `original_label`.
     pub label: String,
+    /// The name a user typed, when one has been typed.
+    ///
+    /// Present whether or not it has been confirmed, because the surface
+    /// that offers confirmation has to know there is something to confirm.
+    /// Rendering it as an identity is forbidden until `confirmed`
+    /// ([`plaudon_domain::speaker::display`]).
+    pub name: Option<String>,
     /// Whether confirmed as identity.
     pub confirmed: bool,
     /// Machine-assigned label.

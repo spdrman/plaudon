@@ -17,6 +17,7 @@ pub mod money;
 pub mod output;
 pub mod recording;
 pub mod source;
+pub mod speaker;
 pub mod time;
 pub mod timerange;
 pub mod transcript;

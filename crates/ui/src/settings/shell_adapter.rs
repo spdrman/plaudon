@@ -228,6 +228,10 @@ impl Screen for SettingsShellScreen {
             cx.send(command);
         }
     }
+
+    fn on_open_archive(&mut self, path: &str, _cx: &mut ScreenCtx<'_>) -> bool {
+        self.screen.open_archive(path)
+    }
 }
 
 /// The first-run flow, as the shell sees it (parity rows C8 and S15).

@@ -120,7 +120,10 @@ pub enum SpeakerError {
 }
 
 /// Maximum stored speaker name length.
-pub const MAX_NAME_CHARS: usize = 120;
+///
+/// Re-stated from [`plaudon_domain::speaker`] so the registry and the text
+/// field a user types into cannot disagree about the limit.
+pub const MAX_NAME_CHARS: usize = plaudon_domain::speaker::MAX_NAME_CHARS;
 
 /// Every speaker row for one recording.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -285,17 +288,16 @@ impl SpeakerRegistry {
     }
 
     /// How a row should be presented.
+    ///
+    /// The qualifier is [`plaudon_domain::speaker::qualifier`]: one wording,
+    /// shared with the export bundle and the desktop interface.
     #[must_use]
     pub fn display(&self, id: SpeakerId) -> Option<SpeakerDisplay> {
         self.get(id).map(|speaker| SpeakerDisplay {
             speaker_id: speaker.id,
             label: speaker.label.clone(),
             confirmed: speaker.user_confirmed,
-            qualifier: if speaker.user_confirmed {
-                "confirmed"
-            } else {
-                "inferred cluster"
-            },
+            qualifier: plaudon_domain::speaker::qualifier(speaker.user_confirmed),
         })
     }
 

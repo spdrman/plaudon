@@ -9,6 +9,10 @@ Record the result of every step in the release evidence bundle: tester, OS
 build, screen-reader version, app version, pass/fail and verbatim announcement
 where it matters.
 
+**This script covers the React frontend.** The Rust-only egui shell has its own, with the same
+structure so the two are comparable: `scripts/ui-a11y-egui.md`. Run that one against a
+`plaudon-egui` build; run this one against the web build until the cutover retires it.
+
 ## Environments
 
 | Platform | Screen reader | Start | Stop |

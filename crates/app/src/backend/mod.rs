@@ -1196,19 +1196,27 @@ impl LocalBackend {
     }
 
     /// Resolve speaker labels to rows, creating inferred speakers on demand.
+    ///
+    /// A transcript segment carries the **machine** label, so rows are
+    /// matched on `original_label`: matching on `label` would stop finding a
+    /// speaker the user has renamed and silently create a second row for the
+    /// same person on the next saved revision.
     async fn ensure_speakers(
         &self,
         recording_id: RecordingId,
         labels: &[Option<String>],
     ) -> Result<Vec<Option<String>>, AppError> {
         let mut known: BTreeMap<String, String> = BTreeMap::new();
-        let rows = sqlx::query("SELECT id, label FROM speakers WHERE recording_id = ?1")
-            .bind(recording_id.to_string())
-            .fetch_all(self.pool())
-            .await
-            .map_err(|err| storage_error("cannot read speakers", &err))?;
+        let rows = sqlx::query(
+            "SELECT id, COALESCE(original_label, label) AS machine_label \
+             FROM speakers WHERE recording_id = ?1",
+        )
+        .bind(recording_id.to_string())
+        .fetch_all(self.pool())
+        .await
+        .map_err(|err| storage_error("cannot read speakers", &err))?;
         for row in rows {
-            known.insert(row.get("label"), row.get("id"));
+            known.insert(row.get("machine_label"), row.get("id"));
         }
 
         let mut out = Vec::with_capacity(labels.len());
@@ -1224,7 +1232,8 @@ impl LocalBackend {
             let id = plaudon_domain::ids::SpeakerId::new().to_string();
             sqlx::query(
                 "INSERT INTO speakers (id, recording_id, label, name, provenance, \
-                 user_confirmed) VALUES (?1, ?2, ?3, NULL, 'inferred', 0)",
+                 user_confirmed, original_label) \
+                 VALUES (?1, ?2, ?3, NULL, 'inferred', 0, ?3)",
             )
             .bind(&id)
             .bind(recording_id.to_string())
@@ -1418,9 +1427,16 @@ impl SpeakersPort for LocalBackend {
         recording_id: RecordingId,
     ) -> Result<plaudon_app_core::speakers::SpeakerRegistry, AppError> {
         let rows: Vec<_> = sqlx::query(
-            "SELECT id, recording_id, cluster_key, original_label, label, name, \
+            // `original_label` arrived in migration 0400 and is nullable, so
+            // a row written before it existed has none. It is coalesced to
+            // the current label here rather than read as NOT NULL: such a row
+            // has never been renamed — no rename ever reached the database
+            // before this column did — so its label still is the machine's.
+            "SELECT id, recording_id, cluster_key, \
+             COALESCE(original_label, label) AS original_label, label, name, \
              provenance, user_confirmed, renamed_at, confirmed_at \
-             FROM speakers WHERE recording_id = ?1 ORDER BY original_label",
+             FROM speakers WHERE recording_id = ?1 \
+             ORDER BY COALESCE(original_label, label), id",
         )
         .bind(recording_id.to_string())
         .fetch_all(self.pool())
@@ -1478,19 +1494,24 @@ impl SpeakersPort for LocalBackend {
             .map_err(|err| AppError::new(AppErrorCode::InvalidArgument, err.to_string()))?;
 
         sqlx::query(
+            // `renamed_at` is INTEGER on a STRICT table (migration 0400), so
+            // it is bound as epoch milliseconds — the unit `list_speakers`
+            // reads back. An RFC 3339 string is refused outright by STRICT,
+            // which is how every rename used to fail.
+            //
+            // `original_label` is written through COALESCE so a row created
+            // before the column existed keeps a machine label to be reset to.
             "UPDATE speakers SET label = ?1, name = ?2, provenance = ?3, \
-             user_confirmed = ?4, renamed_at = ?5, confirmed_at = NULL \
-             WHERE id = ?6 AND recording_id = ?7",
+             user_confirmed = ?4, renamed_at = ?5, confirmed_at = NULL, \
+             original_label = COALESCE(original_label, ?6) \
+             WHERE id = ?7 AND recording_id = ?8",
         )
         .bind(&speaker.label)
         .bind(&speaker.name)
         .bind("inferred")
         .bind(false)
-        .bind(
-            speaker
-                .renamed_at
-                .map(plaudon_domain::time::Timestamp::to_rfc3339),
-        )
+        .bind(speaker.renamed_at.map(Timestamp::as_millis))
+        .bind(&speaker.original_label)
         .bind(speaker.id.to_string())
         .bind(recording_id.to_string())
         .execute(self.pool())
@@ -1512,16 +1533,14 @@ impl SpeakersPort for LocalBackend {
             .map_err(|err| AppError::new(AppErrorCode::InvalidArgument, err.to_string()))?;
 
         sqlx::query(
-            "UPDATE speakers SET provenance = ?1, user_confirmed = ?2, confirmed_at = ?3 \
-             WHERE id = ?4 AND recording_id = ?5",
+            "UPDATE speakers SET provenance = ?1, user_confirmed = ?2, confirmed_at = ?3, \
+             original_label = COALESCE(original_label, ?4) \
+             WHERE id = ?5 AND recording_id = ?6",
         )
         .bind("user_confirmed")
         .bind(true)
-        .bind(
-            speaker
-                .confirmed_at
-                .map(plaudon_domain::time::Timestamp::to_rfc3339),
-        )
+        .bind(speaker.confirmed_at.map(Timestamp::as_millis))
+        .bind(&speaker.original_label)
         .bind(speaker.id.to_string())
         .bind(recording_id.to_string())
         .execute(self.pool())
@@ -1543,7 +1562,8 @@ impl SpeakersPort for LocalBackend {
 
         sqlx::query(
             "UPDATE speakers SET label = ?1, name = NULL, provenance = ?2, \
-             user_confirmed = ?3, renamed_at = NULL, confirmed_at = NULL \
+             user_confirmed = ?3, renamed_at = NULL, confirmed_at = NULL, \
+             original_label = COALESCE(original_label, ?1) \
              WHERE id = ?4 AND recording_id = ?5",
         )
         .bind(&speaker.label)
@@ -2308,6 +2328,196 @@ mod tests {
             fixture.notifier.permission_prompts().await,
             0,
             "an opted-out category never prompts the OS"
+        );
+    }
+
+    /// One diarized segment, which is how a speaker row comes into being.
+    fn diarized(text: &str, start_ms: u64, end_ms: u64, label: &str) -> MachineSegment {
+        MachineSegment {
+            speaker_label: Some(label.to_owned()),
+            ..MachineSegment::timed(text, start_ms, end_ms)
+        }
+    }
+
+    async fn speaker_named(
+        fixture: &super::testing::Fixture,
+        id: RecordingId,
+        machine: &str,
+    ) -> plaudon_app_core::speakers::Speaker {
+        fixture
+            .backend
+            .list_speakers(id)
+            .await
+            .unwrap()
+            .speakers()
+            .iter()
+            .find(|speaker| speaker.original_label == machine)
+            .unwrap_or_else(|| panic!("no speaker row for {machine}"))
+            .clone()
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_rename_a_confirmation_and_a_reset_survive_a_relist() {
+        let fixture = backend_fixture().await;
+        let recording_id = imported_recording(&fixture, "panel.wav").await;
+        fixture
+            .backend
+            .create_machine_revision(MachineRevisionSpec {
+                recording_id,
+                segments: vec![
+                    diarized("welcome everyone", 0, 1_000, "Speaker 1"),
+                    diarized("thanks for having me", 1_000, 2_000, "Speaker 2"),
+                ],
+                engine_id: "whisper.cpp".into(),
+                model_id: "small".into(),
+                alignment_origin: AlignmentOrigin::Native,
+            })
+            .await
+            .unwrap();
+
+        let first = speaker_named(&fixture, recording_id, "Speaker 1").await;
+        assert_eq!(first.label, "Speaker 1");
+        assert!(first.name.is_none());
+
+        // A rename records the name and trims it, and leaves the row inferred.
+        let answered = fixture
+            .backend
+            .rename_speaker(
+                recording_id,
+                first.id,
+                "  Dana  ",
+                Timestamp::from_millis(1_000),
+            )
+            .await
+            .unwrap();
+        assert_eq!(answered.label, "Dana");
+        assert!(!answered.user_confirmed, "a rename is not a claim");
+
+        let stored = speaker_named(&fixture, recording_id, "Speaker 1").await;
+        assert_eq!(stored.label, "Dana");
+        assert_eq!(stored.name.as_deref(), Some("Dana"));
+        assert_eq!(
+            stored.original_label, "Speaker 1",
+            "the machine label is what a reset restores"
+        );
+        assert_eq!(stored.renamed_at, Some(Timestamp::from_millis(1_000)));
+        assert!(!stored.user_confirmed);
+        assert!(stored.is_inferred());
+
+        // Confirmation is the user's claim, and it is the one that sticks.
+        fixture
+            .backend
+            .confirm_speaker(recording_id, first.id, Timestamp::from_millis(2_000))
+            .await
+            .unwrap();
+        let stored = speaker_named(&fixture, recording_id, "Speaker 1").await;
+        assert!(stored.user_confirmed);
+        assert_eq!(stored.confirmed_at, Some(Timestamp::from_millis(2_000)));
+        assert_eq!(stored.renamed_at, Some(Timestamp::from_millis(1_000)));
+        assert!(!stored.is_inferred());
+
+        // A speaker with no typed name has nothing to confirm.
+        let second = speaker_named(&fixture, recording_id, "Speaker 2").await;
+        let refused = fixture
+            .backend
+            .confirm_speaker(recording_id, second.id, Timestamp::from_millis(3_000))
+            .await
+            .expect_err("an unnamed speaker cannot be confirmed");
+        assert_eq!(refused.code(), AppErrorCode::InvalidArgument);
+        assert!(
+            refused.detail().contains("named"),
+            "the diagnostic has to say why: {}",
+            refused.detail()
+        );
+
+        // A later revision over the same machine labels reuses the rows it
+        // already has, renamed or not.
+        fixture
+            .backend
+            .create_machine_revision(MachineRevisionSpec {
+                recording_id,
+                segments: vec![
+                    diarized("welcome everyone again", 0, 1_000, "Speaker 1"),
+                    diarized("still glad to be here", 1_000, 2_000, "Speaker 2"),
+                ],
+                engine_id: "whisper.cpp".into(),
+                model_id: "small".into(),
+                alignment_origin: AlignmentOrigin::Native,
+            })
+            .await
+            .unwrap();
+        let registry = fixture.backend.list_speakers(recording_id).await.unwrap();
+        assert_eq!(
+            registry.speakers().len(),
+            2,
+            "a renamed speaker must not be duplicated by the next revision"
+        );
+        assert_eq!(
+            registry.get(first.id).map(|speaker| speaker.label.as_str()),
+            Some("Dana")
+        );
+
+        // Reset restores the machine label and discards the claim.
+        fixture
+            .backend
+            .reset_speaker(recording_id, first.id)
+            .await
+            .unwrap();
+        let stored = speaker_named(&fixture, recording_id, "Speaker 1").await;
+        assert_eq!(stored.label, "Speaker 1");
+        assert!(stored.name.is_none());
+        assert!(!stored.user_confirmed);
+        assert_eq!(stored.renamed_at, None);
+        assert_eq!(stored.confirmed_at, None);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_speaker_name_is_bounded_and_never_blank() {
+        let fixture = backend_fixture().await;
+        let recording_id = imported_recording(&fixture, "limits.wav").await;
+        fixture
+            .backend
+            .create_machine_revision(MachineRevisionSpec {
+                recording_id,
+                segments: vec![diarized("one line", 0, 1_000, "Speaker 1")],
+                engine_id: "whisper.cpp".into(),
+                model_id: "small".into(),
+                alignment_origin: AlignmentOrigin::Native,
+            })
+            .await
+            .unwrap();
+        let speaker = speaker_named(&fixture, recording_id, "Speaker 1").await;
+
+        for blank in ["", "   "] {
+            let refused = fixture
+                .backend
+                .rename_speaker(recording_id, speaker.id, blank, Timestamp::now())
+                .await
+                .expect_err("a blank name is not a name");
+            assert_eq!(refused.code(), AppErrorCode::InvalidArgument);
+        }
+
+        let limit = plaudon_app_core::speakers::MAX_NAME_CHARS;
+        let too_long = "n".repeat(limit + 1);
+        let refused = fixture
+            .backend
+            .rename_speaker(recording_id, speaker.id, &too_long, Timestamp::now())
+            .await
+            .expect_err("a name longer than the column allows is refused");
+        assert_eq!(refused.code(), AppErrorCode::InvalidArgument);
+
+        let at_limit = "n".repeat(limit);
+        fixture
+            .backend
+            .rename_speaker(recording_id, speaker.id, &at_limit, Timestamp::now())
+            .await
+            .expect("a name of exactly the maximum length is stored");
+        assert_eq!(
+            speaker_named(&fixture, recording_id, "Speaker 1")
+                .await
+                .name
+                .as_deref(),
+            Some(at_limit.as_str())
         );
     }
 }

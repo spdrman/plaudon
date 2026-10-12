@@ -16,8 +16,15 @@
 //!   hash, which is how a user checks that this is the recording they think
 //!   it is;
 //! * a recorded-at that was never captured renders as unknown.
+//!
+//! Two things the container owns beyond the frame, because neither belongs
+//! to a working panel: the vendor exports recorded alongside the audio
+//! ([`artifacts`]) and the deletion disclosure and its confirmation
+//! ([`deletion`]).
 
 pub mod ai_panels;
+pub mod artifacts;
+pub mod deletion;
 pub mod live;
 pub mod playback;
 pub mod transcript_panel;
@@ -142,6 +149,17 @@ pub enum DetailIntent {
     Back,
     /// Open settings.
     OpenSettings,
+    /// The open recording was deleted: the host must leave this view and
+    /// refresh the library.
+    ///
+    /// The string states what the backend reported it actually did — blobs
+    /// removed, blobs retained because another recording shares them, bytes
+    /// freed, whether a tombstone exists — for the status line of the screen
+    /// the user lands on.
+    Deleted {
+        /// The sentence to show, already composed from the response.
+        summary: String,
+    },
 }
 
 /// The detail container.
@@ -154,6 +172,8 @@ pub struct RecordingDetailScreen {
     /// The recording the panels were last told about, so `opened` and
     /// `closed` fire exactly once each per recording.
     announced: Option<RecordingId>,
+    artifacts: artifacts::SourceArtifacts,
+    deletion: deletion::DeletionFlow,
 }
 
 impl Default for RecordingDetailScreen {
@@ -172,6 +192,8 @@ impl RecordingDetailScreen {
             pending: None,
             error: None,
             announced: None,
+            artifacts: artifacts::SourceArtifacts::new(),
+            deletion: deletion::DeletionFlow::new(),
         }
     }
 
@@ -187,7 +209,8 @@ impl RecordingDetailScreen {
         self.detail.as_ref()
     }
 
-    /// Open a recording, fetching it if it is not the one already shown.
+    /// Open a recording, fetching it and its vendor exports if it is not the
+    /// one already shown.
     pub fn open(&mut self, recording_id: RecordingId, send: Sender<'_>) {
         if self.recording_id == Some(recording_id)
             && (self.detail.is_some() || self.pending.is_some())
@@ -197,6 +220,8 @@ impl RecordingDetailScreen {
         self.recording_id = Some(recording_id);
         self.detail = None;
         self.error = None;
+        self.deletion.close();
+        self.artifacts.open(recording_id, &mut *send);
         self.fetch(send);
     }
 
@@ -216,6 +241,9 @@ impl RecordingDetailScreen {
         id: CommandId,
         result: &Result<AppResponse, ErrorEnvelope>,
     ) -> bool {
+        if self.artifacts.on_response(id, result) || self.deletion.on_response(id, result) {
+            return true;
+        }
         if self.pending != Some(id) {
             return false;
         }
@@ -234,6 +262,10 @@ impl RecordingDetailScreen {
     /// Route a §15.3 event.
     pub fn on_ui_event(&mut self, kind: EventKind, send: Sender<'_>) {
         if DETAIL_EVENTS.contains(&kind) && self.recording_id.is_some() {
+            // A source update can add a vendor export to a recording that is
+            // already open, so the export list is refetched with the
+            // recording itself.
+            self.artifacts.fetch(&mut *send);
             self.fetch(send);
         }
     }
@@ -241,6 +273,7 @@ impl RecordingDetailScreen {
     /// Route a resynchronisation.
     pub fn on_resync(&mut self, send: Sender<'_>) {
         if self.recording_id.is_some() {
+            self.artifacts.fetch(&mut *send);
             self.fetch(send);
         }
     }
@@ -258,13 +291,15 @@ impl RecordingDetailScreen {
         self.detail = None;
         self.pending = None;
         self.error = None;
+        self.artifacts.close();
+        self.deletion.close();
     }
 
     /// Draw the container around `panels`.
     ///
     /// Anything the panels asked the application for is appended to `out`;
     /// the container itself only reports [`DetailIntent`]s, which are the
-    /// two things a command cannot express.
+    /// things a command cannot express.
     pub fn ui(
         &mut self,
         ui: &mut Ui,
@@ -309,8 +344,29 @@ impl RecordingDetailScreen {
         };
 
         header(ui, &detail, context);
+
+        let Self {
+            artifacts,
+            deletion,
+            ..
+        } = self;
+
+        // The trigger stands down while the disclosure is open, so the
+        // confirm button inside the disclosure is the only destructive
+        // control the keyboard can reach.
+        if !deletion.is_open()
+            && ui
+                .add(egui::Button::new(
+                    RichText::new(deletion::OPEN_LABEL).color(ui.visuals().error_fg_color),
+                ))
+                .clicked()
+        {
+            deletion.open(detail.summary.recording_id, &mut *send);
+        }
+
         ui.separator();
 
+        let mut artifact_intent = None;
         match DetailLayout::for_width(ui.available_width()) {
             DetailLayout::Wide => {
                 let side = (ui.available_width() * 0.32).clamp(260.0, 420.0);
@@ -323,6 +379,9 @@ impl RecordingDetailScreen {
                     ui.separator();
                     ui.allocate_ui(egui::vec2(side, ui.available_height()), |ui| {
                         panel(ui, "Outputs", |ui| panels.outputs(ui, &detail, out));
+                        panel(ui, artifacts::PANEL_NAME, |ui| {
+                            artifact_intent = artifacts.ui(ui, &mut *send);
+                        });
                     });
                 });
             }
@@ -330,7 +389,17 @@ impl RecordingDetailScreen {
                 panel(ui, "Playback", |ui| panels.player(ui, &detail, out));
                 panel(ui, "Transcript", |ui| panels.transcript(ui, &detail, out));
                 panel(ui, "Outputs", |ui| panels.outputs(ui, &detail, out));
+                panel(ui, artifacts::PANEL_NAME, |ui| {
+                    artifact_intent = artifacts.ui(ui, &mut *send);
+                });
             }
+        }
+        intents.extend(artifact_intent);
+
+        // The disclosure is an overlay, so it is raised after the panels and
+        // still paints above them.
+        if let Some(deletion::DeletionEvent::Deleted(summary)) = deletion.ui(ui, send) {
+            intents.push(DetailIntent::Deleted { summary });
         }
 
         intents

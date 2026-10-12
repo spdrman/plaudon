@@ -401,12 +401,13 @@ pub fn alignment_label(alignment_origin: &str) -> &'static str {
 }
 
 /// Speaker display text that never presents an inferred cluster as identity.
+///
+/// The wording lives in [`plaudon_domain::speaker`] because the desktop
+/// interface renders the same rule over the same rows; a bundle and the
+/// screen it was produced from must not disagree about who was speaking.
 #[must_use]
 pub fn speaker_display(label: &str, name: Option<&str>, user_confirmed: bool) -> String {
-    match (name, user_confirmed) {
-        (Some(name), true) if !name.is_empty() => format!("{name} (confirmed)"),
-        _ => format!("{label} (inferred cluster)"),
-    }
+    plaudon_domain::speaker::display(label, name, user_confirmed)
 }
 
 /// Reads the allowlisted projection out of a library.

@@ -378,6 +378,29 @@ fn nothing_can_be_restored_before_the_archive_has_been_inspected() {
 }
 
 #[test]
+fn a_double_clicked_archive_opens_the_restore_flow_at_its_first_stage() {
+    // Parity row C10: the installer claims the `.plaudon` extension, so
+    // opening one has to land the user in the flow that reads it — with the
+    // archive already chosen, and with nothing read from it yet.
+    let mut harness = harness();
+    harness.run();
+    assert!(
+        !has(&harness, ARCHIVE),
+        "nothing is chosen before the OS hands one over"
+    );
+
+    assert!(harness.state_mut().section.on_open_archive(ARCHIVE));
+    harness.run();
+
+    harness.get_by_label(ARCHIVE);
+    harness.get_by_label("Inspect archive");
+    assert!(
+        !has(&harness, "Restore"),
+        "a double-click is not consent to restore a library"
+    );
+}
+
+#[test]
 fn the_inspection_is_rendered_in_full_and_new_library_says_why_it_is_unavailable() {
     let mut harness = harness();
     open_restore_modal(&mut harness);

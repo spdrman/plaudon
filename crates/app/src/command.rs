@@ -365,7 +365,7 @@ impl Dispatcher {
             events.send(AppEvent::Response {
                 id,
                 command: name,
-                result,
+                result: Box::new(result),
             });
         });
         id

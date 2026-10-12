@@ -1,5 +1,10 @@
 //! Speaker labelling and confirmation (spec §8.7, §17.6).
+//!
+//! Every answer here is the row the store wrote, mapped by one function, so
+//! a caller that patches its list from a rename sees exactly what a later
+//! `list_speakers` would tell it.
 
+use plaudon_app_core::speakers::Speaker;
 use plaudon_domain::error::AppError;
 use plaudon_domain::ids::{RecordingId, SpeakerId};
 use plaudon_domain::time::Timestamp;
@@ -11,6 +16,20 @@ use crate::dto::{
 use crate::validate::parse_id;
 use crate::AppPorts;
 
+/// One stored row as the wire describes it.
+fn dto(speaker: &Speaker) -> SpeakerDto {
+    SpeakerDto {
+        speaker_id: speaker.id,
+        recording_id: speaker.recording_id,
+        label: speaker.label.clone(),
+        name: speaker.name.clone(),
+        confirmed: speaker.user_confirmed,
+        original_label: speaker.original_label.clone(),
+        renamed_at: speaker.renamed_at,
+        confirmed_at: speaker.confirmed_at,
+    }
+}
+
 /// List all speakers for a recording.
 pub async fn list_speakers(
     ports: &AppPorts,
@@ -18,19 +37,7 @@ pub async fn list_speakers(
 ) -> Result<ListSpeakersResponse, AppError> {
     let recording_id: RecordingId = parse_id("recording_id", &request.recording_id)?;
     let registry = ports.speakers.list_speakers(recording_id).await?;
-    let speakers = registry
-        .speakers()
-        .iter()
-        .map(|speaker| SpeakerDto {
-            speaker_id: speaker.id,
-            recording_id: speaker.recording_id,
-            label: speaker.label.clone(),
-            confirmed: speaker.user_confirmed,
-            original_label: speaker.original_label.clone(),
-            renamed_at: speaker.renamed_at,
-            confirmed_at: speaker.confirmed_at,
-        })
-        .collect();
+    let speakers = registry.speakers().iter().map(dto).collect();
     Ok(ListSpeakersResponse { speakers })
 }
 
@@ -46,15 +53,7 @@ pub async fn rename_speaker(
         .rename_speaker(recording_id, speaker_id, &request.name, Timestamp::now())
         .await?;
     Ok(SpeakerOperationResponse {
-        speaker: SpeakerDto {
-            speaker_id: speaker.id,
-            recording_id: speaker.recording_id,
-            label: speaker.label.clone(),
-            confirmed: speaker.user_confirmed,
-            original_label: speaker.original_label.clone(),
-            renamed_at: speaker.renamed_at,
-            confirmed_at: speaker.confirmed_at,
-        },
+        speaker: dto(&speaker),
     })
 }
 
@@ -70,15 +69,7 @@ pub async fn confirm_speaker(
         .confirm_speaker(recording_id, speaker_id, Timestamp::now())
         .await?;
     Ok(SpeakerOperationResponse {
-        speaker: SpeakerDto {
-            speaker_id: speaker.id,
-            recording_id: speaker.recording_id,
-            label: speaker.label.clone(),
-            confirmed: speaker.user_confirmed,
-            original_label: speaker.original_label.clone(),
-            renamed_at: speaker.renamed_at,
-            confirmed_at: speaker.confirmed_at,
-        },
+        speaker: dto(&speaker),
     })
 }
 
@@ -94,14 +85,6 @@ pub async fn reset_speaker(
         .reset_speaker(recording_id, speaker_id)
         .await?;
     Ok(SpeakerOperationResponse {
-        speaker: SpeakerDto {
-            speaker_id: speaker.id,
-            recording_id: speaker.recording_id,
-            label: speaker.label.clone(),
-            confirmed: speaker.user_confirmed,
-            original_label: speaker.original_label.clone(),
-            renamed_at: speaker.renamed_at,
-            confirmed_at: speaker.confirmed_at,
-        },
+        speaker: dto(&speaker),
     })
 }
