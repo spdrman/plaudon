@@ -77,6 +77,13 @@ pub const MIGRATIONS: &[Migration] = &[
         name: "desktop_shell",
         sql: include_str!("../migrations/0300_desktop_shell.sql"),
     },
+    // EPIC M: transcript tools, per-recording conversations, cross-recording
+    // search index, diarization turns and speaker labelling.
+    Migration {
+        version: 400,
+        name: "transcript_tools",
+        sql: include_str!("../migrations/0400_transcript_tools.sql"),
+    },
     // 800+ is EPIC K's range: source reconciliation and watched folders.
     Migration {
         version: 800,

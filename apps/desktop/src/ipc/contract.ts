@@ -666,6 +666,69 @@ export interface SourceArtifactSummary {
 
 export interface ListSourceArtifactsResponse {
   artifacts: SourceArtifactSummary[];
+
+/* ------------------------------------------------------------------ search */
+
+export interface SearchLibraryRequest {
+  query: string;
+  cursor: string | null;
+  limit: number;
+}
+
+export interface SearchResult {
+  recording_id: string;
+  recording_title: string;
+  transcript_revision_id: string;
+  seq_index: number;
+  excerpt: string;
+  /** Null for text-only transcripts (\u00a78.6A: never fabricate seek times). */
+  seek_ms: number | null;
+  alignment_origin: "native" | "derived" | "none";
+}
+
+export interface SearchLibraryResponse {
+  results: SearchResult[];
+  next_cursor: string | null;
+}
+
+/* ---------------------------------------------------------------- speakers */
+
+export interface ListSpeakersRequest {
+  recording_id: string;
+}
+
+export interface Speaker {
+  speaker_id: string;
+  recording_id: string;
+  label: string;
+  confirmed: boolean;
+  original_label: string;
+  renamed_at: string | null;
+  confirmed_at: string | null;
+}
+
+export interface ListSpeakersResponse {
+  speakers: Speaker[];
+}
+
+export interface RenameSpeakerRequest {
+  recording_id: string;
+  speaker_id: string;
+  name: string;
+}
+
+export interface ConfirmSpeakerRequest {
+  recording_id: string;
+  speaker_id: string;
+}
+
+export interface ResetSpeakerRequest {
+  recording_id: string;
+  speaker_id: string;
+}
+
+export interface SpeakerOperationResponse {
+  speaker: Speaker;
 }
 
 /* ------------------------------------------------------------ command map */
@@ -692,6 +755,11 @@ export interface CommandMap {
   set_openrouter_key: { req: SetOpenRouterKeyRequest; res: StatusResponse };
   remove_openrouter_key: { req: Record<string, never>; res: StatusResponse };
   list_activity: { req: ListActivityRequest; res: ActivityPage };
+  search_library: { req: SearchLibraryRequest; res: SearchLibraryResponse };
+  list_speakers: { req: ListSpeakersRequest; res: ListSpeakersResponse };
+  rename_speaker: { req: RenameSpeakerRequest; res: SpeakerOperationResponse };
+  confirm_speaker: { req: ConfirmSpeakerRequest; res: SpeakerOperationResponse };
+  reset_speaker: { req: ResetSpeakerRequest; res: SpeakerOperationResponse };
   complete_onboarding: { req: CompleteOnboardingRequest; res: Preferences };
   plaud_probe: { req: Record<string, never>; res: PlaudConnectorSnapshot };
   plaud_connect: { req: { user_intent: "connect_plaud_account" }; res: PlaudConnectorSnapshot };
@@ -740,10 +808,20 @@ export const EPIC_K_COMMANDS: readonly CommandName[] = [
   "list_source_artifacts",
 ];
 
+/** EPIC M extensions: cross-recording search (§3.1, §9.8) and speaker labelling (§8.7). */
+export const EPIC_M_COMMANDS: readonly CommandName[] = [
+  "search_library",
+  "list_speakers",
+  "rename_speaker",
+  "confirm_speaker",
+  "reset_speaker",
+];
+
 export const ALL_COMMANDS: readonly CommandName[] = [
   ...SPEC_COMMANDS,
   ...ADR_0020_COMMANDS,
   ...EPIC_K_COMMANDS,
+  ...EPIC_M_COMMANDS,
 ];
 
 /* ----------------------------------------------------------------- events */

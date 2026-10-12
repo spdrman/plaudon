@@ -36,6 +36,7 @@ plaudon-ai-openrouter = { path = "crates/ai-openrouter" }
 plaudon-ai-whisper = { path = "crates/ai-whisper" }
 plaudon-ai-diarization = { path = "crates/ai-diarization" }
 plaudon-ai-tools = { path = "crates/ai-tools" }
+plaudon-ai-local-llm = { path = "crates/ai-local-llm" }
 plaudon-ai-apple = { path = "crates/ai-apple" }
 plaudon-jobs = { path = "crates/jobs" }
 plaudon-persistence = { path = "crates/persistence" }
@@ -46,6 +47,7 @@ plaudon-automation = { path = "crates/automation" }
 plaudon-diagnostics = { path = "crates/diagnostics" }
 
 async-trait = "0.1"
+clap = { version = "4", features = ["derive"] }
 fs4 = "1"
 hex = "0.4"
 jsonschema = { version = "0.26", default-features = false }

@@ -36,8 +36,8 @@ use plaudon_desktop::dto::{
 use plaudon_desktop::error::to_command_result;
 use plaudon_desktop::events::{EventSink, RecordingEventSink};
 use plaudon_desktop::ports::{
-    ActivityPort, CapabilitiesPort, ExportPort, ImportPort, JobsPort, LibraryPort, SettingsPort,
-    SourcesPort, TranscriptPort,
+    ActivityPort, CapabilitiesPort, ExportPort, ImportPort, JobsPort, LibraryPort, SearchPort,
+    SettingsPort, SourcesPort, SpeakersPort, TranscriptPort,
 };
 use plaudon_desktop::secrets::{InMemorySecretStore, SecretStore};
 use plaudon_desktop::AppPorts;
@@ -256,6 +256,8 @@ impl Harness {
             settings: Arc::clone(&backend) as Arc<dyn SettingsPort>,
             export: Arc::clone(&backend) as Arc<dyn ExportPort>,
             sources: Arc::clone(&backend) as Arc<dyn SourcesPort>,
+            search: Arc::clone(&backend) as Arc<dyn SearchPort>,
+            speakers: Arc::clone(&backend) as Arc<dyn SpeakersPort>,
             secrets,
             events: backend.events().clone(),
         };

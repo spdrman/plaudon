@@ -145,6 +145,14 @@ export function LibraryScreen({
           </Button>
         ) : null}
       </form>
+      <div className="library__search-action">
+        <button
+          type="button"
+          onClick={() => navigate({ name: "library.search" })}
+        >
+          Search across all recordings
+        </button>
+      </div>
 
       {list.error ? (
         <ErrorNotice

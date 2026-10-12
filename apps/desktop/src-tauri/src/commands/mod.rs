@@ -9,24 +9,29 @@
 pub mod import;
 pub mod jobs;
 pub mod library;
+pub mod search;
 pub mod settings;
 pub mod sources;
+pub mod speakers;
 pub mod transcript;
 
 use tauri::State;
 
 use crate::dto::{
-    ActivityPage, CancelJobRequest, Capabilities, CompleteOnboardingRequest, EmptyRequest,
-    ExportRecordingRequest, ExportRecordingResponse, GetRecordingRequest, GetTranscriptRequest,
-    ImportFilesRequest, ImportFilesResponse, JobPage, JobSummary, ListActivityRequest,
-    ListJobsRequest, ListRecordingsRequest, ListSourceArtifactsRequest,
-    ListSourceArtifactsResponse, LocalOnlyModeResponse, NotificationSettingsResponse,
-    PlaudConnectRequest, PlaudConnectorSnapshot, PlaudDisconnectResponse, PlaudImportRequest,
-    PlaudImportResponse, PlaudListRequest, PlaudListResponse, Preferences, RecordingDetail,
-    RecordingPage, RetryJobRequest, SaveTranscriptRevisionRequest, SaveTranscriptRevisionResponse,
+    ActivityPage, CancelJobRequest, Capabilities, CompleteOnboardingRequest, ConfirmSpeakerRequest,
+    EmptyRequest, ExportRecordingRequest, ExportRecordingResponse, GetRecordingRequest,
+    GetTranscriptRequest, ImportFilesRequest, ImportFilesResponse, JobPage, JobSummary,
+    ListActivityRequest, ListJobsRequest, ListRecordingsRequest, ListSourceArtifactsRequest,
+    ListSourceArtifactsResponse, ListSpeakersRequest, ListSpeakersResponse, LocalOnlyModeResponse,
+    NotificationSettingsResponse, PlaudConnectRequest, PlaudConnectorSnapshot,
+    PlaudDisconnectResponse, PlaudImportRequest, PlaudImportResponse, PlaudListRequest,
+    PlaudListResponse, Preferences, RecordingDetail, RecordingPage, RenameSpeakerRequest,
+    ResetSpeakerRequest, RetryJobRequest, SaveTranscriptRevisionRequest,
+    SaveTranscriptRevisionResponse, SearchLibraryRequest, SearchLibraryResponse,
     SetLocalOnlyModeRequest, SetNotificationSettingsRequest, SetOpenRouterKeyRequest,
     SourceAddFolderRequest, SourceAddFolderResponse, SourceReconcileRequest,
-    SourceReconcileResponse, SourceSyncRequest, SourceSyncResponse, StatusResponse, TranscriptPage,
+    SourceReconcileResponse, SourceSyncRequest, SourceSyncResponse, SpeakerOperationResponse,
+    StatusResponse, TranscriptPage,
 };
 use crate::error::{to_command_result, CommandResult};
 use crate::AppState;
@@ -48,6 +53,11 @@ pub const COMMAND_ALLOWLIST: &[&str] = &[
     "set_notification_settings",
     "set_local_only_mode",
     "set_openrouter_key",
+    "search_library",
+    "list_speakers",
+    "rename_speaker",
+    "confirm_speaker",
+    "reset_speaker",
     "remove_openrouter_key",
     "list_activity",
     "complete_onboarding",
@@ -91,7 +101,12 @@ pub fn handler<R: tauri::Runtime>() -> impl Fn(tauri::ipc::Invoke<R>) -> bool + 
         source_add_folder,
         source_sync,
         source_reconcile,
-        list_source_artifacts
+        list_source_artifacts,
+        search_library,
+        list_speakers,
+        rename_speaker,
+        confirm_speaker,
+        reset_speaker
     ]
 }
 
@@ -293,6 +308,46 @@ pub async fn list_source_artifacts(
     request: ListSourceArtifactsRequest,
 ) -> CommandResult<ListSourceArtifactsResponse> {
     to_command_result(sources::list_source_artifacts(&state.ports, request).await)
+}
+
+#[tauri::command]
+pub async fn search_library(
+    state: State<'_, AppState>,
+    request: SearchLibraryRequest,
+) -> CommandResult<SearchLibraryResponse> {
+    to_command_result(search::search_library(&state.ports, request).await)
+}
+
+#[tauri::command]
+pub async fn list_speakers(
+    state: State<'_, AppState>,
+    request: ListSpeakersRequest,
+) -> CommandResult<ListSpeakersResponse> {
+    to_command_result(speakers::list_speakers(&state.ports, request).await)
+}
+
+#[tauri::command]
+pub async fn rename_speaker(
+    state: State<'_, AppState>,
+    request: RenameSpeakerRequest,
+) -> CommandResult<SpeakerOperationResponse> {
+    to_command_result(speakers::rename_speaker(&state.ports, request).await)
+}
+
+#[tauri::command]
+pub async fn confirm_speaker(
+    state: State<'_, AppState>,
+    request: ConfirmSpeakerRequest,
+) -> CommandResult<SpeakerOperationResponse> {
+    to_command_result(speakers::confirm_speaker(&state.ports, request).await)
+}
+
+#[tauri::command]
+pub async fn reset_speaker(
+    state: State<'_, AppState>,
+    request: ResetSpeakerRequest,
+) -> CommandResult<SpeakerOperationResponse> {
+    to_command_result(speakers::reset_speaker(&state.ports, request).await)
 }
 
 #[cfg(test)]

@@ -10,8 +10,8 @@ import { activationTargetOf } from "../ipc/contract";
 import { COMPACT_LAYOUT_WIDTH, MIN_DESKTOP_WIDTH } from "../design/tokens";
 import { OnboardingFlow } from "../features/onboarding/OnboardingFlow";
 import { LibraryScreen } from "../features/library/LibraryScreen";
+import { SearchScreen } from "../features/search/SearchScreen";
 import { InboxScreen } from "../features/library/InboxScreen";
-import { RecordingDetailScreen } from "../features/recording/RecordingDetailScreen";
 import { JobsScreen } from "../features/jobs/JobsScreen";
 import { TemplatesScreen } from "../features/templates/TemplatesScreen";
 import { SettingsScreen } from "../features/settings/SettingsScreen";
@@ -167,6 +167,14 @@ function RouteView() {
       return (
         <LibraryScreen
           onOpenRecording={(recordingId) => navigate({ name: "library.recording", recordingId })}
+        />
+      );
+    case "library.search":
+      return (
+        <SearchScreen
+          onNavigate={(recordingId, _revisionId, _seqIndex) =>
+            navigate({ name: "library.recording", recordingId })
+          }
         />
       );
     case "library.recording":

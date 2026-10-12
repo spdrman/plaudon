@@ -28,7 +28,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use plaudon_app_core::import::ImportService;
 use plaudon_domain::error::{AppError, AppErrorCode, DiagnosticLog, ErrorEnvelope};
-use plaudon_domain::ids::{RecordingId, TranscriptRevisionId};
+use plaudon_domain::ids::{RecordingId, SpeakerId, TranscriptRevisionId};
 use plaudon_domain::media::Sha256Digest;
 use plaudon_domain::model::{EngineId, ModelIdentity};
 use plaudon_domain::time::Timestamp;
@@ -56,7 +56,10 @@ use crate::dto::{
 use crate::error::{internal, invalid_argument};
 use crate::events::{EventDraft, EventPublisher, EventSink};
 use crate::notify::NotificationService;
-use crate::ports::{LibraryPort, MachineRevisionSpec, ResolvedMedia, SettingsPort, TranscriptPort};
+use crate::ports::{
+    LibraryPort, MachineRevisionSpec, ResolvedMedia, SearchPort, SettingsPort, SpeakersPort,
+    TranscriptPort,
+};
 use crate::secrets::SecretStore;
 use crate::validate::{
     PageCursor, ValidatedGetTranscript, ValidatedListRecordings, ValidatedRecordingFilter,
@@ -1285,6 +1288,158 @@ pub fn local_only_response(enabled: bool) -> LocalOnlyModeResponse {
                 .to_owned()
         },
         allowed_hosts: Vec::new(),
+    }
+}
+
+#[async_trait]
+impl SearchPort for LocalBackend {
+    async fn search(
+        &self,
+        query: &str,
+        page: plaudon_persistence::search::SearchPage,
+    ) -> Result<Vec<plaudon_app_core::search::SearchResult>, AppError> {
+        let search = plaudon_app_core::search::LibrarySearch::new(self.store.db().clone());
+        search.search(query, page).await.map_err(AppError::from)
+    }
+}
+
+#[async_trait]
+impl SpeakersPort for LocalBackend {
+    async fn list_speakers(
+        &self,
+        recording_id: RecordingId,
+    ) -> Result<plaudon_app_core::speakers::SpeakerRegistry, AppError> {
+        let rows: Vec<_> = sqlx::query(
+            "SELECT id, recording_id, cluster_key, original_label, label, name, \
+             provenance, user_confirmed, renamed_at, confirmed_at \
+             FROM speakers WHERE recording_id = ?1 ORDER BY original_label",
+        )
+        .bind(recording_id.to_string())
+        .fetch_all(self.pool())
+        .await
+        .map_err(|err| storage_error("cannot read speakers", &err))?;
+
+        let mut speakers = Vec::new();
+        for row in rows {
+            let id: String = row.get("id");
+            let cluster_key: Option<String> = row.get("cluster_key");
+            let provenance: String = row.get("provenance");
+
+            speakers.push(plaudon_app_core::speakers::Speaker {
+                id: id
+                    .parse()
+                    .map_err(|_| internal("stored speaker id is not a uuid"))?,
+                recording_id,
+                cluster_key: cluster_key.map(plaudon_ai_diarization::ClusterKey::new),
+                original_label: row.get("original_label"),
+                label: row.get("label"),
+                name: row.get("name"),
+                provenance: match provenance.as_str() {
+                    "inferred" => plaudon_app_core::speakers::SpeakerProvenance::Inferred,
+                    "user_confirmed" => {
+                        plaudon_app_core::speakers::SpeakerProvenance::UserConfirmed
+                    }
+                    _ => return Err(internal("unknown speaker provenance")),
+                },
+                user_confirmed: row.get("user_confirmed"),
+                renamed_at: row
+                    .get::<Option<i64>, _>("renamed_at")
+                    .map(Timestamp::from_millis),
+                confirmed_at: row
+                    .get::<Option<i64>, _>("confirmed_at")
+                    .map(Timestamp::from_millis),
+            });
+        }
+
+        Ok(plaudon_app_core::speakers::SpeakerRegistry {
+            recording_id,
+            speakers,
+        })
+    }
+
+    async fn rename_speaker(
+        &self,
+        recording_id: RecordingId,
+        speaker_id: SpeakerId,
+        name: &str,
+        at: Timestamp,
+    ) -> Result<plaudon_app_core::speakers::Speaker, AppError> {
+        let mut registry = self.list_speakers(recording_id).await?;
+        let speaker = registry
+            .rename(speaker_id, name, at)
+            .map_err(|err| AppError::new(AppErrorCode::InvalidArgument, err.to_string()))?;
+
+        sqlx::query(
+            "UPDATE speakers SET label = ?1, name = ?2, provenance = ?3, \
+             user_confirmed = ?4, renamed_at = ?5, confirmed_at = NULL \
+             WHERE id = ?6 AND recording_id = ?7",
+        )
+        .bind(&speaker.label)
+        .bind(&speaker.name)
+        .bind("inferred")
+        .bind(false)
+        .bind(speaker.renamed_at.map(|t| t.to_rfc3339()))
+        .bind(speaker.id.to_string())
+        .bind(recording_id.to_string())
+        .execute(self.pool())
+        .await
+        .map_err(|err| storage_error("cannot update speaker", &err))?;
+
+        Ok(speaker.clone())
+    }
+
+    async fn confirm_speaker(
+        &self,
+        recording_id: RecordingId,
+        speaker_id: SpeakerId,
+        at: Timestamp,
+    ) -> Result<plaudon_app_core::speakers::Speaker, AppError> {
+        let mut registry = self.list_speakers(recording_id).await?;
+        let speaker = registry
+            .confirm(speaker_id, at)
+            .map_err(|err| AppError::new(AppErrorCode::InvalidArgument, err.to_string()))?;
+
+        sqlx::query(
+            "UPDATE speakers SET provenance = ?1, user_confirmed = ?2, confirmed_at = ?3 \
+             WHERE id = ?4 AND recording_id = ?5",
+        )
+        .bind("user_confirmed")
+        .bind(true)
+        .bind(speaker.confirmed_at.map(|t| t.to_rfc3339()))
+        .bind(speaker.id.to_string())
+        .bind(recording_id.to_string())
+        .execute(self.pool())
+        .await
+        .map_err(|err| storage_error("cannot confirm speaker", &err))?;
+
+        Ok(speaker.clone())
+    }
+
+    async fn reset_speaker(
+        &self,
+        recording_id: RecordingId,
+        speaker_id: SpeakerId,
+    ) -> Result<plaudon_app_core::speakers::Speaker, AppError> {
+        let mut registry = self.list_speakers(recording_id).await?;
+        let speaker = registry
+            .reset(speaker_id)
+            .map_err(|err| AppError::new(AppErrorCode::InvalidArgument, err.to_string()))?;
+
+        sqlx::query(
+            "UPDATE speakers SET label = ?1, name = NULL, provenance = ?2, \
+             user_confirmed = ?3, renamed_at = NULL, confirmed_at = NULL \
+             WHERE id = ?4 AND recording_id = ?5",
+        )
+        .bind(&speaker.label)
+        .bind("inferred")
+        .bind(false)
+        .bind(speaker.id.to_string())
+        .bind(recording_id.to_string())
+        .execute(self.pool())
+        .await
+        .map_err(|err| storage_error("cannot reset speaker", &err))?;
+
+        Ok(speaker.clone())
     }
 }
 

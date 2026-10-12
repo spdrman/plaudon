@@ -5,20 +5,30 @@
 //! repeated import of the same source item stays idempotent.
 
 pub mod dedup;
+pub mod diarization;
 pub mod import;
+pub mod library;
 pub mod models;
 pub mod reconciliation;
+pub mod search;
+pub mod speakers;
 pub mod stt;
+pub mod transcript_tools;
 pub mod vendor_artifacts;
 
 pub use dedup::{BlobDecision, DedupPolicy};
+pub use diarization::{reconcile, Reconciliation, SegmentAssignment};
 pub use import::{ImportOutcome, ImportRequest, ImportService};
+pub use library::{LibraryOrder, LibraryPage, LibraryService, RecordingSummary, TranscriptExport};
 pub use models::{ModelError, ModelId, ModelInstaller, ModelPack, ModelRegistry};
 pub use reconciliation::{
     classify_folder_candidate, ObservedItem, ReconcileAction, ReconcileDecision,
     ReconciliationService, SourceEvent,
 };
+pub use search::{LibrarySearch, SearchResult};
+pub use speakers::{Speaker, SpeakerDisplay, SpeakerProvenance, SpeakerRegistry};
 pub use stt::{select_engine, EngineCandidate, EngineDecision, SelectionRequest};
+pub use transcript_tools::{AnsweredQuestion, ConversationService, StudyOutputWriter};
 pub use vendor_artifacts::{
     VendorArtifactImporter, VendorArtifactRef, VendorImportCapability, VendorImportMode,
 };

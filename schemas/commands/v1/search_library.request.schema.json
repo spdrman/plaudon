@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/search_library.request.schema.json",
+  "title": "search_library.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "query",
+    "cursor",
+    "limit"
+  ],
+  "properties": {
+    "query": {
+      "type": "string"
+    },
+    "cursor": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "limit": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1000
+    }
+  }
+}

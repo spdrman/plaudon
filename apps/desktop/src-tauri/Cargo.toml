@@ -31,6 +31,7 @@ tauri-build = { version = "2", features = [] }
 plaudon-domain = { workspace = true }
 plaudon-persistence = { workspace = true }
 plaudon-app-core = { workspace = true }
+plaudon-ai-diarization = { workspace = true }
 plaudon-notifications = { workspace = true }
 plaudon-recording-sources = { workspace = true }
 plaudon-security = { workspace = true }

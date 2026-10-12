@@ -1,0 +1,51 @@
+    async fn list_speakers(
+        &self,
+        recording_id: RecordingId,
+    ) -> Result<plaudon_app_core::speakers::SpeakerRegistry, AppError> {
+        let rows: Vec<_> = sqlx::query(
+            "SELECT id, recording_id, cluster_key, original_label, label, name, \
+             provenance, user_confirmed, renamed_at, confirmed_at \
+             FROM speakers WHERE recording_id = ?1 ORDER BY original_label",
+        )
+        .bind(recording_id.to_string())
+        .fetch_all(self.pool())
+        .await
+        .map_err(|err| storage_error("cannot read speakers", &err))?;
+
+        let mut speakers = Vec::new();
+        for row in rows {
+            let id: String = row.get("id");
+            let cluster_key: Option<String> = row.get("cluster_key");
+            let provenance: String = row.get("provenance");
+
+            speakers.push(plaudon_app_core::speakers::Speaker {
+                id: id
+                    .parse()
+                    .map_err(|_| internal("stored speaker id is not a uuid"))?,
+                recording_id,
+                cluster_key: cluster_key.map(plaudon_ai_diarization::ClusterKey::new),
+                original_label: row.get("original_label"),
+                label: row.get("label"),
+                name: row.get("name"),
+                provenance: match provenance.as_str() {
+                    "inferred" => plaudon_app_core::speakers::SpeakerProvenance::Inferred,
+                    "user_confirmed" => {
+                        plaudon_app_core::speakers::SpeakerProvenance::UserConfirmed
+                    }
+                    _ => return Err(internal("unknown speaker provenance")),
+                },
+                user_confirmed: row.get("user_confirmed"),
+                renamed_at: row
+                    .get::<Option<i64>, _>("renamed_at")
+                    .map(Timestamp::from_millis),
+                confirmed_at: row
+                    .get::<Option<i64>, _>("confirmed_at")
+                    .map(Timestamp::from_millis),
+            });
+        }
+
+        Ok(plaudon_app_core::speakers::SpeakerRegistry {
+            recording_id,
+            speakers,
+        })
+    }

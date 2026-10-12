@@ -366,6 +366,14 @@ export function TranscriptPane({
                     </button>
                   ) : null}
                 </div>
+                  {segment.speaker_label && (
+                    <span
+                      className={`speaker-label ${segment.speaker_label.includes("Speaker") ? "speaker-label--inferred" : "speaker-label--confirmed"}`}
+                      aria-label={`Speaker: ${segment.speaker_label}`}
+                    >
+                      {segment.speaker_label}
+                    </span>
+                  )}
 
                 <div className="transcript__body">
                   {editingIndex === segment.index ? (

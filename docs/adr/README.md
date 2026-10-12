@@ -45,3 +45,9 @@ and why, and the consequences we accept.
 
 - [ADR-0050: The PLAUD Cloud CLI connector is version-locked and ships with an empty compatibility table](ADR-0050-plaud-cli-compatibility-table.md) — Accepted, 2026-10-11 (spec §2.1, §7.1, §7.2, §7.6)
 - [ADR-0051: A filesystem event authorises nothing; a completion barrier and a content digest do](ADR-0051-watched-folder-completion-barrier-and-source-identity.md) — Accepted, 2026-10-11 (spec §4.3, §7.5, §7.10, App. A.2, App. A.4)
+## Transcript tools and automation (0400-0499)
+
+- [ADR-0400: Diarization runtime and licensing](ADR-0400-diarization-runtime-and-licensing.md) — Accepted, 2026-10-11 (spec §8.7, §3.1, §17.4)
+- [ADR-0401: Local text generation footprint gate](ADR-0401-local-text-generation-footprint-gate.md) — Accepted, 2026-10-11 (spec §3.1, §12, §9.4)
+- [ADR-0402: Full-library encryption evaluation](ADR-0402-full-library-encryption-evaluation.md) — Accepted, 2026-10-11 (spec §13.7, §13.8, §24)
+- [ADR-0403: User-local scripting bridge](ADR-0403-user-local-scripting-bridge.md) — Accepted, 2026-10-11 (spec §14.5, App. A.5, App. A.6, §1.3)
