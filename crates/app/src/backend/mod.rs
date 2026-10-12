@@ -408,7 +408,8 @@ impl LocalBackend {
         let rows = sqlx::query(
             "SELECT ts.seq_index AS seq_index, ts.text AS text, ts.start_ms AS start_ms, \
              ts.end_ms AS end_ms, ts.alignment_origin AS alignment_origin, \
-             ts.confidence AS confidence, sp.label AS speaker_label \
+             ts.confidence AS confidence, ts.speaker_id AS speaker_id, \
+             sp.label AS speaker_label \
              FROM transcript_segments ts \
              LEFT JOIN speakers sp ON sp.id = ts.speaker_id \
              WHERE ts.transcript_revision_id = ?1 ORDER BY ts.seq_index ASC LIMIT ?2 OFFSET ?3",
@@ -634,6 +635,7 @@ fn row_to_segment(
                 value,
             }),
         speaker_label: row.get("speaker_label"),
+        speaker_id: row.get("speaker_id"),
         // Annotations are produced by the truthfulness pipeline (spec §8.6A),
         // which the STT EPIC owns; this port stores none and invents none.
         annotations: Vec::new(),
@@ -1576,6 +1578,85 @@ impl SpeakersPort for LocalBackend {
         .map_err(|err| storage_error("cannot reset speaker", &err))?;
 
         Ok(speaker.clone())
+    }
+
+    async fn set_segment_speaker(
+        &self,
+        recording_id: RecordingId,
+        revision_id: TranscriptRevisionId,
+        seq_index: u32,
+        speaker_id: Option<SpeakerId>,
+    ) -> Result<crate::ports::SegmentSpeakerAssignment, AppError> {
+        // The revision has to be this recording's: a segment id plus a
+        // speaker id from two different recordings would otherwise write an
+        // attribution nobody could see or undo.
+        let owner = self.revision_recording(revision_id).await?;
+        if owner != recording_id {
+            return Err(AppError::new(
+                AppErrorCode::RecordNotFound,
+                "no such revision for this recording",
+            ));
+        }
+
+        // A revision with a child is history. Editing it would change what an
+        // export or a citation already quoted.
+        let superseded: i64 = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM transcript_revisions WHERE parent_id = ?1)",
+        )
+        .bind(revision_id.to_string())
+        .fetch_one(self.pool())
+        .await
+        .map_err(|err| storage_error("cannot read a revision's successors", &err))?;
+        if superseded != 0 {
+            return Err(AppError::new(
+                AppErrorCode::Conflict,
+                "this revision has been superseded, so it is read-only",
+            ));
+        }
+
+        // The speaker row is validated against the recording, not merely
+        // parsed: an id from another recording is a refusal, not a write.
+        let speaker_label: Option<String> = match speaker_id {
+            Some(id) => {
+                let label: Option<String> = sqlx::query_scalar(
+                    "SELECT label FROM speakers WHERE id = ?1 AND recording_id = ?2",
+                )
+                .bind(id.to_string())
+                .bind(recording_id.to_string())
+                .fetch_optional(self.pool())
+                .await
+                .map_err(|err| storage_error("cannot read a speaker", &err))?;
+                Some(label.ok_or_else(|| {
+                    AppError::new(
+                        AppErrorCode::InvalidArgument,
+                        "no such speaker in this recording",
+                    )
+                })?)
+            }
+            None => None,
+        };
+
+        let written = sqlx::query(
+            "UPDATE transcript_segments SET speaker_id = ?1 \
+             WHERE transcript_revision_id = ?2 AND seq_index = ?3",
+        )
+        .bind(speaker_id.map(|id| id.to_string()))
+        .bind(revision_id.to_string())
+        .bind(i64::from(seq_index))
+        .execute(self.pool())
+        .await
+        .map_err(|err| storage_error("cannot attribute a segment", &err))?;
+        if written.rows_affected() == 0 {
+            return Err(AppError::new(
+                AppErrorCode::RecordNotFound,
+                "no such segment in this revision",
+            ));
+        }
+
+        Ok(crate::ports::SegmentSpeakerAssignment {
+            speaker_id,
+            speaker_label,
+        })
     }
 }
 

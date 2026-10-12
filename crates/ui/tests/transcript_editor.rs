@@ -51,6 +51,9 @@ impl EditorApp {
         if output.conflict_choice.is_some() {
             self.output.conflict_choice = output.conflict_choice;
         }
+        if output.speaker_change.is_some() {
+            self.output.speaker_change = output.speaker_change;
+        }
         self.output.edited |= output.edited;
     }
 
@@ -218,7 +221,7 @@ fn replace_all_from_the_find_bar_is_a_single_undo_step() {
 }
 
 #[test]
-fn the_speaker_chip_states_who_is_speaking_and_offers_no_assignment_it_cannot_save() {
+fn the_speaker_chip_states_who_is_speaking_and_reassigns_the_segment() {
     let dana = SpeakerId::new();
     let sam = SpeakerId::new();
     let mut session = EditSession::new(document_with(&["we will pay", "that is final"]));
@@ -255,12 +258,35 @@ fn the_speaker_chip_states_who_is_speaking_and_offers_no_assignment_it_cannot_sa
     chip.click();
     harness.run();
 
-    // No reassignment menu opened, and nothing in the document moved.
-    assert!(
-        harness.query_by_label("Reassign this segment").is_none(),
-        "nothing on the wire persists a segment-to-speaker assignment, so the chip must not \
-         offer one"
+    // The picker offers the known rows and the honest "nobody"; it proposes
+    // nothing on its own.
+    harness.get_by_label("No speaker");
+    harness
+        .get_by_label("Sam (confirmed), machine label Speaker 2")
+        .click();
+    harness.run();
+
+    assert_eq!(
+        harness
+            .state()
+            .session
+            .document()
+            .segment(first)
+            .expect("segment")
+            .speaker_id,
+        Some(sam)
     );
+    let change = harness
+        .state()
+        .output
+        .speaker_change
+        .expect("the host is told to persist it");
+    assert_eq!(change.segment, first);
+    assert_eq!(change.seq_index, 0);
+    assert_eq!(change.speaker_id, Some(sam));
+    // A reassignment is its own undo step and changes no text.
+    assert_eq!(harness.state().text(0), "we will pay");
+    harness.state_mut().session.undo().expect("undo");
     assert_eq!(
         harness
             .state()
@@ -271,8 +297,35 @@ fn the_speaker_chip_states_who_is_speaking_and_offers_no_assignment_it_cannot_sa
             .speaker_id,
         Some(dana)
     );
-    assert!(!harness.state().output.edited);
-    assert_eq!(harness.state().text(0), "we will pay");
+}
+
+#[test]
+fn a_read_only_revision_offers_no_speaker_picker() {
+    let sam = SpeakerId::new();
+    let session = EditSession::new(plaudon_transcript_doc::testing::read_only_document(&[
+        "machine transcript",
+    ]));
+    let mut app = EditorApp::new(session);
+    app.speakers = vec![SpeakerChoice {
+        id: sam,
+        label: "Sam".to_owned(),
+        machine_label: "Speaker 2".to_owned(),
+        name: Some("Sam".to_owned()),
+        confirmed: true,
+    }];
+    let mut harness = harness(app);
+    harness.run();
+
+    harness.get_by_label("Speaker: No speaker").click();
+    harness.run();
+
+    assert!(
+        harness
+            .query_by_label("Sam (confirmed), machine label Speaker 2")
+            .is_none(),
+        "a superseded revision cannot be reassigned, so it must not offer it"
+    );
+    assert!(harness.state().output.speaker_change.is_none());
 }
 
 #[test]

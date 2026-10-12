@@ -485,6 +485,7 @@ fn transcript_page(detail: &RecordingDetail) -> TranscriptPage {
         alignment_origin: AlignmentOrigin::Native,
         confidence: None,
         speaker_label: None,
+        speaker_id: None,
         annotations: Vec::new(),
     })
     .collect::<Vec<_>>();

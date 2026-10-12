@@ -580,6 +580,15 @@ pub struct TranscriptSegmentDto {
     pub confidence: Option<SegmentConfidence>,
     /// Speaker label, when diarization ran.
     pub speaker_label: Option<String>,
+    /// Speaker row this segment is attributed to, when one is (spec §4.1
+    /// VP-030). `speaker_label` is that row's resolved label; this is the
+    /// identity `set_segment_speaker` writes and reads back, so a client can
+    /// tell two rows that were renamed to the same text apart.
+    ///
+    /// `#[serde(default)]` so a page written before the column was published
+    /// still deserializes.
+    #[serde(default)]
+    pub speaker_id: Option<String>,
     /// Annotations attached to this segment.
     pub annotations: Vec<TranscriptAnnotation>,
 }
@@ -2060,6 +2069,40 @@ pub struct SpeakerOperationResponse {
     /// Updated speaker.
     pub speaker: SpeakerDto,
 }
+
+/// Request for `set_segment_speaker` (spec §4.1, VP-031).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SetSegmentSpeakerRequest {
+    /// Recording the revision and the speaker both belong to.
+    pub recording_id: String,
+    /// Revision the segment belongs to.
+    pub transcript_revision_id: String,
+    /// Zero-based position of the segment inside that revision.
+    pub seq_index: u32,
+    /// Speaker row to attribute the segment to; `null` clears the
+    /// attribution, which is what "nobody can tell" looks like.
+    pub speaker_id: Option<String>,
+}
+
+/// Response for `set_segment_speaker`.
+///
+/// Carries the stored attribution back, label included, so a caller renders
+/// the chip from the row the database holds rather than from what it asked
+/// for.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SetSegmentSpeakerResponse {
+    /// Recording the segment belongs to.
+    pub recording_id: RecordingId,
+    /// Revision the segment belongs to.
+    pub transcript_revision_id: TranscriptRevisionId,
+    /// Position of the segment that was written.
+    pub seq_index: u32,
+    /// Speaker now stored for the segment.
+    pub speaker_id: Option<SpeakerId>,
+    /// That speaker's current label, resolved for display.
+    pub speaker_label: Option<String>,
+}
+
 /// Three-valued capability flag.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -4090,6 +4133,7 @@ mod tests {
             alignment_origin: AlignmentOrigin::None,
             confidence: None,
             speaker_label: None,
+            speaker_id: None,
             annotations: Vec::new(),
         };
         let json = serde_json::to_value(&segment).unwrap();
@@ -4097,6 +4141,22 @@ mod tests {
         assert_eq!(json["end_ms"], serde_json::Value::Null);
         assert_eq!(json["confidence"], serde_json::Value::Null);
         assert_eq!(json["speaker_label"], serde_json::Value::Null);
+        assert_eq!(json["speaker_id"], serde_json::Value::Null);
+
+        // VP-030: a page written before the field existed still reads, and
+        // its absence means "unknown", never "nobody".
+        let older: TranscriptSegmentDto = serde_json::from_value(serde_json::json!({
+            "index": 0,
+            "text": "hello",
+            "start_ms": null,
+            "end_ms": null,
+            "alignment_origin": "none",
+            "confidence": null,
+            "speaker_label": null,
+            "annotations": [],
+        }))
+        .expect("a pre-VP-030 segment still deserializes");
+        assert_eq!(older, segment);
     }
 
     #[test]

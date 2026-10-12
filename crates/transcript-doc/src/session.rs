@@ -341,6 +341,30 @@ impl EditSession {
         ))
     }
 
+    /// A `set_segment_speaker` write succeeded: the assignment on screen is
+    /// now the stored one.
+    ///
+    /// # Errors
+    ///
+    /// [`DocError::UnknownSegment`] when the segment is not in this document.
+    pub fn note_speaker_persisted(&mut self, id: SegmentId) -> Result<(), DocError> {
+        self.document.note_speaker_persisted(id)?;
+        self.search.refresh(&self.document);
+        Ok(())
+    }
+
+    /// A `set_segment_speaker` write was refused: show the stored assignment
+    /// again, without an undo step for a change that never landed.
+    ///
+    /// # Errors
+    ///
+    /// [`DocError::UnknownSegment`] when the segment is not in this document.
+    pub fn restore_persisted_speaker(&mut self, id: SegmentId) -> Result<(), DocError> {
+        self.document.restore_persisted_speaker(id)?;
+        self.search.refresh(&self.document);
+        Ok(())
+    }
+
     /// Reassign every segment currently attributed to `from`.
     ///
     /// One undo step, because "that was Dana, not Speaker 2" is one decision.
@@ -765,6 +789,73 @@ mod tests {
                 .expect("segment")
                 .speaker_id,
             None
+        );
+    }
+
+    #[test]
+    fn a_persisted_reassignment_stops_being_a_pending_one() {
+        let mut session = session(&["one", "two"]);
+        let segment_ids = ids(&session);
+        let speaker = SpeakerId::new();
+        session
+            .set_speaker(segment_ids[0], Some(speaker))
+            .expect("assign");
+        assert!(session.document().is_dirty());
+
+        session
+            .note_speaker_persisted(segment_ids[0])
+            .expect("the write landed");
+        assert_eq!(session.document().speaker_reassignments(), Vec::new());
+        assert!(!session.document().is_dirty());
+        assert_eq!(
+            session
+                .document()
+                .segment(segment_ids[0])
+                .expect("segment")
+                .speaker_id,
+            Some(speaker),
+            "the assignment itself is untouched: only its base moved"
+        );
+    }
+
+    #[test]
+    fn a_refused_reassignment_is_taken_off_the_document_without_an_undo_step() {
+        let mut session = session(&["one", "two"]);
+        let segment_ids = ids(&session);
+        let stored = SpeakerId::new();
+        session
+            .set_speaker(segment_ids[0], Some(stored))
+            .expect("assign");
+        session
+            .note_speaker_persisted(segment_ids[0])
+            .expect("the write landed");
+
+        let attempted = SpeakerId::new();
+        session
+            .set_speaker(segment_ids[0], Some(attempted))
+            .expect("assign");
+        session
+            .restore_persisted_speaker(segment_ids[0])
+            .expect("the write was refused");
+
+        assert_eq!(
+            session
+                .document()
+                .segment(segment_ids[0])
+                .expect("segment")
+                .speaker_id,
+            Some(stored)
+        );
+        // Undo goes back past the refused change to the stored one, never
+        // offering to restore an assignment no store accepted.
+        session.undo().expect("undo");
+        assert_eq!(
+            session
+                .document()
+                .segment(segment_ids[0])
+                .expect("segment")
+                .speaker_id,
+            Some(stored)
         );
     }
 

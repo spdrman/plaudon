@@ -132,11 +132,16 @@ than documentation drift, and all three were closed in this change:
 * **D13 — `blocked`.** No `device_*` command exists for a mounted USB volume. The Devices screen
   says so and offers ordinary import of the mounted files; asserted by
   `crates/ui/tests/devices_screen.rs:842`. Closing it needs a command and a DTO, not UI work.
-* **T12 — `done` for speaker identity, short of per-segment reassignment.** Nothing on the wire can
-  persist a segment→speaker assignment: `SegmentEdit` is `{index, text}` and
-  `TranscriptSegmentDto` carries only `speaker_label`. The per-segment picker was **removed rather
-  than faked**, because it silently discarded every reassignment it appeared to make. The chip is a
-  read-only label pointing at the speaker panel.
+* **T12 — `done`, including per-segment reassignment.** Speaker identity shipped in O2.8; the wire
+  leg that was missing landed in P1.1 (#239, `docs/specs/VOICE_PROFILES_SPEC.md` §4.1,
+  VP-030..VP-033). `TranscriptSegmentDto` now carries `speaker_id` (`#[serde(default)]`), the
+  `set_segment_speaker` command writes `transcript_segments.speaker_id` after validating the row
+  against that recording's `speakers`, and the chip is a picker again — the recording's rows plus
+  "No speaker", one undo step through `Op::SetSpeaker`, and a refused assignment taken back off the
+  chip with its message and diagnostic id. Asserted by `crates/app/tests/segment_speaker.rs`
+  (stored, read back by `get_transcript`, still true after the library is reopened),
+  `crates/ui/tests/speaker_identity.rs` and `crates/ui/tests/transcript_editor.rs`. No assignment is
+  ever made by the machine: every entry in the picker is a row a human chose.
 * **S17 — `done for what automation can cover`.** See §6.
 * **J10 — `done as designed`.** A per-stage progress breakdown is not published and will not be;
   `JobSummary` carries one `stage` and one `progress`, read from the latest `job_steps` row.
@@ -416,7 +421,8 @@ Source: `docs/licensing/third-party-register.md`, enforced by
    neither is a formality to be waved through.
 5. **The remote runner cannot reproduce two test preconditions** (`.git` present, non-root user),
    so ten tests are green only on the workstation. §3.2.
-6. **D13 and T12 are product gaps, not UI gaps**, and need wire-level work (§2.1).
+6. **D13 is a product gap, not a UI gap**, and needs wire-level work (§2.1). T12's wire leg is no
+   longer outstanding: P1.1 (#239) added `set_segment_speaker` and `TranscriptSegmentDto.speaker_id`.
 
 ---
 
