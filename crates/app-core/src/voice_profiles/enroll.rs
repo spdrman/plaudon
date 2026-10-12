@@ -197,6 +197,40 @@ pub fn reseal_exemplars(
     Ok(resealed)
 }
 
+/// The clean single-speaker speech one cluster of one diarization run offers.
+///
+/// Rows and arithmetic only: no audio is opened, no model is called and no
+/// [`ConsentProof`] is taken, because the number a VP-094 meter shows has to
+/// exist *before* the consent gate is answered — "ends at the consent gate
+/// before anything is computed" is only meaningful if the user can see how
+/// much speech there is while deciding. Enrolment itself reaches this through
+/// [`VoiceEnrolmentService`], which then applies the [`SpeechGate`] the
+/// operation requires.
+///
+/// # Errors
+///
+/// [`EnrolError::CorruptReconciliation`] when the stored reconciliation cannot
+/// be rebuilt, [`EnrolError::UnknownCluster`] when the run has no such cluster
+/// and [`EnrolError::Persistence`] when the rows cannot be read.
+pub async fn cluster_clean_speech(
+    speakers: &SpeakerRepository,
+    revision: &TranscriptRevision,
+    diarization_run_id: Uuid,
+    cluster_key: &str,
+) -> Result<ClusterSpeech, EnrolError> {
+    let rows = speakers
+        .assignments(revision.id, diarization_run_id)
+        .await?;
+    let reconciliation = reconciliation_from_assignments(revision.id, &rows)
+        .map_err(|error| EnrolError::CorruptReconciliation(error.detail))?;
+    cluster_speech(&reconciliation, revision)
+        .into_iter()
+        .find(|cluster| cluster.cluster_key == cluster_key)
+        .ok_or_else(|| EnrolError::UnknownCluster {
+            cluster_key: cluster_key.to_owned(),
+        })
+}
+
 /// Enrolment, exemplar addition and splitting, over one library.
 #[derive(Clone)]
 pub struct VoiceEnrolmentService {
@@ -396,18 +430,13 @@ impl VoiceEnrolmentService {
         source: &EnrolmentSource,
         gate: SpeechGate,
     ) -> Result<ClusterSpeech, EnrolError> {
-        let rows = self
-            .speakers
-            .assignments(source.revision.id, source.diarization_run_id)
-            .await?;
-        let reconciliation = reconciliation_from_assignments(source.revision.id, &rows)
-            .map_err(|error| EnrolError::CorruptReconciliation(error.detail))?;
-        let speech = cluster_speech(&reconciliation, &source.revision)
-            .into_iter()
-            .find(|cluster| cluster.cluster_key == source.cluster_key)
-            .ok_or_else(|| EnrolError::UnknownCluster {
-                cluster_key: source.cluster_key.clone(),
-            })?;
+        let speech = cluster_clean_speech(
+            &self.speakers,
+            &source.revision,
+            source.diarization_run_id,
+            &source.cluster_key,
+        )
+        .await?;
         gate.check(speech.clean_speech_ms)?;
         Ok(speech)
     }

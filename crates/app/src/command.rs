@@ -60,15 +60,15 @@ use crate::dto::{
 };
 use crate::dto::{
     AddVoiceExemplarRequest, AssignClusterPersonRequest, AssignClusterPersonResponse,
-    ConfirmSpeakerSuggestionRequest, CreatePersonRequest, DeletePersonRequest,
+    ClusterSpeechDto, ConfirmSpeakerSuggestionRequest, CreatePersonRequest, DeletePersonRequest,
     DeletePersonResponse, DeleteVoiceEnrollmentRequest, DeleteVoiceEnrollmentResponse,
     EmptyRequest, EnrollPersonVoiceRequest, ForgetAllVoiceProfilesRequest,
-    ForgetAllVoiceProfilesResponse, ListPeopleRequest, ListPeopleResponse,
-    ListSpeakerSuggestionsRequest, ListSpeakerSuggestionsResponse, MergePeopleRequest,
-    MergePeopleResponse, PersonResponse, RejectSpeakerSuggestionRequest,
-    SetVoiceProfilesEnabledRequest, SpeakerSuggestionDecisionDto, SplitVoiceEnrollmentRequest,
-    SplitVoiceEnrollmentResponse, StartSpeakerMatchingRequest, StartSpeakerMatchingResponse,
-    UpdatePersonRequest, VoiceEnrollmentDto, VoiceProfileSettingsDto,
+    ForgetAllVoiceProfilesResponse, GetClusterSpeechRequest, ListPeopleRequest, ListPeopleResponse,
+    ListSpeakerSuggestionsRequest, ListSpeakerSuggestionsResponse, ListVoiceExemplarsRequest,
+    ListVoiceExemplarsResponse, MergePeopleRequest, MergePeopleResponse, PersonResponse,
+    RejectSpeakerSuggestionRequest, SetVoiceProfilesEnabledRequest, SpeakerSuggestionDecisionDto,
+    SplitVoiceEnrollmentRequest, SplitVoiceEnrollmentResponse, StartSpeakerMatchingRequest,
+    StartSpeakerMatchingResponse, UpdatePersonRequest, VoiceEnrollmentDto, VoiceProfileSettingsDto,
 };
 use crate::dto::{
     AskRecordingRequest, AskRecordingResponse, CreateTemplateCopyRequest,
@@ -267,6 +267,8 @@ command_surface! {
         "enroll_person_voice" => EnrollPersonVoice: voice_profiles::enroll_person_voice(EnrollPersonVoiceRequest) -> VoiceEnrollmentDto,
         "add_voice_exemplar" => AddVoiceExemplar: voice_profiles::add_voice_exemplar(AddVoiceExemplarRequest) -> VoiceEnrollmentDto,
         "split_voice_enrollment" => SplitVoiceEnrollment: voice_profiles::split_voice_enrollment(SplitVoiceEnrollmentRequest) -> SplitVoiceEnrollmentResponse,
+        "list_voice_exemplars" => ListVoiceExemplars: voice_profiles::list_voice_exemplars(ListVoiceExemplarsRequest) -> ListVoiceExemplarsResponse,
+        "get_cluster_speech" => GetClusterSpeech: voice_profiles::get_cluster_speech(GetClusterSpeechRequest) -> ClusterSpeechDto,
         "delete_voice_enrollment" => DeleteVoiceEnrollment: voice_profiles::delete_voice_enrollment(DeleteVoiceEnrollmentRequest) -> DeleteVoiceEnrollmentResponse,
         "forget_all_voice_profiles" => ForgetAllVoiceProfiles: voice_profiles::forget_all_voice_profiles(ForgetAllVoiceProfilesRequest) -> ForgetAllVoiceProfilesResponse,
         "list_speaker_suggestions" => ListSpeakerSuggestions: voice_profiles::list_speaker_suggestions(ListSpeakerSuggestionsRequest) -> ListSpeakerSuggestionsResponse,
@@ -444,8 +446,10 @@ mod tests {
         // added because a native player cannot be handed a URL, plus
         // `set_segment_speaker`, the T12 wire leg (spec §4.1, VP-031), plus
         // the seventeen EPIC P task P1.5 added for the people roster and the
-        // consent-gated biometric tier (`VOICE_PROFILES_SPEC` §8).
-        assert_eq!(COMMAND_NAMES.len(), 96);
+        // consent-gated biometric tier (`VOICE_PROFILES_SPEC` §8), plus the
+        // two task P2.6 added for the provenance list the split UI reads and
+        // the clean-speech meter the enrolment flow shows (VP-091, VP-094).
+        assert_eq!(COMMAND_NAMES.len(), 98);
     }
 
     /// Commands the egui screens added (EPIC O tasks O2.4, O2.6 and O2.7).
@@ -503,6 +507,11 @@ mod tests {
         "confirm_speaker_suggestion",
         "reject_speaker_suggestion",
         "start_speaker_matching",
+        // P2.6 (VP-091, VP-094): the exemplar provenance list behind the
+        // split-by-provenance UI, and the cluster's clean speech behind the
+        // enrolment meter.
+        "list_voice_exemplars",
+        "get_cluster_speech",
     ];
 
     #[test]

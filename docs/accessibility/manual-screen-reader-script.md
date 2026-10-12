@@ -285,8 +285,9 @@ Open a recording with audio and a transcript (§5 step 10).
 
 ## 11A. People and voice profiles
 
-New with P2.1 (#244); the rules are `VOICE_PROFILES_SPEC` §9A and VP-096, and
-ADR-0082's wording rules apply to every line read aloud here.
+New with P2.1 (#244), extended by P2.6 (#272); the rules are
+`VOICE_PROFILES_SPEC` §9A and VP-096, and ADR-0082's wording rules apply to
+every line read aloud here.
 
 1. Press `Mod+7`, or arrow to **People** in the rail. The destination
    announces its name and the sentence "One list of people for the whole
@@ -324,7 +325,19 @@ ADR-0082's wording rules apply to every line read aloud here.
 11. **Enrol this speaker's voice…** must be unavailable until a person is
     assigned and must say why. Its gate must be readable to the end before the
     attestation can be ticked, and the attestation must never start ticked.
-12. In Settings → Privacy, "Forget all voice profiles" must disclose its counts
+12. While that flow is open, the **clean-speech meter** must read as words and
+    not only as a bar: before the measurement arrives it says it is measuring,
+    and afterwards it announces "12 s of 10 s clean speech collected, over 3
+    stretch(es)." with a glyph-plus-word state ("enough clean speech" /
+    "not enough clean speech"). Below the minimum, "Enrol this voice" stays
+    unavailable and says why (P2.6 #272, VP-094).
+13. On People, **Split <name>'s voiceprint…** (offered only where an enrolment
+    has more than one exemplar) must announce each exemplar as its provenance —
+    recording, cluster, span and seconds of speech — and never anything about
+    the stored vector. Ticking every one must announce that moving all of them
+    is a merge, not a split. The attestation is for the person the speech moves
+    *to*, and is never pre-ticked (P2.6 #272, VP-091, §3.5).
+14. In Settings → Privacy, "Forget all voice profiles" must disclose its counts
     and every limitation sentence, require the typed phrase, and state
     afterwards that the people themselves were kept.
 
