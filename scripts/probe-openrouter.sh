@@ -5,6 +5,13 @@
 #
 #   catalog   Reads the PUBLIC, unauthenticated model catalog and writes a
 #             sanitized snapshot. No credential is used or required.
+#
+# The same ground can be covered from Rust by the opt-in live suite, which is
+# inert unless both flags are present and is capped at one bundled 32 KiB clip:
+#
+#   PLAUDON_OPENROUTER_LIVE=1 OPENROUTER_API_KEY=sk-or-... \
+#   PLAUDON_OPENROUTER_LIVE_MODEL=openai/whisper-1 \
+#     cargo test -p plaudon-ai-openrouter --test live_provider -- --nocapture
 #   exchange  Sends ONE real transcription request for ONE model, so the
 #             request family, accepted formats, response fields, provider
 #             route and retention behaviour can be observed. Opt-in,

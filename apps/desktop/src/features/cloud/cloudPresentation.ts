@@ -80,6 +80,16 @@ export const STAGE_LABELS: Record<ProcessingStage, string> = {
 export const ZDR_CAVEAT =
   "Zero retention still processes your content outside this device, and it does not retroactively delete provider data, exports, logs or backups created earlier.";
 
+/**
+ * ADR-0022: a model can only become `verified` by an observed exchange, so the
+ * check sends this much bundled fixture audio as a real, billable request.
+ */
+export const CAPABILITY_CHECK_CLIP_MS = 5_000;
+
+/** What the capability check actually does, stated before it is run. */
+export const CAPABILITY_CHECK_DISCLOSURE =
+  "Running the check sends about 5 seconds of bundled test audio to this model through the provider. It is a real request: it may be billed, and it is the only way the model can become Verified.";
+
 export interface CostPresentation {
   /** Short label; always states which of the three confidences it is. */
   label: string;
