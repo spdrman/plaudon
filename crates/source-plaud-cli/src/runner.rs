@@ -66,7 +66,7 @@ pub struct RunLimits {
 }
 
 impl RunLimits {
-    /// Budget for a quick, non-interactive call (`--version`).
+    /// Budget for a quick, non-interactive call (`version`, `audio`).
     pub const PROBE: Self = Self {
         timeout: Duration::from_secs(10),
         max_stdout_bytes: 64 * 1024,

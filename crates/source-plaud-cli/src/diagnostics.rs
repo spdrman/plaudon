@@ -510,7 +510,7 @@ mod tests {
         assert_eq!(
             panel.next_action,
             NextAction::InstallTestedVersion {
-                usable_versions: Vec::new()
+                usable_versions: vec!["0.3.15".to_owned()]
             }
         );
     }

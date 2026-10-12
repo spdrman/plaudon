@@ -14,7 +14,7 @@ it.
 | Dependency | What it is | Required? | Network | Status | Licensing |
 |---|---|---|---|---|---|
 | OpenRouter REST API | Optional cloud gateway for transcription and text models, using **your** API key | No | Yes, per authorized request | **Documented** | Commercial service; you buy prepaid API credit directly from OpenRouter. Not a subscription to this product, and this product takes no cut |
-| official PLAUD Cloud CLI | PLAUD's own command-line tool, installed by you, used to list and download recordings from your PLAUD account | No | Yes, by that tool itself | **Unsupported** | Published by PLAUD; we neither bundle nor redistribute it, and its package listing declares no licence |
+| official PLAUD Cloud CLI | PLAUD's own command-line tool, installed by you, used to list and download recordings from your PLAUD account | No | Yes, by that tool itself | **Experimental** | Published by PLAUD; we neither bundle nor redistribute it, and its package listing declares no licence |
 | Direct device access over Bluetooth or USB | Unofficial interoperability with a compatible PLAUD recorder, built from protocol observation, not from a vendor SDK | No | No | **Unsupported** | Our own implementation; see the compatibility matrix for the exact cells |
 | Apple Speech and Foundation Models | On-device transcription and text generation on qualifying macOS hardware | No | No | **Documented** | Apple system frameworks; availability is probed at runtime, never assumed |
 | whisper.cpp | Local speech-to-text engine | For local transcription | No | **Validated** | MIT; the model weights you download carry their own licence, shown before download |
@@ -32,7 +32,15 @@ These are different things and the application never blurs them:
 - The **official PLAUD Cloud CLI** is PLAUD's own program. It authenticates to
   your PLAUD account and talks to PLAUD's servers. Using it requires a PLAUD
   account and an internet connection. We launch it with fixed, typed arguments
-  and never ask you to paste a bearer token or install a browser extension.
+  and never ask you to paste a bearer token or install a browser extension. We
+  use it read-only: we list recordings and ask for a download link, and we
+  never delete, rename or upload anything in your PLAUD account.
+- Exactly **one release of that tool has been tested**, `@plaud-ai/cli` 0.3.15,
+  on macOS only. The tool offers no machine-readable output, so we read its
+  human-readable listing under a version lock: any other release is refused
+  with a message naming your version rather than guessed at, and the listing
+  carries a compatibility warning while that is true. Windows and Linux hosts
+  are untested.
 - **Direct device access** is unofficial interoperability: our own code speaking
   to a recorder over Bluetooth or reading a mounted USB volume. It needs no
   PLAUD account and no internet connection, it is strictly read-only, and it

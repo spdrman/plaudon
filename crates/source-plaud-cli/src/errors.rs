@@ -15,6 +15,23 @@ use plaudon_recording_sources::source::SourceError;
 use crate::invocation::CliCommand;
 use crate::runner::CliOutput;
 
+/// Bracketed failure codes `@plaud-ai/cli` 0.3.15 prints on stderr.
+///
+/// The release writes `✗ [CODE] message`; these three codes were produced by
+/// the real tool and nothing else is listed, because spec 2.1 forbids
+/// inventing a taxonomy the vendor has not shown us. An unlisted code falls
+/// through to the phrase rules and then to the exit-code rule.
+const CODE_RULES: &[(&str, SourceError)] = &[
+    // `plaud file <unknown id>` → `✗ [NOT_FOUND] File not found: …`.
+    ("[not_found]", SourceError::AssetNotFound),
+    // `plaud audio <bad id>` → `✗ [FETCH_FAILED] Failed to fetch audio URL.`
+    ("[fetch_failed]", SourceError::SourceUnavailable),
+    // `plaud files -s 5` → `✗ [INVALID_ARGS] --page-size must be …`. We built
+    // the command line, so this is our contract with the release breaking,
+    // which is the same user-visible outcome as unreadable output.
+    ("[invalid_args]", SourceError::MalformedOutput),
+];
+
 /// A phrase shape and the stable error it indicates.
 ///
 /// Matching is on lowercase substrings, which is deliberately conservative:
@@ -109,6 +126,12 @@ pub fn classify(output: &CliOutput, command: &CliCommand) -> Option<SourceError>
         return None;
     }
     let haystack = output.stderr_excerpt.to_ascii_lowercase();
+    // A code the release printed itself is more precise than a phrase shape.
+    for (code, error) in CODE_RULES {
+        if haystack.contains(code) {
+            return Some(error.clone());
+        }
+    }
     for (phrases, error) in PHRASE_RULES {
         if phrases.iter().any(|phrase| haystack.contains(phrase)) {
             return Some(error.clone());
