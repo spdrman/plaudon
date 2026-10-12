@@ -266,6 +266,8 @@ impl Harness {
             sources: Arc::clone(&backend) as Arc<dyn SourcesPort>,
             search: Arc::clone(&backend) as Arc<dyn SearchPort>,
             speakers: Arc::clone(&backend) as Arc<dyn SpeakersPort>,
+            people: Arc::clone(&backend) as Arc<dyn plaudon_app::ports::PeoplePort>,
+            voice_profiles: Arc::clone(&backend) as Arc<dyn plaudon_app::ports::VoiceProfilesPort>,
             cloud: Arc::clone(&backend) as Arc<dyn CloudPort>,
             devices: Arc::new(plaudon_app::backend::devices::DevicesBackend::new(
                 plaudon_app::backend::devices::DevicesDeps::production(

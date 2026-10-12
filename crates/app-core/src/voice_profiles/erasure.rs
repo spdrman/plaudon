@@ -140,7 +140,7 @@ impl VoiceProfileEraser {
     pub async fn forget_all(&self, now: Timestamp) -> VoiceProfileResult<ForgetAllReceipt> {
         self.cipher.destroy_key()?;
         let outcome: ForgetAllOutcome = self.enrollments.forget_all(now).await?;
-        self.gate.disable().await?;
+        self.gate.disable(now).await?;
         Ok(ForgetAllReceipt {
             enrollments_destroyed: outcome.enrollments,
             exemplars_destroyed: outcome.exemplars,

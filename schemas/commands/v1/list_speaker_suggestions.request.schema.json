@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/list_speaker_suggestions.request.schema.json",
+  "title": "list_speaker_suggestions.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "recording_id",
+    "limit"
+  ],
+  "properties": {
+    "recording_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "uuid"
+    },
+    "limit": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    }
+  }
+}

@@ -39,7 +39,9 @@
         "device.compatibility_changed",
         "device.transfer_progress",
         "device.transfer_verified",
-        "device.disconnected"
+        "device.disconnected",
+        "voiceprofile.suggestions_ready",
+        "person.changed"
       ]
     },
     "occurred_at": {

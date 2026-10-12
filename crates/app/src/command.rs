@@ -59,6 +59,18 @@ use crate::dto::{
     VerifyModelRequest, VerifyModelResponse,
 };
 use crate::dto::{
+    AddVoiceExemplarRequest, AssignClusterPersonRequest, AssignClusterPersonResponse,
+    ConfirmSpeakerSuggestionRequest, CreatePersonRequest, DeletePersonRequest,
+    DeletePersonResponse, DeleteVoiceEnrollmentRequest, DeleteVoiceEnrollmentResponse,
+    EmptyRequest, EnrollPersonVoiceRequest, ForgetAllVoiceProfilesRequest,
+    ForgetAllVoiceProfilesResponse, ListPeopleRequest, ListPeopleResponse,
+    ListSpeakerSuggestionsRequest, ListSpeakerSuggestionsResponse, MergePeopleRequest,
+    MergePeopleResponse, PersonResponse, RejectSpeakerSuggestionRequest,
+    SetVoiceProfilesEnabledRequest, SpeakerSuggestionDecisionDto, SplitVoiceEnrollmentRequest,
+    SplitVoiceEnrollmentResponse, StartSpeakerMatchingRequest, StartSpeakerMatchingResponse,
+    UpdatePersonRequest, VoiceEnrollmentDto, VoiceProfileSettingsDto,
+};
+use crate::dto::{
     AskRecordingRequest, AskRecordingResponse, CreateTemplateCopyRequest,
     GenerateStudyArtifactsRequest, GenerateStudyArtifactsResponse, GetTemplateRequest,
     ListConversationsRequest, ListConversationsResponse, ListStudyArtifactsRequest,
@@ -242,6 +254,25 @@ command_surface! {
         "save_template" => SaveTemplate: templates::save_template(SaveTemplateRequest) -> SaveTemplateResponse,
         "validate_template" => ValidateTemplate: templates::validate_template(ValidateTemplateRequest) -> ValidateTemplateResponse,
         "list_template_versions" => ListTemplateVersions: templates::list_template_versions(ListTemplateVersionsRequest) -> ListTemplateVersionsResponse,
+        // EPIC P task P1.5: the people roster (ungated, VP-011) and the
+        // consent-gated biometric tier (`VOICE_PROFILES_SPEC` §8).
+        "list_people" => ListPeople: people::list_people(ListPeopleRequest) -> ListPeopleResponse,
+        "create_person" => CreatePerson: people::create_person(CreatePersonRequest) -> PersonResponse,
+        "update_person" => UpdatePerson: people::update_person(UpdatePersonRequest) -> PersonResponse,
+        "merge_people" => MergePeople: people::merge_people(MergePeopleRequest) -> MergePeopleResponse,
+        "delete_person" => DeletePerson: people::delete_person(DeletePersonRequest) -> DeletePersonResponse,
+        "assign_cluster_person" => AssignClusterPerson: people::assign_cluster_person(AssignClusterPersonRequest) -> AssignClusterPersonResponse,
+        "get_voice_profile_settings" => GetVoiceProfileSettings: voice_profiles::get_voice_profile_settings(EmptyRequest) -> VoiceProfileSettingsDto,
+        "set_voice_profiles_enabled" => SetVoiceProfilesEnabled: voice_profiles::set_voice_profiles_enabled(SetVoiceProfilesEnabledRequest) -> VoiceProfileSettingsDto,
+        "enroll_person_voice" => EnrollPersonVoice: voice_profiles::enroll_person_voice(EnrollPersonVoiceRequest) -> VoiceEnrollmentDto,
+        "add_voice_exemplar" => AddVoiceExemplar: voice_profiles::add_voice_exemplar(AddVoiceExemplarRequest) -> VoiceEnrollmentDto,
+        "split_voice_enrollment" => SplitVoiceEnrollment: voice_profiles::split_voice_enrollment(SplitVoiceEnrollmentRequest) -> SplitVoiceEnrollmentResponse,
+        "delete_voice_enrollment" => DeleteVoiceEnrollment: voice_profiles::delete_voice_enrollment(DeleteVoiceEnrollmentRequest) -> DeleteVoiceEnrollmentResponse,
+        "forget_all_voice_profiles" => ForgetAllVoiceProfiles: voice_profiles::forget_all_voice_profiles(ForgetAllVoiceProfilesRequest) -> ForgetAllVoiceProfilesResponse,
+        "list_speaker_suggestions" => ListSpeakerSuggestions: voice_profiles::list_speaker_suggestions(ListSpeakerSuggestionsRequest) -> ListSpeakerSuggestionsResponse,
+        "confirm_speaker_suggestion" => ConfirmSpeakerSuggestion: voice_profiles::confirm_speaker_suggestion(ConfirmSpeakerSuggestionRequest) -> SpeakerSuggestionDecisionDto,
+        "reject_speaker_suggestion" => RejectSpeakerSuggestion: voice_profiles::reject_speaker_suggestion(RejectSpeakerSuggestionRequest) -> SpeakerSuggestionDecisionDto,
+        "start_speaker_matching" => StartSpeakerMatching: voice_profiles::start_speaker_matching(StartSpeakerMatchingRequest) -> StartSpeakerMatchingResponse,
     }
     without_request {
         "get_capabilities" => GetCapabilities: settings::get_capabilities() -> Capabilities,
@@ -411,8 +442,10 @@ mod tests {
         // added for settings the React frontend never had, plus the twelve
         // task O2.6 added for transcript tools and templates, plus the one O2.7
         // added because a native player cannot be handed a URL, plus
-        // `set_segment_speaker`, the T12 wire leg (spec §4.1, VP-031).
-        assert_eq!(COMMAND_NAMES.len(), 79);
+        // `set_segment_speaker`, the T12 wire leg (spec §4.1, VP-031), plus
+        // the seventeen EPIC P task P1.5 added for the people roster and the
+        // consent-gated biometric tier (`VOICE_PROFILES_SPEC` §8).
+        assert_eq!(COMMAND_NAMES.len(), 96);
     }
 
     /// Commands the egui screens added (EPIC O tasks O2.4, O2.6 and O2.7).
@@ -450,6 +483,26 @@ mod tests {
         // P1.1 (VP-031): per-segment reassignment is an egui-era command; the
         // React shell never had a control that could ask for it.
         "set_segment_speaker",
+        // P1.5 (`VOICE_PROFILES_SPEC` §8): the people roster is ungated and
+        // works with matching off (VP-011); the biometric tier is
+        // consent-gated. Neither existed when the React shell did.
+        "list_people",
+        "create_person",
+        "update_person",
+        "merge_people",
+        "delete_person",
+        "assign_cluster_person",
+        "get_voice_profile_settings",
+        "set_voice_profiles_enabled",
+        "enroll_person_voice",
+        "add_voice_exemplar",
+        "split_voice_enrollment",
+        "delete_voice_enrollment",
+        "forget_all_voice_profiles",
+        "list_speaker_suggestions",
+        "confirm_speaker_suggestion",
+        "reject_speaker_suggestion",
+        "start_speaker_matching",
     ];
 
     #[test]

@@ -26,7 +26,9 @@ use sqlx::{Row, Sqlite, Transaction};
 
 use crate::db::Database;
 use crate::error::{PersistenceError, PersistenceResult};
-use crate::voice_profiles::{journal, tier_counts, StoredVoiceProfileEvent, VoiceProfileEventKind};
+use crate::voice_profiles::{
+    journal, tier_counts, ResealedExemplar, StoredVoiceProfileEvent, VoiceProfileEventKind,
+};
 
 /// Longest display name the schema accepts.
 pub const MAX_DISPLAY_NAME_CHARS: usize = 120;
@@ -459,15 +461,28 @@ impl PeopleRepository {
     /// retention of the two, since VP-130 allows shortening and never
     /// lengthening.
     ///
+    /// `resealed` carries the loser's exemplars sealed under the survivor's
+    /// binding, and must name exactly them. A ciphertext authenticates the
+    /// person it belongs to
+    /// (`plaudon_app_core::voice_profiles::store::ExemplarBinding`), so an
+    /// exemplar that merely had its `person_id` column rewritten would be
+    /// undecryptable afterwards — the merge would silently destroy the
+    /// voiceprint it claimed to move. Re-sealing needs the library's data key,
+    /// which this crate deliberately cannot reach, so the caller does it: with
+    /// nobody enrolled (the manual-only library of VP-011) the slice is
+    /// empty and no key is involved at all.
+    ///
     /// # Errors
     ///
     /// [`PersistenceError::RecordNotFound`] when either person is unknown,
-    /// [`PersistenceError::Invalid`] when both ids are the same or the
-    /// survivor is itself a tombstone.
+    /// [`PersistenceError::Invalid`] when both ids are the same, when the
+    /// survivor is itself a tombstone, or when `resealed` does not cover
+    /// exactly the loser's exemplars.
     pub async fn merge(
         &self,
         loser: PersonId,
         survivor: PersonId,
+        resealed: &[ResealedExemplar],
         at: Timestamp,
     ) -> PersistenceResult<MergeOutcome> {
         if loser == survivor {
@@ -523,6 +538,26 @@ impl PeopleRepository {
         .fetch_optional(&mut *tx)
         .await?;
 
+        // The caller's re-sealed set has to be exactly the loser's exemplars:
+        // a short set would drop voiceprints the disclosure said would move,
+        // and a long one would name rows this merge has no business rewriting.
+        let owned: Vec<String> =
+            sqlx::query_scalar("SELECT id FROM voice_exemplars WHERE person_id = ?1 ORDER BY id")
+                .bind(loser.to_string())
+                .fetch_all(&mut *tx)
+                .await?;
+        let mut supplied: Vec<String> = resealed
+            .iter()
+            .map(|exemplar| exemplar.id.to_string())
+            .collect();
+        supplied.sort_unstable();
+        supplied.dedup();
+        if supplied != owned {
+            return Err(PersistenceError::Invalid(
+                "a merge must re-seal exactly the exemplars it moves".to_owned(),
+            ));
+        }
+
         if let Some(row) = loser_enrolment {
             let retention: i64 = row.try_get("retention_months")?;
             let last_matched: Option<i64> = row.try_get("last_matched_at")?;
@@ -560,11 +595,23 @@ impl PeopleRepository {
                     .await?;
                 }
             }
-            sqlx::query("UPDATE voice_exemplars SET person_id = ?2 WHERE person_id = ?1")
-                .bind(loser.to_string())
+            // Re-sealed bytes, one row at a time: the ciphertext authenticates
+            // the person it belongs to, so a bare `SET person_id` would leave
+            // the survivor holding exemplars nothing can decrypt.
+            for exemplar in resealed {
+                sqlx::query(
+                    "UPDATE voice_exemplars
+                     SET person_id = ?2, embedding_cipher = ?3, embedding_nonce = ?4
+                     WHERE id = ?1 AND person_id = ?5",
+                )
+                .bind(exemplar.id.to_string())
                 .bind(survivor.to_string())
+                .bind(&exemplar.embedding_cipher)
+                .bind(&exemplar.embedding_nonce)
+                .bind(loser.to_string())
                 .execute(&mut *tx)
                 .await?;
+            }
             sqlx::query("DELETE FROM person_voice_enrollments WHERE person_id = ?1")
                 .bind(loser.to_string())
                 .execute(&mut *tx)

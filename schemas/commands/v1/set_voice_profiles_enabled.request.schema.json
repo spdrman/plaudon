@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/set_voice_profiles_enabled.request.schema.json",
+  "title": "set_voice_profiles_enabled.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "enabled",
+    "accept_disclosure_version"
+  ],
+  "properties": {
+    "enabled": {
+      "type": "boolean"
+    },
+    "accept_disclosure_version": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  }
+}

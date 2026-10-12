@@ -718,6 +718,8 @@ mod cloud {
                 sources: Arc::clone(&backend) as _,
                 search: Arc::clone(&backend) as _,
                 speakers: Arc::clone(&backend) as _,
+                people: Arc::clone(&backend) as _,
+                voice_profiles: Arc::clone(&backend) as _,
                 devices: Arc::new(plaudon_app::backend::devices::DevicesBackend::new(
                     plaudon_app::backend::devices::DevicesDeps::production(
                         backend.store().db().clone(),

@@ -749,9 +749,16 @@
       "control": "Enrolment enforces minimum clean single-speaker speech and excludes overlap; matches are persisted suggestions that never change a transcript without explicit confirmation; every exemplar keeps provenance (recording, cluster, span) and a profile can be split by provenance; rejections are remembered and feed per-profile calibration; the UI never presents a match as identity",
       "owner": "crates/app-core/src/voice_profiles/enroll.rs",
       "epic": "M",
-      "verification": [],
-      "status": "planned",
-      "notes": "Planned by docs/specs/VOICE_PROFILES_SPEC.md (VP-060 to VP-066, VP-094) and ADR-0082. There is deliberately no auto-assignment tier at any score: measured demographic error disparity in VoxCeleb-trained models makes an auto-assignment threshold a policy about whose records get silently corrupted. The matching half of the control exists as of the P1.4 change in crates/app-core/src/voice_profiles/matching: suggestion-only bands, speech minima, model-version-mismatch refusal and bounded per-profile calibration, with golden and property tests in crates/app-core/tests/voice_matching.rs. The row stays planned because enrolment, exemplar provenance and remembered rejections still have no implementation and the owner file does not exist yet."
+      "verification": [
+        "the_roster_round_trips_with_matching_off_and_never_reaches_the_embedder",
+        "no_embedding_is_reachable_while_ungated_or_while_matching_is_off",
+        "turning_the_feature_on_requires_accepting_the_current_disclosure",
+        "enrolling_then_confirming_a_suggestion_names_the_cluster_and_its_segments",
+        "rejecting_never_renames_and_reject_then_pick_records_the_correction",
+        "splitting_an_enrolment_re_seals_the_exemplars_it_moves"
+      ],
+      "status": "open",
+      "notes": "Planned by docs/specs/VOICE_PROFILES_SPEC.md (VP-060 to VP-066, VP-094) and ADR-0082. There is deliberately no auto-assignment tier at any score: measured demographic error disparity in VoxCeleb-trained models makes an auto-assignment threshold a policy about whose records get silently corrupted. The matching half of the control exists as of the P1.4 change in crates/app-core/src/voice_profiles/matching: suggestion-only bands, speech minima, model-version-mismatch refusal and bounded per-profile calibration, with golden and property tests in crates/app-core/tests/voice_matching.rs. The row stays planned because enrolment, exemplar provenance and remembered rejections still have no implementation and the owner file does not exist yet. The enrolment leg landed with P1.5: crates/app-core/src/voice_profiles/enroll.rs enforces the VP-065 minima from the stored reconciliation before the embedder is called, records provenance (recording, run, cluster, span) per exemplar and splits an enrolment by that provenance with the ciphertexts re-sealed under the new owner; the consent gate is a ConsentProof value with no public constructor, so the roster path cannot reach embedding code at all, and a scripted embedder that panics on call proves it at runtime in both closed states. A rejection is kept as a score record and feeds the per-profile offset the matcher reads. Remaining: the egui surfaces that present suggestions and the dedupe/merge disclosures (P2.1), and the real ONNX embedder."
     },
     {
       "id": "TM-048",
