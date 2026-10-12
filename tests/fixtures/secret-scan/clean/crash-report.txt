@@ -1,0 +1,5 @@
+PANIC location=crates/audio/src/decode.rs:214:17 payload=decoder rejected frame length 4294967295 backtrace=<backtrace disabled; set RUST_BACKTRACE=1>
+context: job_id=job_91ce0022 recording_id=rec_a013mq8x engine=local_whisper
+context: credential_scope=openrouter credential_value=<redacted:registered>
+context: last_destination=<redacted:signed_url host=plaud-media.s3.amazonaws.com>
+note: no audio bytes, request bodies or GATT frames are attached to crash reports (spec App. B.7)

@@ -1,0 +1,395 @@
+//! Subprocess chokepoint for network-capable child processes (D1.1, §16.2A, §7.1).
+//!
+//! The official PLAUD Cloud CLI is a separate executable that may issue network
+//! requests outside our HTTP client, so §16.2A requires that we **never invoke
+//! it in Local-only Mode**. This module is the only place that may spawn it.
+//!
+//! Hardening per §7.1:
+//! * hardcoded program leaf name selected during discovery, never an arbitrary
+//!   user-supplied executable path;
+//! * typed, strictly validated arguments — no shell, no `cmd.exe`, no
+//!   `PowerShell`, no string concatenation;
+//! * a scrubbed environment, so no secret ever reaches a subprocess env var
+//!   (§16.4);
+//! * bounded stdout/stderr capture and a wall-clock timeout.
+
+use std::collections::BTreeMap;
+use std::ffi::OsString;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::time::Duration;
+
+use super::{
+    Destination, EgressDenied, EgressPurpose, EgressRequest, EgressTicket, OutboundPolicy,
+    PayloadClass, Subsystem,
+};
+
+/// Arguments we are willing to pass to the cloud CLI. Modelling them as an enum
+/// rather than strings makes flag injection unrepresentable: a hostile title or
+/// search term can only ever land in a value position, and values are validated.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CliArg {
+    /// A fixed subcommand or flag from our own vocabulary.
+    Literal(&'static str),
+    /// An opaque identifier produced by the CLI itself (IDs, cursors).
+    Identifier(String),
+    /// A filesystem path we control (already canonicalized by `fsguard`).
+    Path(PathBuf),
+    /// A bounded integer.
+    Number(i64),
+}
+
+/// Why an argument was refused.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum ArgError {
+    #[error("argument contains a control character or NUL")]
+    ControlCharacter,
+    #[error("argument looks like a flag and may not come from untrusted input")]
+    FlagInjection,
+    #[error("argument exceeds the maximum length")]
+    TooLong,
+    #[error("identifier contains characters outside [A-Za-z0-9._:-]")]
+    IllegalIdentifier,
+    #[error("path is not absolute")]
+    RelativePath,
+    #[error("path contains a non-UTF-8 component")]
+    NonUtf8Path,
+}
+
+/// Maximum length of a single argument. The CLI never legitimately needs more.
+pub const MAX_ARG_LEN: usize = 512;
+
+impl CliArg {
+    /// Render the argument, validating it. Untrusted text can only enter via
+    /// [`CliArg::Identifier`], which is restricted to an identifier charset, so
+    /// shell metacharacters, newlines, NUL bytes and leading `-` are rejected
+    /// rather than escaped.
+    pub fn render(&self) -> Result<OsString, ArgError> {
+        match self {
+            CliArg::Literal(s) => Ok(OsString::from(*s)),
+            CliArg::Identifier(s) => {
+                if s.len() > MAX_ARG_LEN {
+                    return Err(ArgError::TooLong);
+                }
+                if s.chars().any(char::is_control) {
+                    return Err(ArgError::ControlCharacter);
+                }
+                if s.starts_with('-') {
+                    return Err(ArgError::FlagInjection);
+                }
+                if !s
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | ':' | '-'))
+                {
+                    return Err(ArgError::IllegalIdentifier);
+                }
+                Ok(OsString::from(s))
+            }
+            CliArg::Path(p) => {
+                if !p.is_absolute() {
+                    return Err(ArgError::RelativePath);
+                }
+                let s = p.to_str().ok_or(ArgError::NonUtf8Path)?;
+                if s.len() > MAX_ARG_LEN * 4 {
+                    return Err(ArgError::TooLong);
+                }
+                if s.chars().any(char::is_control) {
+                    return Err(ArgError::ControlCharacter);
+                }
+                Ok(OsString::from(s))
+            }
+            CliArg::Number(n) => Ok(OsString::from(n.to_string())),
+        }
+    }
+}
+
+/// Environment variables that must never reach a child process, because they
+/// change how it resolves code or where it sends data (§7.1).
+pub const STRIPPED_ENV_PREFIXES: [&str; 4] = ["LD_", "DYLD_", "PLAUDON_SECRET", "NODE_OPTIONS"];
+/// Exact environment variable names that must never reach a child process.
+pub const STRIPPED_ENV_NAMES: [&str; 10] = [
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "ALL_PROXY",
+    "http_proxy",
+    "https_proxy",
+    "all_proxy",
+    "OPENROUTER_API_KEY",
+    "PLAUD_TOKEN",
+    "PLAUD_API_KEY",
+    "AWS_SECRET_ACCESS_KEY",
+];
+
+/// Failure launching or running a gated subprocess.
+#[derive(Debug, thiserror::Error)]
+pub enum SpawnError {
+    #[error("egress policy denied the subprocess: {0}")]
+    Denied(#[from] EgressDenied),
+    #[error("invalid argument: {0}")]
+    Arg(#[from] ArgError),
+    #[error("program not found at the discovered path")]
+    ProgramNotFound,
+    #[error("subprocess failed to start: {0}")]
+    Start(String),
+    #[error("subprocess exceeded its time budget")]
+    Timeout,
+}
+
+/// A validated, policy-approved subprocess invocation.
+///
+/// Holding one is proof the policy allowed the launch; `into_command` consumes
+/// the ticket.
+#[derive(Debug)]
+pub struct GatedCommand {
+    ticket: EgressTicket,
+    program: PathBuf,
+    args: Vec<OsString>,
+    env: BTreeMap<String, String>,
+    timeout: Duration,
+    max_output_bytes: usize,
+}
+
+impl GatedCommand {
+    #[must_use]
+    pub fn ticket(&self) -> &EgressTicket {
+        &self.ticket
+    }
+    #[must_use]
+    pub fn program(&self) -> &Path {
+        &self.program
+    }
+    #[must_use]
+    pub fn args(&self) -> &[OsString] {
+        &self.args
+    }
+    #[must_use]
+    pub fn env(&self) -> &BTreeMap<String, String> {
+        &self.env
+    }
+    #[must_use]
+    pub fn timeout(&self) -> Duration {
+        self.timeout
+    }
+    #[must_use]
+    pub fn max_output_bytes(&self) -> usize {
+        self.max_output_bytes
+    }
+
+    /// Build the `std::process::Command`. No shell is involved at any point.
+    #[must_use]
+    pub fn into_command(self) -> std::process::Command {
+        let mut cmd = std::process::Command::new(&self.program);
+        cmd.args(&self.args);
+        cmd.env_clear();
+        for (k, v) in &self.env {
+            cmd.env(k, v);
+        }
+        cmd.stdin(std::process::Stdio::null());
+        cmd.stdout(std::process::Stdio::piped());
+        cmd.stderr(std::process::Stdio::piped());
+        cmd
+    }
+}
+
+/// The only launcher for the network-capable cloud CLI.
+#[derive(Debug, Clone)]
+pub struct GatedProcessLauncher {
+    policy: Arc<OutboundPolicy>,
+}
+
+impl GatedProcessLauncher {
+    #[must_use]
+    pub fn new(policy: Arc<OutboundPolicy>) -> Self {
+        Self { policy }
+    }
+
+    /// Prepare a launch of the discovered cloud CLI.
+    ///
+    /// Returns `Err(SpawnError::Denied)` with [`super::DenyReason::LocalOnlyMode`]
+    /// whenever Local-only Mode is on, which is how §22(15) ("never launches the
+    /// PLAUD Cloud CLI") is enforced rather than merely documented.
+    pub fn prepare_cloud_cli(
+        &self,
+        discovered_program: &Path,
+        args: &[CliArg],
+        purpose: EgressPurpose,
+    ) -> Result<GatedCommand, SpawnError> {
+        let program_label = discovered_program
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("<non-utf8>")
+            .to_owned();
+
+        let request = EgressRequest::new(
+            Subsystem::PlaudCloudCli,
+            Destination::subprocess(program_label),
+            purpose,
+            PayloadClass::Metadata,
+        );
+        let ticket = self.policy.authorize(&request)?;
+
+        let mut rendered = Vec::with_capacity(args.len());
+        for arg in args {
+            rendered.push(arg.render()?);
+        }
+
+        Ok(GatedCommand {
+            ticket,
+            program: discovered_program.to_path_buf(),
+            args: rendered,
+            env: scrubbed_env(),
+            timeout: Duration::from_secs(120),
+            max_output_bytes: 8 * 1024 * 1024,
+        })
+    }
+}
+
+/// Build the child environment: start from the parent, remove everything that
+/// could redirect code loading or carry a secret.
+#[must_use]
+pub fn scrubbed_env() -> BTreeMap<String, String> {
+    std::env::vars()
+        .filter(|(name, _)| !is_stripped_env(name))
+        .collect()
+}
+
+#[must_use]
+pub fn is_stripped_env(name: &str) -> bool {
+    STRIPPED_ENV_NAMES.contains(&name)
+        || STRIPPED_ENV_PREFIXES.iter().any(|p| name.starts_with(p))
+        || name.to_ascii_uppercase().contains("TOKEN")
+        || name.to_ascii_uppercase().contains("SECRET")
+        || name.to_ascii_uppercase().contains("API_KEY")
+        || name.to_ascii_uppercase().contains("PASSWORD")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::outbound::{ApprovalSource, DenyReason, NetworkGrant};
+
+    fn launcher(policy: OutboundPolicy) -> GatedProcessLauncher {
+        GatedProcessLauncher::new(Arc::new(policy))
+    }
+
+    #[test]
+    fn local_only_never_launches_the_cloud_cli() {
+        let l = launcher(OutboundPolicy::local_only());
+        let err = l
+            .prepare_cloud_cli(
+                Path::new("/usr/local/bin/plaud"),
+                &[CliArg::Literal("list")],
+                EgressPurpose::AccountSync,
+            )
+            .unwrap_err();
+        match err {
+            SpawnError::Denied(d) => assert_eq!(d.reason, DenyReason::LocalOnlyMode),
+            other => panic!("expected denial, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn permitted_mode_prepares_the_pinned_program() {
+        let l = launcher(OutboundPolicy::network_permitted(NetworkGrant::new(
+            ApprovalSource::TestHarness,
+            0,
+            "privacy-v1",
+        )));
+        let cmd = l
+            .prepare_cloud_cli(
+                Path::new("/usr/local/bin/plaud"),
+                &[CliArg::Literal("list"), CliArg::Number(50)],
+                EgressPurpose::AccountSync,
+            )
+            .unwrap();
+        assert_eq!(cmd.args(), [OsString::from("list"), OsString::from("50")]);
+    }
+
+    #[test]
+    fn a_non_pinned_program_is_refused_even_when_network_is_permitted() {
+        let l = launcher(OutboundPolicy::network_permitted(NetworkGrant::new(
+            ApprovalSource::TestHarness,
+            0,
+            "privacy-v1",
+        )));
+        let err = l
+            .prepare_cloud_cli(
+                Path::new("/tmp/evil"),
+                &[CliArg::Literal("list")],
+                EgressPurpose::AccountSync,
+            )
+            .unwrap_err();
+        match err {
+            SpawnError::Denied(d) => assert_eq!(d.reason, DenyReason::DestinationNotAllowlisted),
+            other => panic!("expected denial, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn hostile_identifiers_cannot_inject_flags_or_shell_syntax() {
+        let hostile = [
+            "--delete-all",
+            "-rf",
+            "a;rm -rf /",
+            "a`id`",
+            "a$(id)",
+            "a|b",
+            "a&b",
+            "a>b",
+            "a\nb",
+            "a\0b",
+            "a'b",
+            "a\"b",
+            "a b",
+            "a\\b",
+            "%SYSTEMROOT%",
+            "$HOME",
+        ];
+        for h in hostile {
+            let err = CliArg::Identifier(h.to_owned()).render().unwrap_err();
+            assert!(
+                matches!(
+                    err,
+                    ArgError::FlagInjection
+                        | ArgError::IllegalIdentifier
+                        | ArgError::ControlCharacter
+                ),
+                "{h:?} produced {err:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn legitimate_identifiers_pass() {
+        for ok in ["rec_01HF8", "abc-123", "a.b:c", "ID_0"] {
+            CliArg::Identifier(ok.to_owned()).render().unwrap();
+        }
+    }
+
+    #[test]
+    fn overlong_identifier_is_refused() {
+        let long = "a".repeat(MAX_ARG_LEN + 1);
+        assert_eq!(
+            CliArg::Identifier(long).render().unwrap_err(),
+            ArgError::TooLong
+        );
+    }
+
+    #[test]
+    fn env_scrubbing_removes_secret_and_loader_variables() {
+        for name in [
+            "OPENROUTER_API_KEY",
+            "PLAUD_TOKEN",
+            "DYLD_INSERT_LIBRARIES",
+            "LD_PRELOAD",
+            "HTTPS_PROXY",
+            "MY_SECRET_THING",
+            "SOME_PASSWORD",
+            "X_API_KEY",
+        ] {
+            assert!(is_stripped_env(name), "{name} should be stripped");
+        }
+        assert!(!is_stripped_env("PATH"));
+        assert!(!is_stripped_env("HOME"));
+    }
+}

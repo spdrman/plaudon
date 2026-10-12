@@ -1,6 +1,6 @@
 [package]
 name = "plaudon-security"
-description = "Secure key access, consent policy and redaction."
+description = "Secure key access, consent policy, egress gate, path guard and sandboxing."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -10,4 +10,52 @@ repository.workspace = true
 [lints]
 workspace = true
 
+[lib]
+name = "plaudon_security"
+path = "src/lib.rs"
+
+[[bin]]
+name = "plaudon-tauri-audit"
+path = "src/bin/tauri_audit.rs"
+
+# Real helper used by `tests/sandbox_integration.rs` to verify what the
+# process sandbox actually enforces (D2.5, §6.3A).
+[[bin]]
+name = "plaudon-sandbox-probe"
+path = "src/bin/sandbox_probe.rs"
+
 [dependencies]
+plaudon-diagnostics = { workspace = true }
+plaudon-domain = { workspace = true }
+hex = { workspace = true }
+libc = { workspace = true }
+parking_lot = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+url = { workspace = true }
+zeroize = { workspace = true }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+security-framework = "3"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_Security_Credentials",
+    "Win32_System_JobObjects",
+    "Win32_System_Threading",
+] }
+
+[dev-dependencies]
+rusqlite = { workspace = true }
+tempfile = { workspace = true }
+
+[features]
+default = []
+# Opt-in tests that touch the real OS credential store. Never enabled in hermetic CI.
+real-keychain = []
+# Exposes `secrets::InMemorySecretStore` to downstream test harnesses. Never a production dependency.
+test-support = []

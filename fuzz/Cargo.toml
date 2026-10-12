@@ -1,0 +1,97 @@
+# cargo-fuzz package for D2.4 (spec §18.5, §16.2 "Arbitrary command execution" /
+# "Malicious audio decoder input", §18.6A, App. B.7).
+#
+# This package is deliberately EXCLUDED from the workspace (`exclude = ["fuzz"]`
+# in the root manifest) because `libfuzzer-sys` requires a nightly toolchain and
+# `-Zsanitizer=address`; a stable `cargo build` of the workspace must not try to
+# compile it.
+#
+# The fuzz targets contain no logic of their own. Each one calls a
+# `checks::check_*` function defined in
+# `../crates/security/tests/fuzz_corpus_replay.rs`, which is pulled in with
+# `#[path = ...] mod replay;`. The same functions are driven over the committed
+# corpora by `cargo test -p plaudon-security --test fuzz_corpus_replay` on
+# stable, so the invariants are enforced on every PR even without cargo-fuzz.
+
+[package]
+name = "plaudon-fuzz"
+version = "0.0.0"
+edition = "2021"
+rust-version = "1.90"
+publish = false
+license = "Apache-2.0"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+arbitrary = { version = "1", features = ["derive"] }
+tempfile = "3"
+serde_json = "1"
+plaudon-security = { path = "../crates/security" }
+plaudon-diagnostics = { path = "../crates/diagnostics" }
+plaudon-domain = { path = "../crates/domain" }
+
+[profile.release]
+debug = 1
+
+# Prevent this from interfering with a parent workspace scan.
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "fuzz_cli_arg_render"
+path = "fuzz_targets/fuzz_cli_arg_render.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_destination_url"
+path = "fuzz_targets/fuzz_destination_url.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_path_validation"
+path = "fuzz_targets/fuzz_path_validation.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_archive_entry"
+path = "fuzz_targets/fuzz_archive_entry.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_allowlist_manifest"
+path = "fuzz_targets/fuzz_allowlist_manifest.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_redactor"
+path = "fuzz_targets/fuzz_redactor.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_error_envelope"
+path = "fuzz_targets/fuzz_error_envelope.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_domain_redactor"
+path = "fuzz_targets/fuzz_domain_redactor.rs"
+test = false
+doc = false
+bench = false
