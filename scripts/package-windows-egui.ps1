@@ -215,54 +215,32 @@ if (-not (Test-Path $Installer)) {
 # package is opened read-only through Windows Installer's own automation
 # interface, so these are the rows the operating system will act on.
 #
-# It runs under Windows PowerShell 5.1 rather than in this process: PowerShell
-# 7's COM binder does not return data for the `Record.StringData` and
-# `Record.FieldCount` parameterized properties — it reports a type mismatch or
-# hands back empty strings, which is the one failure mode an audit must not
-# have. 5.1 ships with Windows, so this needs nothing installed.
-$AuditScript = Join-Path $OutFull "msi-audit.ps1"
-@'
-param([Parameter(Mandatory = $true)][string]$Msi)
-$ErrorActionPreference = "Stop"
-$installer = New-Object -ComObject WindowsInstaller.Installer
-$database = $installer.GetType().InvokeMember(
-    "OpenDatabase", "InvokeMethod", $null, $installer, @($Msi, 0))
-function Get-Column([string]$sql) {
-    $view = $database.GetType().InvokeMember("OpenView", "InvokeMethod", $null, $database, @($sql))
-    $view.GetType().InvokeMember("Execute", "InvokeMethod", $null, $view, $null) | Out-Null
-    $values = @()
-    while ($true) {
-        $record = $view.GetType().InvokeMember("Fetch", "InvokeMethod", $null, $view, $null)
-        if (-not $record) { break }
-        $values += [string]$record.GetType().InvokeMember(
-            "StringData", "GetProperty", $null, $record, @(1))
-    }
-    $view.GetType().InvokeMember("Close", "InvokeMethod", $null, $view, $null) | Out-Null
-    return , $values
-}
-$summary = $database.GetType().InvokeMember("SummaryInformation", "GetProperty", $null, $database, @(0))
-[pscustomobject]@{
-    roots        = @(Get-Column "SELECT ``Root`` FROM ``Registry``")
-    keys         = @(Get-Column "SELECT ``Key`` FROM ``Registry``")
-    allusers     = @(Get-Column "SELECT ``Value`` FROM ``Property`` WHERE ``Property``='ALLUSERS'")
-    shortcuts    = @(Get-Column "SELECT ``Shortcut`` FROM ``Shortcut``")
-    upgradecodes = @(Get-Column "SELECT ``Value`` FROM ``Property`` WHERE ``Property``='UpgradeCode'")
-    wordcount    = [int]$summary.GetType().InvokeMember("Property", "GetProperty", $null, $summary, @(15))
-} | ConvertTo-Json -Compress
-'@ | Set-Content -Path $AuditScript -Encoding utf8
+# The calls are plain late-bound COM calls rather than Type.InvokeMember:
+# PowerShell 7's COM binder rejects the InvokeMember form of these with
+# DISP_E_TYPEMISMATCH, and `pwsh` is what CI runs.
+$WindowsInstaller = New-Object -ComObject WindowsInstaller.Installer
+$Database = $WindowsInstaller.OpenDatabase($Installer, 0)
 
-$AuditJson = & "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" `
-    -NoProfile -ExecutionPolicy Bypass -File $AuditScript -Msi $Installer
-if ($LASTEXITCODE -ne 0 -or -not $AuditJson) {
-    Write-Error "reason=missing_tool: the built package could not be read back for auditing"
-    exit 1
+# One column at a time, as a flat array of strings. Nested arrays are what a
+# PowerShell pipeline flattens behind your back, and an audit that silently
+# sees nothing is worse than no audit.
+function Get-MsiColumn([string]$Sql) {
+    $View = $Database.OpenView($Sql)
+    $View.Execute()
+    $Values = New-Object System.Collections.Generic.List[string]
+    while ($true) {
+        $Record = $View.Fetch()
+        if ($null -eq $Record) { break }
+        $Values.Add([string]$Record.StringData(1))
+    }
+    $View.Close()
+    return , $Values.ToArray()
 }
-$Audit = ($AuditJson -join "") | ConvertFrom-Json
 
 # Registry root 2 is HKLM and -1 is "whichever hive the install scope picks",
 # which for a package that must never be machine-wide is just as wrong.
-$RegistryRoots = @($Audit.roots)
-$RegistryKeys = @($Audit.keys)
+$RegistryRoots = @(Get-MsiColumn "SELECT ``Root`` FROM ``Registry``")
+$RegistryKeys = @(Get-MsiColumn "SELECT ``Key`` FROM ``Registry``")
 if ($RegistryRoots.Count -eq 0) {
     Write-Error "reason=missing_binary: the built package has no Registry rows; the association claim did not make it in"
     exit 1
@@ -273,31 +251,32 @@ for ($Index = 0; $Index -lt $RegistryRoots.Count; $Index++) {
         exit 1
     }
 }
-$AllUsers = @($Audit.allusers)
+$AllUsers = @(Get-MsiColumn "SELECT ``Value`` FROM ``Property`` WHERE ``Property``='ALLUSERS'")
 if ($AllUsers.Count -ne 0 -and $AllUsers[0] -ne "") {
     Write-Error "reason=entitlement_rejected: ALLUSERS is '$($AllUsers[0])'; a per-user install leaves it empty"
     exit 1
 }
 # Summary information property 15 is the word count; bit 3 (value 8) is
 # "elevated privileges are not required to install".
-$WordCount = [int]$Audit.wordcount
+$WordCount = [int]$Database.SummaryInformation(0).Property(15)
 if (($WordCount -band 8) -eq 0) {
     Write-Error "reason=entitlement_rejected: the package asks for elevation (word count $WordCount)"
     exit 1
 }
-$Shortcuts = @($Audit.shortcuts)
+$Shortcuts = @(Get-MsiColumn "SELECT ``Shortcut`` FROM ``Shortcut``")
 if ($Shortcuts.Count -ne 1) {
     Write-Error "reason=entitlement_rejected: the built package carries $($Shortcuts.Count) shortcuts; it installs exactly one, in the Start Menu"
     exit 1
 }
-$UpgradeCodes = @($Audit.upgradecodes)
+$UpgradeCodes = @(Get-MsiColumn "SELECT ``Value`` FROM ``Property`` WHERE ``Property``='UpgradeCode'")
 if ($UpgradeCodes.Count -ne 1) {
     Write-Error "reason=missing_binary: the built package has no UpgradeCode, so it could never upgrade itself"
     exit 1
 }
 $UpgradeCode = $UpgradeCodes[0]
 Write-Host "==> package audit: $($RegistryRoots.Count) HKCU registry rows, $($Shortcuts.Count) shortcut, upgrade code $UpgradeCode, no elevation requested"
-Remove-Item $AuditScript -Force
+[System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($Database) | Out-Null
+[System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($WindowsInstaller) | Out-Null
 
 if ($SignTool) {
     Write-Host "==> signing the installer"
