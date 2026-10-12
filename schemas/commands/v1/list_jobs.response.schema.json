@@ -116,7 +116,8 @@
             "summarize",
             "export",
             "model_install",
-            "source_sync"
+            "source_sync",
+            "speaker_match"
           ]
         },
         "state": {

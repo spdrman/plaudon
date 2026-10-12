@@ -721,7 +721,7 @@
         "a_locked_store_refuses_the_voice_profile_key_without_a_plaintext_fallback"
       ],
       "status": "open",
-      "notes": "Storage leg implemented (P1.2): migration 0900 keeps embeddings only as XChaCha20-Poly1305 ciphertext bound to person+model+dimension as AEAD additional data, the key lives in the OS vault under SecretScope::VoiceProfileKey, an unavailable vault locks the biometric tier while the name-only roster keeps working (ADR-0014, spec §12.2A), and destroying the key is the VP-095 cryptographic erasure. Gap: the export/backup exclusion of embeddings is not built yet (tracked by TM-046), and encryption protects data at rest, not data in use — vectors are plaintext in process memory while a job runs."
+      "notes": "Storage leg implemented (P1.2): migration 0900 keeps embeddings only as XChaCha20-Poly1305 ciphertext bound to person+model+dimension as AEAD additional data, the key lives in the OS vault under SecretScope::VoiceProfileKey, an unavailable vault locks the biometric tier while the name-only roster keeps working (ADR-0014, spec §12.2A), and destroying the key is the VP-095 cryptographic erasure. The matching job keeps the same rule in flight: its per-cluster scratch (migration 0901) is ciphertext bound to job, run and cluster and is destroyed when the job settles. Gap: the export/backup exclusion of embeddings is not built yet (tracked by TM-046), and encryption protects data at rest, not data in use — vectors are plaintext in process memory while a job runs."
     },
     {
       "id": "TM-046",

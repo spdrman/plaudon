@@ -152,3 +152,41 @@ positive_test = "a_validly_signed_update_installs"
 negative_test = "a_tampered_package_is_rejected"
 crash_recovery_test = "an_interruption_at_every_step_leaves_a_launchable_application"
 test_files = ["crates/updater/src/install.rs"]
+
+# The speaker-matching pipeline's stage transitions (VOICE_PROFILES_SPEC
+# VP-102, VP-105). Each stage's output is durable before its commit mark, so
+# the crash-recovery test for each is a process killed inside that mark.
+
+[[transitions]]
+id = "voice::reconcile_to_embed"
+spec = "VOICE_PROFILES_SPEC VP-022, VP-023, VP-065, VP-102"
+positive_test = "a_queued_speaker_match_job_runs_and_records_a_suggestion"
+negative_test = "a_cluster_without_enough_clean_speech_is_reported_not_embedded"
+crash_recovery_test = "a_kill_as_the_embed_stage_commits_resumes_at_match"
+test_files = [
+    "crates/app/src/backend/processing/tests.rs",
+    "crates/app-core/tests/voice_match_pipeline.rs",
+    "tests/chaos/tests/speaker_match_chaos.rs",
+]
+
+[[transitions]]
+id = "voice::embed_to_match"
+spec = "VOICE_PROFILES_SPEC VP-024, VP-102, VP-103"
+positive_test = "a_kill_between_embed_and_match_resumes_at_match"
+negative_test = "with_the_gate_closed_nothing_is_embedded_and_the_plan_has_no_biometric_stages"
+crash_recovery_test = "a_kill_as_the_embed_stage_commits_resumes_at_match"
+test_files = [
+    "crates/app-core/tests/voice_match_pipeline.rs",
+    "tests/chaos/tests/speaker_match_chaos.rs",
+]
+
+[[transitions]]
+id = "voice::match_to_suggest"
+spec = "VOICE_PROFILES_SPEC VP-026, VP-060, VP-102"
+positive_test = "an_enrolled_voice_becomes_a_suggestion_and_nothing_is_assigned"
+negative_test = "a_profile_from_another_checkpoint_is_not_scored"
+crash_recovery_test = "a_kill_as_the_suggest_stage_commits_reinserts_nothing"
+test_files = [
+    "crates/app-core/tests/voice_match_pipeline.rs",
+    "tests/chaos/tests/speaker_match_chaos.rs",
+]

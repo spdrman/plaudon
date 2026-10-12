@@ -519,6 +519,9 @@ async fn a_stage_request_round_trips_through_its_durable_snapshot() {
         audio_sha256: "a".repeat(64),
         cloud: false,
         cost_acknowledged: false,
+        transcript_revision: None,
+        model_version: None,
+        normalization: std::collections::BTreeMap::new(),
     };
     let job_id = pipeline
         .backend
@@ -862,4 +865,372 @@ async fn a_real_whisper_model_transcribes_the_committed_clip() {
         "the real transcript does not contain the clip's words: {text}"
     );
     pool.stop(Duration::from_secs(5)).await;
+}
+
+/* ------------------------------------------------- speaker matching (P1.3) */
+
+/// A pipeline whose worker can also run the speaker-matching executor, over a
+/// deterministic diarization provider and a scripted embedder
+/// (`VOICE_PROFILES_SPEC` VP-100..VP-105).
+struct VoicePipeline {
+    inner: Pipeline,
+    embedder: Arc<plaudon_app_core::voice_profiles::embedder::ScriptedEmbedder>,
+    secrets: Arc<plaudon_security::secrets::InMemorySecretStore>,
+}
+
+/// Dimension of the scripted checkpoint; the arithmetic lives in app-core.
+const VOICE_DIM: usize = 8;
+
+/// Four six-second segments, so each cluster clears the three-second
+/// identification minimum of VP-065.
+const VOICE_SEGMENT_MS: u64 = 6_000;
+
+impl VoicePipeline {
+    async fn open() -> Self {
+        use plaudon_ai_diarization::SpeakerTurn;
+        use plaudon_app_core::voice_profiles::embedder::ScriptedEmbedder;
+
+        let fixture = crate::backend::testing::backend_fixture().await;
+        let embedder = Arc::new(ScriptedEmbedder::new(VOICE_DIM));
+        let secrets = Arc::new(plaudon_security::secrets::InMemorySecretStore::new());
+        let diarizer = Arc::new(plaudon_ai_diarization::FakeDiarizationProvider::new(vec![
+            SpeakerTurn::new("S1", 0, 12_000),
+            SpeakerTurn::new("S2", 12_000, 24_000),
+        ]));
+        let backend = Arc::new(
+            fixture
+                .backend
+                .clone()
+                .with_stt_engines(vec![ScriptedStt::new(&["one", "two", "three", "four"])
+                    .with_segment_ms(VOICE_SEGMENT_MS)
+                    .shared()])
+                .with_text_model(ScriptedTextModel::new(json!({})).shared())
+                .with_voice_engines(
+                    diarizer as Arc<dyn plaudon_ai_diarization::contract::DiarizationProvider>,
+                    Arc::clone(&embedder)
+                        as Arc<dyn plaudon_app_core::voice_profiles::embedder::SpeakerEmbedder>,
+                )
+                .with_voice_secrets(
+                    Arc::clone(&secrets) as Arc<dyn plaudon_security::secrets::SecretStore>
+                ),
+        );
+        let pool = ProcessingHandle::start(&backend, Some(1));
+        Self {
+            inner: Pipeline {
+                fixture,
+                backend,
+                pool: Some(pool),
+            },
+            embedder,
+            secrets,
+        }
+    }
+
+    /// Import a recording and transcribe it, so there is a timed revision to
+    /// reconcile speaker turns against.
+    async fn transcribed(&self, name: &str) -> RecordingId {
+        let recording_id = self.inner.import(name).await;
+        self.inner
+            .prefer(Stage::Transcribe, SCRIPTED_STT_ENGINE)
+            .await;
+        let job = self.inner.run_stage(recording_id, Stage::Transcribe).await;
+        let summary = self.inner.settled(job).await;
+        assert_eq!(summary.state, JobState::Completed, "{summary:?}");
+        recording_id
+    }
+
+    /// Turn the runtime gate on, as the §12.2 activation does.
+    async fn activate(&self) {
+        self.inner
+            .backend
+            .set_voice_matching_settings(&super::speaker_match::VoiceMatchingSettings {
+                enabled: true,
+                accepted_disclosure_version: Some(
+                    plaudon_app_core::voice_profiles::pipeline::CONSENT_DISCLOSURE_VERSION
+                        .to_owned(),
+                ),
+            })
+            .await
+            .expect("the preference is stored");
+    }
+
+    /// Enrol a person whose voice is the scripted voice of `cluster`.
+    async fn enrol(&self, cluster: &str) -> plaudon_domain::ids::PersonId {
+        use plaudon_app_core::voice_profiles::store::{EmbeddingCipher, ExemplarBinding};
+        use plaudon_persistence::voice_profiles::{
+            EnrollmentDraft, ExemplarInsert, VoiceEnrollmentRepository,
+        };
+
+        let person = plaudon_domain::ids::PersonId::new();
+        sqlx::query(
+            "INSERT INTO people (id, display_name, created_at, updated_at, status)
+             VALUES (?1, 'Priya', 0, 0, 'active')",
+        )
+        .bind(person.to_string())
+        .execute(self.inner.backend.pool())
+        .await
+        .expect("person");
+
+        let voices = VoiceEnrollmentRepository::new(self.inner.backend.store().db().clone());
+        voices
+            .enroll(
+                person,
+                &EnrollmentDraft {
+                    consent_version:
+                        plaudon_app_core::voice_profiles::pipeline::CONSENT_DISCLOSURE_VERSION
+                            .to_owned(),
+                    consent_note: None,
+                    retention_months: 12,
+                },
+                plaudon_domain::time::Timestamp::from_millis(0),
+            )
+            .await
+            .expect("enrolment");
+
+        let cipher = EmbeddingCipher::new(
+            Arc::clone(&self.secrets) as Arc<dyn plaudon_security::secrets::SecretStore>
+        );
+        let checkpoint = plaudon_app_core::voice_profiles::embedder::SpeakerEmbedder::checkpoint(
+            self.embedder.as_ref(),
+        );
+        let vector = self.embedder.voice_of(cluster);
+        for index in 0..2u8 {
+            let binding = ExemplarBinding {
+                person_id: person,
+                model_id: checkpoint.binding.model_id.clone(),
+                model_version: checkpoint.binding.model_version.clone(),
+                embedding_dim: u32::try_from(VOICE_DIM).unwrap(),
+            };
+            let sealed = cipher.seal(&vector, &binding).expect("seal");
+            voices
+                .add_exemplar(
+                    &ExemplarInsert {
+                        person_id: person,
+                        recording_id: None,
+                        diarization_run_id: None,
+                        cluster_key: None,
+                        source_start_ms: None,
+                        source_end_ms: None,
+                        speech_ms: 6_000,
+                        model_id: checkpoint.binding.model_id.clone(),
+                        model_version: checkpoint.binding.model_version.clone(),
+                        model_sha256: checkpoint.binding.model_sha256.to_hex(),
+                        embedding_dim: sealed.embedding_dim,
+                        embedding_cipher: sealed.cipher,
+                        embedding_nonce: sealed.nonce,
+                    },
+                    plaudon_domain::time::Timestamp::from_millis(i64::from(index)),
+                )
+                .await
+                .expect("exemplar");
+        }
+        person
+    }
+
+    async fn suggestions(&self) -> i64 {
+        sqlx::query_scalar("SELECT COUNT(*) FROM speaker_suggestions")
+            .fetch_one(self.inner.backend.pool())
+            .await
+            .expect("count")
+    }
+
+    async fn stop(self) {
+        self.inner.stop().await;
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_queued_speaker_match_job_runs_and_records_a_suggestion() {
+    let pipeline = VoicePipeline::open().await;
+    let recording_id = pipeline.transcribed("voices.wav").await;
+    pipeline.activate().await;
+    let person = pipeline.enrol("S1").await;
+
+    let job_id = pipeline
+        .inner
+        .backend
+        .enqueue_speaker_match(recording_id)
+        .await
+        .expect("the job is queued");
+    let summary = pipeline.inner.settled(job_id).await;
+    assert_eq!(summary.kind, JobKind::SpeakerMatch);
+    assert_eq!(summary.state, JobState::Completed, "{summary:?}");
+
+    let rows: Vec<(String, String, String)> = sqlx::query_as(
+        "SELECT cluster_key, person_id, state FROM speaker_suggestions ORDER BY cluster_key",
+    )
+    .fetch_all(pipeline.inner.backend.pool())
+    .await
+    .expect("suggestions");
+    assert_eq!(rows.len(), 1, "{rows:?}");
+    assert_eq!(rows[0].1, person.to_string());
+    assert_eq!(rows[0].2, "pending", "nothing is assigned by a job");
+    pipeline.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn asking_for_the_same_match_twice_deduplicates_until_a_profile_changes() {
+    let pipeline = VoicePipeline::open().await;
+    let recording_id = pipeline.transcribed("dedup.wav").await;
+    pipeline.activate().await;
+    pipeline.enrol("S1").await;
+
+    let digest_before = pipeline
+        .inner
+        .backend
+        .enrolled_profile_digest()
+        .await
+        .expect("digest");
+    let first = pipeline
+        .inner
+        .backend
+        .enqueue_speaker_match(recording_id)
+        .await
+        .expect("queued");
+    let again = pipeline
+        .inner
+        .backend
+        .enqueue_speaker_match(recording_id)
+        .await
+        .expect("queued again");
+    assert!(
+        first == again || pipeline.inner.settled(first).await.state.is_terminal(),
+        "an identical request neither duplicated nor reused the job"
+    );
+
+    // Enrolling a second person changes the profile-set digest, which is a
+    // keyed dimension: the next request is different work (VP-101).
+    pipeline.enrol("S2").await;
+    let digest_after = pipeline
+        .inner
+        .backend
+        .enrolled_profile_digest()
+        .await
+        .expect("digest");
+    assert_ne!(digest_before, digest_after);
+    let third = pipeline
+        .inner
+        .backend
+        .enqueue_speaker_match(recording_id)
+        .await
+        .expect("queued under the new key");
+    assert_ne!(third, first, "a new profile set makes a fresh job");
+    pipeline.inner.settled(third).await;
+    pipeline.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn matching_cannot_be_queued_while_the_gate_is_closed() {
+    let pipeline = VoicePipeline::open().await;
+    let recording_id = pipeline.transcribed("closed.wav").await;
+
+    // Off by default: no activation, nobody enrolled (VP-003).
+    let refused = pipeline
+        .inner
+        .backend
+        .enqueue_speaker_match(recording_id)
+        .await
+        .expect_err("a closed gate queues nothing");
+    assert_eq!(refused.code(), AppErrorCode::CapabilityUnverified);
+
+    // Activated, but still nobody enrolled: still nothing to match (VP-024).
+    pipeline.activate().await;
+    let refused = pipeline
+        .inner
+        .backend
+        .enqueue_speaker_match(recording_id)
+        .await
+        .expect_err("nobody is enrolled");
+    assert_eq!(refused.code(), AppErrorCode::CapabilityUnverified);
+
+    assert_eq!(pipeline.embedder.call_count(), 0, "nothing was embedded");
+    assert_eq!(pipeline.suggestions().await, 0);
+    pipeline.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn turning_matching_off_after_queueing_leaves_the_job_without_biometric_stages() {
+    let pipeline = VoicePipeline::open().await;
+    let recording_id = pipeline.transcribed("flip.wav").await;
+    pipeline.activate().await;
+    pipeline.enrol("S1").await;
+
+    // Queue the job, then withdraw the toggle before the worker gets to the
+    // biometric stages: the run must plan none of them (VP-003, VP-024).
+    pipeline
+        .inner
+        .backend
+        .set_voice_matching_settings(&super::speaker_match::VoiceMatchingSettings::default())
+        .await
+        .expect("preference");
+    let request = StageRequest {
+        recording_id,
+        kind: JobKind::SpeakerMatch,
+        engine: plaudon_ai_diarization::FAKE_PROVIDER_ID.to_owned(),
+        model_id: Some(plaudon_app_core::voice_profiles::embedder::SCRIPTED_EMBEDDER_ID.to_owned()),
+        model_version: Some("1.0".to_owned()),
+        stage: "speaker_match".to_owned(),
+        label: "Match speakers".to_owned(),
+        audio_sha256: "b".repeat(64),
+        cloud: false,
+        cost_acknowledged: false,
+        transcript_revision: None,
+        normalization: std::collections::BTreeMap::new(),
+    };
+    let job_id = pipeline
+        .inner
+        .backend
+        .enqueue_stage(&request)
+        .await
+        .expect("queued directly");
+    let summary = pipeline.inner.settled(job_id).await;
+    assert_eq!(summary.state, JobState::Completed, "{summary:?}");
+    assert_eq!(
+        pipeline.embedder.call_count(),
+        0,
+        "the gate closed between enqueue and run, so nothing was embedded"
+    );
+    assert_eq!(pipeline.suggestions().await, 0);
+    // Diarization still ran: it carries no biometrics.
+    let runs: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM diarization_runs")
+        .fetch_one(pipeline.inner.backend.pool())
+        .await
+        .expect("count");
+    assert_eq!(runs, 1);
+    pipeline.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_build_without_an_embedder_parks_the_job_instead_of_failing_it() {
+    // No `with_voice_engines`: the host has no speaker-embedding model, which
+    // preflight must treat as a waiting state, not a failure (§14.4).
+    let pipeline =
+        Pipeline::open(ScriptedStt::new(&["x"]), ScriptedTextModel::new(json!({}))).await;
+    let recording_id = pipeline.import("noembedder.wav").await;
+    let request = StageRequest {
+        recording_id,
+        kind: JobKind::SpeakerMatch,
+        engine: plaudon_ai_diarization::FAKE_PROVIDER_ID.to_owned(),
+        model_id: Some("absent".to_owned()),
+        model_version: None,
+        stage: "speaker_match".to_owned(),
+        label: "Match speakers".to_owned(),
+        audio_sha256: "c".repeat(64),
+        cloud: false,
+        cost_acknowledged: false,
+        transcript_revision: None,
+        normalization: std::collections::BTreeMap::new(),
+    };
+    let job_id = pipeline
+        .backend
+        .enqueue_stage(&request)
+        .await
+        .expect("queued");
+    let summary = pipeline
+        .until(job_id, |summary| {
+            summary.state == JobState::WaitingForModel || summary.state.is_terminal()
+        })
+        .await;
+    assert_eq!(summary.state, JobState::WaitingForModel, "{summary:?}");
+    pipeline.stop().await;
 }
