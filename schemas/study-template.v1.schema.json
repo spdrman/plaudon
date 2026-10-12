@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.local/schemas/study-template.v1.schema.json",
+  "title": "Study/Revision template v1",
+  "description": "Versioned template schema for study artifacts: flashcards, quiz with answer key, and definitions (spec §9.3, §9.5). Every item must carry at least one verifiable source citation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "template_version",
+    "flashcards",
+    "quiz",
+    "definitions"
+  ],
+  "properties": {
+    "template_version": {
+      "type": "string",
+      "const": "study-revision/1"
+    },
+    "flashcards": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/flashcard"
+      }
+    },
+    "quiz": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/quiz_item"
+      }
+    },
+    "definitions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/definition"
+      }
+    }
+  },
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "source_anchor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "revision_id",
+        "seq_index",
+        "char_start",
+        "char_end",
+        "excerpt"
+      ],
+      "properties": {
+        "revision_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "seq_index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "char_start": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "char_end": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "excerpt": {
+          "type": "string"
+        }
+      }
+    },
+    "flashcard": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "front",
+        "back",
+        "anchors"
+      ],
+      "properties": {
+        "front": {
+          "type": "string"
+        },
+        "back": {
+          "type": "string"
+        },
+        "anchors": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/source_anchor"
+          }
+        }
+      }
+    },
+    "quiz_item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "question",
+        "answer",
+        "anchors"
+      ],
+      "properties": {
+        "question": {
+          "type": "string"
+        },
+        "answer": {
+          "type": "string"
+        },
+        "distractors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "anchors": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/source_anchor"
+          }
+        }
+      }
+    },
+    "definition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "term",
+        "definition",
+        "anchors"
+      ],
+      "properties": {
+        "term": {
+          "type": "string"
+        },
+        "definition": {
+          "type": "string"
+        },
+        "anchors": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/source_anchor"
+          }
+        }
+      }
+    }
+  }
+}

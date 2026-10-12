@@ -14,10 +14,17 @@ workspace = true
 async-trait = { workspace = true }
 plaudon-ai-contracts = { workspace = true }
 plaudon-domain = { workspace = true }
+plaudon-ai-tools = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+clap = { workspace = true }
+time = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
 proptest = { workspace = true }
 tokio = { workspace = true }
+
+[[bin]]
+name = "quality_metrics"
+path = "src/bin/quality_metrics.rs"

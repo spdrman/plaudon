@@ -202,3 +202,48 @@ pub trait ExportPort: Send + Sync {
     /// Run the export as a job and return it.
     async fn export_recording(&self, request: ValidatedExport) -> Result<JobId, AppError>;
 }
+
+/// Cross-recording search (spec §3.1, §9.8, §17.5).
+#[async_trait]
+pub trait SearchPort: Send + Sync {
+    /// Search across all transcripts.
+    async fn search(
+        &self,
+        query: &str,
+        page: plaudon_persistence::search::SearchPage,
+    ) -> Result<Vec<plaudon_app_core::search::SearchResult>, AppError>;
+}
+
+/// Speaker labelling and confirmation (spec §8.7, §17.6).
+#[async_trait]
+pub trait SpeakersPort: Send + Sync {
+    /// List all speakers for a recording.
+    async fn list_speakers(
+        &self,
+        recording_id: plaudon_domain::ids::RecordingId,
+    ) -> Result<plaudon_app_core::speakers::SpeakerRegistry, AppError>;
+
+    /// Rename a speaker.
+    async fn rename_speaker(
+        &self,
+        recording_id: plaudon_domain::ids::RecordingId,
+        speaker_id: plaudon_domain::ids::SpeakerId,
+        name: &str,
+        at: plaudon_domain::time::Timestamp,
+    ) -> Result<plaudon_app_core::speakers::Speaker, AppError>;
+
+    /// Confirm a speaker's identity.
+    async fn confirm_speaker(
+        &self,
+        recording_id: plaudon_domain::ids::RecordingId,
+        speaker_id: plaudon_domain::ids::SpeakerId,
+        at: plaudon_domain::time::Timestamp,
+    ) -> Result<plaudon_app_core::speakers::Speaker, AppError>;
+
+    /// Reset a speaker to machine-assigned label.
+    async fn reset_speaker(
+        &self,
+        recording_id: plaudon_domain::ids::RecordingId,
+        speaker_id: plaudon_domain::ids::SpeakerId,
+    ) -> Result<plaudon_app_core::speakers::Speaker, AppError>;
+}

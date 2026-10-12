@@ -20,9 +20,10 @@ use std::collections::BTreeMap;
 
 use plaudon_domain::capability::CapabilityStatus;
 use plaudon_domain::error::ErrorEnvelope;
-use plaudon_domain::ids::{JobId, OutputId, RecordingId, TranscriptRevisionId};
+use plaudon_domain::ids::{JobId, OutputId, RecordingId, SpeakerId, TranscriptRevisionId};
 use plaudon_domain::media::Sha256Digest;
 use plaudon_domain::transcript::AlignmentOrigin;
+use plaudon_domain::time::Timestamp;
 use serde::{Deserialize, Serialize};
 
 /// Request payload of a command that takes no arguments.
@@ -1140,6 +1141,118 @@ pub struct SetOpenRouterKeyRequest {
     pub key: String,
 }
 
+
+/* ------------------------------------------------------------------ search */
+
+/// Request for `search_library` (spec §3.1, §9.8, §17.5).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SearchLibraryRequest {
+    /// User query; tokenized and quoted before FTS5.
+    pub query: String,
+    /// Pagination cursor.
+    pub cursor: Option<String>,
+    /// Maximum results per page.
+    pub limit: u32,
+}
+
+/// One search hit.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SearchResultDto {
+    /// Recording the hit belongs to.
+    pub recording_id: RecordingId,
+    /// Title of that recording.
+    pub recording_title: String,
+    /// Revision containing the match.
+    pub transcript_revision_id: TranscriptRevisionId,
+    /// Segment position.
+    pub seq_index: u32,
+    /// Excerpt around the match.
+    pub excerpt: String,
+    /// Seek position; `None` for text-only transcripts (spec §8.6A).
+    pub seek_ms: Option<u64>,
+    /// Alignment origin for the seek affordance label.
+    pub alignment_origin: AlignmentOrigin,
+}
+
+/// Response for `search_library`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SearchLibraryResponse {
+    /// Results for this page.
+    pub results: Vec<SearchResultDto>,
+    /// Cursor for the next page; `None` when exhausted.
+    pub next_cursor: Option<String>,
+}
+
+/* ---------------------------------------------------------------- speakers */
+
+/// Request for `list_speakers` (spec §8.7, §17.6).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ListSpeakersRequest {
+    /// Recording identity.
+    pub recording_id: String,
+}
+
+/// One speaker row.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SpeakerDto {
+    /// Row identity.
+    pub speaker_id: SpeakerId,
+    /// Recording.
+    pub recording_id: RecordingId,
+    /// Current label.
+    pub label: String,
+    /// Whether confirmed as identity.
+    pub confirmed: bool,
+    /// Machine-assigned label.
+    pub original_label: String,
+    /// When renamed.
+    pub renamed_at: Option<Timestamp>,
+    /// When confirmed.
+    pub confirmed_at: Option<Timestamp>,
+}
+
+/// Response for `list_speakers`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ListSpeakersResponse {
+    /// All speakers for the recording.
+    pub speakers: Vec<SpeakerDto>,
+}
+
+/// Request for `rename_speaker`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RenameSpeakerRequest {
+    /// Recording identity.
+    pub recording_id: String,
+    /// Speaker identity.
+    pub speaker_id: String,
+    /// New name.
+    pub name: String,
+}
+
+/// Request for `confirm_speaker`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ConfirmSpeakerRequest {
+    /// Recording identity.
+    pub recording_id: String,
+    /// Speaker identity.
+    pub speaker_id: String,
+}
+
+/// Request for `reset_speaker`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ResetSpeakerRequest {
+    /// Recording identity.
+    pub recording_id: String,
+    /// Speaker identity.
+    pub speaker_id: String,
+}
+
+/// Response for speaker mutation operations.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SpeakerOperationResponse {
+    /// Updated speaker.
+    pub speaker: SpeakerDto,
+}
 /* ------------------------------------------------------------------ events */
 
 /// §15.3 event names.

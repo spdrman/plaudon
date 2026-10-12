@@ -1,0 +1,21 @@
+{
+  "name": "single-speaker-silence",
+  "provenance": "Synthetic annotation authored for the plaudon-m repository",
+  "duration_ms": 2500,
+  "reference": [
+    {"speaker": "A", "start_ms": 1000, "end_ms": 2000}
+  ],
+  "hypothesis": [
+    {"cluster": "X", "start_ms": 0, "end_ms": 500},
+    {"cluster": "Y", "start_ms": 1000, "end_ms": 2000},
+    {"cluster": "Z", "start_ms": 2000, "end_ms": 2500}
+  ],
+  "expected": {
+    "der": 1.0,
+    "missed_ms": 0,
+    "false_alarm_ms": 1000,
+    "confusion_ms": 0,
+    "total_reference_ms": 1000,
+    "overlapping_reference_ms": 0
+  }
+}

@@ -1,0 +1,294 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.local/schemas/quality-metrics.v1.schema.json",
+  "title": "Quality metrics v1",
+  "description": "Tool quality and diarization metrics emitted for the release evidence bundle (spec §17.4). A metric block that was not measured must not carry scores.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "generated_at",
+    "provenance",
+    "diarization",
+    "tool_quality"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "hardware",
+        "os_build",
+        "toolchain",
+        "commit",
+        "fixture_source"
+      ],
+      "properties": {
+        "hardware": {
+          "type": "string"
+        },
+        "os_build": {
+          "type": "string"
+        },
+        "toolchain": {
+          "type": "string"
+        },
+        "commit": {
+          "type": "string"
+        },
+        "fixture_source": {
+          "type": "string"
+        }
+      }
+    },
+    "diarization": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/diarization_measured"
+        },
+        {
+          "$ref": "#/$defs/metric_skipped"
+        }
+      ]
+    },
+    "tool_quality": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/tool_quality_measured"
+        },
+        {
+          "$ref": "#/$defs/metric_skipped"
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "scored_metric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "value",
+        "sample_size"
+      ],
+      "properties": {
+        "value": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "sample_size": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "corpus_availability_present": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "name",
+        "provenance",
+        "key_point_count"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "const": "present"
+        },
+        "name": {
+          "type": "string"
+        },
+        "provenance": {
+          "type": "string"
+        },
+        "key_point_count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "corpus_availability_absent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "reason"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "const": "absent"
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "diarization_measured": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "der",
+        "missed_ms",
+        "false_alarm_ms",
+        "confusion_ms",
+        "total_reference_ms",
+        "overlapping_reference_ms",
+        "reference_speaker_count",
+        "hypothesis_cluster_count",
+        "scored_frames",
+        "excluded_frames",
+        "overlap_regions_skipped",
+        "collar_ms"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "const": "measured"
+        },
+        "der": {
+          "type": "number",
+          "minimum": 0
+        },
+        "missed_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "false_alarm_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "confusion_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "total_reference_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "overlapping_reference_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "reference_speaker_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "hypothesis_cluster_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "scored_frames": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "excluded_frames": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "overlap_regions_skipped": {
+          "type": "boolean"
+        },
+        "collar_ms": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "tool_quality_measured": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "corpus",
+        "factual_correctness",
+        "coverage",
+        "redundant_question_rate",
+        "grounding_precision"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "const": "measured"
+        },
+        "corpus": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/corpus_availability_present"
+            },
+            {
+              "$ref": "#/$defs/corpus_availability_absent"
+            }
+          ]
+        },
+        "factual_correctness": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/scored_metric"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "coverage": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/scored_metric"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "redundant_question_rate": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/scored_metric"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "grounding_precision": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/scored_metric"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "metric_skipped": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "reason"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "const": "skipped"
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}
