@@ -1,7 +1,6 @@
 //! Mutation profiles for testing precision/recall by injecting controlled defects.
 
 use plaudon_domain::ids::TranscriptRevisionId;
-use rand::{Rng, SeedableRng};
 use serde_json::{json, Value};
 
 use crate::corpus::CorpusFixture;
@@ -42,7 +41,7 @@ impl MutationProfile {
     pub fn apply(
         &self,
         body: Value,
-        fixture: &CorpusFixture,
+        _fixture: &CorpusFixture,
         revision_id: TranscriptRevisionId,
     ) -> Value {
         match self {

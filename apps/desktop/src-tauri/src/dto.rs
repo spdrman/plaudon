@@ -1236,6 +1236,233 @@ pub struct UiEvent {
 }
 
 #[cfg(test)]
+
+/* --------------------------------------------------------------- outputs */
+
+/// Request for outputs of a recording.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ListOutputsRequest {
+    /// Recording whose outputs are requested.
+    pub recording_id: String,
+}
+
+/// One anchor of a claim, with verification outcome.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AnchorDto {
+    /// Zero-based segment index.
+    pub seq_index: u32,
+    /// Unicode character offset of the start.
+    pub char_start: u32,
+    /// Unicode character offset of the end.
+    pub char_end: u32,
+    /// Excerpt from the transcript.
+    pub excerpt: String,
+    /// Whether the anchor resolved to real text.
+    pub verified: bool,
+    /// Rejection code when verification failed.
+    pub rejection_code: Option<String>,
+    /// Matched text when verified.
+    pub matched_text: Option<String>,
+    /// Alignment origin.
+    pub alignment_origin: String,
+    /// Seek position in milliseconds, present only when the backend provided one.
+    pub seek_ms: Option<u64>,
+}
+
+/// Per-kind rendered fields for an action item (spec 9.2).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ActionItemFields {
+    /// Imperative verb phrase.
+    pub verb: String,
+    /// What is to be done.
+    pub description: String,
+    /// Owner name or the literal `"Unassigned"`.
+    pub owner: String,
+    /// Due date `YYYY-MM-DD` or the literal `"Not specified"`.
+    pub due_date: String,
+    /// Status: `open`, `in_progress`, `done`, `unknown`.
+    pub status: String,
+    /// Assertion: `directly_stated` or `model_interpretation`.
+    pub assertion: String,
+}
+
+/// Per-kind rendered fields for a decision (spec 9.2).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DecisionFields {
+    /// The decision statement.
+    pub statement: String,
+    /// Participants, when evidenced.
+    pub participants: Vec<String>,
+    /// Time reference or the literal `"Not specified"`.
+    pub time_reference: String,
+    /// Assertion: `directly_stated` or `model_interpretation`.
+    pub assertion: String,
+}
+
+/// Per-kind rendered fields for a risk (spec 9.2).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RiskFields {
+    /// What the risk is.
+    pub description: String,
+    /// Consequence or the literal `"Not specified"`.
+    pub consequence: String,
+    /// Mitigation or the literal `"Not specified"`.
+    pub mitigation: String,
+}
+
+/// Per-kind rendered fields for an open question (spec 9.2).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct QuestionFields {
+    /// The question.
+    pub question: String,
+    /// Owner name or the literal `"Unassigned"`.
+    pub owner: String,
+}
+
+/// Per-kind rendered fields for a topic heading (spec 9.2).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TopicFields {
+    /// Heading.
+    pub heading: String,
+    /// First segment index covered, inclusive.
+    pub first_segment: u32,
+    /// Last segment index covered, inclusive.
+    pub last_segment: u32,
+}
+
+/// Rendered §9.2 fields of a claim, discriminated by kind.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum RenderedClaimFields {
+    /// Summary statement; no additional fields beyond `text`.
+    SummaryStatement,
+    /// Decision.
+    Decision(DecisionFields),
+    /// Action item.
+    ActionItem(ActionItemFields),
+    /// Risk.
+    Risk(RiskFields),
+    /// Open question.
+    Question(QuestionFields),
+    /// Topic heading.
+    Topic(TopicFields),
+}
+
+/// One claim with its grounding and review state.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ClaimDto {
+    /// Claim identity.
+    pub claim_id: ClaimId,
+    /// JSON Pointer into the output body.
+    pub item_path: String,
+    /// Claim text (display text for the reviewer).
+    pub text: String,
+    /// Verification state: `source_linked`, `human_confirmed`, `unverified`.
+    pub state: String,
+    /// Whether the claim requires human review.
+    pub review_required: bool,
+    /// Reasons the claim is marked for review.
+    pub review_reasons: Vec<String>,
+    /// Entailment check result: `supported`, `not_supported`, `not_checked`.
+    pub entailment: String,
+    /// Category: `general`, `financial_amount`, `obligation`, `deadline`, `safety_commitment`.
+    pub category: String,
+    /// Rendered §9.2 fields.
+    pub fields: RenderedClaimFields,
+    /// Source anchors.
+    pub anchors: Vec<AnchorDto>,
+}
+
+/// Coverage of the input transcript.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CoverageDto {
+    /// Coverage state: `full` or `model_reported_partial`.
+    pub state: String,
+    /// Chunk indices when partial.
+    pub chunks: Option<Vec<u32>>,
+}
+
+/// Staleness of a stored output.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StaleDto {
+    /// When it was marked stale, RFC 3339.
+    pub stale_at: String,
+    /// Why.
+    pub reason: String,
+}
+
+/// One generated output header with its claims.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OutputDto {
+    /// Output identity.
+    pub output_id: OutputId,
+    /// Recording the output belongs to.
+    pub recording_id: RecordingId,
+    /// Transcript revision it read.
+    pub transcript_revision_id: TranscriptRevisionId,
+    /// Output type, e.g. `meeting_summary`.
+    pub output_type: String,
+    /// Template identity.
+    pub template_id: String,
+    /// Template version.
+    pub template_version: String,
+    /// Pipeline version.
+    pub pipeline_version: String,
+    /// Lifecycle status: `complete` or `needs_review`.
+    pub status: String,
+    /// Coverage of the transcript.
+    pub coverage: CoverageDto,
+    /// Staleness, when superseded.
+    pub stale: Option<StaleDto>,
+    /// Creation instant, RFC 3339.
+    pub created_at: String,
+    /// Claims with their grounding state.
+    pub claims: Vec<ClaimDto>,
+}
+
+/// Response of `list_outputs`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ListOutputsResponse {
+    /// The outputs of the recording, newest last.
+    pub outputs: Vec<OutputDto>,
+}
+
+/// Request to review a claim.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReviewClaimRequest {
+    /// Output the claim belongs to.
+    pub output_id: String,
+    /// Claim being reviewed.
+    pub claim_id: String,
+    /// Whether the reviewer accepted the claim.
+    pub accepted: bool,
+    /// Optional review note.
+    pub note: Option<String>,
+}
+
+/// Response of `review_claim`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReviewClaimResponse {
+    /// Updated claim state: `human_confirmed` or `unverified`.
+    pub state: String,
+}
+
+/// Request to regenerate an output.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RegenerateOutputRequest {
+    /// Output to regenerate.
+    pub output_id: String,
+    /// Explicit user acknowledgement.
+    pub acknowledged: bool,
+}
+
+/// Response of `regenerate_output`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RegenerateOutputResponse {
+    /// Job identity of the regeneration run.
+    pub job_id: JobId,
+}
+
 mod tests {
     use super::*;
 

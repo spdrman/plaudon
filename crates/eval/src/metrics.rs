@@ -25,6 +25,7 @@ pub struct ItemMatch {
 
 /// All §17.3 metrics for one run.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct EvalMetrics {
     // Decision metrics
     /// Decision precision.
@@ -76,7 +77,7 @@ impl EvalMetrics {
     #[must_use]
     pub fn compute(
         fixture: &CorpusFixture,
-        claims: &[Claim],
+        _claims: &[Claim],
         grounding: &GroundingSummary,
         body: &serde_json::Value,
         schema_valid_count: u32,
@@ -152,8 +153,7 @@ impl EvalMetrics {
 /// Extract items from a body field.
 fn extract_items(body: &serde_json::Value, field: &str) -> Vec<serde_json::Value> {
     body.get(field)
-        .and_then(|v| v.as_array())
-        .map(|arr| arr.clone())
+        .and_then(|v| v.as_array()).cloned()
         .unwrap_or_default()
 }
 
@@ -388,27 +388,3 @@ mod tests {
     }
 }
 
-impl Default for EvalMetrics {
-    fn default() -> Self {
-        Self {
-            decision_precision: None,
-            decision_recall: None,
-            decision_f1: None,
-            decision_sample_size: 0,
-            action_item_precision: None,
-            action_item_recall: None,
-            action_item_f1: None,
-            action_item_sample_size: 0,
-            owner_accuracy: None,
-            owner_sample_size: 0,
-            due_date_accuracy: None,
-            due_date_sample_size: 0,
-            schema_validity_rate: None,
-            schema_sample_size: 0,
-            anchor_correctness: None,
-            anchor_sample_size: 0,
-            unsupported_claim_rate: None,
-            unsupported_claim_sample_size: 0,
-        }
-    }
-}

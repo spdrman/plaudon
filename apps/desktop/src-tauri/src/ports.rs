@@ -5,12 +5,16 @@
 //! `crates/jobs` replace the implementations in [`crate::backend`] by swapping
 //! what [`crate::build_ports`] constructs — no command and no UI change.
 
+
 use std::path::PathBuf;
 
 use async_trait::async_trait;
+use plaudon_domain::claim::{Claim, ClaimState};
 use plaudon_domain::error::AppError;
-use plaudon_domain::ids::{JobId, RecordingId};
-use plaudon_domain::transcript::AlignmentOrigin;
+use plaudon_domain::ids::{ClaimId, JobId, OutputId, RecordingId, TranscriptRevisionId};
+use plaudon_domain::media::Sha256Digest;
+use plaudon_domain::transcript::{AlignmentOrigin, TranscriptRevisionDraft};
+use plaudon_persistence::intelligence::OutputHeader;
 
 use crate::dto::{
     ActivityPage, Capabilities, CompleteOnboardingRequest, DuplicatePolicy, ImportFilesResponse,
@@ -201,4 +205,98 @@ pub trait SettingsPort: Send + Sync {
 pub trait ExportPort: Send + Sync {
     /// Run the export as a job and return it.
     async fn export_recording(&self, request: ValidatedExport) -> Result<JobId, AppError>;
+}
+
+/// Generated outputs and claim review (`list_outputs`, `review_claim`, `regenerate_output`).
+#[async_trait]
+pub trait OutputsPort: Send + Sync {
+    /// Every generated output of a recording, with its claims.
+    async fn list_outputs(&self, recording_id: RecordingId) -> Result<Vec<OutputWithClaims>, AppError>;
+
+    /// Record a human review decision, returning the updated claim state.
+    async fn review_claim(
+        &self,
+        claim_id: ClaimId,
+        accepted: bool,
+        note: Option<String>,
+    ) -> Result<ClaimState, AppError>;
+
+    /// Trigger regeneration of an output.
+    async fn regenerate_output(&self, output_id: OutputId) -> Result<JobId, AppError>;
+}
+
+/// One output with all its claims, for the review panel.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OutputWithClaims {
+    /// Output header.
+    pub header: OutputHeader,
+    /// Claims with their grounding state.
+    pub claims: Vec<ClaimWithFields>,
+}
+
+/// A claim with its rendered §9.2 fields.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClaimWithFields {
+    /// The claim itself.
+    pub claim: Claim,
+    /// Rendered fields from the output body JSON.
+    pub fields: ItemFields,
+}
+
+/// Rendered §9.2 fields of one item.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ItemFields {
+    /// Summary statement (no additional fields).
+    SummaryStatement,
+    /// Decision.
+    Decision {
+        /// The decision statement.
+        statement: String,
+        /// Participants.
+        participants: Vec<String>,
+        /// Time reference.
+        time_reference: String,
+        /// Assertion.
+        assertion: String,
+    },
+    /// Action item.
+    ActionItem {
+        /// Verb.
+        verb: String,
+        /// Description.
+        description: String,
+        /// Owner.
+        owner: String,
+        /// Due date.
+        due_date: String,
+        /// Status.
+        status: String,
+        /// Assertion.
+        assertion: String,
+    },
+    /// Risk.
+    Risk {
+        /// Description.
+        description: String,
+        /// Consequence.
+        consequence: String,
+        /// Mitigation.
+        mitigation: String,
+    },
+    /// Question.
+    Question {
+        /// Question text.
+        question: String,
+        /// Owner.
+        owner: String,
+    },
+    /// Topic.
+    Topic {
+        /// Heading.
+        heading: String,
+        /// First segment.
+        first_segment: u32,
+        /// Last segment.
+        last_segment: u32,
+    },
 }

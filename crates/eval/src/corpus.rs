@@ -3,7 +3,6 @@
 use std::collections::HashMap;
 use std::path::Path;
 
-use plaudon_domain::ids::TranscriptRevisionId;
 use plaudon_domain::time::Timestamp;
 use plaudon_domain::transcript::{AlignmentOrigin, TranscriptRevision, TranscriptSegment};
 use serde::{Deserialize, Serialize};
