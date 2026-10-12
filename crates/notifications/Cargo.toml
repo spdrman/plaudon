@@ -10,4 +10,40 @@ repository.workspace = true
 [lints]
 workspace = true
 
+# No HTTP, SMTP or push-service dependency may ever appear below: spec 5.5
+# restricts completion notices to the OS notification systems. The
+# `deps_policy` tests enforce this against a denylist.
 [dependencies]
+plaudon-domain = { workspace = true }
+async-trait = { workspace = true }
+serde = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+block2 = "0.6"
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", default-features = false, features = [
+    "std",
+    "NSBundle",
+    "NSDictionary",
+    "NSError",
+    "NSString",
+] }
+objc2-user-notifications = { version = "0.3", default-features = false, features = [
+    "std",
+    "block2",
+    "UNError",
+    "UNNotificationContent",
+    "UNNotificationRequest",
+    "UNNotificationSettings",
+    "UNNotificationTrigger",
+    "UNUserNotificationCenter",
+] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+tauri-winrt-notification = "0.8"
+
+[dev-dependencies]
+regex = "1"
+serde_json = { workspace = true }

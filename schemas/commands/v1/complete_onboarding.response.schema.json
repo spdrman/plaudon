@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/complete_onboarding.response.schema.json",
+  "title": "complete_onboarding.response",
+  "$ref": "#/$defs/preferences",
+  "$defs": {
+    "notification_settings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "categories"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "categories": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "import_finished",
+            "transcription_finished",
+            "requires_attention",
+            "cloud_budget_exceeded"
+          ],
+          "properties": {
+            "import_finished": {
+              "type": "boolean"
+            },
+            "transcription_finished": {
+              "type": "boolean"
+            },
+            "requires_attention": {
+              "type": "boolean"
+            },
+            "cloud_budget_exceeded": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    "preferences": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "onboarding_completed",
+        "local_only_mode",
+        "default_stt_engine_id",
+        "default_text_engine_id",
+        "appearance",
+        "contrast",
+        "notifications"
+      ],
+      "properties": {
+        "onboarding_completed": {
+          "type": "boolean"
+        },
+        "local_only_mode": {
+          "type": "boolean"
+        },
+        "default_stt_engine_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "default_text_engine_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "appearance": {
+          "type": "string",
+          "enum": [
+            "system",
+            "light",
+            "dark"
+          ]
+        },
+        "contrast": {
+          "type": "string",
+          "enum": [
+            "standard",
+            "high"
+          ]
+        },
+        "notifications": {
+          "$ref": "#/$defs/notification_settings"
+        }
+      }
+    }
+  }
+}
