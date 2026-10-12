@@ -35,6 +35,7 @@ import type {
   UsageTotals,
 } from "../ipc/contract";
 import type { Transport, Unlisten } from "../ipc/client";
+import { CAPABILITY_CHECK_CLIP_MS } from "../features/cloud/cloudPresentation";
 import { estimateDispatchCost, parseMicros, usd } from "../features/cloud/money";
 
 export interface FakeRecording extends RecordingDetail {
@@ -581,6 +582,8 @@ export class FakeBackend implements Transport {
         return this.#setModelPreference(request);
       case "start_processing":
         return this.#startProcessing(request);
+      case "verify_model":
+        return this.#verifyModel(request);
       default: {
         const never: never = command;
         throw envelope("INTERNAL_ERROR", `No such command: ${String(never)}`);
@@ -1114,14 +1117,100 @@ export class FakeBackend implements Transport {
     };
   }
 
-  #consentCovers(modelId: string, recordingId: string): boolean {
+  /**
+   * An active grant for this model. `recordingId` is `null` for a dispatch that
+   * belongs to no recording, which only a model-policy grant can cover.
+   */
+  #consentCovers(modelId: string, recordingId: string | null): boolean {
     return this.consents.some(
       (grant) =>
         grant.revoked_at === null &&
         grant.model_id === modelId &&
         (grant.scope_kind === "model_policy" ||
-          (grant.scope_kind === "recording" && grant.recording_id === recordingId)),
+          (grant.scope_kind === "recording" &&
+            recordingId !== null &&
+            grant.recording_id === recordingId)),
     );
+  }
+
+  /**
+   * ADR-0022 capability check: one real bundled-fixture request. It is the only
+   * path that can turn `not_verified` into `verified`, and it is billable, so
+   * it needs consent, budget headroom and an explicit cost acknowledgement.
+   */
+  #verifyModel(request: Record<string, any>) {
+    const modelId = String(request.model_id ?? "");
+    const model = this.#anyModel(modelId);
+    if (!model) {
+      throw envelope("MODEL_UNAVAILABLE", "That model is not in the catalogue.", {
+        action: "CHOOSE_ANOTHER_MODEL",
+      });
+    }
+    if (this.preferences.local_only_mode) {
+      throw envelope(
+        "LOCAL_ONLY_MODE",
+        "Local-only mode is on, so the capability check was not sent.",
+        { action: "REVIEW_LOCAL_ONLY_MODE" },
+      );
+    }
+    if (!this.#consentCovers(modelId, null)) {
+      throw envelope(
+        "CONSENT_REQUIRED",
+        "The capability check sends test audio to this provider. Review and approve it first.",
+        { action: "REVIEW_CONSENT" },
+      );
+    }
+    const cost = estimateDispatchCost(model, CAPABILITY_CHECK_CLIP_MS);
+    const blocked = this.#budgetBlock(cost);
+    if (blocked) throw envelope("BUDGET_EXCEEDED", blocked, { action: "OPEN_SETTINGS" });
+    if (request.cost_acknowledged !== true) {
+      throw envelope(
+        "COST_ACKNOWLEDGEMENT_REQUIRED",
+        "The capability check is a billable request. Confirm the cost to run it.",
+        { action: "REVIEW_CONSENT" },
+      );
+    }
+
+    // The exchange happened, so what was observed is now known.
+    const observed: CostValue =
+      cost.amount === null ? { confidence: "unknown", amount: null }
+        : { confidence: "finalized", amount: cost.amount };
+    const providerRequestId = `provider-req-${this.#idCounter + 1}`;
+    const verified: ModelCard = {
+      ...model,
+      verification: "verified",
+      verification_reason: null,
+      fixture_id: `fixture-capability-${modelId.replace(/[^a-z0-9]+/gi, "-")}`,
+      validated_at: this.#stamp(),
+      request_family:
+        model.request_family !== "unknown"
+          ? model.request_family
+          : request.task === "transcription"
+            ? "multipart_stt"
+            : "audio_chat",
+      selectable: true,
+    };
+    this.#replaceModel(modelId, verified);
+    this.addAttempt({
+      model_id: modelId,
+      request_family: verified.request_family,
+      dispatch_state: "completed",
+      cost: observed,
+      provider_request_id: providerRequestId,
+      responded_at: this.#stamp(),
+      possibly_billed: true,
+    });
+    return { model: verified, cost: observed, provider_request_id: providerRequestId };
+  }
+
+  #replaceModel(modelId: string, next: ModelCard): void {
+    const updated: Partial<Record<ProcessingStage, ModelCard[]>> = {};
+    for (const [stage, cards] of Object.entries(this.models) as Array<
+      [ProcessingStage, ModelCard[]]
+    >) {
+      updated[stage] = cards.map((card) => (card.model_id === modelId ? next : card));
+    }
+    this.models = updated;
   }
 
   /** Message describing the locally calculable limit this run would breach. */

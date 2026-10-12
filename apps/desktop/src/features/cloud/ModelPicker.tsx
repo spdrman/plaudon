@@ -7,13 +7,25 @@
  */
 import "./cloud.css";
 import { useId, useState } from "react";
-import type { ModelCard, ProcessingStage } from "../../ipc/contract";
-import { useCommandQuery } from "../../ipc/useCommand";
+import type {
+  ModelCard,
+  ProcessingStage,
+  VerificationTask,
+  VerifyModelResponse,
+} from "../../ipc/contract";
+import { useAppState } from "../../app/AppState";
+import { useCommandMutation, useCommandQuery } from "../../ipc/useCommand";
 import { Button } from "../../components/Button";
+import { Dialog } from "../../components/Dialog";
 import { TextField } from "../../components/Field";
 import { StatusBadge } from "../../components/StatusBadge";
 import { CommandErrorNotice } from "../recording/errorNotice";
+import { ErrorNotice } from "../settings/ErrorNotice";
+import { CloudConsentDialog } from "./CloudConsentDialog";
+import { CostView } from "./CostView";
 import {
+  CAPABILITY_CHECK_CLIP_MS,
+  CAPABILITY_CHECK_DISCLOSURE,
   DEGRADED_REASON_LABELS,
   REQUEST_FAMILY_LABELS,
   TRI_STATE_LABELS,
@@ -24,6 +36,7 @@ import {
   unselectableReason,
   verificationPresentation,
 } from "./cloudPresentation";
+import { estimateDispatchCost } from "./money";
 
 export interface ModelPickerProps {
   stage: ProcessingStage;
@@ -46,11 +59,54 @@ export function ModelPicker({
   const groupName = useId();
   const [customId, setCustomId] = useState("");
   const [customCards, setCustomCards] = useState<ModelCard[]>([]);
+  const [checkTarget, setCheckTarget] = useState<ModelCard | null>(null);
+  const [consentOpen, setConsentOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [checkResult, setCheckResult] = useState<VerifyModelResponse | null>(null);
+  const { capabilities } = useAppState();
+  const verify = useCommandMutation("verify_model");
   const { data, error, loading, refetch } = useCommandQuery(
     "list_models",
     { stage, engine },
     { deps: [stage, engine] },
   );
+
+  const task: VerificationTask =
+    stage === "transcribe" || stage === "diarize" ? "transcription" : "text_generation";
+
+  /** An active model-policy grant is the only kind that can cover a check. */
+  function coveredByConsent(modelId: string): boolean {
+    return (capabilities?.cloud_consents ?? []).some(
+      (grant) =>
+        grant.revoked_at === null &&
+        grant.model_id === modelId &&
+        grant.scope_kind === "model_policy",
+    );
+  }
+
+  function startCheck(model: ModelCard): void {
+    verify.reset();
+    setCheckResult(null);
+    setCheckTarget(model);
+    if (coveredByConsent(model.model_id)) setConfirmOpen(true);
+    else setConsentOpen(true);
+  }
+
+  async function runCheck(): Promise<void> {
+    if (!checkTarget) return;
+    setConfirmOpen(false);
+    try {
+      const result = await verify.run({
+        model_id: checkTarget.model_id,
+        task,
+        cost_acknowledged: true,
+      });
+      setCheckResult(result);
+      await refetch();
+    } catch {
+      /* rendered from verify.error; the model stays Not verified */
+    }
+  }
 
   if (error) {
     return <CommandErrorNotice error={error} onRetry={() => void refetch()} />;
@@ -92,6 +148,10 @@ export function ModelPicker({
             checked={model.model_id === selectedModelId}
             isDefault={model.model_id === defaultModelId}
             onSelect={() => onSelect(model)}
+            onRunCapabilityCheck={
+              model.verification === "not_verified" ? () => startCheck(model) : null
+            }
+            checkPending={verify.pending && checkTarget?.model_id === model.model_id}
           />
         ))}
       </fieldset>
@@ -115,6 +175,65 @@ export function ModelPicker({
         />
         <Button type="submit">Add custom model ID</Button>
       </form>
+
+      {checkResult !== null ? (
+        <p className="model-picker__source" role="status">
+          Capability check on {checkResult.model.model_id} completed. It cost{" "}
+          <CostView cost={checkResult.cost} /> and the provider request id was{" "}
+          {checkResult.provider_request_id ?? "not reported"}.
+        </p>
+      ) : null}
+      {verify.error ? (
+        <ErrorNotice envelope={verify.error.envelope}>
+          {verify.error.code === "CONSENT_REQUIRED" && checkTarget !== null ? (
+            <Button variant="primary" onClick={() => setConsentOpen(true)}>
+              Review and approve
+            </Button>
+          ) : null}
+        </ErrorNotice>
+      ) : null}
+
+      {checkTarget !== null ? (
+        <>
+          <CloudConsentDialog
+            open={consentOpen}
+            model={checkTarget}
+            purpose="credential_validation"
+            contentType="audio_bytes"
+            recordingId={null}
+            estimatedCost={estimateDispatchCost(checkTarget, CAPABILITY_CHECK_CLIP_MS)}
+            onClose={() => setConsentOpen(false)}
+            onGranted={(result) => {
+              setConsentOpen(false);
+              if (result.authorized) setConfirmOpen(true);
+            }}
+          />
+          <Dialog
+            open={confirmOpen}
+            title={`Run the capability check on ${checkTarget.display_name}?`}
+            description={<p>{CAPABILITY_CHECK_DISCLOSURE}</p>}
+            onClose={() => setConfirmOpen(false)}
+            footer={
+              <>
+                <Button onClick={() => setConfirmOpen(false)}>Cancel</Button>
+                <Button variant="primary" disabled={verify.pending} onClick={() => void runCheck()}>
+                  Send the test clip and accept the cost
+                </Button>
+              </>
+            }
+          >
+            <p className="model-picker__source">
+              Estimated charge for the check:{" "}
+              {estimateDispatchCost(checkTarget, CAPABILITY_CHECK_CLIP_MS).confidence ===
+              "unknown" ? (
+                "estimate unavailable for this model's pricing basis"
+              ) : (
+                <CostView cost={estimateDispatchCost(checkTarget, CAPABILITY_CHECK_CLIP_MS)} />
+              )}
+            </p>
+          </Dialog>
+        </>
+      ) : null}
     </div>
   );
 }
@@ -125,9 +244,20 @@ interface ModelChoiceProps {
   checked: boolean;
   isDefault: boolean;
   onSelect: () => void;
+  /** ADR-0022 capability check; `null` when the model is already verified. */
+  onRunCapabilityCheck: (() => void) | null;
+  checkPending: boolean;
 }
 
-function ModelChoice({ model, groupName, checked, isDefault, onSelect }: ModelChoiceProps) {
+function ModelChoice({
+  model,
+  groupName,
+  checked,
+  isDefault,
+  onSelect,
+  onRunCapabilityCheck,
+  checkPending,
+}: ModelChoiceProps) {
   const factsId = useId();
   const verification = verificationPresentation(model);
   const blocked = unselectableReason(model);
@@ -214,6 +344,15 @@ function ModelChoice({ model, groupName, checked, isDefault, onSelect }: ModelCh
           <span aria-hidden="true">✕ </span>
           {blocked}
         </p>
+      ) : null}
+
+      {onRunCapabilityCheck !== null ? (
+        <div className="model-choice__check">
+          <Button onClick={onRunCapabilityCheck} disabled={checkPending}>
+            Run capability check on {model.display_name}
+          </Button>
+          <span className="model-choice__blocked">{CAPABILITY_CHECK_DISCLOSURE}</span>
+        </div>
       ) : null}
     </div>
   );

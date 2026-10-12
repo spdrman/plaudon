@@ -259,6 +259,18 @@ describe("responses produced by the reference backend satisfy the schemas", () =
     validate("get_usage.request.schema.json", usageRequest);
     validate("get_usage.response.schema.json", await backend.invoke("get_usage", usageRequest));
 
+    const verifyRequest = {
+      model_id: "vendor/catalog-audio-xl",
+      task: "transcription",
+      cost_acknowledged: true,
+    };
+    validate("verify_model.request.schema.json", verifyRequest);
+    backend.addConsent({ model_id: "vendor/catalog-audio-xl", scope_kind: "model_policy" });
+    validate(
+      "verify_model.response.schema.json",
+      await backend.invoke("verify_model", verifyRequest),
+    );
+
     const revokeRequest = { consent_id: granted.consent_id };
     validate("revoke_cloud_consent.request.schema.json", revokeRequest);
     validate(

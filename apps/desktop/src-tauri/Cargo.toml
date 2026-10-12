@@ -23,6 +23,9 @@ plaudon-domain = { workspace = true }
 plaudon-persistence = { workspace = true }
 plaudon-app-core = { workspace = true }
 plaudon-notifications = { workspace = true }
+plaudon-ai-contracts = { workspace = true }
+plaudon-ai-openrouter = { workspace = true }
+plaudon-security = { workspace = true }
 async-trait = { workspace = true }
 hex = { workspace = true }
 serde = { workspace = true }

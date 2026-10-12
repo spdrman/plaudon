@@ -103,9 +103,8 @@ async fn the_public_catalog_is_reachable_and_parses() {
     let Some(live) = live() else {
         return;
     };
-    let transport = Arc::new(
-        ReqwestTransport::with_timeout(Duration::from_secs(60)).expect("transport"),
-    );
+    let transport =
+        Arc::new(ReqwestTransport::with_timeout(Duration::from_secs(60)).expect("transport"));
     let client = CatalogClient::new(
         GatedHttpClientFactory::new(policy()),
         transport,
@@ -133,9 +132,8 @@ async fn one_capability_smoke_test_against_the_named_model() {
     );
 
     let ledger = Arc::new(RecordingLedger::new());
-    let transport = Arc::new(
-        ReqwestTransport::with_timeout(Duration::from_secs(300)).expect("transport"),
-    );
+    let transport =
+        Arc::new(ReqwestTransport::with_timeout(Duration::from_secs(300)).expect("transport"));
     let dispatcher = CloudDispatcher::new(
         GatedHttpClientFactory::new(policy()),
         transport,
@@ -191,5 +189,8 @@ async fn one_capability_smoke_test_against_the_named_model() {
         outcome.record.language_detection,
         outcome.record.provider_route
     );
-    eprintln!("cost: {:?} ({:?})", outcome.cost.amount, outcome.cost.origin);
+    eprintln!(
+        "cost: {:?} ({:?})",
+        outcome.cost.amount, outcome.cost.origin
+    );
 }

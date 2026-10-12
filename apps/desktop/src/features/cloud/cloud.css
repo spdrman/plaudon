@@ -93,6 +93,13 @@
   font-size: var(--font-size-sm);
 }
 
+.model-choice__check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
 .cloud-consent__facts {
   display: grid;
   grid-template-columns: max-content 1fr;

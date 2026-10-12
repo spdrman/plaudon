@@ -210,6 +210,9 @@ pub struct Capabilities {
     pub preferences: Preferences,
     /// Whether an OpenRouter key is present in the OS keychain.
     pub openrouter_key_present: bool,
+    /// Cloud consent grants on record. Revoked grants stay listed so the
+    /// history is visible (spec §4.4 #6, §16.3).
+    pub cloud_consents: Vec<ConsentSummary>,
 }
 
 /* --------------------------------------------------------------- recording */
@@ -799,6 +802,8 @@ pub struct JobSummary {
     pub provider_request_id: Option<String>,
     /// Navigation target of the produced output.
     pub output_link: Option<OutputLink>,
+    /// Cost carried by the job (spec §10.4). Local jobs are always `unknown`.
+    pub cost: CostValue,
 }
 
 /// `list_jobs` request.
