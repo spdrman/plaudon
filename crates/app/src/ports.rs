@@ -16,17 +16,21 @@ use plaudon_persistence::intelligence::OutputHeader;
 
 use crate::dto::SourceAddFolderRequest;
 use crate::dto::{
-    ActivityPage, Capabilities, CloudBudget, CompleteOnboardingRequest, ConsentSummary,
-    DeviceAuthStatusDto, DeviceListingDto, DeviceProbeDto, DeviceScanDto, DeviceSyncPolicyDto,
-    DuplicatePolicy, GetUsageResponse, GrantCloudConsentResponse, ImportFilesResponse, JobPage,
-    JobSummary, ListModelsResponse, ListSourceArtifactsResponse, LocalOnlyModeResponse,
-    NotificationSettings, NotificationSettingsResponse, PlaudConnectorSnapshot,
-    PlaudDisconnectResponse, PlaudImportResponse, PlaudListResponse, Preferences, RecordingDetail,
-    RecordingPage, SaveTranscriptRevisionResponse, SetModelPreferenceResponse,
-    SourceAddFolderResponse, SourceReconcileResponse, SourceSyncResponse, StartProcessingResponse,
-    SyncTrigger, TranscriptPage, TranscriptRevisionRef, VerifyModelResponse,
+    ActivityPage, Appearance, Capabilities, CloudBudget, CompleteOnboardingRequest, ConsentSummary,
+    Contrast, DeviceAuthStatusDto, DeviceListingDto, DeviceProbeDto, DeviceScanDto,
+    DeviceSyncPolicyDto, DuplicatePolicy, ExportDefaults, GetUsageResponse,
+    GrantCloudConsentResponse, ImportFilesResponse, InspectModelPackResponse, InstallModelResponse,
+    JobPage, JobSummary, ListLocalModelsResponse, ListModelsResponse, ListSourceArtifactsResponse,
+    LocalOnlyModeResponse, NotificationSettings, NotificationSettingsResponse,
+    PlaudConnectorSnapshot, PlaudDisconnectResponse, PlaudImportResponse, PlaudListResponse,
+    Preferences, RecordingDetail, RecordingPage, RemoveLocalModelResponse,
+    SaveTranscriptRevisionResponse, SetModelPreferenceResponse, SourceAddFolderResponse,
+    SourceReconcileResponse, SourceSyncResponse, StartProcessingResponse, SyncTrigger,
+    TranscriptPage, TranscriptRevisionRef, VerifyLocalModelResponse, VerifyModelResponse,
 };
 use crate::secrets::SecretValue;
+use crate::settings_presentation::UpdateStatus;
+use crate::shortcuts::ShortcutBindings;
 use crate::validate::{
     ValidatedBudget, ValidatedConsent, ValidatedExport, ValidatedGetTranscript,
     ValidatedListActivity, ValidatedListJobs, ValidatedListModels, ValidatedListRecordings,
@@ -205,6 +209,76 @@ pub trait SettingsPort: Send + Sync {
         &self,
         request: CompleteOnboardingRequest,
     ) -> Result<Preferences, AppError>;
+
+    /// Store the appearance and contrast choice (matrix row C1).
+    async fn set_appearance(
+        &self,
+        appearance: Appearance,
+        contrast: Contrast,
+    ) -> Result<Preferences, AppError>;
+
+    /// Store the default engine for each stage. `None` clears a preference.
+    async fn set_engine_preferences(
+        &self,
+        default_stt_engine_id: Option<String>,
+        default_text_engine_id: Option<String>,
+    ) -> Result<Preferences, AppError>;
+
+    /// Store the defaults the export surfaces start from.
+    async fn set_export_defaults(&self, defaults: ExportDefaults) -> Result<Preferences, AppError>;
+
+    /// The stored keyboard overrides (matrix row C9).
+    async fn shortcuts(&self) -> Result<ShortcutBindings, AppError>;
+
+    /// Replace the keyboard overrides. The caller has already validated them
+    /// against the command registry.
+    async fn set_shortcuts(&self, bindings: ShortcutBindings)
+        -> Result<ShortcutBindings, AppError>;
+}
+
+/// Locally installed speech and text models (matrix row A13, spec §12).
+///
+/// Every method is explicitly user-initiated: nothing here runs on a timer,
+/// and the install path cannot reach a network transport at all, because it
+/// installs from a redistributable offline pack.
+#[async_trait]
+pub trait ModelsPort: Send + Sync {
+    /// Models present on this machine, with the disk they occupy.
+    async fn list_local_models(&self) -> Result<ListLocalModelsResponse, AppError>;
+
+    /// Read a pack without installing anything, and report the licence and
+    /// footprint gate for every model it offers.
+    async fn inspect_pack(&self, pack_path: PathBuf) -> Result<InspectModelPackResponse, AppError>;
+
+    /// Install one model from a pack. The caller has already checked that the
+    /// licence was accepted and the footprint acknowledged.
+    async fn install_from_pack(
+        &self,
+        pack_path: PathBuf,
+        model_id: String,
+        keep_offline: bool,
+    ) -> Result<InstallModelResponse, AppError>;
+
+    /// Delete an installed model. The caller has already checked the
+    /// confirmation.
+    async fn remove_local_model(
+        &self,
+        model_id: String,
+    ) -> Result<RemoveLocalModelResponse, AppError>;
+
+    /// Re-hash an installed model against what the registry recorded.
+    async fn verify_local_model(
+        &self,
+        model_id: String,
+    ) -> Result<VerifyLocalModelResponse, AppError>;
+}
+
+/// What the update subsystem can say without making a request (task N2.2).
+#[async_trait]
+pub trait UpdatePort: Send + Sync {
+    /// The installed version, the pinned endpoint and whether Local-only Mode
+    /// suppresses checks. Never performs a network operation.
+    async fn update_status(&self) -> Result<UpdateStatus, AppError>;
 }
 
 /// Transcript export (`export_recording`).

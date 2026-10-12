@@ -5685,12 +5685,14 @@ dependencies = [
  "plaudon-craft-ui",
  "plaudon-diagnostics",
  "plaudon-domain",
+ "plaudon-platform",
  "plaudon-ui",
  "plaudon-ui-testkit",
  "rfd 0.17.2",
  "tempfile",
  "tokio",
  "tracing",
+ "tray-icon",
 ]
 
 [[package]]
@@ -5879,6 +5881,23 @@ dependencies = [
  "thiserror 2.0.21",
  "tokio",
  "uuid",
+]
+
+[[package]]
+name = "plaudon-platform"
+version = "0.1.0"
+dependencies = [
+ "arboard",
+ "async-trait",
+ "plaudon-app",
+ "plaudon-domain",
+ "plaudon-notifications",
+ "rfd 0.17.2",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+ "url",
 ]
 
 [[package]]
@@ -6097,6 +6116,7 @@ dependencies = [
  "plaudon-domain",
  "plaudon-transcript-doc",
  "plaudon-ui-testkit",
+ "serde_json",
  "tempfile",
  "thiserror 2.0.21",
  "tracing",

@@ -9,7 +9,7 @@
 //! reference applications use.
 
 use std::fmt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use plaudon_app::shell_state::ShellState;
@@ -27,6 +27,9 @@ pub type PickSavePath = Arc<dyn Fn(&str) -> Option<PathBuf> + Send + Sync>;
 /// Persists the shell's presentation state, off the render thread.
 pub type SaveShellState = Arc<dyn Fn(ShellState) + Send + Sync>;
 
+/// Shows a path selected in the OS file manager (parity row C10).
+pub type RevealInFolder = Arc<dyn Fn(&Path) + Send + Sync>;
+
 /// What the shell may ask the host to do.
 #[derive(Clone)]
 pub struct HostHooks {
@@ -40,6 +43,9 @@ pub struct HostHooks {
     /// Persist the shell's presentation state. The binary writes it off the
     /// render thread; the view never opens a file.
     pub save_shell_state: SaveShellState,
+    /// Show a path selected in the OS file manager. The view never spawns a
+    /// process; the binary does it through `plaudon_platform::opener`.
+    pub reveal_in_folder: RevealInFolder,
 }
 
 impl fmt::Debug for HostHooks {
@@ -66,6 +72,7 @@ impl HostHooks {
             pick_folder: Arc::new(|| None),
             pick_save_path: Arc::new(|_| None),
             save_shell_state: Arc::new(|_| {}),
+            reveal_in_folder: Arc::new(|_| {}),
         }
     }
 }

@@ -59,7 +59,21 @@ fn main() -> ExitCode {
     let result = eframe::run_native(
         "Plaudon",
         options,
-        Box::new(move |_cc| Ok(Box::new(PlaudonShell::new(engine, hooks, state)))),
+        Box::new(move |_cc| {
+            let mut app = PlaudonShell::new(engine, hooks, state);
+            // Matrix rows C1-C5, C8, C9, A13, J16 and S15: the Settings
+            // destination and the first-run flow (EPIC O task O2.4).
+            let mut settings = plaudon_ui::settings::SettingsShellScreen::new();
+            settings.set_command_registry(app.shell().command_specs());
+            app.shell_mut().register(Box::new(settings));
+            app.shell_mut()
+                .register_onboarding(Box::new(plaudon_ui::settings::OnboardingShellScreen::new()));
+            // Matrix row C11: the status item, where a backend exists.
+            let desktop =
+                plaudon_egui::desktop::Desktop::native(plaudon_egui::desktop::approved_roots());
+            plaudon_egui::desktop::install_tray(&desktop, false);
+            Ok(Box::new(app))
+        }),
     );
 
     match result {
@@ -89,6 +103,15 @@ fn native_hooks(store: ShellStateStore, runtime: tokio::runtime::Handle) -> Host
         pick_folder: Arc::new(|| rfd::FileDialog::new().pick_folder()),
         pick_save_path: Arc::new(|suggested| {
             rfd::FileDialog::new().set_file_name(suggested).save_file()
+        }),
+        // Matrix row C10: the view never spawns a process; the opener does,
+        // with an argument vector and never a shell.
+        reveal_in_folder: Arc::new(|path| {
+            use plaudon_platform::opener::Opener as _;
+            if let Err(error) = plaudon_platform::opener::NativeOpener::new().reveal_in_folder(path)
+            {
+                tracing::debug!(%error, "the file manager could not be opened");
+            }
         }),
         save_shell_state: Arc::new(move |state: ShellState| {
             let store = store.clone();

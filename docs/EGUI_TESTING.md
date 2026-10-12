@@ -128,6 +128,7 @@ regenerated baseline is committed **with the change that caused it**, never on i
 | Suite | Where | Command |
 | --- | --- | --- |
 | `plaudon-app` unit and dispatcher tests | anywhere, no GPU | `cargo test -p plaudon-app` |
+| `plaudon-platform` adapter tests (fakes only; no dialog, clipboard or tray is touched) | anywhere, no GPU | `cargo test -p plaudon-platform` |
 | `plaudon-ui-testkit` self-tests | anywhere (software raster) | `cargo test -p plaudon-ui-testkit` |
 | `plaudon-craft-ui` vendored widget tests | anywhere, no GPU | `cargo test -p plaudon-craft-ui` |
 | Token contrast and theme unit tests (O1.3) | anywhere, no GPU | `cargo test -p plaudon-ui theme::` |
@@ -136,6 +137,9 @@ regenerated baseline is committed **with the change that caused it**, never on i
 | `plaudon-ui` screen and copy tests (devices, sources) | anywhere (software raster) | `cargo test -p plaudon-ui` |
 | kittest interaction tests | locally for logic, MARS for pixels | `cargo test -p plaudon-egui --test spike_kittest` |
 | AI workflow panels (O2.2): consent, claim review, stale/regenerate, Local-only refusal | anywhere, no GPU | `cargo test -p plaudon-ui --test ai_workflows --test ai_review --test ai_summarize` |
+| Settings sections, onboarding and the settings screen (O2.4) | anywhere (software raster) | `cargo test -p plaudon-ui --test settings_screen --test settings_privacy_group --test settings_engines_group --test settings_backup --test onboarding` |
+| `plaudon-platform` adapter tests (fakes only; no dialog, clipboard or tray is touched) | anywhere, no GPU | `cargo test -p plaudon-platform` |
+| Desktop integration (tray model, drag-drop classification, deep links) | anywhere; the tray backend is linked on macOS and Windows only | `cargo test -p plaudon-egui --lib` |
 | Snapshot comparison, scale and performance runs | **MARS only** | `scripts/e2e-remote.sh …` |
 
 The resource policy is part of the test strategy: heavy or renderer-dependent runs go to MARS Docker

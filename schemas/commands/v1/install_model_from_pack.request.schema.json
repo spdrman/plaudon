@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/install_model_from_pack.request.schema.json",
+  "title": "install_model_from_pack.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "pack_path",
+    "model_id",
+    "licence_accepted_spdx_id",
+    "footprint_acknowledged"
+  ],
+  "properties": {
+    "pack_path": {
+      "type": "string"
+    },
+    "model_id": {
+      "type": "string"
+    },
+    "licence_accepted_spdx_id": {
+      "type": "string"
+    },
+    "footprint_acknowledged": {
+      "type": "boolean"
+    },
+    "keep_offline": {
+      "type": "boolean"
+    }
+  }
+}

@@ -1,0 +1,161 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/inspect_model_pack.response.schema.json",
+  "title": "inspect_model_pack.response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "pack_path",
+    "artifact_digest",
+    "schema_version",
+    "offers",
+    "available_disk_bytes",
+    "total_ram_bytes"
+  ],
+  "properties": {
+    "pack_path": {
+      "type": "string"
+    },
+    "artifact_digest": {
+      "type": "string"
+    },
+    "schema_version": {
+      "type": "integer"
+    },
+    "offers": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/offer"
+      }
+    },
+    "available_disk_bytes": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "total_ram_bytes": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    }
+  },
+  "$defs": {
+    "offer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gate",
+        "already_installed",
+        "languages",
+        "engine",
+        "version"
+      ],
+      "properties": {
+        "gate": {
+          "$ref": "#/$defs/gate"
+        },
+        "already_installed": {
+          "type": "boolean"
+        },
+        "languages": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "engine": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      }
+    },
+    "gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "model_id",
+        "display_name",
+        "licence",
+        "footprint",
+        "below_recommended_memory"
+      ],
+      "properties": {
+        "model_id": {
+          "type": "string"
+        },
+        "display_name": {
+          "type": "string"
+        },
+        "licence": {
+          "$ref": "#/$defs/licence"
+        },
+        "footprint": {
+          "$ref": "#/$defs/footprint"
+        },
+        "below_recommended_memory": {
+          "type": "boolean"
+        }
+      }
+    },
+    "licence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "spdx_id",
+        "name",
+        "redistributable",
+        "redistribution_note",
+        "text_file"
+      ],
+      "properties": {
+        "spdx_id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "redistributable": {
+          "type": "boolean"
+        },
+        "redistribution_note": {
+          "type": "string"
+        },
+        "text_file": {
+          "type": "string"
+        }
+      }
+    },
+    "footprint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "size_bytes",
+        "required_bytes",
+        "min_ram_bytes",
+        "recommended_ram_bytes",
+        "notes"
+      ],
+      "properties": {
+        "size_bytes": {
+          "type": "integer"
+        },
+        "required_bytes": {
+          "type": "integer"
+        },
+        "min_ram_bytes": {
+          "type": "integer"
+        },
+        "recommended_ram_bytes": {
+          "type": "integer"
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

@@ -36,10 +36,13 @@ pub mod folder_pump;
 pub mod job_presentation;
 pub mod media;
 pub mod notify;
+pub mod onboarding;
 pub mod ports;
 pub mod runtime;
 pub mod secrets;
+pub mod settings_presentation;
 pub mod shell_state;
+pub mod shortcuts;
 pub mod tone;
 pub mod updater;
 pub mod validate;
@@ -54,8 +57,8 @@ use crate::backend::LocalBackend;
 use crate::events::EventSink;
 use crate::ports::{
     ActivityPort, ArchivePort, CapabilitiesPort, CloudPort, DeletionPort, DevicesPort, ExportPort,
-    ImportPort, JobsPort, LibraryPort, MediaExportPort, OutputsPort, SearchPort, SettingsPort,
-    SourcesPort, SpeakersPort, TranscriptPort,
+    ImportPort, JobsPort, LibraryPort, MediaExportPort, ModelsPort, OutputsPort, SearchPort,
+    SettingsPort, SourcesPort, SpeakersPort, TranscriptPort, UpdatePort,
 };
 use crate::secrets::SecretStore;
 
@@ -98,6 +101,10 @@ pub struct AppPorts {
     pub search: Arc<dyn SearchPort>,
     /// Speaker labelling and confirmation.
     pub speakers: Arc<dyn SpeakersPort>,
+    /// Locally installed models.
+    pub models: Arc<dyn ModelsPort>,
+    /// Read-only update facts.
+    pub update: Arc<dyn UpdatePort>,
     /// The UI event stream, shared with the notification activation route.
     pub events: crate::events::EventPublisher,
 }
@@ -186,6 +193,14 @@ pub async fn build_ports_with_radio(
         export: Arc::clone(&backend) as Arc<dyn ExportPort>,
         search: Arc::clone(&backend) as Arc<dyn SearchPort>,
         speakers: Arc::clone(&backend) as Arc<dyn SpeakersPort>,
+        models: Arc::new(crate::backend::models::ModelsBackend::new(
+            app_data_dir,
+            events.clone(),
+        )),
+        update: Arc::new(crate::backend::update::UpdateBackend::new(
+            app_data_dir,
+            Arc::clone(&backend) as Arc<dyn SettingsPort>,
+        )),
         cloud: Arc::clone(&backend) as Arc<dyn CloudPort>,
         outputs: Arc::clone(&backend) as Arc<dyn OutputsPort>,
         devices: Arc::new(devices),

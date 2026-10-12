@@ -14,8 +14,10 @@
 pub mod activity;
 pub mod ai;
 pub mod jobs;
+pub mod onboarding;
 pub mod player;
 pub mod screens;
+pub mod settings;
 pub mod shell;
 pub mod theme;
 pub mod transcript;

@@ -23,9 +23,11 @@ pub mod devices;
 pub mod export;
 pub mod import;
 pub mod jobs;
+pub mod models;
 pub mod outputs;
 pub mod sources;
 pub mod store;
+pub mod update;
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -74,6 +76,8 @@ use crate::validate::{
 
 /// `app_preferences` key holding the serialized [`Preferences`].
 const PREFERENCES_KEY: &str = "desktop.preferences";
+/// `app_preferences` key holding the serialized keyboard overrides (C9).
+const SHORTCUTS_KEY: &str = "desktop.shortcuts";
 /// `app_preferences` key holding the last observed OS notification permission.
 const NOTIFICATION_PERMISSION_KEY: &str = "desktop.notification_os_permission";
 /// Separator used to pack a tag list into one scalar column.
@@ -1232,6 +1236,7 @@ pub fn default_preferences() -> Preferences {
             enabled: false,
             categories,
         },
+        export_defaults: crate::dto::ExportDefaults::default(),
     }
 }
 
@@ -1278,6 +1283,55 @@ impl SettingsPort for LocalBackend {
         self.put_setting(PREFERENCES_KEY, &preferences).await?;
         self.apply_notification_settings(&preferences).await?;
         Ok(preferences)
+    }
+
+    async fn set_appearance(
+        &self,
+        appearance: Appearance,
+        contrast: Contrast,
+    ) -> Result<Preferences, AppError> {
+        let mut preferences = self.preferences().await?;
+        preferences.appearance = appearance;
+        preferences.contrast = contrast;
+        self.put_setting(PREFERENCES_KEY, &preferences).await?;
+        Ok(preferences)
+    }
+
+    async fn set_engine_preferences(
+        &self,
+        default_stt_engine_id: Option<String>,
+        default_text_engine_id: Option<String>,
+    ) -> Result<Preferences, AppError> {
+        let mut preferences = self.preferences().await?;
+        preferences.default_stt_engine_id = default_stt_engine_id;
+        preferences.default_text_engine_id = default_text_engine_id;
+        self.put_setting(PREFERENCES_KEY, &preferences).await?;
+        Ok(preferences)
+    }
+
+    async fn set_export_defaults(
+        &self,
+        defaults: crate::dto::ExportDefaults,
+    ) -> Result<Preferences, AppError> {
+        let mut preferences = self.preferences().await?;
+        preferences.export_defaults = defaults;
+        self.put_setting(PREFERENCES_KEY, &preferences).await?;
+        Ok(preferences)
+    }
+
+    async fn shortcuts(&self) -> Result<crate::shortcuts::ShortcutBindings, AppError> {
+        Ok(self
+            .setting::<crate::shortcuts::ShortcutBindings>(SHORTCUTS_KEY)
+            .await?
+            .unwrap_or_default())
+    }
+
+    async fn set_shortcuts(
+        &self,
+        bindings: crate::shortcuts::ShortcutBindings,
+    ) -> Result<crate::shortcuts::ShortcutBindings, AppError> {
+        self.put_setting(SHORTCUTS_KEY, &bindings).await?;
+        Ok(bindings)
     }
 }
 
