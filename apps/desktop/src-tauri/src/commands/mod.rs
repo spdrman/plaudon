@@ -1,4 +1,4 @@
-//! The entire IPC surface: sixteen narrow commands and nothing else.
+//! The entire IPC surface: twenty-four narrow commands and nothing else.
 //!
 //! Spec §15.1: no generic shell execution, no HTTP proxy and no generic
 //! filesystem command is exposed to JavaScript. Every command takes one
@@ -6,6 +6,7 @@
 //! or the §15.4 error envelope. The allowlist test at the bottom of this file
 //! fails if a handler outside the published list is ever registered.
 
+pub mod cloud;
 pub mod import;
 pub mod jobs;
 pub mod library;
@@ -15,13 +16,18 @@ pub mod transcript;
 use tauri::State;
 
 use crate::dto::{
-    ActivityPage, CancelJobRequest, Capabilities, CompleteOnboardingRequest, EmptyRequest,
-    ExportRecordingRequest, ExportRecordingResponse, GetRecordingRequest, GetTranscriptRequest,
-    ImportFilesRequest, ImportFilesResponse, JobPage, JobSummary, ListActivityRequest,
-    ListJobsRequest, ListRecordingsRequest, LocalOnlyModeResponse, NotificationSettingsResponse,
-    Preferences, RecordingDetail, RecordingPage, RetryJobRequest, SaveTranscriptRevisionRequest,
-    SaveTranscriptRevisionResponse, SetLocalOnlyModeRequest, SetNotificationSettingsRequest,
-    SetOpenRouterKeyRequest, StatusResponse, TranscriptPage,
+    ActivityPage, CancelJobRequest, Capabilities, CloudBudget, CompleteOnboardingRequest,
+    EmptyRequest, ExportRecordingRequest, ExportRecordingResponse, GetRecordingRequest,
+    GetTranscriptRequest, GetUsageRequest, GetUsageResponse, GrantCloudConsentRequest,
+    GrantCloudConsentResponse, ImportFilesRequest, ImportFilesResponse, JobPage, JobSummary,
+    ListActivityRequest, ListJobsRequest, ListModelsRequest, ListModelsResponse,
+    ListRecordingsRequest, LocalOnlyModeResponse, NotificationSettingsResponse, Preferences,
+    RecordingDetail, RecordingPage, RetryJobRequest, RevokeCloudConsentRequest,
+    SaveTranscriptRevisionRequest, SaveTranscriptRevisionResponse, SetCloudBudgetRequest,
+    SetLocalOnlyModeRequest, SetModelPreferenceRequest, SetModelPreferenceResponse,
+    SetNotificationSettingsRequest, SetOpenRouterKeyRequest, StartProcessingRequest,
+    StartProcessingResponse, StatusResponse, TranscriptPage, VerifyModelRequest,
+    VerifyModelResponse,
 };
 use crate::error::{to_command_result, CommandResult};
 use crate::AppState;
@@ -45,6 +51,14 @@ pub const COMMAND_ALLOWLIST: &[&str] = &[
     "remove_openrouter_key",
     "list_activity",
     "complete_onboarding",
+    "list_models",
+    "start_processing",
+    "grant_cloud_consent",
+    "revoke_cloud_consent",
+    "get_usage",
+    "set_cloud_budget",
+    "set_model_preference",
+    "verify_model",
 ];
 
 /// Every command of the IPC surface, for [`tauri::Builder::invoke_handler`].
@@ -67,7 +81,15 @@ pub fn handler<R: tauri::Runtime>() -> impl Fn(tauri::ipc::Invoke<R>) -> bool + 
         set_openrouter_key,
         remove_openrouter_key,
         list_activity,
-        complete_onboarding
+        complete_onboarding,
+        list_models,
+        start_processing,
+        grant_cloud_consent,
+        revoke_cloud_consent,
+        get_usage,
+        set_cloud_budget,
+        set_model_preference,
+        verify_model
     ]
 }
 
@@ -197,6 +219,70 @@ pub async fn complete_onboarding(
     request: CompleteOnboardingRequest,
 ) -> CommandResult<Preferences> {
     to_command_result(settings::complete_onboarding(&state.ports, request).await)
+}
+
+#[tauri::command]
+pub async fn list_models(
+    state: State<'_, AppState>,
+    request: ListModelsRequest,
+) -> CommandResult<ListModelsResponse> {
+    to_command_result(cloud::list_models(&state.ports, request).await)
+}
+
+#[tauri::command]
+pub async fn start_processing(
+    state: State<'_, AppState>,
+    request: StartProcessingRequest,
+) -> CommandResult<StartProcessingResponse> {
+    to_command_result(cloud::start_processing(&state.ports, request).await)
+}
+
+#[tauri::command]
+pub async fn grant_cloud_consent(
+    state: State<'_, AppState>,
+    request: GrantCloudConsentRequest,
+) -> CommandResult<GrantCloudConsentResponse> {
+    to_command_result(cloud::grant_cloud_consent(&state.ports, request).await)
+}
+
+#[tauri::command]
+pub async fn revoke_cloud_consent(
+    state: State<'_, AppState>,
+    request: RevokeCloudConsentRequest,
+) -> CommandResult<StatusResponse> {
+    to_command_result(cloud::revoke_cloud_consent(&state.ports, request).await)
+}
+
+#[tauri::command]
+pub async fn get_usage(
+    state: State<'_, AppState>,
+    request: GetUsageRequest,
+) -> CommandResult<GetUsageResponse> {
+    to_command_result(cloud::get_usage(&state.ports, request).await)
+}
+
+#[tauri::command]
+pub async fn set_cloud_budget(
+    state: State<'_, AppState>,
+    request: SetCloudBudgetRequest,
+) -> CommandResult<CloudBudget> {
+    to_command_result(cloud::set_cloud_budget(&state.ports, request).await)
+}
+
+#[tauri::command]
+pub async fn set_model_preference(
+    state: State<'_, AppState>,
+    request: SetModelPreferenceRequest,
+) -> CommandResult<SetModelPreferenceResponse> {
+    to_command_result(cloud::set_model_preference(&state.ports, request).await)
+}
+
+#[tauri::command]
+pub async fn verify_model(
+    state: State<'_, AppState>,
+    request: VerifyModelRequest,
+) -> CommandResult<VerifyModelResponse> {
+    to_command_result(cloud::verify_model(&state.ports, request).await)
 }
 
 #[cfg(test)]

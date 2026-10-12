@@ -2,7 +2,7 @@
 //!
 //! The shell owns three things and delegates everything else:
 //!
-//! * [`commands`] — sixteen narrow IPC commands (spec §15.2) that validate
+//! * [`commands`] — twenty-four narrow IPC commands (spec §15.2, ADR-0020, ADR-0022) that validate
 //!   their arguments in Rust and answer with typed DTOs or the §15.4 error
 //!   envelope;
 //! * [`events`] — the §15.3 UI event stream, sequenced after the database
@@ -34,8 +34,8 @@ use plaudon_domain::error::AppError;
 use crate::backend::LocalBackend;
 use crate::events::{EventSink, TauriEventSink};
 use crate::ports::{
-    ActivityPort, CapabilitiesPort, ExportPort, ImportPort, JobsPort, LibraryPort, SettingsPort,
-    TranscriptPort,
+    ActivityPort, CapabilitiesPort, CloudPort, ExportPort, ImportPort, JobsPort, LibraryPort,
+    SettingsPort, TranscriptPort,
 };
 use crate::secrets::{KeyringSecretStore, SecretStore};
 
@@ -58,6 +58,8 @@ pub struct AppPorts {
     pub settings: Arc<dyn SettingsPort>,
     /// Transcript export.
     pub export: Arc<dyn ExportPort>,
+    /// Cloud AI: catalogue, usage, budget, consent and dispatch.
+    pub cloud: Arc<dyn CloudPort>,
     /// OS keychain storage.
     pub secrets: Arc<dyn SecretStore>,
     /// The UI event stream, shared with the notification activation route.
@@ -115,7 +117,8 @@ pub async fn build_ports(
         activity: Arc::clone(&backend) as Arc<dyn ActivityPort>,
         import: Arc::clone(&backend) as Arc<dyn ImportPort>,
         settings: Arc::clone(&backend) as Arc<dyn SettingsPort>,
-        export: backend as Arc<dyn ExportPort>,
+        export: Arc::clone(&backend) as Arc<dyn ExportPort>,
+        cloud: backend as Arc<dyn CloudPort>,
         secrets,
         events,
     })

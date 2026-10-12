@@ -13,14 +13,18 @@ use plaudon_domain::ids::{JobId, RecordingId};
 use plaudon_domain::transcript::AlignmentOrigin;
 
 use crate::dto::{
-    ActivityPage, Capabilities, CompleteOnboardingRequest, DuplicatePolicy, ImportFilesResponse,
-    JobPage, JobSummary, LocalOnlyModeResponse, NotificationSettings, NotificationSettingsResponse,
-    Preferences, RecordingDetail, RecordingPage, SaveTranscriptRevisionResponse, TranscriptPage,
-    TranscriptRevisionRef,
+    ActivityPage, Capabilities, CloudBudget, CompleteOnboardingRequest, ConsentSummary,
+    DuplicatePolicy, GetUsageResponse, GrantCloudConsentResponse, ImportFilesResponse, JobPage,
+    JobSummary, ListModelsResponse, LocalOnlyModeResponse, NotificationSettings,
+    NotificationSettingsResponse, Preferences, RecordingDetail, RecordingPage,
+    SaveTranscriptRevisionResponse, SetModelPreferenceResponse, StartProcessingResponse,
+    TranscriptPage, TranscriptRevisionRef, VerifyModelResponse,
 };
 use crate::validate::{
-    ValidatedExport, ValidatedGetTranscript, ValidatedListActivity, ValidatedListJobs,
-    ValidatedListRecordings, ValidatedSaveRevision,
+    ValidatedBudget, ValidatedConsent, ValidatedExport, ValidatedGetTranscript,
+    ValidatedListActivity, ValidatedListJobs, ValidatedListModels, ValidatedListRecordings,
+    ValidatedPreference, ValidatedSaveRevision, ValidatedStartProcessing, ValidatedUsageRange,
+    ValidatedVerifyModel,
 };
 
 /// Machine facts and stored preferences (`get_capabilities`).
@@ -201,4 +205,50 @@ pub trait SettingsPort: Send + Sync {
 pub trait ExportPort: Send + Sync {
     /// Run the export as a job and return it.
     async fn export_recording(&self, request: ValidatedExport) -> Result<JobId, AppError>;
+}
+
+/// Cloud AI over OpenRouter BYOK (spec §10, ADR-0022): model catalogue, usage
+/// and budget, consent, model preferences and cost-bearing dispatch.
+#[async_trait]
+pub trait CloudPort: Send + Sync {
+    /// The model picker for a stage.
+    async fn list_models(&self, query: ValidatedListModels)
+        -> Result<ListModelsResponse, AppError>;
+
+    /// Ledger usage in a range, plus the current budget.
+    async fn get_usage(&self, range: ValidatedUsageRange) -> Result<GetUsageResponse, AppError>;
+
+    /// Replace the local spending budget.
+    async fn set_cloud_budget(&self, budget: ValidatedBudget) -> Result<CloudBudget, AppError>;
+
+    /// Record a consent grant.
+    async fn grant_cloud_consent(
+        &self,
+        grant: ValidatedConsent,
+    ) -> Result<GrantCloudConsentResponse, AppError>;
+
+    /// Revoke a consent grant. Idempotent for a known id.
+    async fn revoke_cloud_consent(&self, consent_id: String) -> Result<(), AppError>;
+
+    /// Write a default or a per-recording model preference.
+    async fn set_model_preference(
+        &self,
+        preference: ValidatedPreference,
+    ) -> Result<SetModelPreferenceResponse, AppError>;
+
+    /// Start a processing stage, enforcing budget and consent before any
+    /// content leaves the machine.
+    async fn start_processing(
+        &self,
+        request: ValidatedStartProcessing,
+    ) -> Result<StartProcessingResponse, AppError>;
+
+    /// Run the capability smoke test for a model (a real, cost-bearing call).
+    async fn verify_model(
+        &self,
+        request: ValidatedVerifyModel,
+    ) -> Result<VerifyModelResponse, AppError>;
+
+    /// Every consent grant on record, for `get_capabilities`.
+    async fn cloud_consents(&self) -> Result<Vec<ConsentSummary>, AppError>;
 }

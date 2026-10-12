@@ -10,20 +10,26 @@ use std::path::PathBuf;
 
 use plaudon_desktop::dto::{
     ActivityEntry, ActivityPage, ActivityTarget, ActivityTargetKind, AnnotationKind, Appearance,
-    CancelJobRequest, Capabilities, CompleteOnboardingRequest, Contrast, DuplicatePolicy,
-    EmptyRequest, EngineInventoryEntry, EngineStage, EventKind, ExportFormat,
-    ExportRecordingRequest, ExportRecordingResponse, GetRecordingRequest, GetTranscriptRequest,
-    HardwareInfo, ImportFilesRequest, ImportFilesResponse, ImportOutcome, ImportStatus, JobKind,
-    JobPage, JobState, JobSummary, ListActivityRequest, ListJobsRequest, ListRecordingsRequest,
-    LocalOnlyModeResponse, NotificationCategory, NotificationSettings,
-    NotificationSettingsResponse, OsInfo, OsNotificationPermission, OutputKind, OutputLink,
-    OutputLinkKind, PermissionState, Platform, Preferences, RecordingDetail, RecordingFilter,
-    RecordingMediaInfo, RecordingOutput, RecordingPage, RecordingSort, RecordingSortField,
-    RecordingSourceRef, RecordingSummary, RetryJobRequest, SaveTranscriptRevisionRequest,
-    SaveTranscriptRevisionResponse, SegmentConfidence, SegmentEdit, SetLocalOnlyModeRequest,
-    SetNotificationSettingsRequest, SortDirection, SourceKind, StatusResponse, StorageCapability,
-    TranscriptAnnotation, TranscriptPage, TranscriptRevisionRef, TranscriptSegmentDto,
-    TranscriptionStatus, UiEvent,
+    CancelJobRequest, Capabilities, CloudBudget, CompleteOnboardingRequest, ConsentScopeDto,
+    ConsentSummary, Contrast, CostConfidence, CostValue, DuplicatePolicy, EmptyRequest,
+    EngineInventoryEntry, EngineStage, EventKind, ExportFormat, ExportRecordingRequest,
+    ExportRecordingResponse, GetRecordingRequest, GetTranscriptRequest, GetUsageRequest,
+    GetUsageResponse, GrantCloudConsentRequest, GrantCloudConsentResponse, HardwareInfo,
+    ImportFilesRequest, ImportFilesResponse, ImportOutcome, ImportStatus, JobKind, JobPage,
+    JobState, JobSummary, ListActivityRequest, ListJobsRequest, ListModelsRequest,
+    ListModelsResponse, ListRecordingsRequest, LocalOnlyModeResponse, ModelCard, ModelFeatures,
+    ModelOverride, ModelPreferenceScope, ModelPricing, ModelPrivacy, MoneyAmount,
+    NotificationCategory, NotificationSettings, NotificationSettingsResponse, OsInfo,
+    OsNotificationPermission, OutputKind, OutputLink, OutputLinkKind, PermissionState, Platform,
+    Preferences, RecordingDetail, RecordingFilter, RecordingMediaInfo, RecordingOutput,
+    RecordingPage, RecordingSort, RecordingSortField, RecordingSourceRef, RecordingSummary,
+    RetryJobRequest, RevokeCloudConsentRequest, SaveTranscriptRevisionRequest,
+    SaveTranscriptRevisionResponse, SegmentConfidence, SegmentEdit, SetCloudBudgetRequest,
+    SetLocalOnlyModeRequest, SetModelPreferenceRequest, SetModelPreferenceResponse,
+    SetNotificationSettingsRequest, SortDirection, SourceKind, StartProcessingRequest,
+    StartProcessingResponse, StatusResponse, StorageCapability, TranscriptAnnotation,
+    TranscriptPage, TranscriptRevisionRef, TranscriptSegmentDto, TranscriptionStatus, TriState,
+    UiEvent, UsageAttempt, UsageByModel, UsageTotals, VerifyModelRequest, VerifyModelResponse,
 };
 use plaudon_domain::capability::CapabilityStatus;
 use plaudon_domain::error::{AppError, AppErrorCode, DiagnosticLog, ErrorEnvelope};
@@ -139,6 +145,7 @@ fn job_summary() -> JobSummary {
             kind: OutputLinkKind::Recording,
             id: RecordingId::new().to_string(),
         }),
+        cost: CostValue::unknown(),
     }
 }
 
@@ -307,6 +314,7 @@ fn every_response_dto_matches_its_schema() {
         permissions: BTreeMap::from([("notifications".to_owned(), PermissionState::NotRequested)]),
         preferences: preferences(),
         openrouter_key_present: false,
+        cloud_consents: vec![consent_summary()],
     };
     validate("get_capabilities.response", &to_value(&capabilities));
 
@@ -530,4 +538,270 @@ fn every_published_command_has_both_schemas() {
             assert!(path.is_file(), "missing schema {}", path.display());
         }
     }
+}
+
+fn money(amount: &str) -> MoneyAmount {
+    MoneyAmount {
+        amount: amount.into(),
+        currency: "USD".into(),
+    }
+}
+
+fn consent_summary() -> ConsentSummary {
+    ConsentSummary {
+        consent_id: "consent-1".into(),
+        purpose: "transcription".into(),
+        content_type: "audio_bytes".into(),
+        scope_kind: "recording".into(),
+        recording_id: Some(RecordingId::new().to_string()),
+        model_id: "openai/whisper-1".into(),
+        downstream_provider: None,
+        required_retention: Some("zero_retention".into()),
+        disclosure_version: "2026-02-01".into(),
+        granted_at: "1970-01-01T00:00:00Z".into(),
+        expires_at: None,
+        revoked_at: Some("1970-01-01T00:00:01Z".into()),
+    }
+}
+
+fn model_card(verified: bool) -> ModelCard {
+    ModelCard {
+        model_id: "openai/whisper-1".into(),
+        display_name: "Whisper".into(),
+        engine: "openrouter".into(),
+        request_family: if verified { "multipart_stt" } else { "unknown" }.into(),
+        verification: if verified { "verified" } else { "not_verified" }.into(),
+        verification_reason: (!verified).then(|| "no_observed_exchange".to_owned()),
+        fixture_id: verified.then(|| "capability-check".to_owned()),
+        validated_at: verified.then(|| "2026-10-11T00:00:00Z".to_owned()),
+        features: ModelFeatures {
+            segments: TriState::Yes,
+            word_timestamps: TriState::Unknown,
+            diarization: TriState::No,
+            language_detection: TriState::Unknown,
+        },
+        locales: None,
+        max_input_bytes: Some(25_000_000),
+        max_duration_ms: None,
+        pricing: ModelPricing {
+            basis: "per_token".into(),
+            unit_label: "USD per audio input token".into(),
+            amount_per_unit: verified.then(|| money("0.000002000000")),
+        },
+        privacy: ModelPrivacy {
+            relay: "openrouter".into(),
+            downstream_provider: None,
+            retention: "unknown".into(),
+            retention_days: None,
+            zero_retention_available: false,
+        },
+        selectable: verified,
+    }
+}
+
+fn budget() -> CloudBudget {
+    CloudBudget {
+        per_job_limit: Some(money("1.000000000000")),
+        monthly_limit: None,
+        month_to_date: CostValue {
+            confidence: CostConfidence::Estimated,
+            amount: Some(money("0.250000000000")),
+        },
+        blocks_dispatch: true,
+        enforcement_note: "device only".into(),
+    }
+}
+
+#[test]
+#[allow(clippy::too_many_lines)]
+fn every_cloud_request_dto_matches_its_schema() {
+    validate(
+        "list_models.request",
+        &to_value(&ListModelsRequest {
+            stage: "transcribe".into(),
+            engine: None,
+        }),
+    );
+    validate(
+        "get_usage.request",
+        &to_value(&GetUsageRequest {
+            from: "2026-10-01T00:00:00Z".into(),
+            to: "2026-11-01T00:00:00Z".into(),
+        }),
+    );
+    validate(
+        "set_cloud_budget.request",
+        &to_value(&SetCloudBudgetRequest {
+            per_job_limit: Some("1.5".into()),
+            monthly_limit: None,
+            currency: "USD".into(),
+        }),
+    );
+    for kind in ["ask_every_time", "recording", "model_policy"] {
+        validate(
+            "grant_cloud_consent.request",
+            &to_value(&GrantCloudConsentRequest {
+                purpose: "transcription".into(),
+                content_type: "audio_bytes".into(),
+                scope: ConsentScopeDto {
+                    kind: kind.into(),
+                    recording_id: (kind == "recording").then(|| RecordingId::new().to_string()),
+                },
+                model_id: "openai/whisper-1".into(),
+                downstream_provider: Some("openai".into()),
+                require_zero_retention: false,
+                disclosure_version: "2026-02-01".into(),
+            }),
+        );
+    }
+    validate(
+        "revoke_cloud_consent.request",
+        &to_value(&RevokeCloudConsentRequest {
+            consent_id: "consent-1".into(),
+        }),
+    );
+    validate(
+        "set_model_preference.request",
+        &to_value(&SetModelPreferenceRequest {
+            stage: "transcribe".into(),
+            scope: ModelPreferenceScope {
+                kind: "recording".into(),
+                recording_id: Some(RecordingId::new().to_string()),
+            },
+            engine: "openrouter".into(),
+            model_id: None,
+        }),
+    );
+    validate(
+        "start_processing.request",
+        &to_value(&StartProcessingRequest {
+            recording_id: RecordingId::new().to_string(),
+            stage: "transcribe".into(),
+            model_override: Some(ModelOverride {
+                engine: "openrouter".into(),
+                model_id: "openai/whisper-1".into(),
+            }),
+            cost_acknowledged: false,
+            rerun: false,
+        }),
+    );
+    validate(
+        "verify_model.request",
+        &to_value(&VerifyModelRequest {
+            model_id: "openai/whisper-1".into(),
+            task: "transcription".into(),
+            cost_acknowledged: false,
+        }),
+    );
+}
+
+#[test]
+#[allow(clippy::too_many_lines)]
+fn every_cloud_response_dto_matches_its_schema() {
+    for verified in [true, false] {
+        validate(
+            "list_models.response",
+            &to_value(&ListModelsResponse {
+                models: vec![model_card(verified)],
+                catalog_source: "pinned_allowlist".into(),
+                catalog_fetched_at: None,
+                degraded_reason: Some("no_key".into()),
+                default_model_id: Some("openai/whisper-1".into()),
+            }),
+        );
+        validate(
+            "set_model_preference.response",
+            &to_value(&SetModelPreferenceResponse {
+                stage: "transcribe".into(),
+                scope_kind: "default".into(),
+                recording_id: None,
+                engine: "openrouter".into(),
+                model_id: Some("openai/whisper-1".into()),
+                effective_model: verified.then(|| model_card(true)),
+            }),
+        );
+        validate(
+            "verify_model.response",
+            &to_value(&VerifyModelResponse {
+                model: model_card(verified),
+                cost: CostValue::unknown(),
+                provider_request_id: Some("req-1".into()),
+            }),
+        );
+    }
+    validate(
+        "get_usage.response",
+        &to_value(&GetUsageResponse {
+            from: "2026-10-01T00:00:00Z".into(),
+            to: "2026-11-01T00:00:00Z".into(),
+            totals: UsageTotals {
+                finalized: Some(money("0.100000000000")),
+                estimated: None,
+                unknown_count: 2,
+            },
+            by_model: vec![UsageByModel {
+                model_id: "openai/whisper-1".into(),
+                attempts: 3,
+                finalized: Some(money("0.100000000000")),
+                estimated: None,
+                unknown_count: 2,
+            }],
+            attempts: vec![UsageAttempt {
+                attempt_id: "attempt-1".into(),
+                job_id: JobId::new().to_string(),
+                model_id: "openai/whisper-1".into(),
+                request_family: "multipart_stt".into(),
+                dispatch_state: "outcome_unknown".into(),
+                cost: CostValue::unknown(),
+                provider_request_id: None,
+                created_at: "1970-01-01T00:00:00Z".into(),
+                responded_at: None,
+                possibly_billed: true,
+            }],
+            budget: budget(),
+        }),
+    );
+    validate("set_cloud_budget.response", &to_value(&budget()));
+    validate(
+        "grant_cloud_consent.response",
+        &to_value(&GrantCloudConsentResponse {
+            consent_id: "consent-1".into(),
+            scope_kind: "model_policy".into(),
+            granted_at: "1970-01-01T00:00:00Z".into(),
+            expires_at: None,
+        }),
+    );
+    validate(
+        "revoke_cloud_consent.response",
+        &to_value(&StatusResponse::ok()),
+    );
+    for dispatch in ["queued", "consent_required", "blocked"] {
+        validate(
+            "start_processing.response",
+            &to_value(&StartProcessingResponse {
+                job_id: JobId::new().to_string(),
+                estimated_cost: CostValue {
+                    confidence: CostConfidence::Estimated,
+                    amount: Some(money("0.010000000000")),
+                },
+                dispatch: dispatch.into(),
+                blocked_reason: (dispatch != "queued").then(|| "reason".to_owned()),
+            }),
+        );
+    }
+    let mut job = job_summary();
+    job.cost = CostValue {
+        confidence: CostConfidence::Finalized,
+        amount: Some(money("0.010000000000")),
+    };
+    validate("retry_job.response", &to_value(&job));
+    validate("cancel_job.response", &to_value(&job));
+    validate(
+        "list_jobs.response",
+        &to_value(&JobPage {
+            items: vec![job],
+            next_cursor: None,
+            state_counts: BTreeMap::new(),
+        }),
+    );
 }
