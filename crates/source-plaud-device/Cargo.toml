@@ -12,6 +12,7 @@ workspace = true
 
 [dependencies]
 plaudon-domain = { workspace = true }
+plaudon-plaud-ble = { workspace = true }
 plaudon-plaud-protocol = { workspace = true }
 plaudon-security = { workspace = true }
 plaudon-recording-sources = { workspace = true }

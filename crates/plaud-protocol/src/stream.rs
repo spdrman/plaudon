@@ -307,7 +307,7 @@ mod tests {
     fn an_out_of_order_chunk_is_held_then_released_in_order() {
         let mut assembler = StreamingAssembler::with_declared_length(1_024, 6);
         let step = assembler.accept(&chunk(3, b"def")).unwrap();
-        assert!(step.ready.is_empty());
+        assert_eq!(step.ready, Vec::<u8>::new());
         assert_eq!(assembler.buffered_bytes(), 3);
 
         let step = assembler.accept(&chunk(0, b"abc")).unwrap();

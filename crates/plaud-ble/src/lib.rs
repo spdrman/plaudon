@@ -11,18 +11,39 @@
 //!   identity. There is no auto-connect path.
 //! * [`session`] drives the spec 7.9 `DeviceSession` state machine, which
 //!   fails closed on an unknown firmware or an unimplemented auth mode.
-//! * The real radio scanner lives behind the `hardware-scan` feature and the
-//!   `plaud-ble-scan` binary. It is excluded from the default build and from
-//!   CI, and it only ever reads.
+//! * [`transport`] defines the GATT contract. Its only write method takes a
+//!   [`plaudon_plaud_protocol::ControlFrame`], so a mutating opcode cannot be
+//!   placed on the wire by any implementation.
+//! * [`actor`] owns one transport as a single-owner actor; concurrent callers
+//!   are serialized or refused with `DEVICE_BUSY`, never interleaved.
+//! * [`fake`] replays versioned wire fixtures deterministically, which is how
+//!   every hostile case is exercised without a radio. A simulator result is
+//!   never compatibility evidence.
+//! * The real radio scanner and transport live behind the `hardware-scan`
+//!   feature. They are excluded from the default build and from CI, and they
+//!   only ever read.
 
+pub mod actor;
 pub mod discovery;
 pub mod session;
+pub mod transport;
+
+#[cfg(any(test, feature = "test-support"))]
+pub mod fake;
 
 #[cfg(feature = "hardware-scan")]
 pub mod scanner;
 
+#[cfg(feature = "hardware-scan")]
+pub mod hardware;
+
+pub use actor::{DeviceActor, DeviceHandle, FrameSink, TransferSummary};
 pub use discovery::{AdvertisementVerdict, Candidate, DiscoveryPolicy, ObservedAdvertisement};
 pub use session::{SessionDriver, SessionEvent};
+pub use transport::{Characteristics, DeviceEvent, GattTransport, ProbeResult, TransferProgress};
+
+#[cfg(any(test, feature = "test-support"))]
+pub use fake::{DeviceScenario, FakeDevice, ScenarioBuilder, TransferFault};
 
 /// Cargo package name of this crate, used by the workspace layout conformance test.
 pub const PACKAGE_NAME: &str = "plaudon-plaud-ble";

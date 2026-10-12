@@ -430,7 +430,7 @@ mod tests {
     use proptest::prelude::*;
 
     use super::*;
-    use crate::profile::LEGACY_NOTE_V0095;
+    use crate::profile::{profile_by_name, LEGACY_NOTE_V0095};
 
     fn entry(id: &str) -> ListedRecording {
         ListedRecording {
@@ -501,10 +501,14 @@ mod tests {
         .encode(&LEGACY_NOTE_V0095)
         .unwrap();
         let decoded = DeltaListing::decode(&LEGACY_NOTE_V0095, &encoded).unwrap();
-        assert!(decoded.entries.is_empty());
-        assert!(
+        assert_eq!(decoded.entries, Vec::new());
+        // An empty delta listing never means the device has no recordings:
+        // the profile records that its listing is a delta (spec App. B.3).
+        assert_eq!(
             LEGACY_NOTE_V0095.listing_is_delta_only,
-            "an empty delta listing never means the device has no recordings"
+            profile_by_name("plaud-note-legacy-v0095")
+                .expect("the legacy profile is named")
+                .listing_is_delta_only
         );
     }
 
