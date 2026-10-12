@@ -446,6 +446,15 @@ impl VendorArtifactImporter {
         self.artifacts.list_for_item(source_item_id).await
     }
 
+    /// Artifacts recorded for every association of one recording, which is
+    /// what a provenance badge in the UI needs.
+    pub async fn artifacts_for_recording(
+        &self,
+        recording_id: RecordingId,
+    ) -> PersistenceResult<Vec<SourceExportArtifact>> {
+        self.artifacts.list_for_recording(recording_id).await
+    }
+
     /// Provenance view used to assert that a human edit stays preferred.
     #[must_use]
     pub fn provenance(&self) -> &TranscriptProvenanceRepository {

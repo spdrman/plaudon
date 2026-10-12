@@ -1246,28 +1246,51 @@ impl SourceExportArtifactRepository {
         .bind(source_item_id.to_string())
         .fetch_all(self.db.pool())
         .await?;
-        rows.iter()
-            .map(|row| {
-                Ok(SourceExportArtifact {
-                    id: Uuid::parse_str(&row.get::<String, _>("id"))
-                        .map_err(|_| PersistenceError::Migration("corrupt artifact id".into()))?,
-                    source_item_id: row
-                        .get::<String, _>("source_item_id")
-                        .parse()
-                        .map_err(|_| PersistenceError::Migration("corrupt item id".into()))?,
-                    artifact_kind: row.get("artifact_kind"),
-                    source_vendor: row.get("source_vendor"),
-                    content_sha256: row.get("content_sha256"),
-                    byte_length: u64::try_from(row.get::<i64, _>("byte_length")).unwrap_or(0),
-                    original_filename: row.get("original_filename"),
-                    imported_at: row
-                        .get::<Option<i64>, _>("imported_at")
-                        .map(Timestamp::from_millis),
-                    import_mode: row.get("import_mode"),
-                    created_at: Timestamp::from_millis(row.get::<i64, _>("created_at")),
-                })
-            })
-            .collect()
+        rows.iter().map(Self::from_row).collect()
+    }
+
+    /// Artifacts recorded for every association of one recording.
+    ///
+    /// A recording can carry associations from more than one source, so the
+    /// UI asks by recording and gets the union, each row still naming the
+    /// association and vendor it came from.
+    pub async fn list_for_recording(
+        &self,
+        recording_id: RecordingId,
+    ) -> PersistenceResult<Vec<SourceExportArtifact>> {
+        let rows = sqlx::query(
+            "SELECT a.id, a.source_item_id, a.artifact_kind, a.source_vendor, a.content_sha256,
+                    a.byte_length, a.original_filename, a.imported_at, a.import_mode, a.created_at
+             FROM source_export_artifacts a
+             JOIN source_items si ON si.id = a.source_item_id
+             WHERE si.recording_id = ?1
+             ORDER BY a.created_at, a.id",
+        )
+        .bind(recording_id.to_string())
+        .fetch_all(self.db.pool())
+        .await?;
+        rows.iter().map(Self::from_row).collect()
+    }
+
+    fn from_row(row: &sqlx::sqlite::SqliteRow) -> PersistenceResult<SourceExportArtifact> {
+        Ok(SourceExportArtifact {
+            id: Uuid::parse_str(&row.get::<String, _>("id"))
+                .map_err(|_| PersistenceError::Migration("corrupt artifact id".into()))?,
+            source_item_id: row
+                .get::<String, _>("source_item_id")
+                .parse()
+                .map_err(|_| PersistenceError::Migration("corrupt item id".into()))?,
+            artifact_kind: row.get("artifact_kind"),
+            source_vendor: row.get("source_vendor"),
+            content_sha256: row.get("content_sha256"),
+            byte_length: u64::try_from(row.get::<i64, _>("byte_length")).unwrap_or(0),
+            original_filename: row.get("original_filename"),
+            imported_at: row
+                .get::<Option<i64>, _>("imported_at")
+                .map(Timestamp::from_millis),
+            import_mode: row.get("import_mode"),
+            created_at: Timestamp::from_millis(row.get::<i64, _>("created_at")),
+        })
     }
 }
 

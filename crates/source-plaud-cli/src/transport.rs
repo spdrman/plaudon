@@ -205,13 +205,7 @@ impl HttpFetcher for ReqwestFetcher {
                 content_type: headers
                     .get(reqwest::header::CONTENT_TYPE)
                     .and_then(|v| v.to_str().ok())
-                    .map(|v| {
-                        v.split(';')
-                            .next()
-                            .unwrap_or(v)
-                            .trim()
-                            .to_ascii_lowercase()
-                    }),
+                    .map(|v| v.split(';').next().unwrap_or(v).trim().to_ascii_lowercase()),
                 content_length: response.content_length(),
                 etag: headers
                     .get(reqwest::header::ETAG)

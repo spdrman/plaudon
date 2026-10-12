@@ -193,14 +193,20 @@ impl ConnectorStatus {
     pub fn apply(mut self, event: ConnectorEvent, at_ms: i64) -> Self {
         self.state = self.state.apply(event);
         self.updated_at_ms = at_ms;
-        if matches!(event, ConnectorEvent::Disconnected | ConnectorEvent::CliMissing) {
+        if matches!(
+            event,
+            ConnectorEvent::Disconnected | ConnectorEvent::CliMissing
+        ) {
             self.detected_version = None;
             self.version_validated = false;
             self.program_origin = None;
             self.listing_possibly_incomplete = false;
             self.scraping_warning = false;
         }
-        self.last_error = self.state.as_source_error().map(|error| AppError::from(error).code());
+        self.last_error = self
+            .state
+            .as_source_error()
+            .map(|error| AppError::from(error).code());
         self
     }
 

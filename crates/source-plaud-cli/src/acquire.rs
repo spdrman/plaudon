@@ -236,7 +236,7 @@ impl AcquisitionPipeline {
             }
         };
 
-        let verified = self.verify(&part, &outcome, fetched.head.content_length);
+        let verified = Self::verify(&part, &outcome, fetched.head.content_length);
         let container = match verified {
             Ok(container) => container,
             Err(error) => {
@@ -267,7 +267,6 @@ impl AcquisitionPipeline {
 
     /// Verify the staged bytes without trusting the filename.
     fn verify(
-        &self,
         part: &Path,
         outcome: &WriteOutcome,
         declared_length: Option<u64>,
@@ -450,9 +449,13 @@ mod tests {
         }
     }
 
+    /// One scripted response: a head plus the chunk sequence its body yields.
+    type ScriptedResponse =
+        Result<(ResponseHead, Vec<Result<Vec<u8>, TransportError>>), TransportError>;
+
     #[derive(Debug)]
     struct ScriptedFetcher {
-        responses: Mutex<Vec<Result<(ResponseHead, Vec<Result<Vec<u8>, TransportError>>), TransportError>>>,
+        responses: Mutex<Vec<ScriptedResponse>>,
         urls_seen: Mutex<Vec<String>>,
     }
 
@@ -464,9 +467,7 @@ mod tests {
             }
         }
 
-        fn scripted(
-            responses: Vec<Result<(ResponseHead, Vec<Result<Vec<u8>, TransportError>>), TransportError>>,
-        ) -> Self {
+        fn scripted(responses: Vec<ScriptedResponse>) -> Self {
             Self {
                 responses: Mutex::new(responses),
                 urls_seen: Mutex::new(Vec::new()),
@@ -717,7 +718,10 @@ mod tests {
     async fn an_empty_body_is_an_integrity_failure() {
         let dir = tempfile::tempdir().expect("tempdir");
         let target = dir.path().join("staged.bin");
-        let fetcher = Arc::new(ScriptedFetcher::ok(head(None, Some("audio/wav")), Vec::new()));
+        let fetcher = Arc::new(ScriptedFetcher::ok(
+            head(None, Some("audio/wav")),
+            Vec::new(),
+        ));
         let error = pipeline(fetcher)
             .acquire(&provider(), &item(None), &target)
             .await

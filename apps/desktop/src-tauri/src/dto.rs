@@ -1140,6 +1140,218 @@ pub struct SetOpenRouterKeyRequest {
     pub key: String,
 }
 
+/* ----------------------------------------------------------------- sources */
+
+/// The only user-intent tokens `plaud_connect` accepts.
+///
+/// Spec §7.1: every launch of the vendor tool follows an explicit user action.
+/// The UI states which action it is acting for; Rust maps the token onto a
+/// `&'static str` it controls and rejects anything else, so the string that
+/// reaches the process runner is never frontend-supplied text.
+pub const PLAUD_CONNECT_INTENT: &str = "connect_plaud_account";
+
+/// `plaud_connect` request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlaudConnectRequest {
+    /// The user action that triggered the request; must be
+    /// [`PLAUD_CONNECT_INTENT`].
+    pub user_intent: String,
+}
+
+/// `plaud_list` request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlaudListRequest {
+    /// Cursor returned by the previous page, or `null` for the first page.
+    pub cursor: Option<String>,
+}
+
+/// `plaud_import` request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlaudImportRequest {
+    /// External IDs from the last listing; any other ID rejects the request.
+    pub external_ids: Vec<String>,
+}
+
+/// Machine-readable lifecycle state of the cloud connector.
+pub type PlaudConnectorState = plaudon_source_plaud_cli::state::ConnectorState;
+
+/// What the user should do next; the variants are the §5.4 corrective
+/// actions, and the UI maps each to a control rather than composing text.
+pub type PlaudNextAction = plaudon_source_plaud_cli::diagnostics::NextAction;
+
+/// Which truthful disconnect wording applies (spec §4.2.7).
+pub type PlaudDisconnectVariant = plaudon_source_plaud_cli::diagnostics::DisconnectCopy;
+
+/// Compatibility verdict of the detected CLI version, in one word.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PlaudCompatibility {
+    /// No readable version.
+    Unknown,
+    /// The version is in the validated compatibility table.
+    Tested,
+    /// The version was read but never validated.
+    Untested,
+}
+
+/// Persisted connector facts (spec §7.1), without any prose.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlaudConnectorStatus {
+    /// Lifecycle state.
+    pub state: PlaudConnectorState,
+    /// Version the tool reported, when readable.
+    pub detected_version: Option<String>,
+    /// Whether the version is in the validated compatibility table.
+    pub version_validated: bool,
+    /// Where the executable was found.
+    pub program_origin: Option<String>,
+    /// Stable code of the last error.
+    pub last_error: Option<plaudon_domain::error::AppErrorCode>,
+    /// Whether the last listing may not include every recording.
+    pub listing_possibly_incomplete: bool,
+    /// Whether the listing is read from an on-screen table.
+    pub scraping_warning: bool,
+    /// When the status last changed, Unix epoch milliseconds.
+    pub updated_at_ms: i64,
+}
+
+/// The diagnostics panel payload (spec §4.2, §7.5, §7.6).
+///
+/// `headline`, `detail` and `warnings` are written in
+/// `plaudon_source_plaud_cli::diagnostics` from a stable state or code and are
+/// rendered verbatim by the UI; there is no vendor text to forward.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlaudDiagnostics {
+    /// Lifecycle state.
+    pub state: PlaudConnectorState,
+    /// One-line summary.
+    pub headline: String,
+    /// Explanation in the application's own words.
+    pub detail: String,
+    /// The concrete next step.
+    pub next_action: PlaudNextAction,
+    /// Version the tool reported, when readable.
+    pub detected_version: Option<String>,
+    /// Compatibility verdict.
+    pub compatibility: PlaudCompatibility,
+    /// Where the executable was found.
+    pub program_origin: Option<String>,
+    /// Stable code of the last error, for log correlation.
+    pub last_error: Option<plaudon_domain::error::AppErrorCode>,
+    /// Warnings to render alongside the panel.
+    pub warnings: Vec<String>,
+}
+
+/// Disconnect wording for the detected release (spec §4.2.7).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlaudDisconnectCopy {
+    /// Which variant applies.
+    pub variant: PlaudDisconnectVariant,
+    /// Button label.
+    pub label: String,
+    /// Explanatory body.
+    pub body: String,
+}
+
+/// Response of `plaud_probe`, `plaud_connect` and the connector half of
+/// `plaud_disconnect`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlaudConnectorSnapshot {
+    /// Persisted connector facts.
+    pub status: PlaudConnectorStatus,
+    /// The diagnostics panel.
+    pub diagnostics: PlaudDiagnostics,
+    /// The disconnect control's wording.
+    pub disconnect: PlaudDisconnectCopy,
+}
+
+/// Response of `plaud_disconnect`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlaudDisconnectResponse {
+    /// The wording that was true for what just happened.
+    pub disconnect: PlaudDisconnectCopy,
+    /// The connector after disconnecting.
+    pub snapshot: PlaudConnectorSnapshot,
+}
+
+/// Whether a listing page may be partial (spec §7.2).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PlaudListingCompleteness {
+    /// Pagination has been observed for this release.
+    Complete,
+    /// Paging was never observed; more recordings may exist.
+    PossiblyIncomplete,
+}
+
+/// One cloud recording as listed.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlaudItemSummary {
+    /// Vendor identifier; the only handle `plaud_import` accepts.
+    pub external_id: String,
+    /// Name the account gives the recording. Advisory metadata.
+    pub display_name: String,
+    /// Capture time, when reported.
+    pub captured_at: Option<String>,
+    /// Duration, when reported.
+    pub duration_ms: Option<u64>,
+    /// Declared size in bytes, when reported. Untrusted until verified.
+    pub declared_byte_length: Option<u64>,
+    /// The library recording that already holds this item, if imported.
+    pub imported_recording_id: Option<RecordingId>,
+}
+
+/// Response of `plaud_list`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlaudListResponse {
+    /// Recordings on this page.
+    pub items: Vec<PlaudItemSummary>,
+    /// Cursor of the next page, or `null`.
+    pub next_cursor: Option<String>,
+    /// Completeness disclosure for the listing.
+    pub completeness: PlaudListingCompleteness,
+    /// Shown when the account looks empty. Not an error (spec §7.5).
+    pub empty_account_advisory: Option<String>,
+}
+
+/// Per-ID result of `plaud_import`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "outcome", rename_all = "snake_case")]
+pub enum PlaudImportOutcome {
+    /// The recording was downloaded, verified and committed.
+    Imported {
+        /// The listed identifier.
+        external_id: String,
+        /// The import job.
+        job_id: JobId,
+        /// The recording now in the library.
+        recording_id: RecordingId,
+    },
+    /// The recording was already in the library; nothing changed.
+    AlreadyImported {
+        /// The listed identifier.
+        external_id: String,
+        /// The existing recording.
+        recording_id: RecordingId,
+    },
+    /// The import failed; the job holds the same code.
+    Failed {
+        /// The listed identifier.
+        external_id: String,
+        /// The job that recorded the failure.
+        job_id: JobId,
+        /// §15.4 envelope with a stable code and no vendor text.
+        error: ErrorEnvelope,
+    },
+}
+
+/// Response of `plaud_import`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlaudImportResponse {
+    /// One outcome per requested ID, in request order.
+    pub results: Vec<PlaudImportOutcome>,
+}
+
 /* ------------------------------------------------------------------ events */
 
 /// §15.3 event names.

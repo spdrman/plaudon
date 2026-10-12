@@ -175,9 +175,9 @@ impl ConnectorDiagnostics {
         table: &CliCompatibilityTable,
     ) -> Self {
         let mut panel = Self::render(status, table);
-        let (headline, detail, next_action) = error_copy(error.clone(), table);
-        panel.headline = headline.to_owned();
-        panel.detail = detail.to_owned();
+        let (headline, detail, next_action) = error_copy(&error, table);
+        headline.clone_into(&mut panel.headline);
+        detail.clone_into(&mut panel.detail);
         panel.next_action = next_action;
         panel.last_error = Some(plaudon_domain::error::AppError::from(error).code());
         panel
@@ -289,7 +289,7 @@ fn incompatible_detail(status: &ConnectorStatus, table: &CliCompatibilityTable) 
 }
 
 fn error_copy(
-    error: SourceError,
+    error: &SourceError,
     table: &CliCompatibilityTable,
 ) -> (&'static str, &'static str, NextAction) {
     match error {
@@ -428,8 +428,11 @@ mod tests {
     #[test]
     fn every_spec_7_6_error_variant_renders_copy() {
         for error in ALL_ERRORS {
-            let panel =
-                ConnectorDiagnostics::for_error(&status(ConnectorState::Ready), error.clone(), table());
+            let panel = ConnectorDiagnostics::for_error(
+                &status(ConnectorState::Ready),
+                error.clone(),
+                table(),
+            );
             assert!(!panel.headline.is_empty(), "{error:?}");
             assert!(panel.detail.len() > 40, "{error:?}");
             assert!(panel.last_error.is_some(), "{error:?}");
@@ -455,8 +458,15 @@ mod tests {
         }
         rendered.push(empty_listing_advisory().1.to_owned());
         for text in rendered {
-            for leak in ["http://", "https://", "stderr", "exit code", "Traceback", "Error:", "sk-"]
-            {
+            for leak in [
+                "http://",
+                "https://",
+                "stderr",
+                "exit code",
+                "Traceback",
+                "Error:",
+                "sk-",
+            ] {
                 assert!(!text.contains(leak), "{text:?} contains {leak:?}");
             }
         }
@@ -519,9 +529,10 @@ mod tests {
     #[test]
     fn warnings_follow_the_status_flags() {
         let mut status = status(ConnectorState::Ready);
-        assert!(ConnectorDiagnostics::render(&status, table())
-            .warnings
-            .is_empty());
+        assert_eq!(
+            ConnectorDiagnostics::render(&status, table()).warnings,
+            Vec::<&str>::new()
+        );
         status.scraping_warning = true;
         status.listing_possibly_incomplete = true;
         let panel = ConnectorDiagnostics::render(&status, table());
@@ -538,7 +549,11 @@ mod tests {
         status.version_validated = true;
         status.scraping_warning = true;
         status.listing_possibly_incomplete = true;
-        status.program_origin = Some(crate::discovery::DiscoveryOrigin::WellKnownLocation.label().to_owned());
+        status.program_origin = Some(
+            crate::discovery::DiscoveryOrigin::WellKnownLocation
+                .label()
+                .to_owned(),
+        );
 
         let after = status.apply(ConnectorEvent::Disconnected, 10);
         assert_eq!(after.state, ConnectorState::Unconfigured);

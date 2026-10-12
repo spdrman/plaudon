@@ -456,7 +456,7 @@ fn parse_table(stdout: &str) -> Result<Vec<RawRecord>, ParserError> {
                 .map(|(_, column)| *column)
         })
         .collect();
-    if !columns.iter().any(|c| *c == Some(TableColumn::Id)) {
+    if !columns.contains(&Some(TableColumn::Id)) {
         return Err(ParserError::MissingField { field: "id" });
     }
 
@@ -633,7 +633,10 @@ mod tests {
             .parse_listing(stdout)
             .expect("parsed");
         assert_eq!(external_ids(&page), ["rec_1", "rec_2"]);
-        assert_eq!(page.items[0].identity.source_kind, SourceKind::PlaudCloudCli);
+        assert_eq!(
+            page.items[0].identity.source_kind,
+            SourceKind::PlaudCloudCli
+        );
         assert_eq!(
             page.items[0].identity.account_scope,
             SourceAccountScope::new("account-a")
@@ -664,7 +667,7 @@ mod tests {
             (ListingFormat::JsonLines, "\n\n"),
         ] {
             let page = parser(format, false).parse_listing(stdout).expect("parsed");
-            assert!(page.items.is_empty());
+            assert_eq!(page.items, Vec::new());
         }
     }
 
@@ -681,7 +684,11 @@ mod tests {
 
     #[test]
     fn a_missing_or_blank_id_fails_the_page() {
-        for stdout in ["{\"title\":\"x\"}\n", "{\"id\":\"\"}\n", "{\"id\":\"   \"}\n"] {
+        for stdout in [
+            "{\"title\":\"x\"}\n",
+            "{\"id\":\"\"}\n",
+            "{\"id\":\"   \"}\n",
+        ] {
             assert_eq!(
                 parser(ListingFormat::JsonLines, false)
                     .parse_listing(stdout)

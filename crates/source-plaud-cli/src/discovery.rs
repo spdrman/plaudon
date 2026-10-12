@@ -193,7 +193,10 @@ impl CliDiscovery {
 
     /// Discovery over an injected filesystem and environment.
     #[must_use]
-    pub fn with_probe(probe: Arc<dyn ExecutableProbe>, environment: BTreeMap<String, String>) -> Self {
+    pub fn with_probe(
+        probe: Arc<dyn ExecutableProbe>,
+        environment: BTreeMap<String, String>,
+    ) -> Self {
         Self { probe, environment }
     }
 
@@ -275,17 +278,17 @@ impl CliDiscovery {
     pub fn discover(&self) -> Result<DiscoveredCli, DiscoveryError> {
         let mut shim: Option<PathBuf> = None;
         let groups = [
-            (DiscoveryOrigin::WellKnownLocation, self.well_known_directories()),
+            (
+                DiscoveryOrigin::WellKnownLocation,
+                self.well_known_directories(),
+            ),
             (DiscoveryOrigin::PathEnvironment, self.path_directories()),
         ];
         for (origin, directories) in groups {
             for directory in directories {
                 let candidate = directory.join(EXECUTABLE_LEAF);
                 if self.probe.is_executable_file(&candidate) {
-                    let program = self
-                        .probe
-                        .canonicalize(&candidate)
-                        .unwrap_or(candidate);
+                    let program = self.probe.canonicalize(&candidate).unwrap_or(candidate);
                     return Ok(DiscoveredCli {
                         program,
                         origin,
@@ -344,7 +347,10 @@ impl CliDiscovery {
             return Err(DiscoveryError::NotExecutable);
         }
         Ok(DiscoveredCli {
-            program: self.probe.canonicalize(path).unwrap_or_else(|| path.to_path_buf()),
+            program: self
+                .probe
+                .canonicalize(path)
+                .unwrap_or_else(|| path.to_path_buf()),
             origin: DiscoveryOrigin::UserSelected,
             approval: Some(approval),
         })
@@ -397,7 +403,10 @@ mod tests {
         [
             ("HOME".to_owned(), "/Users/example".to_owned()),
             ("USERPROFILE".to_owned(), "C:\\Users\\example".to_owned()),
-            ("APPDATA".to_owned(), "C:\\Users\\example\\AppData\\Roaming".to_owned()),
+            (
+                "APPDATA".to_owned(),
+                "C:\\Users\\example\\AppData\\Roaming".to_owned(),
+            ),
             ("PATH".to_owned(), path.to_owned()),
         ]
         .into_iter()
@@ -411,7 +420,10 @@ mod tests {
     #[cfg(not(windows))]
     #[test]
     fn a_well_known_location_is_found() {
-        let d = discovery(FakeProbe::default().with_executable("/opt/homebrew/bin/plaud"), "");
+        let d = discovery(
+            FakeProbe::default().with_executable("/opt/homebrew/bin/plaud"),
+            "",
+        );
         let found = d.discover().expect("discovered");
         assert_eq!(found.program, PathBuf::from("/opt/homebrew/bin/plaud"));
         assert_eq!(found.origin, DiscoveryOrigin::WellKnownLocation);
@@ -477,10 +489,7 @@ mod tests {
     #[cfg(not(windows))]
     #[test]
     fn a_non_executable_file_is_not_a_candidate() {
-        let d = discovery(
-            FakeProbe::default().with_file("/usr/local/bin/plaud"),
-            "",
-        );
+        let d = discovery(FakeProbe::default().with_file("/usr/local/bin/plaud"), "");
         assert_eq!(d.discover().unwrap_err(), DiscoveryError::NotFound);
     }
 
@@ -627,7 +636,10 @@ mod tests {
             FakeProbe::default().with_executable(path),
             "/Users/example/Dév Tools",
         );
-        assert_eq!(d.discover().expect("discovered").program, PathBuf::from(path));
+        assert_eq!(
+            d.discover().expect("discovered").program,
+            PathBuf::from(path)
+        );
     }
 
     #[test]
@@ -635,6 +647,6 @@ mod tests {
         let d = discovery(FakeProbe::default(), "::/a::/b:");
         let dirs = d.path_directories();
         assert!(dirs.iter().all(|d| d.is_absolute()));
-        assert!(!dirs.is_empty());
+        assert_ne!(dirs, Vec::<PathBuf>::new());
     }
 }

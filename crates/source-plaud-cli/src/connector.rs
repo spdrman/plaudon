@@ -198,7 +198,10 @@ impl PlaudCloudCliConnector {
                 session.status.listing_possibly_incomplete = row.listing_may_be_incomplete();
                 session.logout_supported = matches!(row.logout_command, Tri::Yes);
                 session.parser = Some(VersionedParser::for_row(row, self.account_scope.clone()));
-                session.status = session.status.clone().apply(ConnectorEvent::CliFound, intent.at_ms);
+                session.status = session
+                    .status
+                    .clone()
+                    .apply(ConnectorEvent::CliFound, intent.at_ms);
                 Ok(session.status.clone())
             }
             VersionVerdict::NotValidated { .. } | VersionVerdict::Unreadable => {
@@ -243,7 +246,12 @@ impl PlaudCloudCliConnector {
             let program = self.program()?;
             let _ = self
                 .runner
-                .run(&program, &CliCommand::Logout, RunLimits::INTERACTIVE, intent)
+                .run(
+                    &program,
+                    &CliCommand::Logout,
+                    RunLimits::INTERACTIVE,
+                    intent,
+                )
                 .await;
         }
         {
@@ -268,7 +276,9 @@ impl PlaudCloudCliConnector {
             (Some(cursor), Some(flag)) => CliCommand::files_page(flag, cursor),
             // A caller that supplies a cursor for a release with no observed
             // pagination is asking us to guess; spec 7.2 says we do not.
-            (Some(_), None) => return Err(self.record_error(SourceError::MalformedOutput, intent.at_ms)),
+            (Some(_), None) => {
+                return Err(self.record_error(SourceError::MalformedOutput, intent.at_ms))
+            }
             (None, _) => CliCommand::files(),
         };
 
@@ -456,7 +466,9 @@ impl RecordingSource for PlaudCloudCliConnector {
         // iterated sources; it is still a user-initiated refresh, recorded as
         // such.
         let intent = UserInitiated::new("refresh_sources", now_ms());
-        self.enumerate(cursor, &intent).await.map(|result| result.page)
+        self.enumerate(cursor, &intent)
+            .await
+            .map(|result| result.page)
     }
 
     async fn acquire(
@@ -503,7 +515,8 @@ mod tests {
 
     #[test]
     fn trailing_punctuation_is_trimmed_from_an_extracted_url() {
-        let extracted = extract_url(&output("url: \"https://cdn.example.com/a.wav\"")).expect("url");
+        let extracted =
+            extract_url(&output("url: \"https://cdn.example.com/a.wav\"")).expect("url");
         assert_eq!(&*extracted, "https://cdn.example.com/a.wav");
     }
 

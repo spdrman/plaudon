@@ -248,9 +248,8 @@ impl DownloadPolicy {
         let scheme = url
             .split_once(':')
             .map(|(scheme, _)| scheme.to_ascii_lowercase());
-        let scheme_ok = |scheme: &str| {
-            scheme == "https" || (self.loopback_http_allowed && scheme == "http")
-        };
+        let scheme_ok =
+            |scheme: &str| scheme == "https" || (self.loopback_http_allowed && scheme == "http");
         match scheme.as_deref() {
             Some(scheme) if scheme_ok(scheme) => {}
             Some(_) => return Err(DownloadRejection::SchemeNotHttps),

@@ -397,7 +397,10 @@ mod tests {
         // and no release has been exercised. This assertion is what makes the
         // connector fail closed rather than guess; a future validated row is
         // expected to change it deliberately, together with a golden fixture.
-        assert!(CliCompatibilityTable::committed().usable_versions().is_empty());
+        assert_eq!(
+            CliCompatibilityTable::committed().usable_versions(),
+            Vec::<&str>::new()
+        );
     }
 
     #[test]
@@ -429,7 +432,10 @@ mod tests {
         let t = table(vec![observed_row("1.4.2")]);
         let verdict = t.verdict(Some(&CliVersion::new("1.4.2")));
         assert!(verdict.permits_use());
-        assert_eq!(verdict.row().map(|r| r.listing_format), Some(ListingFormat::JsonLines));
+        assert_eq!(
+            verdict.row().map(|r| r.listing_format),
+            Some(ListingFormat::JsonLines)
+        );
         assert_eq!(verdict.as_source_error(), None);
     }
 
@@ -449,7 +455,7 @@ mod tests {
         row.host_os.clear();
         let t = table(vec![row]);
         assert!(!t.verdict(Some(&CliVersion::new("1.4.2"))).permits_use());
-        assert!(t.usable_versions().is_empty());
+        assert_eq!(t.usable_versions(), Vec::<&str>::new());
     }
 
     #[test]
@@ -475,10 +481,20 @@ mod tests {
 
     #[test]
     fn promotion_rules_are_enforced_per_row() {
-        let cases: Vec<(&'static str, Box<dyn Fn(&mut CliCompatibilityRow)>)> = vec![
-            ("version", Box::new(|r: &mut CliCompatibilityRow| r.version = "latest".to_owned())),
-            ("fixture", Box::new(|r: &mut CliCompatibilityRow| r.fixture_id = "../escape".to_owned())),
-            ("digest", Box::new(|r: &mut CliCompatibilityRow| r.fixture_sha256 = "short".to_owned())),
+        type Mutation = Box<dyn Fn(&mut CliCompatibilityRow)>;
+        let cases: Vec<(&'static str, Mutation)> = vec![
+            (
+                "version",
+                Box::new(|r: &mut CliCompatibilityRow| r.version = "latest".to_owned()),
+            ),
+            (
+                "fixture",
+                Box::new(|r: &mut CliCompatibilityRow| r.fixture_id = "../escape".to_owned()),
+            ),
+            (
+                "digest",
+                Box::new(|r: &mut CliCompatibilityRow| r.fixture_sha256 = "short".to_owned()),
+            ),
             (
                 "pagination",
                 Box::new(|r: &mut CliCompatibilityRow| {
@@ -488,7 +504,10 @@ mod tests {
                     };
                 }),
             ),
-            ("evidence", Box::new(|r: &mut CliCompatibilityRow| r.verified_on = None)),
+            (
+                "evidence",
+                Box::new(|r: &mut CliCompatibilityRow| r.verified_on = None),
+            ),
         ];
         for (name, mutate) in cases {
             let mut row = observed_row("1.4.2");
@@ -529,6 +548,9 @@ mod tests {
 
     #[test]
     fn resume_is_never_claimed_by_a_cli_release() {
-        assert_eq!(observed_row("1.4.2").capabilities().supports_resume, Tri::No);
+        assert_eq!(
+            observed_row("1.4.2").capabilities().supports_resume,
+            Tri::No
+        );
     }
 }

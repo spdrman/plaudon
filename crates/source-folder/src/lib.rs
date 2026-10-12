@@ -67,7 +67,7 @@ pub use placeholder::{
 pub use queue::{CoalescingQueue, OfferOutcome, PendingCandidate};
 pub use service::{
     CandidateOutcome, CloudDispatchRefusal, LocalWorkSink, NoLocalWork, QueueingLocalWorkSink,
-    WatchedFolderService,
+    SyncReport, WatchedFolderService,
 };
 pub use sniff::{sniff as sniff_container, MediaContainer};
 pub use watcher::{FsEventSource, FsHint, NotifyWatcher, ScriptedEventSource};

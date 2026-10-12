@@ -601,6 +601,39 @@ impl WatchedFolderService {
         Ok(outcomes)
     }
 
+    /// One full reconciliation tick for this folder.
+    ///
+    /// Sweeps the bounded inventory, then processes everything whose debounce
+    /// window has elapsed. This is the entry point a "Sync now" command and
+    /// the periodic timer both use; running it twice in a row imports nothing
+    /// extra, because identity is the file's own, not its path.
+    ///
+    /// # Errors
+    ///
+    /// Propagates storage failures.
+    pub async fn sync(&self) -> FolderResult<SyncReport> {
+        let inventory = self.run_inventory().await?;
+        let outcomes = self.drain_due().await?;
+        let mut report = SyncReport {
+            scanned: inventory.scanned,
+            inventory_complete: inventory.is_complete(),
+            vanished: inventory.vanished.len(),
+            ..SyncReport::default()
+        };
+        for outcome in outcomes {
+            match outcome {
+                CandidateOutcome::Imported { recording_id, .. } => {
+                    report.imported.push(recording_id);
+                }
+                CandidateOutcome::AlreadyImported { .. } => report.already_imported += 1,
+                CandidateOutcome::Deferred { .. } => report.deferred += 1,
+                CandidateOutcome::RefusedTombstoned { .. } => report.refused_tombstoned += 1,
+                CandidateOutcome::Rejected { .. } => report.rejected += 1,
+            }
+        }
+        Ok(report)
+    }
+
     /// Run one bounded inventory sweep.
     ///
     /// Recovers anything the watcher dropped, and marks vanished sources
@@ -668,4 +701,25 @@ impl WatchedFolderService {
     pub fn permits_unattended_cloud(&self) -> bool {
         !matches!(self.config.rule(), FolderRule::AskBeforeCloud)
     }
+}
+
+/// What one [`WatchedFolderService::sync`] tick did.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SyncReport {
+    /// Entries the inventory sweep inspected.
+    pub scanned: usize,
+    /// Whether the sweep saw the whole folder within its caps.
+    pub inventory_complete: bool,
+    /// Recordings created by this tick.
+    pub imported: Vec<RecordingId>,
+    /// Candidates that were already imported.
+    pub already_imported: usize,
+    /// Candidates the completion barrier deferred.
+    pub deferred: usize,
+    /// Candidates refused because the user deleted the recording.
+    pub refused_tombstoned: usize,
+    /// Paths that are not candidates for this folder.
+    pub rejected: usize,
+    /// Known paths that are no longer present and were marked unavailable.
+    pub vanished: usize,
 }

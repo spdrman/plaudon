@@ -344,7 +344,9 @@ where
     R: tokio::io::AsyncRead + Unpin,
 {
     let mut buffer = Vec::with_capacity(limit.min(64 * 1024));
-    let mut chunk = [0u8; 16 * 1024];
+    // Heap, not stack: a 16 KiB array here lands in every future that awaits
+    // this function and makes `CliRunner::run` a 34 KiB future.
+    let mut chunk = vec![0u8; 16 * 1024];
     loop {
         let Ok(read) = reader.read(&mut chunk).await else {
             // A broken pipe means the child died; whatever we have is what
@@ -562,7 +564,7 @@ mod tests {
             .expect("ran");
         assert_eq!(output.exit_code, Some(7));
         assert!(!output.succeeded());
-        assert!(output.stdout.is_empty());
+        assert_eq!(output.stdout, "");
         assert!(output.stderr_excerpt.contains("not logged in"));
     }
 
@@ -644,7 +646,10 @@ mod tests {
     #[tokio::test]
     async fn read_capped_accepts_exactly_the_limit() {
         let mut data = &b"0123456789"[..];
-        assert_eq!(read_capped(&mut data, 10, "stdout").await.unwrap().len(), 10);
+        assert_eq!(
+            read_capped(&mut data, 10, "stdout").await.unwrap().len(),
+            10
+        );
         let mut data = &b"0123456789"[..];
         assert_eq!(
             read_capped(&mut data, 9, "stdout").await.unwrap_err(),

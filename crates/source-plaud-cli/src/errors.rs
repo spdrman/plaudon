@@ -22,15 +22,31 @@ use crate::runner::CliOutput;
 /// being forced into the nearest-looking variant.
 const PHRASE_RULES: &[(&[&str], SourceError)] = &[
     (
-        &["not logged in", "login required", "please log in", "please login", "unauthenticated"],
+        &[
+            "not logged in",
+            "login required",
+            "please log in",
+            "please login",
+            "unauthenticated",
+        ],
         SourceError::AuthenticationRequired,
     ),
     (
-        &["session expired", "token expired", "credentials expired", "re-authenticate"],
+        &[
+            "session expired",
+            "token expired",
+            "credentials expired",
+            "re-authenticate",
+        ],
         SourceError::AuthenticationRequired,
     ),
     (
-        &["login cancel", "cancelled by user", "canceled by user", "aborted by user"],
+        &[
+            "login cancel",
+            "cancelled by user",
+            "canceled by user",
+            "aborted by user",
+        ],
         SourceError::AuthCanceled,
     ),
     (
@@ -38,15 +54,35 @@ const PHRASE_RULES: &[(&[&str], SourceError)] = &[
         SourceError::RemoteRateLimited,
     ),
     (
-        &["link expired", "url expired", "signature expired", "presigned", "410 gone"],
+        &[
+            "link expired",
+            "url expired",
+            "signature expired",
+            "presigned",
+            "410 gone",
+        ],
         SourceError::LinkExpired,
     ),
     (
-        &["not found", "no such recording", "no such file", "unknown id", "404"],
+        &[
+            "not found",
+            "no such recording",
+            "no such file",
+            "unknown id",
+            "404",
+        ],
         SourceError::AssetNotFound,
     ),
     (
-        &["network", "connection refused", "timed out", "timeout", "dns", "offline", "unreachable"],
+        &[
+            "network",
+            "connection refused",
+            "timed out",
+            "timeout",
+            "dns",
+            "offline",
+            "unreachable",
+        ],
         SourceError::SourceUnavailable,
     ),
     (
@@ -54,7 +90,12 @@ const PHRASE_RULES: &[(&[&str], SourceError)] = &[
         SourceError::IntegrityFailed,
     ),
     (
-        &["unexpected response", "unsupported format", "parse error", "invalid json"],
+        &[
+            "unexpected response",
+            "unsupported format",
+            "parse error",
+            "invalid json",
+        ],
         SourceError::MalformedOutput,
     ),
 ];
@@ -138,7 +179,10 @@ mod tests {
     #[test]
     fn a_successful_run_is_not_an_error() {
         assert_eq!(
-            classify(&output(Some(0), "warning: beta build"), &CliCommand::files()),
+            classify(
+                &output(Some(0), "warning: beta build"),
+                &CliCommand::files()
+            ),
             None
         );
     }
@@ -152,15 +196,39 @@ mod tests {
         let cases: &[(Option<i32>, &str, SourceError)] = &[
             (Some(127), "", SourceError::CliMissing),
             (Some(126), "", SourceError::CliMissing),
-            (Some(1), "Error: not logged in", SourceError::AuthenticationRequired),
-            (Some(1), "session expired, please re-authenticate", SourceError::AuthenticationRequired),
+            (
+                Some(1),
+                "Error: not logged in",
+                SourceError::AuthenticationRequired,
+            ),
+            (
+                Some(1),
+                "session expired, please re-authenticate",
+                SourceError::AuthenticationRequired,
+            ),
             (Some(130), "login cancelled", SourceError::AuthCanceled),
             (Some(1), "no such recording", SourceError::AssetNotFound),
-            (Some(1), "the download url expired", SourceError::LinkExpired),
-            (Some(1), "unexpected response from server", SourceError::MalformedOutput),
-            (Some(1), "network is unreachable", SourceError::SourceUnavailable),
+            (
+                Some(1),
+                "the download url expired",
+                SourceError::LinkExpired,
+            ),
+            (
+                Some(1),
+                "unexpected response from server",
+                SourceError::MalformedOutput,
+            ),
+            (
+                Some(1),
+                "network is unreachable",
+                SourceError::SourceUnavailable,
+            ),
             (Some(1), "checksum mismatch", SourceError::IntegrityFailed),
-            (Some(1), "rate limit exceeded", SourceError::RemoteRateLimited),
+            (
+                Some(1),
+                "rate limit exceeded",
+                SourceError::RemoteRateLimited,
+            ),
         ];
         for (code, stderr, expected) in cases {
             assert_eq!(
@@ -174,7 +242,10 @@ mod tests {
     #[test]
     fn an_unexplained_failure_is_not_guessed_into_a_specific_variant() {
         assert_eq!(
-            classify(&output(Some(42), "something went wrong"), &CliCommand::files()),
+            classify(
+                &output(Some(42), "something went wrong"),
+                &CliCommand::files()
+            ),
             Some(SourceError::SourceUnavailable)
         );
         assert_eq!(
@@ -198,7 +269,10 @@ mod tests {
     #[test]
     fn classification_is_case_insensitive() {
         assert_eq!(
-            classify(&output(Some(1), "ERROR: NOT LOGGED IN"), &CliCommand::files()),
+            classify(
+                &output(Some(1), "ERROR: NOT LOGGED IN"),
+                &CliCommand::files()
+            ),
             Some(SourceError::AuthenticationRequired)
         );
     }
@@ -209,11 +283,14 @@ mod tests {
         // pins it so a future "message" field cannot be added without
         // revisiting spec 7.6.
         let error = classify(
-            &output(Some(1), "FATAL: account 4711 at eu-west rejected token abcdef"),
+            &output(
+                Some(1),
+                "FATAL: account 4711 at eu-west rejected token abcdef",
+            ),
             &CliCommand::files(),
         )
         .expect("classified");
-        let rendered = SourceError::from(error).to_string();
+        let rendered = error.to_string();
         for leak in ["4711", "eu-west", "abcdef", "FATAL"] {
             assert!(!rendered.contains(leak), "{rendered} leaked {leak}");
         }

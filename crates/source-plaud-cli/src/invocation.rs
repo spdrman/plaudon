@@ -183,7 +183,10 @@ mod tests {
 
     #[test]
     fn version_login_and_files_render_to_fixed_vectors() {
-        assert_eq!(rendered(&CliCommand::Version), [OsString::from("--version")]);
+        assert_eq!(
+            rendered(&CliCommand::Version),
+            [OsString::from("--version")]
+        );
         assert_eq!(rendered(&CliCommand::Login), [OsString::from("login")]);
         assert_eq!(rendered(&CliCommand::Logout), [OsString::from("logout")]);
         assert_eq!(rendered(&CliCommand::files()), [OsString::from("files")]);
