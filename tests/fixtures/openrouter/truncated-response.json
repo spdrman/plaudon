@@ -1,0 +1,6 @@
+{
+  "_shape": "Connection closed mid-body after bytes were transmitted.",
+  "status": 200,
+  "truncated": true,
+  "body_prefix": "{\"text\": \"Good morn"
+}

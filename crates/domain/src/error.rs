@@ -465,36 +465,33 @@ impl Redactor {
 
     fn redact_token(token: &str) -> String {
         let lower = token.to_ascii_lowercase();
-        let sensitive_key = [
-            "token",
-            "secret",
-            "key",
-            "password",
-            "signature",
-            "authorization",
-            "cookie",
-            "sig",
-            "credential",
-        ];
-        if lower.starts_with("http://")
-            || lower.starts_with("https://")
-            || lower.starts_with("file://")
-            || lower.starts_with('/')
-            || lower.contains(":\\")
-        {
+        // A URL is matched anywhere in the token, not only at its start:
+        // surrounding punctuation such as `(`, `"`, `<` or a `key=` prefix
+        // must not be able to smuggle a signed link past the redactor.
+        let carries_url = ["http://", "https://", "file://"]
+            .iter()
+            .any(|scheme| lower.contains(scheme));
+        if carries_url || lower.starts_with('/') || lower.contains(":\\") {
             return Self::PLACEHOLDER.to_owned();
         }
-        if let Some((key, _)) = token.split_once(['=', ':']) {
-            let key_lower = key.to_ascii_lowercase();
-            if sensitive_key
-                .iter()
-                .any(|needle| key_lower.contains(needle))
-            {
-                return format!("{key}={}", Self::PLACEHOLDER);
-            }
-        }
-        if sensitive_key.iter().any(|needle| lower == *needle) {
+        // The bare word on its own is not a secret; it is usually a label in
+        // a sentence such as "a token is required".
+        if Self::SENSITIVE_KEYS.iter().any(|needle| lower == *needle) {
             return token.to_owned();
+        }
+        // A token may carry several `key=value` pairs, as a query fragment
+        // does. Every pair is inspected, not only the first.
+        for pair in token.split(['&', ';']) {
+            if let Some((key, value)) = pair.split_once(['=', ':']) {
+                let key_lower = key.to_ascii_lowercase();
+                if !value.is_empty()
+                    && Self::SENSITIVE_KEYS
+                        .iter()
+                        .any(|needle| key_lower.contains(needle))
+                {
+                    return Self::PLACEHOLDER.to_owned();
+                }
+            }
         }
         if Self::looks_like_opaque_secret(token) {
             return Self::PLACEHOLDER.to_owned();
@@ -502,17 +499,43 @@ impl Redactor {
         token.to_owned()
     }
 
+    /// Substrings in a field name that mark its value as sensitive.
+    const SENSITIVE_KEYS: &'static [&'static str] = &[
+        "token",
+        "secret",
+        "key",
+        "password",
+        "passphrase",
+        "signature",
+        "authorization",
+        "cookie",
+        "sig",
+        "credential",
+        "session",
+        "bearer",
+    ];
+
+    /// Whether a token has the shape of an opaque credential.
+    ///
+    /// A credential frequently carries internal separators: a JWT is
+    /// `header.payload.signature`, base64 uses `+`, `/` and `=`, and a query
+    /// fragment uses `&`. The token is therefore split on those separators
+    /// and redacted when **any** segment looks opaque, which over-redacts a
+    /// long dotted identifier and never under-redacts a credential.
     fn looks_like_opaque_secret(token: &str) -> bool {
         let trimmed = token.trim_matches(|c: char| !c.is_ascii_alphanumeric());
-        if trimmed.len() < 20 {
-            return false;
-        }
-        let alnum = trimmed
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
-        let has_digit = trimmed.chars().any(|c| c.is_ascii_digit());
-        let has_alpha = trimmed.chars().any(|c| c.is_ascii_alphabetic());
-        alnum && has_digit && has_alpha
+        trimmed
+            .split(['.', '&', '?', ',', ';'])
+            .any(Self::segment_looks_opaque)
+    }
+
+    fn segment_looks_opaque(segment: &str) -> bool {
+        segment.len() >= 20
+            && segment
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '+' | '/' | '='))
+            && segment.chars().any(|c| c.is_ascii_digit())
+            && segment.chars().any(|c| c.is_ascii_alphabetic())
     }
 }
 
@@ -747,6 +770,70 @@ mod tests {
             .message
             .ends_with("You can try again in about 30 seconds."));
         assert!(envelope.retryable);
+    }
+
+    #[test]
+    fn a_url_is_redacted_wherever_it_appears_in_a_token() {
+        // Regression: a leading `(`, `"`, `<` or `key=` used to defeat the
+        // scheme check, which is the signed-URL leak row of spec 16.2.
+        let redactor = Redactor::default();
+        for leaky in [
+            "see (https://cdn.example/x?sig=abc) now",
+            "\"https://cdn.example/x?X-Amz-Signature=deadbeefcafebabe0123\"",
+            "<https://cdn.example/signed>",
+            "url=https://cdn.example/signed",
+            "[link](http://cdn.example/a)",
+            "fetch:file:///Users/example/secret.wav",
+        ] {
+            let redacted = redactor.redact(leaky);
+            for scheme in ["http://", "https://", "file://"] {
+                assert!(
+                    !redacted.contains(scheme),
+                    "{leaky:?} leaked {scheme} as {redacted:?}"
+                );
+            }
+            assert!(
+                redacted.contains(Redactor::PLACEHOLDER),
+                "{leaky:?} -> {redacted:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_dotted_credential_is_redacted_segment_by_segment() {
+        // Regression: a JWT used to survive because its `.` separators made
+        // the whole token fail the opaque-token shape test.
+        let jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dBjftJeZ4CVPmB92K27uhbUJU1p1r";
+        let redacted = Redactor::default().redact(&format!("vendor said {jwt} is invalid"));
+        assert!(!redacted.contains("eyJhbGciOiJIUzI1NiJ9"), "{redacted}");
+        assert!(redacted.contains(Redactor::PLACEHOLDER));
+        assert!(redacted.starts_with("vendor said "));
+    }
+
+    #[test]
+    fn a_dotted_or_base64_credential_is_redacted_segment_by_segment() {
+        // Regression: credentials with internal separators used to survive,
+        // because one `.`, `+` or `/` disqualified the whole token.
+        let redactor = Redactor::default();
+        for credential in [
+            "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dBjftJeZ4CVPmB92K27uhbUJU1p1r",
+            "sk-or-v1-abc1234567890abcdef.def1234567890abcdef",
+            "YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY3ODkw+/==",
+            "a=1&token=0123456789abcdefghijklmnop",
+        ] {
+            let redacted = redactor.redact(&format!("vendor said {credential} is invalid"));
+            assert!(
+                redacted.contains(Redactor::PLACEHOLDER),
+                "{credential:?} survived as {redacted:?}"
+            );
+            assert!(redacted.starts_with("vendor said "));
+        }
+    }
+
+    #[test]
+    fn a_sensitive_key_is_caught_in_any_position_of_a_query_fragment() {
+        let redacted = Redactor::default().redact("sv=2021-06-08&sig=abcdef&sp=r");
+        assert_eq!(redacted, Redactor::PLACEHOLDER);
     }
 
     #[test]

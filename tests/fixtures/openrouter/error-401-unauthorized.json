@@ -1,0 +1,10 @@
+{
+  "_shape": "Rejected credential.",
+  "status": 401,
+  "body": {
+    "error": {
+      "code": 401,
+      "message": "No auth credentials found"
+    }
+  }
+}

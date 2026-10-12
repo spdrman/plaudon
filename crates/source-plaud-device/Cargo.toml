@@ -11,3 +11,13 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
+plaudon-domain = { workspace = true }
+plaudon-recording-sources = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_norway = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+jsonschema = { workspace = true }
+proptest = { workspace = true }

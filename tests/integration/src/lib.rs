@@ -7,6 +7,7 @@
 //! no vendor dependency at all.
 
 pub mod fakes;
+pub mod spikes;
 
 /// Cargo package name of this crate, used by the workspace layout conformance test.
 pub const PACKAGE_NAME: &str = "plaudon-integration-tests";

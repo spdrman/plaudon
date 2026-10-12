@@ -1,0 +1,10 @@
+{
+  "_shape": "Account out of credit.",
+  "status": 402,
+  "body": {
+    "error": {
+      "code": 402,
+      "message": "Insufficient credits"
+    }
+  }
+}

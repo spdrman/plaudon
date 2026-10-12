@@ -14,6 +14,18 @@ workspace = true
 [dependencies]
 async-trait = { workspace = true }
 plaudon-ai-contracts = { workspace = true }
+serde = { workspace = true }
+sha2 = { workspace = true }
+symphonia = { version = "0.5", default-features = false, features = [
+    "wav",
+    "pcm",
+    "mp3",
+    "aac",
+    "isomp4",
+    "ogg",
+    "vorbis",
+    "flac",
+] }
 plaudon-app-core = { workspace = true }
 plaudon-domain = { workspace = true }
 plaudon-persistence = { workspace = true }

@@ -1,0 +1,7 @@
+{
+  "_shape": "Successful response with no offsets at all. Must yield alignment_origin none.",
+  "status": 200,
+  "body": {
+    "text": "Good morning everyone."
+  }
+}

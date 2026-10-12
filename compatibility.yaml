@@ -1,0 +1,216 @@
+# Machine-readable compatibility claim register (spec 2.5B).
+#
+# This file is the ONLY source of the compatibility strings the application
+# shows. No compatibility claim may be written as interface copy, and a probed
+# profile that does not match a row here fails closed: no listing, no
+# transfer, no "Supported" label.
+#
+# Promotion rules, enforced by `CompatibilityCell::validate`:
+#   * status `supported` requires evidence_level `observed_on_identified_hardware`,
+#     a non-empty firmware_range and os_version_range, a test_run_id, a
+#     last_verified_at and verified_import_recorded: true.
+#   * a firmware or OS change invalidates the cell; use `demoted()` rather than
+#     editing a stale row in place.
+#
+# As of 2026-10-11 no cell is `supported`. No PLAUD hardware has been attached
+# to this build, so every device row is `not_evaluated` or `known_unsupported`
+# on vendor documentation. This is a finding, not an omission.
+
+schema_version: 1
+updated_at: "2026-10-11"
+
+cells:
+  # ---- Direct BLE (spec 2.5A, 7.7, App. B.3) ----
+  - source_type: plaud_device_ble
+    vendor: PLAUD
+    device_model: Note
+    hardware_revision: null
+    firmware_range: ["V0095"]
+    host_os: macos
+    os_version_range: ["26.0", "27.0"]
+    auth_mode: legacy_static_token
+    provisioning_method: imported_existing_token
+    transport: ble
+    codec: opus
+    quality_class: compressed_device_transfer
+    evidence_level: implemented_not_verified
+    status: not_evaluated
+    test_run_id: null
+    last_verified_at: null
+    verified_import_recorded: false
+    known_limitations:
+      - "Frame codec and read-only opcode allowlist implemented and unit tested; never exercised against real hardware by this build."
+      - "Upstream plaude-cli evidence is Linux/BlueZ-first; macOS operation with real hardware is not confirmed (spec 2.5A)."
+      - "The BLE listing is a delta of unsynchronized files; recordings already synced to a phone may be absent."
+      - "Legacy mode exchanges a static token over an unencrypted link."
+      - "Yields a compressed .ASR Opus sidecar, not the original stereo WAV."
+
+  - source_type: plaud_device_ble
+    vendor: PLAUD
+    device_model: Note
+    hardware_revision: null
+    firmware_range: ["V0095"]
+    host_os: windows
+    os_version_range: ["11"]
+    auth_mode: legacy_static_token
+    provisioning_method: imported_existing_token
+    transport: ble
+    codec: opus
+    quality_class: compressed_device_transfer
+    evidence_level: implemented_not_verified
+    status: not_evaluated
+    test_run_id: null
+    last_verified_at: null
+    verified_import_recorded: false
+    known_limitations:
+      - "Never exercised against real hardware by this build."
+      - "A cross-platform BLE crate proves central discovery exists; it does not prove PLAUD protocol success (spec 2.5B)."
+
+  - source_type: plaud_device_ble
+    vendor: PLAUD
+    device_model: Note
+    hardware_revision: null
+    firmware_range: ["encrypted-mode"]
+    host_os: macos
+    os_version_range: ["26.0", "27.0"]
+    auth_mode: encrypted_handshake
+    provisioning_method: none
+    transport: ble
+    codec: opus
+    quality_class: compressed_device_transfer
+    evidence_level: unsupported
+    status: known_unsupported
+    test_run_id: null
+    last_verified_at: null
+    verified_import_recorded: false
+    known_limitations:
+      - "RSA/ChaCha20-Poly1305 device mode is identified in reverse-engineering notes but implemented by no codec we have (spec 2.5A); we fail closed rather than downgrading."
+
+  # ---- Legacy USB mass storage (spec 4.2B, 7.8, App. B.2) ----
+  - source_type: plaud_device_usb
+    vendor: PLAUD
+    device_model: Note
+    hardware_revision: null
+    firmware_range: ["V0095"]
+    host_os: macos
+    os_version_range: ["26.0", "27.0"]
+    auth_mode: none
+    provisioning_method: device_setting_access_via_usb
+    transport: usb_mass_storage
+    codec: pcm_s16le
+    quality_class: original_device_recording
+    evidence_level: implemented_not_verified
+    status: not_evaluated
+    test_run_id: null
+    last_verified_at: null
+    verified_import_recorded: false
+    known_limitations:
+      - "Requires the device's own 'Access via USB' setting; we never toggle it."
+      - "macOS mounts removable volumes read-write by default and writes .Spotlight-V100/.fseventsd/.DS_Store, so a zero-physical-writes claim is not available (spec 7.8)."
+      - "Our code issues no writes; host writes are the operating system's."
+
+  - source_type: plaud_device_usb
+    vendor: PLAUD
+    device_model: Note Pro
+    hardware_revision: null
+    firmware_range: ["any"]
+    host_os: macos
+    os_version_range: ["26.0", "27.0"]
+    auth_mode: none
+    provisioning_method: none
+    transport: usb_mass_storage
+    codec: unknown
+    quality_class: unknown
+    evidence_level: unsupported
+    status: known_unsupported
+    test_run_id: null
+    last_verified_at: null
+    verified_import_recorded: false
+    known_limitations:
+      - "Vendor documents USB as charging only for Note Pro; the application must not instruct a user to mount it (spec 7.8)."
+
+  - source_type: plaud_device_usb
+    vendor: PLAUD
+    device_model: NotePin S
+    hardware_revision: null
+    firmware_range: ["any"]
+    host_os: macos
+    os_version_range: ["26.0", "27.0"]
+    auth_mode: none
+    provisioning_method: none
+    transport: usb_mass_storage
+    codec: unknown
+    quality_class: unknown
+    evidence_level: unsupported
+    status: known_unsupported
+    test_run_id: null
+    last_verified_at: null
+    verified_import_recorded: false
+    known_limitations:
+      - "Vendor documents no USB recording access for NotePin S (spec App. B.2)."
+
+  # ---- Wi-Fi Fast Transfer (spec 7.8 future gate) ----
+  - source_type: plaud_device_wifi
+    vendor: PLAUD
+    device_model: Note
+    hardware_revision: null
+    firmware_range: ["any"]
+    host_os: macos
+    os_version_range: ["26.0", "27.0"]
+    auth_mode: unknown
+    provisioning_method: none
+    transport: wifi
+    codec: unknown
+    quality_class: unknown
+    evidence_level: proposed
+    status: not_evaluated
+    test_run_id: null
+    last_verified_at: null
+    verified_import_recorded: false
+    known_limitations:
+      - "The upstream Wi-Fi transport is a stub; advertisement, session authorization, framing and integrity are all unproven (spec 7.8)."
+
+  # ---- Official PLAUD Cloud CLI (spec 2.1, 7.1, A2.1) ----
+  - source_type: plaud_cloud_cli
+    vendor: PLAUD
+    device_model: n/a
+    hardware_revision: null
+    firmware_range: ["n/a"]
+    host_os: macos
+    os_version_range: ["26.0", "27.0"]
+    auth_mode: browser_login
+    provisioning_method: vendor_cli_login
+    transport: https
+    codec: unknown
+    quality_class: vendor_cloud_export
+    evidence_level: proposed
+    status: not_evaluated
+    test_run_id: null
+    last_verified_at: null
+    verified_import_recorded: false
+    known_limitations:
+      - "No release of the official CLI has been exercised by this build; VersionedParser::VALIDATED is deliberately empty, so every version fails closed as CLI_UNSUPPORTED."
+      - "JSON mode, stable tabular output, pagination, exit codes and a stable download URL format are all unverified (spec 2.1)."
+      - "The npm package listing declares no license; we neither bundle nor redistribute it."
+      - "Whether a Google or Apple PLAUD login works with the CLI is unverified; no token-paste workaround will be offered."
+
+  # ---- Local file import (spec 3.1 unconditional V1) ----
+  - source_type: local_file
+    vendor: n/a
+    device_model: n/a
+    hardware_revision: null
+    firmware_range: ["n/a"]
+    host_os: macos
+    os_version_range: ["26.0", "27.0"]
+    auth_mode: none
+    provisioning_method: user_file_selection
+    transport: filesystem
+    codec: multi
+    quality_class: user_supplied_file
+    evidence_level: observed_on_identified_hardware
+    status: supported
+    test_run_id: run-local-import-001
+    last_verified_at: "2026-10-11"
+    verified_import_recorded: true
+    known_limitations:
+      - "Opus-in-Ogg and raw .ASR sidecars have no decoder in the current Symphonia feature set; they import as bytes and report UNSUPPORTED_CODEC on decode (A1.4)."

@@ -93,14 +93,49 @@ fn every_spec_6_4_crate_exists_with_the_expected_package_name() {
     }
 }
 
+/// Paths git actually tracks, relative to the repository root.
+///
+/// The filesystem is the wrong oracle for a layout assertion: git does not
+/// track empty directories, so stating the working tree passes for a
+/// developer who still has a scratch directory and fails on a clean clone.
+fn tracked_paths() -> Vec<String> {
+    let output = std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo_root())
+        .args(["ls-files", "-z"])
+        .output()
+        .expect("git ls-files");
+    assert!(output.status.success(), "git ls-files failed");
+    String::from_utf8_lossy(&output.stdout)
+        .split('\0')
+        .filter(|entry| !entry.is_empty())
+        .map(str::to_owned)
+        .collect()
+}
+
 #[test]
-fn every_spec_6_4_directory_exists() {
-    let root = repo_root();
-    for directory in REQUIRED_DIRECTORIES {
-        assert!(
-            root.join(directory).is_dir(),
-            "missing required directory {directory}"
-        );
+fn every_spec_6_4_directory_is_part_of_the_committed_tree() {
+    let tracked = tracked_paths();
+    let missing: Vec<&str> = REQUIRED_DIRECTORIES
+        .iter()
+        .copied()
+        .filter(|directory| {
+            let prefix = format!("{directory}/");
+            !tracked.iter().any(|path| path.starts_with(&prefix))
+        })
+        .collect();
+    assert!(
+        missing.is_empty(),
+        "these spec 6.4 directories contain no committed file, so a clean clone lacks them: {missing:?}"
+    );
+}
+
+#[test]
+fn every_spec_6_4_crate_manifest_is_committed() {
+    let tracked = tracked_paths();
+    for crate_dir in REQUIRED_CRATES {
+        let manifest = format!("crates/{crate_dir}/Cargo.toml");
+        assert!(tracked.contains(&manifest), "{manifest} is not committed");
     }
 }
 
