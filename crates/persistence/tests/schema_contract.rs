@@ -757,9 +757,9 @@ async fn migrating_a_populated_0800_library_backs_up_first_and_keeps_its_data() 
     recording_with_a_speaker(&db).await;
 
     let report = MigrationRunner::new().run(&db).await.unwrap();
-    // 0900 brings the tier in; 0902 brings its retention clock and the
-    // wholesale-erasure journal kind (VP-095, VP-130).
-    assert_eq!(report.applied, vec![900, 902]);
+    // 0900 brings the tier in; 0901 the match job's scratch; 0902 the
+    // retention clock and the wholesale-erasure journal kind (VP-095, VP-130).
+    assert_eq!(report.applied, vec![900, 901, 902]);
     let backup = report
         .backup_path
         .expect("an upgrade of a populated library must back up first");

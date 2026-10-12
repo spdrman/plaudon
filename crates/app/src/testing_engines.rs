@@ -24,6 +24,7 @@ use plaudon_ai_contracts::stt::{
 use plaudon_ai_contracts::text::{
     StructuredRequest, StructuredResponse, TextModel, TextModelError,
 };
+use plaudon_ai_contracts::transcript::SourceTime;
 use plaudon_domain::capability::{CapabilityStatus, Known, Tri};
 use plaudon_domain::model::{EngineId, ModelIdentity};
 use plaudon_domain::transcript::AlignmentOrigin;
@@ -38,6 +39,9 @@ pub const SCRIPTED_TEXT_ENGINE: &str = "scripted-text";
 ///
 /// It reports progress the way a real one does (a fraction per segment) and
 /// honours cancellation between segments, so a test can assert both.
+/// Sample rate the scripted engine's timed segments are expressed against.
+const SCRIPTED_SAMPLE_RATE_HZ: u32 = 16_000;
+
 #[derive(Debug)]
 pub struct ScriptedStt {
     model_id: String,
@@ -45,6 +49,10 @@ pub struct ScriptedStt {
     available: bool,
     /// Milliseconds of "work" per segment, so a test can cancel mid-run.
     pace_ms: u64,
+    /// When set, each segment spans this many milliseconds and the draft
+    /// carries native alignment, so a test can reconcile diarization turns
+    /// against it (spec §8.7).
+    segment_ms: Option<u64>,
 }
 
 impl ScriptedStt {
@@ -56,6 +64,7 @@ impl ScriptedStt {
             segments: segments.iter().map(|text| (*text).to_owned()).collect(),
             available: true,
             pace_ms: 0,
+            segment_ms: None,
         }
     }
 
@@ -72,6 +81,18 @@ impl ScriptedStt {
     #[must_use]
     pub const fn with_pace_ms(mut self, pace_ms: u64) -> Self {
         self.pace_ms = pace_ms;
+        self
+    }
+
+    /// Emit `segment_ms`-long timed segments instead of text-only ones.
+    ///
+    /// Diarization reconciliation needs times: a revision whose alignment
+    /// origin is `None` carries no positions to map speaker turns onto
+    /// (spec §8.6A), so a speaker-matching test scripts them here rather than
+    /// inventing them downstream.
+    #[must_use]
+    pub const fn with_segment_ms(mut self, segment_ms: u64) -> Self {
+        self.segment_ms = Some(segment_ms);
         self
     }
 
@@ -146,10 +167,19 @@ impl SpeechToText for ScriptedStt {
             }
             #[allow(clippy::cast_precision_loss)]
             ctx.report(Progress::fraction((index + 1) as f32 / total as f32));
-            segments.push(TranscriptSegmentDraft::text_only(
-                u32::try_from(index).unwrap_or(0),
-                text.clone(),
-            ));
+            let seq_index = u32::try_from(index).unwrap_or(0);
+            segments.push(match self.segment_ms {
+                Some(span) => TranscriptSegmentDraft::timed(
+                    seq_index,
+                    SourceTime::from_millis(u64::from(seq_index) * span, SCRIPTED_SAMPLE_RATE_HZ),
+                    SourceTime::from_millis(
+                        u64::from(seq_index) * span + span,
+                        SCRIPTED_SAMPLE_RATE_HZ,
+                    ),
+                    text.clone(),
+                ),
+                None => TranscriptSegmentDraft::text_only(seq_index, text.clone()),
+            });
         }
         if ctx.is_cancelled() {
             return Err(SttError::Cancelled);
@@ -161,7 +191,10 @@ impl SpeechToText for ScriptedStt {
             input.media_sha256,
             segments,
         );
-        draft.alignment_origin = AlignmentOrigin::None;
+        draft.alignment_origin = match self.segment_ms {
+            Some(_) => AlignmentOrigin::Native,
+            None => AlignmentOrigin::None,
+        };
         draft.duration_ms = input.duration_ms;
         Ok(draft)
     }

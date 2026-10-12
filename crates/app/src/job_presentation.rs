@@ -537,6 +537,7 @@ pub const fn job_kind_label(kind: JobKind) -> &'static str {
         JobKind::Export => "Export",
         JobKind::ModelInstall => "Model install",
         JobKind::SourceSync => "Source sync",
+        JobKind::SpeakerMatch => "Speaker matching",
     }
 }
 

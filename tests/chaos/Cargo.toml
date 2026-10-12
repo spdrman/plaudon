@@ -23,6 +23,10 @@ path = "src/bin/cloud_dispatch_runner.rs"
 name = "export-step-runner"
 path = "src/bin/export_step_runner.rs"
 
+[[bin]]
+name = "speaker-match-runner"
+path = "src/bin/speaker_match_runner.rs"
+
 [dependencies]
 plaudon-ai-contracts = { workspace = true }
 plaudon-ai-openrouter = { workspace = true }
@@ -31,6 +35,8 @@ plaudon-domain = { workspace = true }
 plaudon-export = { workspace = true }
 plaudon-jobs = { workspace = true, features = ["fault-injection"] }
 plaudon-persistence = { workspace = true }
+plaudon-security = { workspace = true, features = ["test-support"] }
+plaudon-ai-diarization = { workspace = true }
 hex = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }

@@ -773,6 +773,10 @@ pub enum JobKind {
     ModelInstall,
     /// Synchronize a source.
     SourceSync,
+    /// Match a recording's speakers against enrolled voice profiles
+    /// (`VOICE_PROFILES_SPEC` VP-100). Local-only, consent-gated, and it
+    /// produces suggestions a user confirms — never a label (ADR-0082).
+    SpeakerMatch,
 }
 
 impl JobKind {
@@ -784,6 +788,7 @@ impl JobKind {
         Self::Export,
         Self::ModelInstall,
         Self::SourceSync,
+        Self::SpeakerMatch,
     ];
 
     /// Stable wire string.
@@ -796,6 +801,7 @@ impl JobKind {
             Self::Export => "export",
             Self::ModelInstall => "model_install",
             Self::SourceSync => "source_sync",
+            Self::SpeakerMatch => "speaker_match",
         }
     }
 

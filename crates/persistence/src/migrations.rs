@@ -124,6 +124,14 @@ pub const MIGRATIONS: &[Migration] = &[
         name: "voice_profiles",
         sql: include_str!("../migrations/0900_voice_profiles.sql"),
     },
+    // The resumable speaker-matching job's per-job scratch: sealed cluster
+    // embeddings and match reports, so a crash between stages resumes instead
+    // of recomputing (VP-100..VP-105).
+    Migration {
+        version: 901,
+        name: "speaker_match_runs",
+        sql: include_str!("../migrations/0901_speaker_match_runs.sql"),
+    },
     // Retention expiry, wholesale erasure and the sweep journal (VP-095,
     // VP-130). Still EPIC P's range.
     Migration {

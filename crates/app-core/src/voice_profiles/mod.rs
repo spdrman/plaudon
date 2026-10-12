@@ -61,14 +61,25 @@
 //! destroys everything at once, key included (VP-095). Both leave the roster
 //! standing.
 
+pub mod embedder;
 pub mod erasure;
 pub mod matching;
+pub mod pipeline;
 pub mod retention;
 pub mod store;
 
+pub use embedder::{
+    EmbedError, EmbedWindow, EmbedderCheckpoint, ScriptedEmbedder, SpeakerEmbedder,
+    SCRIPTED_EMBEDDER_ID,
+};
 pub use erasure::{ForgetAllDisclosure, ForgetAllReceipt, VoiceProfileEraser, FORGET_ALL_LIMITS};
+pub use pipeline::{
+    cluster_speech, profile_set_digest, ClusterSpeech, GateRefusal, MatchGate, SkippedCluster,
+    SpeakerMatchError, SpeakerMatchOutcome, SpeakerMatchPipeline, SpeakerMatchPlan,
+    SpeakerMatchRequest, SpeakerMatchStage, CONSENT_DISCLOSURE_VERSION, EMBED_WINDOW_MS,
+};
 pub use retention::{RetentionReport, VoiceRetentionService, TOMBSTONE_DAYS};
 pub use store::{
-    EmbeddingCipher, ExemplarBinding, SealedEmbedding, VoiceProfileError, VoiceProfileResult,
-    EMBEDDING_KEY_BYTES, EMBEDDING_NONCE_BYTES, MAX_EMBEDDING_DIM,
+    ClusterBinding, EmbeddingCipher, ExemplarBinding, SealedEmbedding, VoiceProfileError,
+    VoiceProfileResult, EMBEDDING_KEY_BYTES, EMBEDDING_NONCE_BYTES, MAX_EMBEDDING_DIM,
 };
