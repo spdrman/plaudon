@@ -33,7 +33,7 @@ const AUDIO: &str = "PLAUDON_APPLE_AUDIO_FIXTURE";
 #[test]
 fn the_hardware_suite_is_opt_in() {
     // Printed so a CI log shows the suite was present and declined.
-    if !plaudon_hardware_tests::opted_in(OPT_IN, "the Apple compatibility suite") {
+    if !plaudon_hardware_tests::apple::opted_in(OPT_IN, "the Apple compatibility suite") {
         return;
     }
     println!("{OPT_IN} is set; the measurement tests will run.");
@@ -69,7 +69,7 @@ mod measured {
     /// for cells it never touched.
     #[test]
     fn this_mac_produces_an_evidence_record_for_its_class() {
-        if !plaudon_hardware_tests::opted_in(OPT_IN, "the Apple compatibility measurement") {
+        if !plaudon_hardware_tests::apple::opted_in(OPT_IN, "the Apple compatibility measurement") {
             return;
         }
         let bridge = bridge();
@@ -95,7 +95,7 @@ mod measured {
 
         let mut speech_transcribed = false;
         let mut comparison = None;
-        if let Some(path) = plaudon_hardware_tests::audio_fixture(AUDIO) {
+        if let Some(path) = plaudon_hardware_tests::apple::audio_fixture(AUDIO) {
             let request = encode_request(
                 BridgeOp::TranscribeFile,
                 &TranscribeRequest {
@@ -206,7 +206,7 @@ mod measured {
             comparison,
             known_limitations: Vec::new(),
         };
-        let path = plaudon_hardware_tests::write_evidence(
+        let path = plaudon_hardware_tests::apple::write_evidence(
             &format!("apple-{}", class.as_str()),
             &serde_json::to_value(&record).expect("an evidence record serializes"),
         )
@@ -236,7 +236,7 @@ mod measured {
     /// both the cold call and the cached one on real hardware.
     #[test]
     fn the_probe_is_cheap_enough_to_ask_constantly() {
-        if !plaudon_hardware_tests::opted_in(OPT_IN, "the Apple probe latency measurement") {
+        if !plaudon_hardware_tests::apple::opted_in(OPT_IN, "the Apple probe latency measurement") {
             return;
         }
         let bridge = bridge();
@@ -261,7 +261,7 @@ mod measured {
     /// Cancellation and the time budget hold against the real platform.
     #[test]
     fn a_real_run_is_cancellable_and_bounded() {
-        if !plaudon_hardware_tests::opted_in(OPT_IN, "the Apple cancellation measurement") {
+        if !plaudon_hardware_tests::apple::opted_in(OPT_IN, "the Apple cancellation measurement") {
             return;
         }
         let bridge = bridge();
