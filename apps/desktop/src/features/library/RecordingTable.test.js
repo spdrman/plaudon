@@ -35,7 +35,7 @@ describe("RecordingTable", () => {
         renderTable([
             makeRow(1, {
                 title: "Quarterly review",
-                processing_engine: "apple-speech",
+                processing_engine: "apple.speech",
                 last_error: {
                     code: "STORAGE_FULL",
                     message: "Not enough space to finish transcription.",
@@ -61,7 +61,7 @@ describe("RecordingTable", () => {
         const row = dataRows()[0];
         expect(within(row).getByText("Quarterly review")).toBeInTheDocument();
         expect(within(row).getByText("Manual import")).toBeInTheDocument();
-        expect(within(row).getByText("apple-speech")).toBeInTheDocument();
+        expect(within(row).getByText("apple.speech")).toBeInTheDocument();
         expect(within(row).getByText("1:01")).toBeInTheDocument();
         expect(within(row).getByText("Not enough space to finish transcription.")).toBeInTheDocument();
     });
