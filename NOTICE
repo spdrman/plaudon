@@ -88,3 +88,27 @@ Shipped through egui's `default_fonts` feature.
 The full licence texts are distributed with the `epaint_default_fonts` crate
 (`fonts/` directory) and are reproduced in the release evidence bundle. No font
 file is modified.
+
+--------------------------------------------------------------------------------
+Opus decoder (crate `opus-pure`)
+Linked into the shipped binary through `crates/audio` (task O1.6).
+
+    opus-pure
+    Copyright 2026 Stephen Berry
+    Copyright 2026 restsend.com
+    Copyright 2001-2023 Xiph.Org, Skype Limited, Octasic, Jean-Marc Valin,
+                        Timothy B. Terriberry, CSIRO, Gregory Maxwell,
+                        Mark Borgerding, Erik de Castro Lopo, Mozilla, Amazon
+    Licensed under the BSD 3-Clause License.
+
+`opus-pure` is a pure-Rust port of the reference libopus implementation (via
+`rusty-opus` and `opus-rs`, both BSD-3-Clause); its `ATTRIBUTION.md` records
+that chain and we carry its inherited notices above rather than only the
+most recent one. No libopus C source is vendored, built or linked, and no
+Plaudon source is derived from it.
+
+BSD-3-Clause requires that the copyright notice, the list of conditions and
+the disclaimer are reproduced with a binary redistribution; the full licence
+text ships with the crate (`LICENSE`) and is reproduced in the release
+evidence bundle. The Opus format itself is an IETF standard (RFC 6716,
+RFC 7845) and carries no additional notice obligation.

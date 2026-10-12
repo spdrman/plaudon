@@ -29,6 +29,7 @@ libfuzzer-sys = "0.4"
 arbitrary = { version = "1", features = ["derive"] }
 tempfile = "3"
 serde_json = "1"
+plaudon-audio = { path = "../crates/audio" }
 plaudon-security = { path = "../crates/security" }
 plaudon-diagnostics = { path = "../crates/diagnostics" }
 plaudon-domain = { path = "../crates/domain" }
@@ -92,6 +93,13 @@ bench = false
 [[bin]]
 name = "fuzz_domain_redactor"
 path = "fuzz_targets/fuzz_domain_redactor.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_opus_packet"
+path = "fuzz_targets/fuzz_opus_packet.rs"
 test = false
 doc = false
 bench = false
