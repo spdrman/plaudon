@@ -186,38 +186,45 @@ impl CapabilitySmokeTest {
                 None => Known::Unknown,
             },
             observed_on: self.observed_on.clone(),
+            audio_tokens_per_second: Known::Unknown,
             notes: String::new(),
         };
 
-        let (usage, provider) = match self.candidate_family {
-            RequestFamily::MultipartStt => {
-                let decoded: TranscriptionResponse =
-                    serde_json::from_slice(&success.body).map_err(|_| SttError::MalformedOutput)?;
-                record.timestamps = if decoded.has_word_offsets() {
-                    TimestampSupport::ObservedWords
-                } else if decoded.has_native_offsets() {
-                    TimestampSupport::ObservedSegments
-                } else {
-                    TimestampSupport::ObservedNone
-                };
-                record.diarization = Tri::from_observation(Some(decoded.has_speaker_labels()));
-                record.language_detection = Tri::from_observation(Some(decoded.language.is_some()));
-                (decoded.usage.clone(), None)
+        let (usage, provider) = if self.candidate_family == RequestFamily::MultipartStt {
+            let decoded: TranscriptionResponse =
+                serde_json::from_slice(&success.body).map_err(|_| SttError::MalformedOutput)?;
+            record.timestamps = if decoded.has_word_offsets() {
+                TimestampSupport::ObservedWords
+            } else if decoded.has_native_offsets() {
+                TimestampSupport::ObservedSegments
+            } else {
+                TimestampSupport::ObservedNone
+            };
+            record.diarization = Tri::from_observation(Some(decoded.has_speaker_labels()));
+            record.language_detection = Tri::from_observation(Some(decoded.language.is_some()));
+            (decoded.usage.clone(), None)
+        } else {
+            let decoded: ChatCompletionResponse =
+                serde_json::from_slice(&success.body).map_err(|_| SttError::MalformedOutput)?;
+            if decoded.first_content().is_none() {
+                return Err(SttError::MalformedOutput);
             }
-            _ => {
-                let decoded: ChatCompletionResponse =
-                    serde_json::from_slice(&success.body).map_err(|_| SttError::MalformedOutput)?;
-                if decoded.first_content().is_none() {
-                    return Err(SttError::MalformedOutput);
-                }
-                // A chat model returns prose, so it demonstrates no timing,
-                // no diarization and no language field at all.
-                record.timestamps = TimestampSupport::ObservedNone;
-                record.diarization = Tri::No;
-                record.language_detection = Tri::No;
-                (decoded.usage.clone(), decoded.provider.clone())
-            }
+            // A chat model returns prose, so it demonstrates no timing,
+            // no diarization and no language field at all.
+            record.timestamps = TimestampSupport::ObservedNone;
+            record.diarization = Tri::No;
+            record.language_detection = Tri::No;
+            (decoded.usage.clone(), decoded.provider.clone())
         };
+
+        // A reported token count plus a reported audio duration is the only
+        // thing that makes a future audio estimate calculable (spec 10.4).
+        if let Some(rate) = usage
+            .as_ref()
+            .and_then(crate::pricing::observed_audio_token_rate)
+        {
+            record.audio_tokens_per_second = Known::Known(rate);
+        }
 
         // The route is what the consent grant was taken against; the response
         // may also name the downstream provider, which is stronger evidence.

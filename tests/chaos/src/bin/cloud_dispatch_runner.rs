@@ -11,7 +11,7 @@
 use plaudon_ai_contracts::capabilities::RequestFamily;
 use plaudon_ai_openrouter::ledger::{AttemptIntent, AttemptLedger, AttemptUpdate};
 use plaudon_ai_openrouter::pricing::{CostEstimate, EstimateGap};
-use plaudon_app_core::cloud::InferenceLedger;
+use plaudon_ai_openrouter::service::InferenceLedger;
 use plaudon_persistence::db::Database;
 use plaudon_persistence::migrations::MigrationRunner;
 

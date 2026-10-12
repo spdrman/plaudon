@@ -1,11 +1,13 @@
 //! Cloud AI (OpenRouter BYOK) use cases: model catalogue, cost ledger, local
 //! budgets, consent-gated dispatch and model selection (spec 10).
 //!
-//! The crate split is deliberate. `plaudon-ai-openrouter` owns the wire
-//! contracts and owns no state; `plaudon-security` owns the egress gate and
-//! consent; `plaudon-persistence` owns SQLite. This module is the only place
-//! the three meet, so there is exactly one answer to "may this request leave,
-//! what will it cost, and what did it actually cost".
+//! The rest of this crate owns the wire contracts and no state;
+//! `plaudon-security` owns the egress gate and consent; `plaudon-persistence`
+//! owns SQLite. This module is the only place the three meet, so there is
+//! exactly one answer to "may this request leave, what will it cost, and what
+//! did it actually cost". It lives here rather than in `plaudon-app-core`
+//! because spec 6.3(1) keeps the vendor-neutral core free of vendor adapters,
+//! and this orchestration is OpenRouter-specific by construction.
 
 pub mod authority;
 pub mod ledger;
@@ -15,10 +17,10 @@ pub mod usage;
 
 use std::sync::Arc;
 
-use plaudon_ai_openrouter::allowlist::{Allowlist, ModelTask};
-use plaudon_ai_openrouter::discovery::{CatalogClient, DegradedReason};
-use plaudon_ai_openrouter::privacy;
-use plaudon_ai_openrouter::registry::{CatalogSource, ModelCard, ModelRegistry};
+use crate::allowlist::{Allowlist, ModelTask};
+use crate::discovery::{CatalogClient, DegradedReason};
+use crate::privacy;
+use crate::registry::{CatalogSource, ModelCard, ModelRegistry};
 use plaudon_domain::time::Timestamp;
 use plaudon_persistence::db::Database;
 use plaudon_persistence::error::PersistenceResult;
@@ -63,7 +65,7 @@ impl CloudAi {
     ///
     /// Returns an error only when the embedded allowlist manifest is
     /// unusable, which is a build defect rather than a runtime condition.
-    pub fn open(db: Database) -> Result<Self, plaudon_ai_openrouter::allowlist::AllowlistError> {
+    pub fn open(db: Database) -> Result<Self, crate::allowlist::AllowlistError> {
         Ok(Self {
             store: CloudStore::new(db.clone()),
             ledger: InferenceLedger::new(db),
@@ -163,7 +165,7 @@ impl CloudAi {
         &self,
         from: Timestamp,
         to: Timestamp,
-    ) -> Result<UsageSummary, plaudon_ai_openrouter::ledger::LedgerUnavailable> {
+    ) -> Result<UsageSummary, crate::ledger::LedgerUnavailable> {
         let rows = self.ledger.attempts_between(from, to).await?;
         Ok(summarize(&rows))
     }
@@ -172,7 +174,7 @@ impl CloudAi {
     pub async fn month_to_date(
         &self,
         at: Timestamp,
-    ) -> Result<CostTotals, plaudon_ai_openrouter::ledger::LedgerUnavailable> {
+    ) -> Result<CostTotals, crate::ledger::LedgerUnavailable> {
         let start = month_start(at);
         let rows = self.ledger.attempts_between(start, at).await?;
         Ok(summarize(&rows).totals)
@@ -180,7 +182,7 @@ impl CloudAi {
 
     /// The ledger as a trait object, for the OpenRouter clients.
     #[must_use]
-    pub fn ledger_handle(&self) -> Arc<dyn plaudon_ai_openrouter::ledger::AttemptLedger> {
+    pub fn ledger_handle(&self) -> Arc<dyn crate::ledger::AttemptLedger> {
         Arc::new(self.ledger.clone())
     }
 }

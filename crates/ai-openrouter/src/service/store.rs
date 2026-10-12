@@ -1,10 +1,10 @@
 //! Durable state EPIC G owns: the capability registry, model selection and
 //! documented per-route retention policies (migration `0400_cloud_ai.sql`).
 
+use crate::allowlist::ModelTask;
+use crate::catalog::{ModelProbeRecord, ProbeEvidence};
+use crate::privacy::DocumentedPolicy;
 use plaudon_ai_contracts::capabilities::RequestFamily;
-use plaudon_ai_openrouter::allowlist::ModelTask;
-use plaudon_ai_openrouter::catalog::{ModelProbeRecord, ProbeEvidence};
-use plaudon_ai_openrouter::privacy::DocumentedPolicy;
 use plaudon_domain::money::Currency;
 use plaudon_domain::time::Timestamp;
 use plaudon_persistence::db::Database;

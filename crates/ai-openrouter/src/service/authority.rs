@@ -8,9 +8,9 @@
 
 use std::sync::Arc;
 
+use crate::client::{CloudDispatchAuthority, DispatchRefused};
+use crate::privacy::{self, DocumentedPolicy, PrivacyResolution};
 use async_trait::async_trait;
-use plaudon_ai_openrouter::client::{CloudDispatchAuthority, DispatchRefused};
-use plaudon_ai_openrouter::privacy::{self, DocumentedPolicy, PrivacyResolution};
 use plaudon_security::consent::{
     dispatch_preflight, ConsentError, ConsentGrant, ConsentPurpose, ContentType, DispatchApproval,
     DispatchRequest, RetentionPosture,
@@ -29,7 +29,7 @@ pub struct DispatchContext {
     /// Documented policies for exact routes.
     pub documented_policies: Vec<DocumentedPolicy>,
     /// Route metadata fetched from the relay, when discovery succeeded.
-    pub endpoints: Option<plaudon_ai_openrouter::privacy::EndpointsResponse>,
+    pub endpoints: Option<crate::privacy::EndpointsResponse>,
 }
 
 /// The production authority.

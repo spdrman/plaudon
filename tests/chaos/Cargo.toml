@@ -22,7 +22,6 @@ path = "src/bin/cloud_dispatch_runner.rs"
 [dependencies]
 plaudon-ai-contracts = { workspace = true }
 plaudon-ai-openrouter = { workspace = true }
-plaudon-app-core = { workspace = true }
 plaudon-domain = { workspace = true }
 plaudon-jobs = { workspace = true, features = ["fault-injection"] }
 plaudon-persistence = { workspace = true }

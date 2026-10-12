@@ -13,18 +13,12 @@ workspace = true
 [dependencies]
 plaudon-ai-contracts = { workspace = true }
 plaudon-domain = { workspace = true }
-plaudon-ai-openrouter = { workspace = true }
 plaudon-persistence = { workspace = true }
-plaudon-security = { workspace = true }
-async-trait = { workspace = true }
 fs4 = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
-sqlx = { workspace = true }
 thiserror = { workspace = true }
-tracing = { workspace = true }
-uuid = { workspace = true }
 
 [dev-dependencies]
 plaudon-ai-contracts = { workspace = true }

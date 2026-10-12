@@ -515,7 +515,7 @@ mod tests {
         let decoded: TranscriptionResponse =
             serde_json::from_str(r#"{"text":"hello","extra_field":{"a":1}}"#).expect("decodes");
         assert_eq!(decoded.text, "hello");
-        assert!(decoded.segments.is_empty());
+        assert_eq!(decoded.segments.len(), 0);
         assert!(!decoded.has_native_offsets());
         assert!(decoded.unknown.contains_key("extra_field"));
     }

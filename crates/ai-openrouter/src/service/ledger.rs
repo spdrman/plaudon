@@ -11,11 +11,9 @@
 //! `outcome_unknown`: the request may already have been billed, so it is never
 //! re-sent without the user explicitly accepting that risk.
 
+use crate::ledger::{AttemptId, AttemptIntent, AttemptLedger, AttemptUpdate, LedgerUnavailable};
+use crate::pricing::{CostOrigin, SettledCost};
 use async_trait::async_trait;
-use plaudon_ai_openrouter::ledger::{
-    AttemptId, AttemptIntent, AttemptLedger, AttemptUpdate, LedgerUnavailable,
-};
-use plaudon_ai_openrouter::pricing::{CostOrigin, SettledCost};
 use plaudon_domain::capability::DispatchState;
 use plaudon_domain::money::MoneyEstimate;
 use plaudon_domain::time::Timestamp;
@@ -57,7 +55,7 @@ impl InferenceLedger {
         )
         .fetch_all(self.db.pool())
         .await
-        .map_err(unavailable)?;
+        .map_err(|error| unavailable(&error))?;
 
         for (id,) in &rows {
             sqlx::query(
@@ -68,7 +66,7 @@ impl InferenceLedger {
             .bind(at.as_millis())
             .execute(self.db.pool())
             .await
-            .map_err(unavailable)?;
+            .map_err(|error| unavailable(&error))?;
         }
         Ok(rows.into_iter().map(|(id,)| id).collect())
     }
@@ -88,7 +86,7 @@ impl InferenceLedger {
         .bind(job_id)
         .fetch_all(self.db.pool())
         .await
-        .map_err(unavailable)
+        .map_err(|error| unavailable(&error))
     }
 
     /// Attempts created in `[from, to)`, oldest first.
@@ -109,7 +107,7 @@ impl InferenceLedger {
         .bind(to.as_millis())
         .fetch_all(self.db.pool())
         .await
-        .map_err(unavailable)
+        .map_err(|error| unavailable(&error))
     }
 }
 
@@ -191,7 +189,7 @@ impl AttemptRow {
         self.estimated_units_json
             .as_deref()
             .and_then(|raw| serde_json::from_str::<StoredEstimate>(raw).ok())
-            .map_or(MoneyEstimate::Unknown, |stored| stored.into_estimate())
+            .map_or(MoneyEstimate::Unknown, StoredEstimate::into_estimate)
     }
 }
 
@@ -281,7 +279,7 @@ pub struct StoredEstimate {
 impl StoredEstimate {
     /// Project an estimate into its stored form.
     #[must_use]
-    pub fn from_estimate(estimate: &plaudon_ai_openrouter::pricing::CostEstimate) -> Self {
+    pub fn from_estimate(estimate: &crate::pricing::CostEstimate) -> Self {
         let amount = estimate.amount.amount();
         Self {
             amount: amount.map(money_to_string),
@@ -314,9 +312,9 @@ impl StoredEstimate {
     }
 }
 
-fn unavailable(error: sqlx::Error) -> LedgerUnavailable {
+fn unavailable(error: &sqlx::Error) -> LedgerUnavailable {
     LedgerUnavailable {
-        detail: format!("ledger write failed: {}", error_kind(&error)),
+        detail: format!("ledger write failed: {}", error_kind(error)),
     }
 }
 
@@ -359,7 +357,7 @@ impl AttemptLedger for InferenceLedger {
         .bind(now)
         .execute(self.db.pool())
         .await
-        .map_err(unavailable)?;
+        .map_err(|error| unavailable(&error))?;
 
         Ok(AttemptId::committed(id))
     }
@@ -380,7 +378,7 @@ impl AttemptLedger for InferenceLedger {
                 .bind(now)
                 .execute(self.db.pool())
                 .await
-                .map_err(unavailable)?;
+                .map_err(|error| unavailable(&error))?;
             }
             AttemptUpdate::Accepted {
                 provider_request_id,
@@ -400,7 +398,7 @@ impl AttemptLedger for InferenceLedger {
                 .bind(now)
                 .execute(self.db.pool())
                 .await
-                .map_err(unavailable)?;
+                .map_err(|error| unavailable(&error))?;
             }
             AttemptUpdate::FailedBeforeSend { reason } => {
                 sqlx::query(
@@ -413,7 +411,7 @@ impl AttemptLedger for InferenceLedger {
                 .bind(now)
                 .execute(self.db.pool())
                 .await
-                .map_err(unavailable)?;
+                .map_err(|error| unavailable(&error))?;
                 tracing::debug!(reason = %reason, "cloud attempt failed before transmission");
             }
             AttemptUpdate::Completed {
@@ -435,7 +433,7 @@ impl AttemptLedger for InferenceLedger {
                 .bind(final_cost)
                 .execute(self.db.pool())
                 .await
-                .map_err(unavailable)?;
+                .map_err(|error| unavailable(&error))?;
 
                 self.record_usage(id, cost, usage.as_ref(), now).await?;
             }
@@ -458,7 +456,7 @@ impl InferenceLedger {
         .bind(id.as_str())
         .fetch_optional(self.db.pool())
         .await
-        .map_err(unavailable)?;
+        .map_err(|error| unavailable(&error))?;
         let Some((job_id, provider, model_id)) = row else {
             return Ok(());
         };
@@ -507,7 +505,7 @@ impl InferenceLedger {
         .bind(now)
         .execute(self.db.pool())
         .await
-        .map_err(unavailable)?;
+        .map_err(|error| unavailable(&error))?;
         Ok(())
     }
 }

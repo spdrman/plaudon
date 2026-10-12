@@ -8,7 +8,7 @@
 use std::path::Path;
 use std::process::Command;
 
-use plaudon_app_core::cloud::InferenceLedger;
+use plaudon_ai_openrouter::service::InferenceLedger;
 use plaudon_domain::capability::DispatchState;
 use plaudon_domain::time::Timestamp;
 use plaudon_persistence::db::Database;
@@ -48,16 +48,17 @@ async fn a_crash_before_the_row_leaves_nothing_to_reconcile() {
     crash_at(&path, "before_row");
 
     let (_db, ledger) = open(&path).await;
-    assert!(ledger
-        .attempts_for_job("job-1")
-        .await
-        .expect("attempts")
-        .is_empty());
-    assert!(ledger
-        .reconcile_in_flight(Timestamp::from_millis(1))
-        .await
-        .expect("reconcile")
-        .is_empty());
+    assert_eq!(
+        ledger.attempts_for_job("job-1").await.expect("attempts"),
+        [] as [plaudon_ai_openrouter::service::AttemptRow; 0]
+    );
+    assert_eq!(
+        ledger
+            .reconcile_in_flight(Timestamp::from_millis(1))
+            .await
+            .expect("reconcile"),
+        [] as [std::string::String; 0]
+    );
 }
 
 #[tokio::test]
@@ -74,11 +75,13 @@ async fn a_crash_after_the_row_but_before_sending_stays_safe_to_retry() {
     assert!(!attempts[0].possibly_billed());
 
     // Reconciliation leaves it alone: nothing was transmitted.
-    assert!(ledger
-        .reconcile_in_flight(Timestamp::from_millis(1))
-        .await
-        .expect("reconcile")
-        .is_empty());
+    assert_eq!(
+        ledger
+            .reconcile_in_flight(Timestamp::from_millis(1))
+            .await
+            .expect("reconcile"),
+        [] as [std::string::String; 0]
+    );
     assert_eq!(
         ledger.attempts_for_job("job-1").await.expect("attempts")[0].state(),
         DispatchState::NotSent

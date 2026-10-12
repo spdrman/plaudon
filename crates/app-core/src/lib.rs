@@ -4,13 +4,11 @@
 //! import deduplicates blobs without merging logical meetings, and how a
 //! repeated import of the same source item stays idempotent.
 
-pub mod cloud;
 pub mod dedup;
 pub mod import;
 pub mod models;
 pub mod stt;
 
-pub use cloud::{CloudAi, CloudBudget, CloudStore, InferenceLedger, ModelChoice, Stage};
 pub use dedup::{BlobDecision, DedupPolicy};
 pub use import::{ImportOutcome, ImportRequest, ImportService};
 pub use models::{ModelError, ModelId, ModelInstaller, ModelPack, ModelRegistry};

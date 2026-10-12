@@ -10,7 +10,7 @@
 //!   are summed separately and are never added together, so a display can
 //!   never present a projection as a charge.
 
-use plaudon_ai_openrouter::pricing::SettledCost;
+use crate::pricing::SettledCost;
 use plaudon_domain::money::{Currency, Money, MoneyEstimate};
 use serde::{Deserialize, Serialize};
 
@@ -18,9 +18,9 @@ use super::ledger::AttemptRow;
 
 /// Fractional digits used for stored and displayed amounts.
 ///
-/// Matches `plaudon_ai_openrouter::catalog::PRICE_SCALE` so a per-unit price
+/// Matches `crate::catalog::PRICE_SCALE` so a per-unit price
 /// multiplied by a quantity needs no rescaling.
-pub const AMOUNT_SCALE: u8 = plaudon_ai_openrouter::catalog::PRICE_SCALE;
+pub const AMOUNT_SCALE: u8 = crate::catalog::PRICE_SCALE;
 
 /// Render an amount as a plain decimal string, without the currency.
 #[must_use]
@@ -34,8 +34,7 @@ pub fn money_to_string(amount: Money) -> String {
 /// Parse a plain decimal string into money at [`AMOUNT_SCALE`].
 #[must_use]
 pub fn money_from_string(raw: &str, currency: Currency) -> Option<Money> {
-    plaudon_ai_openrouter::catalog::parse_decimal_usd(raw)
-        .map(|scaled| Money::new(scaled, AMOUNT_SCALE, currency))
+    crate::catalog::parse_decimal_usd(raw).map(|scaled| Money::new(scaled, AMOUNT_SCALE, currency))
 }
 
 /// The `cost_confidence` column value for a settled cost.
@@ -302,7 +301,7 @@ pub const BUDGET_ENFORCEMENT_NOTE: &str = "This budget is enforced on this devic
 #[cfg(test)]
 mod tests {
     use super::*;
-    use plaudon_ai_openrouter::pricing::CostOrigin;
+    use crate::pricing::CostOrigin;
 
     fn usd(units: i128) -> Money {
         Money::new(units, AMOUNT_SCALE, Currency::USD)

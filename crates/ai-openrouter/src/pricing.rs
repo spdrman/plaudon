@@ -325,6 +325,33 @@ pub fn settle(units: &PricingUnits, usage: Option<&UsageDto>) -> SettledCost {
     }
 }
 
+/// Measure how many audio input tokens one second of media costs, from an
+/// exchange that reported both.
+///
+/// Returns `None` unless the provider reported a token count **and** an audio
+/// duration: without both there is nothing to measure, and a rate invented
+/// from a model family name would make every later estimate fiction.
+///
+/// The figure is a deliberate slight over-estimate: the prompt also contains
+/// the (short) instruction, so attributing every prompt token to the audio
+/// rounds the rate up. For a budget guardrail that is the safe direction.
+#[must_use]
+pub fn observed_audio_token_rate(usage: &UsageDto) -> Option<u32> {
+    let seconds = usage.input_audio_seconds?;
+    if !seconds.is_finite() || seconds <= 0.0 {
+        return None;
+    }
+    let tokens = usage.prompt_tokens.or(usage.total_tokens)?;
+    if tokens == 0 {
+        return None;
+    }
+    let rate = (tokens as f64 / seconds).ceil();
+    if !rate.is_finite() || rate < 1.0 {
+        return None;
+    }
+    u32::try_from(rate as u64).ok()
+}
+
 /// Convert a provider-reported USD amount into exact scaled money.
 ///
 /// Formatting through a fixed number of decimals keeps the conversion
@@ -480,6 +507,77 @@ mod tests {
         assert_eq!(settled.amount, MoneyEstimate::Unknown);
         assert_eq!(settled.origin, CostOrigin::Unavailable);
         assert_eq!(settled.amount.amount(), None);
+    }
+
+    #[test]
+    fn an_audio_token_rate_is_measured_only_when_both_halves_were_reported() {
+        assert_eq!(
+            observed_audio_token_rate(&UsageDto {
+                prompt_tokens: Some(100),
+                input_audio_seconds: Some(2.0),
+                ..UsageDto::default()
+            }),
+            Some(50)
+        );
+        // A partial second rounds the rate up, never down.
+        assert_eq!(
+            observed_audio_token_rate(&UsageDto {
+                prompt_tokens: Some(101),
+                input_audio_seconds: Some(2.0),
+                ..UsageDto::default()
+            }),
+            Some(51)
+        );
+        for usage in [
+            UsageDto {
+                prompt_tokens: Some(100),
+                ..UsageDto::default()
+            },
+            UsageDto {
+                input_audio_seconds: Some(2.0),
+                ..UsageDto::default()
+            },
+            UsageDto {
+                prompt_tokens: Some(0),
+                input_audio_seconds: Some(2.0),
+                ..UsageDto::default()
+            },
+            UsageDto {
+                prompt_tokens: Some(100),
+                input_audio_seconds: Some(0.0),
+                ..UsageDto::default()
+            },
+        ] {
+            assert_eq!(observed_audio_token_rate(&usage), None);
+        }
+    }
+
+    #[test]
+    fn a_measured_rate_makes_a_previously_unknown_estimate_calculable() {
+        let units = audio_units();
+        assert!(!estimate(
+            &units,
+            EstimateInput::Audio {
+                duration_ms: Some(10_000)
+            }
+        )
+        .is_known());
+
+        let measured = units.with_audio_tokens_per_second(
+            observed_audio_token_rate(&UsageDto {
+                prompt_tokens: Some(500),
+                input_audio_seconds: Some(10.0),
+                ..UsageDto::default()
+            })
+            .expect("rate"),
+        );
+        assert!(estimate(
+            &measured,
+            EstimateInput::Audio {
+                duration_ms: Some(10_000)
+            }
+        )
+        .is_known());
     }
 
     #[test]

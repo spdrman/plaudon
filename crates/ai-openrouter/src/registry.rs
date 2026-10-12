@@ -294,7 +294,7 @@ impl ModelRegistry {
                         })
                     });
                 if !entry.name.is_empty() {
-                    card.display_name = entry.name.clone();
+                    card.display_name.clone_from(&entry.name);
                 }
                 card.declares_audio_input = declares_audio;
                 card.context_length = match entry.context_length {
@@ -333,6 +333,9 @@ impl ModelRegistry {
             language_detection: record.language_detection,
         };
         card.max_input_bytes = record.max_input_bytes.clone();
+        if let Known::Known(rate) = record.audio_tokens_per_second {
+            card.pricing.audio_tokens_per_second = Known::Known(rate);
+        }
         card.max_duration_ms = record.max_duration_ms.clone();
 
         if record.evidence != ProbeEvidence::ObservedExchange {
@@ -431,6 +434,7 @@ mod tests {
             audio_input_price: Known::Unknown,
             pricing_unit: Known::Unknown,
             observed_on: "2026-10-11".to_owned(),
+            audio_tokens_per_second: Known::Unknown,
             notes: String::new(),
         }
     }

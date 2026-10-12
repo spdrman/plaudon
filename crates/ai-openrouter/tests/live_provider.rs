@@ -116,7 +116,10 @@ async fn the_public_catalog_is_reachable_and_parses() {
         "catalogue refresh degraded: {:?}",
         discovered.degraded
     );
-    assert!(!discovered.entries.is_empty());
+    assert_ne!(
+        discovered.entries,
+        [] as [plaudon_ai_openrouter::CatalogEntry; 0]
+    );
 }
 
 #[tokio::test]

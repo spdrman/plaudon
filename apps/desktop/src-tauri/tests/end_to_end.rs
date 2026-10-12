@@ -752,6 +752,7 @@ mod cloud {
                 audio_input_price: Known::Unknown,
                 pricing_unit: Known::Unknown,
                 observed_on: "2026-10-11".to_owned(),
+                audio_tokens_per_second: plaudon_domain::capability::Known::Unknown,
                 notes: String::new(),
             };
             self.backend
@@ -1068,7 +1069,7 @@ mod cloud {
             .store()
             .recording_override(
                 &recording.to_string(),
-                plaudon_app_core::cloud::Stage::Transcribe,
+                plaudon_ai_openrouter::service::Stage::Transcribe,
             )
             .await
             .expect("read");

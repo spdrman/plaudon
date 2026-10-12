@@ -581,23 +581,20 @@ impl OpenRouterSpeechToText {
             .await
             .map_err(SttError::from)?;
 
-        let (draft, usage) = match self.card.request_family {
-            RequestFamily::MultipartStt => {
-                let decoded: TranscriptionResponse =
-                    serde_json::from_slice(&success.body).map_err(|_| SttError::MalformedOutput)?;
-                let draft = self.draft_from_transcription(&decoded, &input)?;
-                (draft, decoded.usage.clone())
-            }
-            _ => {
-                let decoded: ChatCompletionResponse =
-                    serde_json::from_slice(&success.body).map_err(|_| SttError::MalformedOutput)?;
-                let text = decoded
-                    .first_content()
-                    .ok_or(SttError::MalformedOutput)?
-                    .to_owned();
-                let draft = self.draft_from_text(text, &input);
-                (draft, decoded.usage.clone())
-            }
+        let (draft, usage) = if self.card.request_family == RequestFamily::MultipartStt {
+            let decoded: TranscriptionResponse =
+                serde_json::from_slice(&success.body).map_err(|_| SttError::MalformedOutput)?;
+            let draft = self.draft_from_transcription(&decoded, &input)?;
+            (draft, decoded.usage.clone())
+        } else {
+            let decoded: ChatCompletionResponse =
+                serde_json::from_slice(&success.body).map_err(|_| SttError::MalformedOutput)?;
+            let text = decoded
+                .first_content()
+                .ok_or(SttError::MalformedOutput)?
+                .to_owned();
+            let draft = self.draft_from_text(text, &input);
+            (draft, decoded.usage.clone())
         };
 
         validate_draft(&draft, None).map_err(|_| SttError::TruthfulnessViolation)?;

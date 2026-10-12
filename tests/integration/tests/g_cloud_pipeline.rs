@@ -22,8 +22,8 @@ use plaudon_ai_openrouter::catalog::{ModelProbeRecord, ProbeEvidence, TimestampS
 use plaudon_ai_openrouter::client::{CloudDispatcher, JobBinding, OpenRouterSpeechToText};
 use plaudon_ai_openrouter::credential::StaticApiKey;
 use plaudon_ai_openrouter::registry::{ModelCard, Verification};
+use plaudon_ai_openrouter::service::{CloudAi, ModelChoice, Stage};
 use plaudon_ai_openrouter::transport::{AsyncHttpTransport, TransportFailure};
-use plaudon_app_core::cloud::{CloudAi, ModelChoice, Stage};
 use plaudon_domain::capability::{DispatchState, Known, Tri};
 use plaudon_domain::ids::{JobId, RecordingId};
 use plaudon_domain::media::Sha256Digest;
@@ -539,6 +539,7 @@ async fn a_stored_probe_record_is_what_makes_a_model_offerable() {
                 audio_input_price: Known::Unknown,
                 pricing_unit: Known::Unknown,
                 observed_on: "2026-10-11".to_owned(),
+                audio_tokens_per_second: Known::Unknown,
                 notes: String::new(),
             },
             "capability-check",

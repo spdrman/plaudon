@@ -12,8 +12,8 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 use plaudon_ai_openrouter::allowlist::ModelTask;
-use plaudon_app_core::cloud::usage::money_from_string;
-use plaudon_app_core::cloud::{ModelChoice, Stage};
+use plaudon_ai_openrouter::service::usage::money_from_string;
+use plaudon_ai_openrouter::service::{ModelChoice, Stage};
 use plaudon_domain::error::{AppError, AppErrorCode};
 use plaudon_domain::ids::{IdParseError, RecordingId, TranscriptRevisionId};
 use plaudon_domain::money::{Currency, Money};

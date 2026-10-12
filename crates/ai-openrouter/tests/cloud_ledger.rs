@@ -7,7 +7,7 @@ use plaudon_ai_openrouter::catalog::{ModelProbeRecord, ProbeEvidence, TimestampS
 use plaudon_ai_openrouter::ledger::{AttemptIntent, AttemptLedger, AttemptUpdate};
 use plaudon_ai_openrouter::pricing::{CostEstimate, CostOrigin, EstimateGap, SettledCost};
 use plaudon_ai_openrouter::privacy::DocumentedPolicy;
-use plaudon_app_core::cloud::{
+use plaudon_ai_openrouter::service::{
     evaluate_budget, BudgetDecision, BudgetLimit, CloudAi, CloudBudget, ModelChoice, Stage,
 };
 use plaudon_domain::capability::{DispatchState, Known, Tri};
@@ -147,7 +147,7 @@ async fn settling_an_attempt_records_usage_without_turning_unknown_into_zero() {
                     amount: MoneyEstimate::Finalized(usd(1_000_000)),
                     origin: CostOrigin::ProviderReported,
                 },
-                usage: Some(serde_json::json!({ "cost": 0.000001 })),
+                usage: Some(serde_json::json!({ "cost": 0.000_001 })),
             },
         )
         .await
@@ -312,6 +312,7 @@ async fn a_catalog_only_probe_cannot_verify_a_model() {
         audio_input_price: Known::Unknown,
         pricing_unit: Known::Unknown,
         observed_on: "2026-10-11".to_owned(),
+        audio_tokens_per_second: Known::Unknown,
         notes: String::new(),
     };
     cloud
@@ -361,6 +362,7 @@ async fn an_observed_probe_with_a_resolved_route_verifies_and_persists() {
         audio_input_price: Known::Unknown,
         pricing_unit: Known::Unknown,
         observed_on: "2026-10-11".to_owned(),
+        audio_tokens_per_second: Known::Unknown,
         notes: String::new(),
     };
     cloud
@@ -472,7 +474,7 @@ async fn the_default_budget_is_unlimited_rather_than_zero() {
     assert!(evaluate_budget(
         &budget,
         MoneyEstimate::Unknown,
-        &plaudon_app_core::cloud::CostTotals::default()
+        &plaudon_ai_openrouter::service::CostTotals::default()
     )
     .is_allowed());
 }

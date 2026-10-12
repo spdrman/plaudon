@@ -26,6 +26,7 @@ pub mod privacy;
 pub mod registry;
 pub mod request;
 pub mod retry;
+pub mod service;
 pub mod smoke;
 pub mod transport;
 pub mod wire;

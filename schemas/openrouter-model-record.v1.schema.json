@@ -140,6 +140,14 @@
         "null"
       ]
     },
+    "audio_tokens_per_second": {
+      "description": "Audio input tokens per second of media, measured from an observed exchange that reported both a token count and an audio duration. Null until measured: the catalogue prices audio per token and the token count for a file is not derivable locally.",
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 1
+    },
     "observed_on": {
       "type": "string",
       "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"

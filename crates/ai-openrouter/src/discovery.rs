@@ -173,7 +173,7 @@ mod tests {
     #[test]
     fn a_degraded_refresh_carries_no_entries_and_a_reason() {
         let degraded = Discovered::degraded(DegradedReason::Offline);
-        assert!(degraded.entries.is_empty());
+        assert_eq!(degraded.entries.len(), 0);
         assert!(!degraded.is_live());
         assert_eq!(degraded.degraded, Some(DegradedReason::Offline));
     }
@@ -196,6 +196,6 @@ mod tests {
         // Missing `data` is tolerated as an empty list by serde's default, so
         // the client treats an empty live list as degraded rather than as "no
         // models exist".
-        assert!(parsed.expect("parses").data.is_empty());
+        assert_eq!(parsed.expect("parses").data.len(), 0);
     }
 }

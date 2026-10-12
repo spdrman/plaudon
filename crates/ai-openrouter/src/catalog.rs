@@ -224,6 +224,11 @@ pub struct ModelProbeRecord {
     pub audio_input_price: Known<Money>,
     /// Unit the audio price is quoted in.
     pub pricing_unit: Known<String>,
+    /// Audio input tokens per second of media, measured from an observed
+    /// exchange. Until something measures it, an audio cost estimate is not
+    /// locally calculable and is reported as unknown rather than guessed.
+    #[serde(default)]
+    pub audio_tokens_per_second: Known<u32>,
     /// Date the record was established, as `YYYY-MM-DD`.
     pub observed_on: String,
     /// Free-form notes. Never contains request or response bodies.
@@ -256,6 +261,7 @@ impl ModelProbeRecord {
             } else {
                 Known::Unknown
             },
+            audio_tokens_per_second: Known::Unknown,
             observed_on: observed_on.into(),
             notes: String::new(),
         }

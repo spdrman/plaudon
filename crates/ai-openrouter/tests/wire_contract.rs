@@ -188,7 +188,7 @@ async fn an_unverified_model_sends_zero_bytes() {
         .expect_err("refused");
     assert_eq!(error, SttError::Unavailable);
     assert_eq!(h.transport.transmitted_bytes(), 0);
-    assert!(ledger.intents().is_empty(), "no attempt row for a refusal");
+    assert_eq!(ledger.intents().len(), 0, "no attempt row for a refusal");
 }
 
 #[tokio::test]
@@ -212,7 +212,7 @@ async fn an_unknown_or_unsupported_family_has_no_dispatch_path() {
             .expect_err("refused");
         assert_eq!(error, SttError::Unavailable, "{family:?}");
         assert_eq!(h.transport.transmitted_bytes(), 0, "{family:?}");
-        assert!(ledger.intents().is_empty());
+        assert_eq!(ledger.intents().len(), 0);
     }
 }
 
@@ -313,7 +313,7 @@ async fn local_only_mode_blocks_the_request_entirely() {
     assert_eq!(error, SttError::Unavailable);
     assert_eq!(h.transport.transmitted_bytes(), 0);
     assert_eq!(h.transport.attempts(), 0);
-    assert!(ledger.intents().is_empty());
+    assert_eq!(ledger.intents().len(), 0);
 }
 
 #[tokio::test]
@@ -333,7 +333,7 @@ async fn a_missing_consent_grant_blocks_the_request() {
         .expect_err("blocked");
     assert_eq!(error, SttError::ProviderRejected);
     assert_eq!(h.transport.transmitted_bytes(), 0);
-    assert!(ledger.intents().is_empty());
+    assert_eq!(ledger.intents().len(), 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -725,7 +725,7 @@ mod smoke {
     use plaudon_ai_openrouter::pricing::PricingUnits;
     use plaudon_ai_openrouter::registry::{ModelRegistry, Verification};
     use plaudon_ai_openrouter::smoke::CapabilitySmokeTest;
-    use plaudon_ai_openrouter::{Allowlist, CapabilitySmokeTest as _Alias, ModelTask};
+    use plaudon_ai_openrouter::{Allowlist, ModelTask};
 
     fn smoke_test(
         family: RequestFamily,
@@ -791,6 +791,62 @@ mod smoke {
     }
 
     #[tokio::test]
+    async fn a_usage_block_with_both_halves_makes_later_estimates_calculable() {
+        use plaudon_ai_openrouter::pricing::{estimate, EstimateInput, PricingUnits};
+        use plaudon_domain::capability::Known;
+
+        let ledger = Arc::new(RecordingLedger::new());
+        let test = smoke_test(
+            RequestFamily::MultipartStt,
+            FixtureTransport::replaying("transcription-success-usage"),
+            ledger,
+        );
+        let outcome = test.run(ctx()).await.expect("smoke test runs");
+        assert_eq!(outcome.record.audio_tokens_per_second, Known::Known(50));
+
+        let mut registry = ModelRegistry::from_allowlist(&Allowlist::embedded().expect("manifest"));
+        registry.apply_probe(
+            ModelTask::Transcription,
+            &outcome.record,
+            "capability-check",
+        );
+        let mut card = registry
+            .card(MODEL, ModelTask::Transcription)
+            .expect("card")
+            .clone();
+        // The catalogue price plus the measured rate is a complete estimate;
+        // before the measurement the same card could only report unknown.
+        // The registry already applied the measured rate to the card, so build
+        // the "catalogue price but nothing measured" state explicitly to show
+        // what the estimate looked like before the smoke test ran.
+        let priced_only = PricingUnits {
+            audio_input_per_token: Known::Known(plaudon_domain::money::Money::new(
+                4_000_000,
+                plaudon_ai_openrouter::catalog::PRICE_SCALE,
+                plaudon_domain::money::Currency::USD,
+            )),
+            ..PricingUnits::unknown()
+        };
+        card.pricing = priced_only;
+        assert!(!estimate(
+            &card.pricing,
+            EstimateInput::Audio {
+                duration_ms: Some(60_000)
+            }
+        )
+        .is_known());
+
+        card.pricing = card.pricing.with_audio_tokens_per_second(50);
+        assert!(estimate(
+            &card.pricing,
+            EstimateInput::Audio {
+                duration_ms: Some(60_000)
+            }
+        )
+        .is_known());
+    }
+
+    #[tokio::test]
     async fn a_failed_exchange_leaves_the_model_unverified() {
         let ledger = Arc::new(RecordingLedger::new());
         let test = smoke_test(
@@ -817,6 +873,6 @@ mod smoke {
             SttError::Unavailable
         );
         assert_eq!(transport.transmitted_bytes(), 0);
-        assert!(ledger.intents().is_empty());
+        assert_eq!(ledger.intents().len(), 0);
     }
 }

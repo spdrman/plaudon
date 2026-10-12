@@ -139,7 +139,7 @@ impl ModelChoice {
     /// Whether this choice routes through the cloud relay.
     #[must_use]
     pub fn is_cloud(&self) -> bool {
-        self.engine == plaudon_ai_openrouter::registry::OPENROUTER_ENGINE_ID
+        self.engine == crate::registry::OPENROUTER_ENGINE_ID
     }
 }
 
@@ -289,7 +289,10 @@ mod tests {
         assert_eq!(stale, vec!["summary".to_owned(), "actions".to_owned()]);
 
         // Re-running the last stage invalidates nothing.
-        assert!(stale_after_rerun(Stage::CitationVerification, "rev-2", &outputs).is_empty());
+        assert_eq!(
+            stale_after_rerun(Stage::CitationVerification, "rev-2", &outputs),
+            [] as [std::string::String; 0]
+        );
     }
 
     #[test]
@@ -299,7 +302,10 @@ mod tests {
             stage: Stage::ConsolidatedSummary,
             input_revision: "rev-2".to_owned(),
         }];
-        assert!(stale_after_rerun(Stage::Transcribe, "rev-2", &outputs).is_empty());
+        assert_eq!(
+            stale_after_rerun(Stage::Transcribe, "rev-2", &outputs),
+            [] as [std::string::String; 0]
+        );
     }
 
     #[test]

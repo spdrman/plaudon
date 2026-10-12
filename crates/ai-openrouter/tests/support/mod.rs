@@ -67,7 +67,10 @@ pub fn response_from(name: &str) -> HttpResponse {
             );
         }
     }
-    if let Some(seconds) = value.get("retry_after_seconds").and_then(|v| v.as_u64()) {
+    if let Some(seconds) = value
+        .get("retry_after_seconds")
+        .and_then(serde_json::Value::as_u64)
+    {
         headers.insert("retry-after".to_owned(), seconds.to_string());
     }
     if let Some(location) = value.get("location").and_then(|v| v.as_str()) {
