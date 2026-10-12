@@ -393,6 +393,27 @@ impl VoiceEnrollmentRepository {
         row.map(|row| decode_enrollment(&row)).transpose()
     }
 
+    /// Every active enrolment, oldest first.
+    ///
+    /// The match job's profile set (VP-101): expired enrolments are left out
+    /// because their exemplars are already destroyed, and the order is stable
+    /// so the job key's profile-set digest is stable too.
+    ///
+    /// # Errors
+    ///
+    /// Propagates persistence failures.
+    pub async fn active_enrollments(&self) -> PersistenceResult<Vec<StoredEnrollment>> {
+        let rows = sqlx::query(
+            "SELECT person_id, consent_version, consent_note, retention_months, last_matched_at,
+                    status, expired_at, created_at
+             FROM person_voice_enrollments WHERE status = 'active'
+             ORDER BY created_at, person_id",
+        )
+        .fetch_all(self.db.pool())
+        .await?;
+        rows.iter().map(decode_enrollment).collect()
+    }
+
     /// Shorten the retention of an enrolment.
     ///
     /// Lengthening is refused rather than clamped: VP-130 allows the user to

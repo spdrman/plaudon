@@ -230,8 +230,15 @@ impl ToolDispatch {
         if let Some(decision) = self.consent.ui(
             ui,
             &route.card,
-            ProcessingStage::ToolRun.consent_purpose(),
-            ProcessingStage::ToolRun.content_type(),
+            // A transcript tool run always dispatches, so it always has a
+            // purpose and a content class; the `Option` exists for the
+            // local-only stages, which never reach this panel.
+            ProcessingStage::ToolRun
+                .consent_purpose()
+                .expect("a tool run dispatches, so it has a consent purpose"),
+            ProcessingStage::ToolRun
+                .content_type()
+                .expect("a tool run dispatches, so it has a content class"),
             Some(context.recording_id),
             &estimate,
             output,
