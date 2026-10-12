@@ -124,6 +124,13 @@ pub const MIGRATIONS: &[Migration] = &[
         name: "voice_profiles",
         sql: include_str!("../migrations/0900_voice_profiles.sql"),
     },
+    // Retention expiry, wholesale erasure and the sweep journal (VP-095,
+    // VP-130). Still EPIC P's range.
+    Migration {
+        version: 902,
+        name: "voice_retention_and_erasure",
+        sql: include_str!("../migrations/0902_voice_retention_and_erasure.sql"),
+    },
 ];
 
 /// An applied migration as recorded in the database.

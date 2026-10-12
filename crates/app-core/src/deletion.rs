@@ -45,6 +45,7 @@ pub const DELETION_LIMITS: &[&str] = &[
     "Anything already sent to a cloud provider is outside our control. Deleting it here does not delete it there.",
     "We remove the files and database rows listed above and ask the operating system to free the space. On an SSD, in a snapshotted filesystem or on a backed-up volume we cannot guarantee the bytes are unrecoverable.",
     "A tombstone is kept so a later import or synchronization does not bring this recording back by itself. It records identifiers and hashes, never the deleted content.",
+    "Voice profiles you enrolled are not deleted. An exemplar belongs to the person you enrolled, not to this recording, so it survives with its origin forgotten. Deleting a person's enrolment, or 'forget everyone', is how you remove voiceprints.",
 ];
 
 /// One media blob the deletion will or will not remove.
@@ -93,6 +94,18 @@ pub struct DisclosedCounts {
     pub export_derivatives: u64,
     /// Activity history entries.
     pub activity_events: u64,
+    /// Pending or settled speaker suggestions that will be destroyed with the
+    /// recording they are about (VP-080).
+    pub speaker_suggestions: u64,
+    /// Voice exemplars that will **survive** this deletion with their
+    /// provenance cleared.
+    ///
+    /// An exemplar belongs to the enrolment, not to the recording it was cut
+    /// from: deleting the recording forgets where the sample came from and
+    /// keeps the voiceprint the user enrolled on purpose. The disclosure says
+    /// so in [`DELETION_LIMITS`], because a count with no sentence beside it
+    /// would read as "these will be deleted too".
+    pub voice_exemplars_provenance_cleared: u64,
 }
 
 /// Everything the user must see before confirming (spec 4.6).
@@ -339,6 +352,18 @@ impl DeletionService {
                     "activity_events",
                     "SELECT COUNT(*) FROM activity_events
                       WHERE target_kind = 'recording' AND target_id = ?1",
+                    &id,
+                )
+                .await?,
+            speaker_suggestions: self
+                .count(
+                    "SELECT COUNT(*) FROM speaker_suggestions WHERE recording_id = ?1",
+                    &id,
+                )
+                .await?,
+            voice_exemplars_provenance_cleared: self
+                .count(
+                    "SELECT COUNT(*) FROM voice_exemplars WHERE recording_id = ?1",
                     &id,
                 )
                 .await?,
@@ -649,6 +674,17 @@ impl DeletionService {
                    AND recording_id = ?1)",
             "DELETE FROM transcript_revisions WHERE recording_id = ?1",
             "DELETE FROM speakers WHERE recording_id = ?1",
+            // VP-080. A suggestion is a statement about this recording's
+            // clusters and dies with it. An exemplar is not: it belongs to the
+            // enrolment, so the row survives and forgets where it came from.
+            // Both are explicit rather than left to `ON DELETE` behaviour, so
+            // the disclosure the user confirmed and the statement that runs sit
+            // in the same file.
+            "DELETE FROM speaker_suggestions WHERE recording_id = ?1",
+            "UPDATE voice_exemplars
+                SET recording_id = NULL, diarization_run_id = NULL, cluster_key = NULL,
+                    source_start_ms = NULL, source_end_ms = NULL
+              WHERE recording_id = ?1",
             "DELETE FROM recording_tags WHERE recording_id = ?1",
             "DELETE FROM media_revisions WHERE recording_id = ?1",
             "DELETE FROM source_items WHERE recording_id = ?1",

@@ -169,7 +169,7 @@ impl LocalBackend {
 
     /// Reconcile the work a crash interrupted (spec §13.3A, §14.3, §14.7).
     ///
-    /// Three sweeps, in the order a restart needs them:
+    /// Four sweeps, in the order a restart needs them:
     ///
     /// 1. the import journal, against the bytes actually on disk;
     /// 2. the job engine, which is the only component allowed to move a job
@@ -177,7 +177,12 @@ impl LocalBackend {
     ///    dispatch with no recorded response becomes possibly billed, a
     ///    half-cancelled job finishes cancelling;
     /// 3. the cloud ledger, for any attempt left in flight by a job the
-    ///    engine does not own.
+    ///    engine does not own;
+    /// 4. voice-profile retention (VP-130), which expires profiles nobody has
+    ///    used for their retention term and removes tombstones older than the
+    ///    visibility window. It is last because it is maintenance rather than
+    ///    recovery, and it resumes an interrupted pass rather than starting a
+    ///    new one.
     ///
     /// Runs before the worker pool starts: the reconciler assumes nothing is
     /// running.
@@ -193,7 +198,20 @@ impl LocalBackend {
             + report.jobs_outcome_unknown.len()
             + report.jobs_cancelled.len();
         let parked = self.reconcile_cloud_attempts().await?;
-        Ok(outcomes.len() + recovered + parked)
+        let retention = self.sweep_voice_retention().await?;
+        Ok(outcomes.len() + recovered + parked + retention)
+    }
+
+    /// Expire voice profiles whose retention term has elapsed (VP-130).
+    ///
+    /// Returns how many enrolments and tombstones this pass destroyed, so the
+    /// startup reconciler can report that it did something.
+    pub async fn sweep_voice_retention(&self) -> Result<usize, AppError> {
+        let report = plaudon_app_core::VoiceRetentionService::new(self.store.db().clone())
+            .sweep(Timestamp::now())
+            .await
+            .map_err(AppError::from)?;
+        Ok((report.expired + report.purged) as usize)
     }
 
     /// The connection pool.

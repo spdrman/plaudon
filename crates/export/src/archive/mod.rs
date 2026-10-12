@@ -11,6 +11,7 @@
 //! | [`reader`] | inspection, validation and verified streaming |
 //! | [`restore`] | staging and transactional integration |
 //! | [`secrets`] | secret-exclusion enforcement before commit |
+//! | [`voiceprofiles`] | the encrypted-only biometric namespace (VP-078) |
 
 pub mod container;
 pub mod crypto;
@@ -20,6 +21,7 @@ pub mod reader;
 pub mod restore;
 pub mod secrets;
 pub mod snapshot;
+pub mod voiceprofiles;
 pub mod writer;
 
 use manifest::ManifestLimits;
@@ -44,4 +46,5 @@ pub use restore::{
     ConflictPolicy, RestoreConflict, RestoreMode, RestoreOptions, RestorePreview, RestoreReport,
     Restorer,
 };
+pub use voiceprofiles::{VoiceProfileDocument, VoiceProfilePermit, VOICEPROFILE_SCHEMA};
 pub use writer::{ArchiveArtifact, ArchiveBuilder, Protection};

@@ -145,6 +145,13 @@ pub enum ExportError {
     /// Archive creation found credential-shaped content and refused to commit.
     #[error("archive creation aborted: {0}")]
     SecretExclusionFailed(String),
+    /// Voice profiles were requested for a backup that is not encrypted.
+    ///
+    /// Biometric material is representable in an archive only under
+    /// `Protection::Encrypted` (VP-078). This is the refusal, not a warning:
+    /// the caller is expected to ask for a password and try again.
+    #[error("voice profiles can only be included in an encrypted backup; nothing was written")]
+    VoiceProfilesRequireEncryption,
     /// Restore into a new library found the target library is not empty.
     #[error("the target library already contains recordings")]
     TargetLibraryNotEmpty,
@@ -183,7 +190,9 @@ impl ExportError {
             Self::DecryptionFailed | Self::PasswordRequired => {
                 AppErrorCode::ArchiveDecryptionFailed
             }
-            Self::SecretExclusionFailed(_) => AppErrorCode::SecretExclusionFailed,
+            Self::SecretExclusionFailed(_) | Self::VoiceProfilesRequireEncryption => {
+                AppErrorCode::SecretExclusionFailed
+            }
             Self::TargetLibraryNotEmpty | Self::RestoreConflict(_) => AppErrorCode::Conflict,
             Self::IntegrityFailed => AppErrorCode::IntegrityFailed,
             Self::RecordNotFound => AppErrorCode::RecordNotFound,

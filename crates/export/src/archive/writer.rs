@@ -33,6 +33,7 @@ use super::manifest::{
     MANIFEST_SCHEMA_VERSION, NONPORTABLE_SETTINGS,
 };
 use super::secrets::ArchiveSecretScanner;
+use super::voiceprofiles::{self, VoiceProfilePermit, VOICEPROFILE_SCHEMA};
 use super::{container, DEFAULT_LIMITS};
 use crate::bundle::AppStamp;
 use crate::destination::ExportDestination;
@@ -102,6 +103,10 @@ pub struct ArchiveBuilder {
     next_staged: u64,
     limits: ManifestLimits,
     created_at: Timestamp,
+    /// Whether any staged entry is biometric. Checked again at emission, so a
+    /// builder that obtained a permit cannot be finished as a plaintext
+    /// archive by a later caller (VP-078).
+    holds_voice_profiles: bool,
 }
 
 impl std::fmt::Debug for PendingEntry {
@@ -123,6 +128,7 @@ impl ArchiveBuilder {
             next_staged: 0,
             limits: DEFAULT_LIMITS,
             created_at,
+            holds_voice_profiles: false,
         })
     }
 
@@ -222,6 +228,34 @@ impl ArchiveBuilder {
         })
     }
 
+    /// Add a `voiceprofiles/` document.
+    ///
+    /// Separate from [`Self::add_document`] on purpose: it takes a
+    /// [`VoiceProfilePermit`], which only
+    /// [`Protection::Encrypted`] can produce, so there is no call shape that
+    /// puts biometric material into a plaintext archive. The builder also
+    /// remembers that it holds such an entry, and [`Self::finish`] refuses a
+    /// plaintext emission afterwards — the permit proves the caller *asked*
+    /// for encryption, the flag proves the archive *is* encrypted, and a
+    /// backup needs both (VP-078).
+    pub fn add_voice_document(
+        &mut self,
+        path: &str,
+        document: &[u8],
+        _permit: VoiceProfilePermit,
+    ) -> ExportResult<()> {
+        if !voiceprofiles::in_namespace(path) {
+            return Err(ExportError::ArchiveRejected(
+                ArchiveRejection::PathRejected {
+                    path: path.to_owned(),
+                    reason: "voice-profile documents belong in voiceprofiles/".to_owned(),
+                },
+            ));
+        }
+        self.holds_voice_profiles = true;
+        self.add_document(path, VOICEPROFILE_SCHEMA, document)
+    }
+
     fn check_path(&self, path: &str) -> ExportResult<()> {
         if !in_known_namespace(path) {
             return Err(ExportError::ArchiveRejected(
@@ -299,6 +333,9 @@ impl ArchiveBuilder {
         file_name: &str,
         protection: &Protection,
     ) -> ExportResult<ArchiveArtifact> {
+        if self.holds_voice_profiles && matches!(protection, Protection::Plaintext) {
+            return Err(ExportError::VoiceProfilesRequireEncryption);
+        }
         let manifest = self.manifest();
         let manifest_json = serde_json::to_vec(&manifest)?;
         ArchiveSecretScanner::enforce(MANIFEST_PATH, &manifest_json)?;

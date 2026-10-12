@@ -33,6 +33,9 @@ plaudon-audio = { path = "../crates/audio" }
 plaudon-security = { path = "../crates/security" }
 plaudon-diagnostics = { path = "../crates/diagnostics" }
 plaudon-domain = { path = "../crates/domain" }
+# Only `fuzz_voiceprofile_archive_doc` needs it: the archive-voiceprofile
+# document and its validator live in the export crate (VP-185).
+plaudon-export = { path = "../crates/export" }
 
 [profile.release]
 debug = 1
@@ -93,6 +96,13 @@ bench = false
 [[bin]]
 name = "fuzz_opus_packet"
 path = "fuzz_targets/fuzz_opus_packet.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_voiceprofile_archive_doc"
+path = "fuzz_targets/fuzz_voiceprofile_archive_doc.rs"
 test = false
 doc = false
 bench = false

@@ -90,3 +90,14 @@ or can access voiceprints, and the public privacy documents say so affirmatively
   auto-expiry). This is stated bluntly in-product; it cannot be engineered away.
 - A privacy-counsel review of the spec's §12 is a release-evidence item before the feature reaches
   a public build.
+- **Implemented so far (P2.3):** the export/backup/deletion leg of this decision now exists.
+  A recording export carries display-name text only; portable backups carry the name-only roster
+  like any other library data and exclude the biometric tier unless the user opts in to an
+  *encrypted* archive — a plaintext backup carrying voiceprints is unrepresentable, because the
+  `voiceprofiles/` namespace can only be staged with a permit that `Protection::Plaintext` cannot
+  produce. Restoring voice data re-arms the consent gate in the target library. "Forget everyone"
+  destroys every enrolment, exemplar and suggestion, destroys the `SecretScope::VoiceProfileKey`
+  entry (cryptographic erasure reaching ciphertexts inside backups already written) and switches
+  the feature off, keeping the roster. Retention expiry runs as a journalled, resumable
+  maintenance pass. Threat-model row TM-046 is `implemented`; TM-045 and TM-048 record what their
+  remaining legs still owe.

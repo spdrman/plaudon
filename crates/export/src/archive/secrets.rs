@@ -28,6 +28,7 @@ use std::collections::BTreeSet;
 use plaudon_diagnostics::redact::Redactor;
 use serde_json::Value;
 
+use super::voiceprofiles;
 use crate::error::{ExportError, ExportResult};
 
 /// Bytes scanned per window. Values larger than this are scanned in
@@ -38,7 +39,7 @@ pub const WINDOW_BYTES: usize = 256 * 1024;
 pub const WINDOW_OVERLAP_BYTES: usize = 4 * 1024;
 
 /// Keys whose value is a content digest this format is built on.
-pub const DIGEST_KEYS: &[&str] = &["sha256", "input_sha256", "integrity_digest"];
+pub const DIGEST_KEYS: &[&str] = &["sha256", "input_sha256", "integrity_digest", "model_sha256"];
 
 /// One documented reason a pattern hit is expected in a given position.
 ///
@@ -47,8 +48,8 @@ pub const DIGEST_KEYS: &[&str] = &["sha256", "input_sha256", "integrity_digest"]
 /// exception is how a scanner quietly stops working.
 pub const DOCUMENTED_EXCEPTIONS: &[(&str, &str)] = &[
     (
-        "sha256 | input_sha256 | integrity_digest",
-        "A 64-character lowercase hex value in one of these fields is a SHA-256 content digest. The archive is content-addressed: if this value were not the real digest of the bytes, verification would reject the archive.",
+        "sha256 | input_sha256 | integrity_digest | model_sha256",
+        "A 64-character lowercase hex value in one of these fields is a SHA-256 content digest. The archive is content-addressed: if this value were not the real digest of the bytes, verification would reject the archive. A model digest is the same shape and the same kind of fact: it identifies a published model file, not a credential.",
     ),
     (
         "path (media/<sha256>.<ext>)",
@@ -57,6 +58,10 @@ pub const DOCUMENTED_EXCEPTIONS: &[(&str, &str)] = &[
     (
         "any canonical UUID value",
         "Recording, revision, asset and output identities are UUIDs. Credentials are never stored in the database at all, so a UUID-shaped value is an identity, not a secret.",
+    ),
+    (
+        "embedding ciphertext inside voiceprofiles/",
+        "A sealed embedding is a long base64 blob, which the VP-078 embedding rule treats as a refusal everywhere else. Inside the encrypted-only voiceprofiles/ namespace it is the payload the namespace exists for, and it is XChaCha20-Poly1305 ciphertext whose key never leaves the OS credential store.",
     ),
 ];
 
@@ -83,15 +88,25 @@ impl ArchiveSecretScanner {
     /// backup for nothing. The spec requires the scan to cover the manifest,
     /// record JSON and annotation free text, which is exactly what passes
     /// through here.
+    ///
+    /// Two rules run over every value. The credential patterns are the shared
+    /// table every sink uses. The second is the VP-078 embedding rule: a value
+    /// shaped like biometric material is a finding **outside** the
+    /// `voiceprofiles/` namespace, and expected inside it. The namespace is
+    /// writable only under `Protection::Encrypted`, so "an embedding exists in
+    /// this archive" and "this archive is encrypted" cannot come apart.
     #[must_use]
     pub fn findings(entry_path: &str, document: &[u8]) -> Vec<SecretFinding> {
         let Ok(text) = std::str::from_utf8(document) else {
             return Vec::new();
         };
         let mut found: BTreeSet<SecretFinding> = BTreeSet::new();
-        match serde_json::from_str::<Value>(text) {
-            Ok(value) => walk(entry_path, "", None, &value, &mut found),
-            Err(_) => scan_value(entry_path, "/", text, &mut found),
+        let biometric_allowed = voiceprofiles::in_namespace(entry_path);
+        if let Ok(value) = serde_json::from_str::<Value>(text) {
+            walk(entry_path, "", None, &value, biometric_allowed, &mut found);
+        } else {
+            scan_value(entry_path, "/", text, &mut found);
+            scan_embedding_shape(entry_path, "/", None, text, biometric_allowed, &mut found);
         }
         found.into_iter().collect()
     }
@@ -118,19 +133,28 @@ fn walk(
     pointer: &str,
     key: Option<&str>,
     value: &Value,
+    biometric_allowed: bool,
     found: &mut BTreeSet<SecretFinding>,
 ) {
     match value {
         Value::String(text) => {
+            let field = if pointer.is_empty() { "/" } else { pointer };
+            scan_embedding_shape(entry_path, field, key, text, biometric_allowed, found);
             if is_expected_identity(key, text) {
                 return;
             }
-            let field = if pointer.is_empty() { "/" } else { pointer };
             scan_value(entry_path, field, text, found);
         }
         Value::Array(items) => {
             for (index, item) in items.iter().enumerate() {
-                walk(entry_path, &format!("{pointer}/{index}"), key, item, found);
+                walk(
+                    entry_path,
+                    &format!("{pointer}/{index}"),
+                    key,
+                    item,
+                    biometric_allowed,
+                    found,
+                );
             }
         }
         Value::Object(fields) => {
@@ -140,11 +164,33 @@ fn walk(
                     &format!("{pointer}/{name}"),
                     Some(name),
                     item,
+                    biometric_allowed,
                     found,
                 );
             }
         }
         _ => {}
+    }
+}
+
+/// The VP-078 rule: biometric material outside `voiceprofiles/` is a refusal.
+fn scan_embedding_shape(
+    entry_path: &str,
+    field: &str,
+    key: Option<&str>,
+    text: &str,
+    biometric_allowed: bool,
+    found: &mut BTreeSet<SecretFinding>,
+) {
+    if biometric_allowed {
+        return;
+    }
+    if let Some(shape) = voiceprofiles::embedding_shape(key, text) {
+        found.insert(SecretFinding {
+            entry_path: entry_path.to_owned(),
+            field: field.to_owned(),
+            pattern: shape.as_str().to_owned(),
+        });
     }
 }
 
@@ -334,7 +380,7 @@ mod tests {
 
     #[test]
     fn every_exception_is_documented() {
-        assert_eq!(DOCUMENTED_EXCEPTIONS.len(), 3);
+        assert_eq!(DOCUMENTED_EXCEPTIONS.len(), 4);
         for (position, reason) in DOCUMENTED_EXCEPTIONS {
             assert_ne!(*position, "");
             assert!(reason.len() > 40, "an exception needs a real reason");
