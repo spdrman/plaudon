@@ -1,0 +1,19 @@
+[package]
+name = "plaudon-transcript-doc"
+description = "UI-independent transcript document model: stable segment ids, piece-table segment text, caret/selection, an undoable operation log, search and replace, anchor remapping and debounced revision autosave. No egui, no SQLite, no platform dependency."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+plaudon-domain = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
