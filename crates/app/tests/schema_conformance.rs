@@ -898,6 +898,8 @@ fn speaker_dto() -> plaudon_app::dto::SpeakerDto {
     plaudon_app::dto::SpeakerDto {
         speaker_id: SpeakerId::new(),
         recording_id: RecordingId::new(),
+        cluster_key: Some("S1".into()),
+        person_id: Some(plaudon_domain::ids::PersonId::new()),
         label: "Priya Raman".into(),
         name: Some("Priya Raman".into()),
         confirmed: true,
@@ -1020,7 +1022,7 @@ fn the_roster_commands_match_their_schemas() {
             applied: true,
             speaker: speaker_dto(),
             person: Some(reference),
-            segments_assigned: 12,
+            assigned_segments: vec![0, 1, 4],
             segment_exceptions: 3,
         }),
     );
@@ -1095,7 +1097,7 @@ fn the_voice_profile_commands_match_their_schemas() {
         applied: true,
         speaker: Some(speaker_dto()),
         person: Some(reference.clone()),
-        segments_assigned: 7,
+        assigned_segments: vec![2, 3],
         segment_exceptions: 0,
     };
 

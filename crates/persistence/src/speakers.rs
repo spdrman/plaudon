@@ -14,7 +14,7 @@
 //! to every segment of that cluster at once, and is reversible because
 //! `original_label` is never overwritten (spec 8.7, \u00a74.5).
 
-use plaudon_domain::ids::{RecordingId, SpeakerId, TranscriptRevisionId};
+use plaudon_domain::ids::{PersonId, RecordingId, SpeakerId, TranscriptRevisionId};
 use plaudon_domain::time::Timestamp;
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
@@ -118,6 +118,8 @@ pub struct StoredSpeaker {
     pub recording_id: RecordingId,
     /// Diarization cluster, when the row came from a run.
     pub cluster_key: Option<String>,
+    /// Roster person this row is linked to, when one has been linked (VP-010).
+    pub person_id: Option<PersonId>,
     /// The machine-assigned label the row started with.
     pub original_label: String,
     /// Current label.
@@ -320,8 +322,8 @@ impl SpeakerRepository {
         recording_id: RecordingId,
     ) -> PersistenceResult<Vec<StoredSpeaker>> {
         let rows = sqlx::query(
-            "SELECT id, cluster_key, original_label, label, name, provenance, user_confirmed,
-                    renamed_at, confirmed_at
+            "SELECT id, cluster_key, person_id, original_label, label, name, provenance,
+                    user_confirmed, renamed_at, confirmed_at
              FROM speakers WHERE recording_id = ?1
              ORDER BY COALESCE(original_label, label), id",
         )
@@ -334,10 +336,18 @@ impl SpeakerRepository {
                 let id: String = row.try_get("id")?;
                 let original: Option<String> = row.try_get("original_label")?;
                 let label: String = row.try_get("label")?;
+                let person: Option<String> = row.try_get("person_id")?;
                 Ok(StoredSpeaker {
                     id: id.parse().map_err(|_| PersistenceError::IntegrityFailed)?,
                     recording_id,
                     cluster_key: row.try_get("cluster_key")?,
+                    person_id: person
+                        .map(|value| {
+                            value
+                                .parse::<PersonId>()
+                                .map_err(|_| PersistenceError::IntegrityFailed)
+                        })
+                        .transpose()?,
                     original_label: original.unwrap_or_else(|| label.clone()),
                     label,
                     name: row.try_get("name")?,
@@ -489,7 +499,9 @@ impl SpeakerRepository {
     /// row, rather than issuing N single-segment commands — which is both the
     /// spec's rule and what makes the action one undo step (VP-212).
     ///
-    /// Returns the number of segments written.
+    /// Returns the zero-based `seq_index` of every segment written, ascending,
+    /// so the caller can turn the action into exactly one undo step over
+    /// known segments rather than a bare count (VP-212).
     ///
     /// # Errors
     ///
@@ -500,24 +512,29 @@ impl SpeakerRepository {
         run_id: Uuid,
         cluster_key: &str,
         speaker_id: SpeakerId,
-    ) -> PersistenceResult<u32> {
-        let affected = sqlx::query(
+    ) -> PersistenceResult<Vec<u32>> {
+        let rows: Vec<i64> = sqlx::query_scalar(
             "UPDATE transcript_segments SET speaker_id = ?4
              WHERE transcript_revision_id = ?1
                AND seq_index IN (
                    SELECT seq_index FROM segment_speaker_assignments
                    WHERE transcript_revision_id = ?1 AND diarization_run_id = ?2
                      AND assignment = 'single' AND cluster_key = ?3
-               )",
+               )
+             RETURNING seq_index",
         )
         .bind(revision_id.to_string())
         .bind(run_id.to_string())
         .bind(cluster_key)
         .bind(speaker_id.to_string())
-        .execute(self.db.pool())
-        .await?
-        .rows_affected();
-        Ok(u32::try_from(affected).unwrap_or(u32::MAX))
+        .fetch_all(self.db.pool())
+        .await?;
+        let mut assigned: Vec<u32> = rows
+            .into_iter()
+            .map(|value| u32::try_from(value).unwrap_or(u32::MAX))
+            .collect();
+        assigned.sort_unstable();
+        Ok(assigned)
     }
 
     /// The most recent diarization run of a recording, when it has one.

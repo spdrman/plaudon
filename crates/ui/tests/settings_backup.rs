@@ -140,6 +140,9 @@ fn backup_response() -> CreateBackupResponse {
         protection_disclosure: "This archive is encrypted with the password you chose. Plaudon \
 cannot read it without that password and cannot recover it."
             .to_owned(),
+        // Nothing voice-derived travels in this fixture: VP-078 keeps
+        // profiles out of an archive unless the user asked for them.
+        voice_profiles_included: 0,
         entry_count: 128,
         total_byte_length: 2_097_152,
         file_byte_length: 1_572_864,

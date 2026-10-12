@@ -420,7 +420,12 @@ fn the_disclosure_states_every_limit_sentence_verbatim() {
     open_disclosure(&mut harness);
 
     let lines = announced(&harness);
-    assert_eq!(DELETION_LIMITS.len(), 5, "the contract has five sentences");
+    assert_eq!(
+        DELETION_LIMITS.len(),
+        6,
+        "the contract has six sentences: the five of spec 4.6 and the \
+         voice-profile one of VOICE_PROFILES_SPEC VP-080"
+    );
     for limit in DELETION_LIMITS {
         assert!(
             lines.iter().any(|line| line == limit),

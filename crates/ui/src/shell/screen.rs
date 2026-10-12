@@ -332,8 +332,16 @@ mod tests {
 
     #[test]
     fn every_destination_names_the_task_that_owns_its_screen() {
+        // EPIC O rebuilt the shell; the People destination arrived later,
+        // with EPIC P's voice-profile work, so the prefix is the EPIC's and
+        // not a fixed letter.
         for destination in Destination::ALL {
-            assert!(destination.owning_task().starts_with('O'));
+            let task = destination.owning_task();
+            assert!(
+                task.starts_with('O') || task.starts_with('P'),
+                "{task} names no owning task"
+            );
+            assert!(task.contains('#'), "{task} names no issue");
         }
     }
 }

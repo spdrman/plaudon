@@ -238,6 +238,40 @@ pub struct EngineOverrides {
     /// only way to tell "no request was made" from "a request was made and
     /// failed".
     pub cloud_transport: Option<Arc<dyn plaudon_ai_openrouter::transport::AsyncHttpTransport>>,
+    /// The voice-profile engines, when a caller substitutes them.
+    ///
+    /// `None` is this build's production arrangement: no diarizer, no
+    /// embedder, and the OS credential store.
+    pub voice: Option<VoiceEngines>,
+}
+
+/// The voice-profile engines and key store a hermetic run substitutes.
+///
+/// The three travel together because they are useless apart: a match job
+/// needs a diarizer and an embedder to produce a score at all, and the
+/// enrolment it scores against is sealed with a key from the credential
+/// store, so a run with a scripted embedder and the real OS keychain would
+/// still touch the host. Production supplies none of them: this build ships
+/// no ONNX tier, so a match job parks in `waiting_for_model` rather than
+/// pretending a model could run (VP-042).
+#[derive(Clone)]
+pub struct VoiceEngines {
+    /// Provider the matching executor diarizes with.
+    pub diarizer: Arc<dyn plaudon_ai_diarization::contract::DiarizationProvider>,
+    /// Embedder the matching executor scores clusters with.
+    pub embedder: Arc<dyn plaudon_app_core::voice_profiles::embedder::SpeakerEmbedder>,
+    /// Credential store the voice-profile data key lives in (VP-071).
+    ///
+    /// Separate from the application's own OpenRouter-key port, which is a
+    /// different trait: the biometric tier needs the
+    /// `plaudon_security::secrets` scope API (ADR-0014).
+    pub secrets: Arc<dyn plaudon_security::secrets::SecretStore>,
+}
+
+impl std::fmt::Debug for VoiceEngines {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("VoiceEngines")
+    }
 }
 
 impl std::fmt::Debug for EngineOverrides {
@@ -246,6 +280,7 @@ impl std::fmt::Debug for EngineOverrides {
             .field("stt", &self.stt.len())
             .field("text", &self.text.is_some())
             .field("cloud_transport", &self.cloud_transport.is_some())
+            .field("voice", &self.voice.is_some())
             .finish()
     }
 }
@@ -285,6 +320,11 @@ pub async fn build_ports_with(
     }
     if let Some(text) = engines.text {
         opened = opened.with_text_model(text);
+    }
+    if let Some(voice) = engines.voice {
+        opened = opened
+            .with_voice_engines(voice.diarizer, voice.embedder)
+            .with_voice_secrets(voice.secrets);
     }
     let backend = Arc::new(opened);
     // Spec §13.3A, §14.3, §14.7: the import journal, the cloud ledger and the

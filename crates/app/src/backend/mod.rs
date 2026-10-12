@@ -1495,7 +1495,7 @@ impl SpeakersPort for LocalBackend {
             // the current label here rather than read as NOT NULL: such a row
             // has never been renamed — no rename ever reached the database
             // before this column did — so its label still is the machine's.
-            "SELECT id, recording_id, cluster_key, \
+            "SELECT id, recording_id, cluster_key, person_id, \
              COALESCE(original_label, label) AS original_label, label, name, \
              provenance, user_confirmed, renamed_at, confirmed_at \
              FROM speakers WHERE recording_id = ?1 \
@@ -1510,6 +1510,7 @@ impl SpeakersPort for LocalBackend {
         for row in rows {
             let id: String = row.get("id");
             let cluster_key: Option<String> = row.get("cluster_key");
+            let person_id: Option<String> = row.get("person_id");
             let provenance: String = row.get("provenance");
 
             speakers.push(plaudon_app_core::speakers::Speaker {
@@ -1518,6 +1519,13 @@ impl SpeakersPort for LocalBackend {
                     .map_err(|_| internal("stored speaker id is not a uuid"))?,
                 recording_id,
                 cluster_key: cluster_key.map(plaudon_ai_diarization::ClusterKey::new),
+                person_id: person_id
+                    .map(|value| {
+                        value
+                            .parse()
+                            .map_err(|_| internal("stored speaker person id is not a uuid"))
+                    })
+                    .transpose()?,
                 original_label: row.get("original_label"),
                 label: row.get("label"),
                 name: row.get("name"),
