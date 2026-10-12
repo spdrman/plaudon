@@ -20,6 +20,7 @@ pub mod stt;
 pub mod templates;
 pub mod transcript_tools;
 pub mod vendor_artifacts;
+pub mod voice_profiles;
 
 pub use chunking::{
     plan_chunks, plan_chunks_for_revision, Chunk, ChunkError, ChunkPlan, ChunkPolicy,
@@ -53,6 +54,9 @@ pub use templates::{TemplateLoadError, TemplateRegistry, TemplateSummary};
 pub use transcript_tools::{AnsweredQuestion, ConversationService, StudyOutputWriter};
 pub use vendor_artifacts::{
     VendorArtifactImporter, VendorArtifactRef, VendorImportCapability, VendorImportMode,
+};
+pub use voice_profiles::{
+    EmbeddingCipher, ExemplarBinding, SealedEmbedding, VoiceProfileError, VoiceProfileResult,
 };
 
 /// Cargo package name of this crate, used by the workspace layout conformance test.

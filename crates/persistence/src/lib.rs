@@ -20,11 +20,13 @@ pub mod error;
 pub mod intelligence;
 pub mod journal;
 pub mod migrations;
+pub mod people;
 pub mod repo;
 pub mod search;
 pub mod speakers;
 pub mod tools;
 pub mod transcript;
+pub mod voice_profiles;
 
 pub use db::{begin_write, Database};
 pub use error::{PersistenceError, PersistenceResult};

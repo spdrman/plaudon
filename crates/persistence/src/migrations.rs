@@ -46,7 +46,8 @@ impl Migration {
 /// EPIC F (audio/STT), 0300-0399 the desktop shell, 0400-0449 transcript
 /// tools and automation, 0450-0499 cloud AI, 0500-0599 direct-device import,
 /// 0600-0699 meeting intelligence, 0700-0799 export, portable archive and
-/// deletion, 0800-0899 source reconciliation and watched folders. Claim a
+/// deletion, 0800-0899 source reconciliation and watched folders, 0900-0999
+/// EPIC P (voice profiles: the people roster and its biometric tier). Claim a
 /// range in this comment before using it.
 pub const MIGRATIONS: &[Migration] = &[
     Migration {
@@ -115,6 +116,13 @@ pub const MIGRATIONS: &[Migration] = &[
         version: 800,
         name: "source_reconciliation",
         sql: include_str!("../migrations/0800_source_reconciliation.sql"),
+    },
+    // 900+ is EPIC P's range: the people roster and the voice-profile
+    // biometric tier (VOICE_PROFILES_SPEC VP-070).
+    Migration {
+        version: 900,
+        name: "voice_profiles",
+        sql: include_str!("../migrations/0900_voice_profiles.sql"),
     },
 ];
 
