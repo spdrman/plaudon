@@ -2,7 +2,7 @@
 //!
 //! Never built by default and never run in CI (spec 18.3, 18.8). It exists so
 //! that promoting a release into `cli-compatibility.yaml` is a transcription
-//! of something observed rather than an assumption (spec 2.1, 2.6, ADR-0050).
+//! of something observed rather than an assumption (spec 2.1, 2.6, ADR-0060).
 //!
 //! It runs the *real* vendor CLI through the same hardened runner the
 //! application uses — same argument array, same scrubbed environment, same
@@ -147,7 +147,7 @@ async fn main() -> std::process::ExitCode {
         println!("  - {item}");
     }
     println!();
-    println!("Then follow ADR-0050, \"How to add a tested release\".");
+    println!("Then follow ADR-0060, \"How to add a tested release\".");
     std::process::ExitCode::SUCCESS
 }
 
