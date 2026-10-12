@@ -1,0 +1,51 @@
+// Windows resources for plaudon-egui.exe: icon, version information and the
+// side-by-side manifest. Compiled by `apps/plaudon-egui/build.rs` with
+// `llvm-rc` or MSVC `rc.exe`, which pass the package version in as
+// PLAUDON_VERSION; nothing here is edited per release.
+//
+// `scripts/package-windows-egui.ps1` reads the version block back off the
+// built executable and refuses to package a binary that has none, so a lost
+// resource compiler is a packaging failure rather than a silently iconless
+// installer.
+
+// Numeric resource types and ids rather than the winuser.h names, because the
+// resource compiler is invoked without an include path: 1 is
+// CREATEPROCESS_MANIFEST_RESOURCE_ID and 24 is RT_MANIFEST.
+#define IDI_PLAUDON 1
+
+IDI_PLAUDON ICON "plaudon.ico"
+1 24 "plaudon-egui.exe.manifest"
+
+#ifndef PLAUDON_VERSION
+#define PLAUDON_VERSION "0.0.0"
+#define PLAUDON_VERSION_COMMA 0,0,0,0
+#endif
+
+1 VERSIONINFO
+FILEVERSION PLAUDON_VERSION_COMMA
+PRODUCTVERSION PLAUDON_VERSION_COMMA
+FILEOS 0x40004L       // VOS_NT_WINDOWS32
+FILETYPE 0x1L         // VFT_APP
+{
+  BLOCK "StringFileInfo"
+  {
+    BLOCK "040904b0"  // US English, Unicode
+    {
+      VALUE "CompanyName",      "Plaudon"
+      // Pure ASCII, deliberately: llvm-rc reads this file in the host
+      // codepage and refuses a multi-byte character (an em dash cost an
+      // afternoon), and MSVC rc.exe would need /C 65001 to agree with it.
+      VALUE "FileDescription",  "Plaudon - local-first recording library"
+      VALUE "FileVersion",      PLAUDON_VERSION
+      VALUE "InternalName",     "plaudon-egui"
+      VALUE "OriginalFilename", "plaudon-egui.exe"
+      VALUE "ProductName",      "Plaudon"
+      VALUE "ProductVersion",   PLAUDON_VERSION
+      VALUE "LegalCopyright",   "Licensed under the Apache License, Version 2.0"
+    }
+  }
+  BLOCK "VarFileInfo"
+  {
+    VALUE "Translation", 0x409, 1200
+  }
+}

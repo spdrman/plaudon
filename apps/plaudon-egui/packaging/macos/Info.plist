@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Template for the bundle's Info.plist. `scripts/package-macos-egui.sh`
+  substitutes the three @TOKEN@ values and then merges
+  `crates/platform/resources/Info.associations.plist` into the same dictionary,
+  which contributes CFBundleDocumentTypes, UTExportedTypeDeclarations and
+  CFBundleURLTypes (the `.plaudon` archive and the `plaudon://` scheme). Those
+  three keys are generated from `plaudon_platform::associations`, so they are
+  deliberately absent here: one source of truth, enforced by that crate's
+  golden test.
+
+  CFBundleIdentifier is `app.plaudon.desktop`, the same identifier the Tauri
+  shell used. It decides where the library lives
+  (`~/Library/Application Support/app.plaudon.desktop`, migration-plan risk
+  R7) and which Launch Services registration the installation keeps across the
+  cutover, so it is pinned by `apps/plaudon-egui/tests/packaging.rs` against
+  `plaudon_app::runtime::APPLICATION_IDENTIFIER`.
+
+  The usage descriptions are the permission prompts the product can actually
+  trigger. There is deliberately no NSMicrophoneUsageDescription and no
+  NSCameraUsageDescription: Plaudon imports recordings, it never captures
+  them, and a usage string is how an application asks to be allowed to.
+-->
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleDisplayName</key>
+	<string>Plaudon</string>
+	<key>CFBundleExecutable</key>
+	<string>plaudon-egui</string>
+	<key>CFBundleIconFile</key>
+	<string>plaudon</string>
+	<key>CFBundleIdentifier</key>
+	<string>app.plaudon.desktop</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>Plaudon</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>@SHORT_VERSION@</string>
+	<key>CFBundleVersion</key>
+	<string>@BUNDLE_VERSION@</string>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.productivity</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>@MINIMUM_SYSTEM_VERSION@</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<!--
+	  The renderer is wgpu over Metal; on a dual-GPU Mac the integrated GPU is
+	  enough for a document UI and the discrete one costs battery.
+	-->
+	<key>NSSupportsAutomaticGraphicsSwitching</key>
+	<true/>
+	<key>NSHumanReadableCopyright</key>
+	<string>Licensed under the Apache License, Version 2.0</string>
+	<!-- Direct BLE acquisition from a PLAUD device (spec 7.7). -->
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Plaudon uses Bluetooth to find and import recordings from your PLAUD device. It never connects to anything else.</string>
+	<!--
+	  Legacy PLAUD Note import reads a mounted USB volume (crates/plaud-usb,
+	  spec 7.8). macOS gates mounted removable volumes behind this string;
+	  there is no separate raw-USB usage key, and Plaudon never claims one
+	  because it never opens a USB device directly.
+	-->
+	<key>NSRemovableVolumesUsageDescription</key>
+	<string>Plaudon reads recordings from a connected PLAUD device that mounts as a disk. It only reads; it never writes to the device.</string>
+	<!--
+	  Apple's on-device speech recogniser (crates/ai-apple). Only reachable
+	  from a signed bundle, which is why this key exists at all
+	  (docs/spikes/A1.3-apple-availability.md).
+	-->
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Plaudon uses Apple's on-device speech recognition to transcribe your recordings. Audio stays on this Mac.</string>
+</dict>
+</plist>
