@@ -229,9 +229,7 @@ async fn commit_export(
     job_id: JobId,
     request: &ValidatedExport,
 ) -> Result<(), AppError> {
-    let mut tx = backend
-        .pool()
-        .begin()
+    let mut tx = plaudon_persistence::begin_write(backend.pool())
         .await
         .map_err(|err| storage_error("cannot begin an export commit", &err))?;
     // Spec §13.2: `export_events` records that an export happened, with a

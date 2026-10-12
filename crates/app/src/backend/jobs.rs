@@ -52,8 +52,7 @@ pub async fn create(pool: &SqlitePool, draft: &JobDraft) -> Result<JobId, AppErr
         }
     }
 
-    let mut tx = pool
-        .begin()
+    let mut tx = plaudon_persistence::begin_write(pool)
         .await
         .map_err(|err| storage_error("cannot begin a job", &err))?;
     sqlx::query(
@@ -88,8 +87,7 @@ pub async fn transition(
     progress: Option<f64>,
 ) -> Result<(), AppError> {
     let now = Timestamp::now().as_millis();
-    let mut tx = pool
-        .begin()
+    let mut tx = plaudon_persistence::begin_write(pool)
         .await
         .map_err(|err| storage_error("cannot begin a transition", &err))?;
     sqlx::query(
@@ -128,8 +126,7 @@ pub async fn fail(
         JobState::FailedTerminal
     };
     let now = Timestamp::now().as_millis();
-    let mut tx = pool
-        .begin()
+    let mut tx = plaudon_persistence::begin_write(pool)
         .await
         .map_err(|err| storage_error("cannot begin a failure", &err))?;
     sqlx::query(

@@ -44,11 +44,25 @@ const DEADLINE: Duration = Duration::from_secs(20);
 struct Pipeline {
     fixture: Fixture,
     backend: Arc<crate::backend::LocalBackend>,
-    pool: ProcessingHandle,
+    /// `None` when nothing drains the queue, so a queued job stays queued.
+    pool: Option<ProcessingHandle>,
 }
 
 impl Pipeline {
     async fn open(stt: ScriptedStt, text: ScriptedTextModel) -> Self {
+        Self::with_workers(stt, text, Some(1)).await
+    }
+
+    /// A pipeline whose queue nothing claims.
+    async fn idle(stt: ScriptedStt, text: ScriptedTextModel) -> Self {
+        Self::with_workers(stt, text, None).await
+    }
+
+    async fn with_workers(
+        stt: ScriptedStt,
+        text: ScriptedTextModel,
+        workers: Option<usize>,
+    ) -> Self {
         let fixture = backend_fixture().await;
         let backend = Arc::new(
             fixture
@@ -57,7 +71,7 @@ impl Pipeline {
                 .with_stt_engines(vec![stt.shared()])
                 .with_text_model(text.shared()),
         );
-        let pool = ProcessingHandle::start(Arc::clone(&backend), Some(1));
+        let pool = workers.map(|count| ProcessingHandle::start(Arc::clone(&backend), Some(count)));
         Self {
             fixture,
             backend,
@@ -146,7 +160,9 @@ impl Pipeline {
     }
 
     async fn stop(self) {
-        self.pool.stop(Duration::from_secs(5)).await;
+        if let Some(pool) = self.pool {
+            pool.stop(Duration::from_secs(5)).await;
+        }
     }
 }
 
@@ -568,6 +584,134 @@ async fn a_cloud_stage_is_never_queued_without_a_key() {
         jobs.items.is_empty(),
         "a refusal before dispatch opens no job row"
     );
+    pipeline.stop().await;
+}
+
+/* ------------------------------------------------------ writer contention */
+
+/// Ask for 200 stages concurrently while workers claim, run and commit.
+///
+/// Two connection pools write this one SQLite file: the job engine's single
+/// writer and the application's pool, which commits transcripts, steps and
+/// events for the very jobs the engine is opening. Queueing a stage must
+/// never fail because the other side happened to commit first.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn concurrent_stage_requests_survive_writer_contention() {
+    /// Requests fired at once per round.
+    const CONCURRENCY: usize = 8;
+    /// Rounds; `CONCURRENCY * ROUNDS` is the number of requests.
+    const ROUNDS: usize = 25;
+
+    let pipeline = Pipeline::with_workers(
+        ScriptedStt::new(&["contended"]),
+        ScriptedTextModel::new(json!({})),
+        Some(2),
+    )
+    .await;
+    let mut recordings = Vec::new();
+    for index in 0..4 {
+        recordings.push(pipeline.import(&format!("stress-{index}.wav")).await);
+    }
+    pipeline.prefer(Stage::Transcribe, SCRIPTED_STT_ENGINE).await;
+
+    let mut accepted = 0_usize;
+    for round in 0..ROUNDS {
+        let mut calls = Vec::with_capacity(CONCURRENCY);
+        for slot in 0..CONCURRENCY {
+            let backend = Arc::clone(&pipeline.backend);
+            let recording_id = recordings[(round + slot) % recordings.len()];
+            calls.push(tokio::spawn(async move {
+                backend
+                    .start_processing(ValidatedStartProcessing {
+                        recording_id,
+                        stage: Stage::Transcribe,
+                        model_override: None,
+                        cost_acknowledged: false,
+                        rerun: false,
+                    })
+                    .await
+            }));
+        }
+        for call in calls {
+            match call.await.expect("the request task ran to completion") {
+                Ok(response) => {
+                    response.job_id.parse::<JobId>().expect("a job id");
+                    accepted += 1;
+                }
+                Err(error) => panic!(
+                    "a stage request failed under contention: {:?} ({})",
+                    error.code(),
+                    error.detail()
+                ),
+            }
+        }
+    }
+    assert_eq!(
+        accepted,
+        ROUNDS * CONCURRENCY,
+        "every stage request was accepted"
+    );
+    pipeline.stop().await;
+}
+
+/// Identical requests that race open one job, never two.
+///
+/// Nothing claims the queue here, so every request sees the same pending
+/// stage: the keyed insert is what deduplicates them, and it must do so
+/// without a retry that could open a second, separately chargeable job.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn racing_identical_requests_open_exactly_one_job() {
+    /// Requests fired at once.
+    const CONCURRENCY: usize = 32;
+
+    let pipeline = Pipeline::idle(
+        ScriptedStt::new(&["once"]),
+        ScriptedTextModel::new(json!({})),
+    )
+    .await;
+    let recording_id = pipeline.import("race.wav").await;
+    pipeline.prefer(Stage::Transcribe, SCRIPTED_STT_ENGINE).await;
+
+    let mut calls = Vec::with_capacity(CONCURRENCY);
+    for _ in 0..CONCURRENCY {
+        let backend = Arc::clone(&pipeline.backend);
+        calls.push(tokio::spawn(async move {
+            backend
+                .start_processing(ValidatedStartProcessing {
+                    recording_id,
+                    stage: Stage::Transcribe,
+                    model_override: None,
+                    cost_acknowledged: false,
+                    rerun: false,
+                })
+                .await
+        }));
+    }
+    let mut job_ids = std::collections::BTreeSet::new();
+    for call in calls {
+        let response = call
+            .await
+            .expect("the request task ran to completion")
+            .expect("the stage is queued");
+        job_ids.insert(response.job_id.parse::<JobId>().expect("a job id"));
+    }
+    assert_eq!(
+        job_ids.len(),
+        1,
+        "racing identical requests collapsed onto one job"
+    );
+
+    let jobs = pipeline
+        .backend
+        .list_jobs(ValidatedListJobs {
+            states: vec![],
+            kinds: vec![JobKind::Transcribe],
+            cursor: PageCursor::at(0),
+            limit: 50,
+        })
+        .await
+        .expect("the job list is readable");
+    assert_eq!(jobs.items.len(), 1, "one job row, not thirty-two");
     pipeline.stop().await;
 }
 

@@ -354,12 +354,7 @@ impl Restorer {
             committed_paths.insert(entry.sha256.clone(), relative);
         }
 
-        let mut tx = self
-            .db
-            .pool()
-            .begin()
-            .await
-            .map_err(PersistenceError::from)?;
+        let mut tx = self.db.begin_write().await?;
 
         for source in &sources {
             let affected = sqlx::query(

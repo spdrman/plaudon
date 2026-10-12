@@ -572,12 +572,7 @@ impl DeletionService {
         now: Timestamp,
     ) -> DeletionResult<()> {
         let id = recording_id.to_string();
-        let mut tx = self
-            .db
-            .pool()
-            .begin()
-            .await
-            .map_err(PersistenceError::from)?;
+        let mut tx = self.db.begin_write().await?;
 
         // Suppressions first: if the transaction commits at all, the deletion
         // is durable against a later sync.
