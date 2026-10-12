@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/search_library.response.schema.json",
+  "title": "search_library.response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "results",
+    "next_cursor"
+  ],
+  "properties": {
+    "results": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/search_result"
+      }
+    },
+    "next_cursor": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "$defs": {
+    "search_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "recording_id",
+        "recording_title",
+        "transcript_revision_id",
+        "seq_index",
+        "excerpt",
+        "seek_ms",
+        "alignment_origin"
+      ],
+      "properties": {
+        "recording_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "recording_title": {
+          "type": "string"
+        },
+        "transcript_revision_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "seq_index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "excerpt": {
+          "type": "string"
+        },
+        "seek_ms": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "Absent for a text-only transcript; no seek affordance may be offered (spec 8.6A)."
+        },
+        "alignment_origin": {
+          "type": "string",
+          "enum": [
+            "native",
+            "derived",
+            "none"
+          ]
+        }
+      }
+    }
+  }
+}

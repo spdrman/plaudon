@@ -8,6 +8,7 @@ export type Destination = (typeof DESTINATIONS)[number];
 export type Route =
   | { name: "library" }
   | { name: "library.recording"; recordingId: string }
+  | { name: "library.search" }
   | { name: "inbox" }
   | { name: "jobs" }
   | { name: "jobs.job"; jobId: string }
@@ -29,7 +30,7 @@ export const DESTINATION_LABELS: Record<Destination, string> = {
 export function destinationOf(route: Route): Destination {
   switch (route.name) {
     case "library":
-    case "library.recording":
+    case "library.search":
       return "library";
     case "inbox":
       return "inbox";
@@ -54,6 +55,8 @@ export function formatRoute(route: Route): string {
       return "#/library";
     case "library.recording":
       return `#/library/${encodeURIComponent(route.recordingId)}`;
+    case "library.search":
+      return "#/library/search";
     case "inbox":
       return "#/inbox";
     case "jobs":
@@ -81,8 +84,8 @@ export function parseRoute(hash: string): Route {
     case undefined:
     case "":
     case "library":
+      if (tail === "search") return { name: "library.search" };
       return tail ? { name: "library.recording", recordingId: tail } : { name: "library" };
-    case "inbox":
       return { name: "inbox" };
     case "jobs":
       return tail ? { name: "jobs.job", jobId: tail } : { name: "jobs" };

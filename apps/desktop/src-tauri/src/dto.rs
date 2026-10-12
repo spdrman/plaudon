@@ -22,8 +22,8 @@ use plaudon_domain::capability::CapabilityStatus;
 use plaudon_domain::error::ErrorEnvelope;
 use plaudon_domain::ids::{JobId, OutputId, RecordingId, SpeakerId, TranscriptRevisionId};
 use plaudon_domain::media::Sha256Digest;
-use plaudon_domain::transcript::AlignmentOrigin;
 use plaudon_domain::time::Timestamp;
+use plaudon_domain::transcript::AlignmentOrigin;
 use serde::{Deserialize, Serialize};
 
 /// Request payload of a command that takes no arguments.
@@ -1140,7 +1140,6 @@ pub struct SetOpenRouterKeyRequest {
     /// The key as entered by the user.
     pub key: String,
 }
-
 
 /* ------------------------------------------------------------------ search */
 

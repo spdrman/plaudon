@@ -13,7 +13,12 @@ export interface SearchResultsProps {
 
 export function SearchResults({ results, onNavigate, onSeek }: SearchResultsProps) {
   if (results.length === 0) {
-    return <EmptyState>No results found</EmptyState>;
+    return (
+      <EmptyState
+        title="No results found"
+        body="No transcript segment in your library matches that search."
+      />
+    );
   }
 
   // Group results by recording

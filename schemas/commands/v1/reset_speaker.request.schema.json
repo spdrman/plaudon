@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/reset_speaker.request.schema.json",
+  "title": "reset_speaker.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "recording_id",
+    "speaker_id"
+  ],
+  "properties": {
+    "recording_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "speaker_id": {
+      "type": "string",
+      "format": "uuid"
+    }
+  }
+}

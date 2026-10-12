@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/reset_speaker.response.schema.json",
+  "title": "reset_speaker.response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "speaker"
+  ],
+  "properties": {
+    "speaker": {
+      "$ref": "#/$defs/speaker"
+    }
+  },
+  "$defs": {
+    "speaker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "speaker_id",
+        "recording_id",
+        "label",
+        "confirmed",
+        "original_label",
+        "renamed_at",
+        "confirmed_at"
+      ],
+      "properties": {
+        "speaker_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "recording_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "confirmed": {
+          "type": "boolean"
+        },
+        "original_label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "renamed_at": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "confirmed_at": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      }
+    }
+  }
+}

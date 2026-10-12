@@ -9,24 +9,23 @@
 pub mod import;
 pub mod jobs;
 pub mod library;
-pub mod settings;
-pub mod transcript;
 pub mod search;
+pub mod settings;
 pub mod speakers;
+pub mod transcript;
 
 use tauri::State;
 
 use crate::dto::{
-    ActivityPage, CancelJobRequest, Capabilities, CompleteOnboardingRequest,
-    ConfirmSpeakerRequest, EmptyRequest, ExportRecordingRequest, ExportRecordingResponse,
-    GetRecordingRequest, GetTranscriptRequest, ImportFilesRequest, ImportFilesResponse, JobPage,
-    JobSummary, ListActivityRequest, ListJobsRequest, ListRecordingsRequest,
-    ListSpeakersRequest, ListSpeakersResponse, LocalOnlyModeResponse,
-    NotificationSettingsResponse, Preferences, RecordingDetail, RecordingPage,
-    RenameSpeakerRequest, ResetSpeakerRequest, RetryJobRequest, SaveTranscriptRevisionRequest,
-    SaveTranscriptRevisionResponse, SearchLibraryRequest, SearchLibraryResponse,
-    SetLocalOnlyModeRequest, SetNotificationSettingsRequest, SetOpenRouterKeyRequest,
-    SpeakerOperationResponse, StatusResponse, TranscriptPage,
+    ActivityPage, CancelJobRequest, Capabilities, CompleteOnboardingRequest, ConfirmSpeakerRequest,
+    EmptyRequest, ExportRecordingRequest, ExportRecordingResponse, GetRecordingRequest,
+    GetTranscriptRequest, ImportFilesRequest, ImportFilesResponse, JobPage, JobSummary,
+    ListActivityRequest, ListJobsRequest, ListRecordingsRequest, ListSpeakersRequest,
+    ListSpeakersResponse, LocalOnlyModeResponse, NotificationSettingsResponse, Preferences,
+    RecordingDetail, RecordingPage, RenameSpeakerRequest, ResetSpeakerRequest, RetryJobRequest,
+    SaveTranscriptRevisionRequest, SaveTranscriptRevisionResponse, SearchLibraryRequest,
+    SearchLibraryResponse, SetLocalOnlyModeRequest, SetNotificationSettingsRequest,
+    SetOpenRouterKeyRequest, SpeakerOperationResponse, StatusResponse, TranscriptPage,
 };
 use crate::error::{to_command_result, CommandResult};
 use crate::AppState;
@@ -213,7 +212,6 @@ pub async fn complete_onboarding(
 ) -> CommandResult<Preferences> {
     to_command_result(settings::complete_onboarding(&state.ports, request).await)
 }
-
 
 #[tauri::command]
 pub async fn search_library(

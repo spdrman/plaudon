@@ -55,8 +55,10 @@ use crate::dto::{
 use crate::error::{internal, invalid_argument};
 use crate::events::{EventDraft, EventPublisher, EventSink};
 use crate::notify::NotificationService;
-use crate::ports::{LibraryPort, MachineRevisionSpec, ResolvedMedia, SearchPort, SettingsPort,
-    SpeakersPort, TranscriptPort};
+use crate::ports::{
+    LibraryPort, MachineRevisionSpec, ResolvedMedia, SearchPort, SettingsPort, SpeakersPort,
+    TranscriptPort,
+};
 use crate::secrets::SecretStore;
 use crate::validate::{
     PageCursor, ValidatedGetTranscript, ValidatedListRecordings, ValidatedRecordingFilter,
@@ -1285,7 +1287,6 @@ pub fn local_only_response(enabled: bool) -> LocalOnlyModeResponse {
         allowed_hosts: Vec::new(),
     }
 }
-
 
 #[async_trait]
 impl SearchPort for LocalBackend {
