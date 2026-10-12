@@ -48,6 +48,14 @@ read-only with range support. The Tauri asset protocol stays disabled and the
 capability set contains no filesystem permission, so JavaScript never sees or
 supplies a path.
 
+One event is emitted beyond the §15.3 list: `ui.activation_requested`. §5.5
+requires that clicking a native notification opens the affected recording or
+job, and §15.3 has no event for that. It is emitted only from the OS
+activation callback, carries nothing but a target kind and id, and — like
+every other event — is a hint: the destination refetches committed state. The
+alternative (polling a "pending activation" row from the frontend) would add a
+command and still not express the one-shot nature of an activation.
+
 ## Consequences
 
 - The frontend contract (`apps/desktop/src/ipc/contract.ts`) and the versioned
