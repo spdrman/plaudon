@@ -54,6 +54,10 @@ Reviewed on 2026-10-11.
 | `btleplug` | MIT or Apache-2.0 | bundle (behind the `hardware-scan` feature) | notice file | wraps platform Bluetooth APIs; the radio is an untrusted input domain | Bundle only when the device feature ships. |
 | `serde`, `serde_json`, `thiserror`, `uuid`, `sha2`, `hex`, `tokio`, `tracing`, `time` | MIT or Apache-2.0 | bundle | notice file | — | Bundle. |
 | `serde_norway` | MIT or Apache-2.0 | bundle | notice file | parses `compatibility.yaml`, which we author | Bundle. |
+| `egui`, `epaint`, `emath`, `ecolor` 0.36 | MIT or Apache-2.0 | bundle | notice file | immediate-mode GUI; renders only data our own code produced | Bundle (EPIC O, ADR range 0020–0029). |
+| `accesskit`, `accesskit_consumer` | Apache-2.0 | bundle | notice file | publishes the accessibility tree to the platform; carries widget labels and values, which for the transcript editor means transcript text — the same text the window already shows | Bundle. The accessibility tree is what makes the pure-Rust UI auditable against spec §5.3. |
+| `epaint_default_fonts` (Hack, Ubuntu-Light, NotoEmoji, emoji-icon-font) | (MIT or Apache-2.0) **and** OFL-1.1 **and** Ubuntu-font-1.0 | bundle | notice file must carry the OFL-1.1 and Ubuntu Font Licence texts and the font copyright lines | font files are data, parsed by `ab_glyph`; they are not executed | Bundle. OFL-1.1 and Ubuntu-font-1.0 both permit redistribution of the unmodified fonts inside a larger work with their licence texts; neither reaches our own sources. Reviewed for EPIC O and added to `deny.toml`. |
+| `egui_kittest`, `kittest` | MIT or Apache-2.0 | development only | — | drives the accessibility tree in tests | Development dependencies. |
 | `jsonschema` | MIT | development only | — | test-time schema conformance | Development dependency. |
 | `proptest`, `tempfile` | MIT or Apache-2.0 | development only | — | — | Development dependencies. |
 | whisper.cpp | MIT | bundle (binary we build) | notice file | C++ parsing untrusted audio; sandbox per ADR-0015 | Bundle the binary we build ourselves. |
