@@ -71,10 +71,10 @@ impl Collected {
     }
 }
 
-fn context<'a>(
-    capabilities: &'a plaudon_app::dto::Capabilities,
+fn context(
+    capabilities: &plaudon_app::dto::Capabilities,
     alignment: AlignmentOrigin,
-) -> RecordingContext<'a> {
+) -> RecordingContext<'_> {
     RecordingContext {
         recording_id: fx::RECORDING_ID,
         duration_ms: Some(600_000),
@@ -165,7 +165,10 @@ fn a_local_engine_and_model_start_the_job_without_a_consent_sheet() {
         request.model_override.as_ref().expect("override").engine,
         "whisper.cpp"
     );
-    assert!(collected.grants.is_empty());
+    assert_eq!(
+        collected.grants,
+        [] as [plaudon_app::dto::GrantCloudConsentRequest; 0]
+    );
 }
 
 #[test]
@@ -188,8 +191,14 @@ fn local_only_mode_refuses_a_cloud_engine_and_dispatches_nothing() {
     harness.run();
     harness.get_by_label("whisper.cpp").click();
     harness.run();
-    assert!(harness.state().collected.start_processing.is_empty());
-    assert!(harness.state().collected.grants.is_empty());
+    assert_eq!(
+        harness.state().collected.start_processing,
+        [] as [plaudon_app::dto::StartProcessingRequest; 0]
+    );
+    assert_eq!(
+        harness.state().collected.grants,
+        [] as [plaudon_app::dto::GrantCloudConsentRequest; 0]
+    );
 }
 
 #[test]
@@ -301,7 +310,10 @@ fn requiring_zero_retention_on_a_route_without_it_fails_closed() {
         collected.grants.is_empty(),
         "the approve control is disabled while the requirement cannot be met"
     );
-    assert!(collected.start_processing.is_empty());
+    assert_eq!(
+        collected.start_processing,
+        [] as [plaudon_app::dto::StartProcessingRequest; 0]
+    );
 }
 
 #[test]
@@ -317,7 +329,10 @@ fn an_existing_model_policy_grant_skips_the_sheet() {
     harness.run();
 
     let collected = &harness.state().collected;
-    assert!(collected.grants.is_empty());
+    assert_eq!(
+        collected.grants,
+        [] as [plaudon_app::dto::GrantCloudConsentRequest; 0]
+    );
     assert_eq!(collected.start_processing.len(), 1);
 }
 
@@ -405,7 +420,10 @@ fn cancelling_discloses_that_an_accepted_cloud_request_is_not_recalled() {
         joined.contains("A cloud request that was already accepted may not be reversed"),
         "{joined}"
     );
-    assert!(harness.state().collected.cancels.is_empty());
+    assert_eq!(
+        harness.state().collected.cancels,
+        [] as [plaudon_app::dto::CancelJobRequest; 0]
+    );
 
     harness.get_by_label("Cancel the job").click();
     harness.run_steps(4);
@@ -582,7 +600,10 @@ fn captions_are_unavailable_without_real_timestamps() {
         .get_by_label("SubRip captions (unavailable)")
         .click();
     harness.run();
-    assert!(harness.state().collected.export_paths.is_empty());
+    assert_eq!(
+        harness.state().collected.export_paths,
+        [] as [(plaudon_app::dto::ExportFormat, std::string::String); 0]
+    );
 }
 
 #[test]

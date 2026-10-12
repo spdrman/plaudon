@@ -87,12 +87,11 @@ impl ProcessingHistory {
 
         for job in &page.items {
             let job_id = job.job_id.to_string();
-            let slot = match self.cards.iter().position(|(id, _)| *id == job_id) {
-                Some(index) => index,
-                None => {
-                    self.cards.push((job_id.clone(), JobCard::default()));
-                    self.cards.len() - 1
-                }
+            let slot = if let Some(index) = self.cards.iter().position(|(id, _)| *id == job_id) {
+                index
+            } else {
+                self.cards.push((job_id.clone(), JobCard::default()));
+                self.cards.len() - 1
             };
             let card_output = self.cards[slot].1.ui(ui, job, now_ms);
             output.extend(card_output);

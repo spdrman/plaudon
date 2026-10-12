@@ -20,6 +20,12 @@ use crate::dto::{JobKind, JobState};
 use crate::tone::Tone;
 
 /// How one job state is rendered.
+///
+/// The four flags are the published contract of §14.1/§14.7 — may it be
+/// cancelled, may it be retried, is it terminal, does a retry need a cost
+/// acknowledgement — and a caller reads them by name. Packing them into bit
+/// flags would hide exactly the distinctions this table exists to make.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct JobStatePresentation {
     /// Short label.
