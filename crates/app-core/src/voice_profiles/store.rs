@@ -85,6 +85,14 @@ pub enum VoiceProfileError {
     /// The vector or its parameters are outside what this build will handle.
     #[error("the embedding is malformed: {0}")]
     Malformed(String),
+    /// The library failed.
+    ///
+    /// Present because the tier's lifecycle operations — wholesale erasure
+    /// (VP-095) and retention expiry (VP-130) — touch rows as well as the key,
+    /// and a caller handling one failure mode should not have to handle two
+    /// unrelated error types to do it.
+    #[error(transparent)]
+    Persistence(#[from] plaudon_persistence::PersistenceError),
 }
 
 impl VoiceProfileError {
@@ -101,6 +109,26 @@ impl VoiceProfileError {
         } else {
             Self::StoreFailed(error)
         }
+    }
+}
+
+impl From<VoiceProfileError> for plaudon_domain::error::AppError {
+    /// Map a biometric-tier failure onto the stable error vocabulary.
+    ///
+    /// A locked vault is its own code because the UI reacts to it differently:
+    /// it is a "unlock your credential store" state, not a failure of the
+    /// feature — the roster keeps working either way (ADR-0014).
+    fn from(error: VoiceProfileError) -> Self {
+        use plaudon_domain::error::AppErrorCode;
+        let code = match &error {
+            VoiceProfileError::StoreLocked(_) => AppErrorCode::SecretStoreLocked,
+            VoiceProfileError::StoreFailed(_)
+            | VoiceProfileError::MalformedKey
+            | VoiceProfileError::Malformed(_) => AppErrorCode::InternalError,
+            VoiceProfileError::Tampered => AppErrorCode::IntegrityFailed,
+            VoiceProfileError::Persistence(inner) => inner.code(),
+        };
+        Self::new(code, error.to_string())
     }
 }
 

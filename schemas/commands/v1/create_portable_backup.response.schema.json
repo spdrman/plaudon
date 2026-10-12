@@ -14,7 +14,8 @@
     "integrity_digest",
     "integrity_note",
     "manifest_schema_version",
-    "nonportable_settings"
+    "nonportable_settings",
+    "voice_profiles_included"
   ],
   "properties": {
     "file_name": {
@@ -49,6 +50,9 @@
       "items": {
         "type": "string"
       }
+    },
+    "voice_profiles_included": {
+      "type": "number"
     }
   }
 }

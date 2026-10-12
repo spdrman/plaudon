@@ -53,10 +53,21 @@
 //! against that attacker is the platform's own (FileVault/BitLocker, ADR-0402),
 //! plus the fact that the feature is off by default and computes nothing until
 //! a user turns it on.
+//!
+//! # Lifecycle
+//!
+//! Two modules implement what §12.4 promises about the end of a profile's
+//! life: [`retention`] expires what nobody uses (VP-130) and [`erasure`]
+//! destroys everything at once, key included (VP-095). Both leave the roster
+//! standing.
 
+pub mod erasure;
 pub mod matching;
+pub mod retention;
 pub mod store;
 
+pub use erasure::{ForgetAllDisclosure, ForgetAllReceipt, VoiceProfileEraser, FORGET_ALL_LIMITS};
+pub use retention::{RetentionReport, VoiceRetentionService, TOMBSTONE_DAYS};
 pub use store::{
     EmbeddingCipher, ExemplarBinding, SealedEmbedding, VoiceProfileError, VoiceProfileResult,
     EMBEDDING_KEY_BYTES, EMBEDDING_NONCE_BYTES, MAX_EMBEDDING_DIM,

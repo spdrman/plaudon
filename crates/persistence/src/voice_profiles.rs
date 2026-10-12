@@ -64,6 +64,9 @@ pub enum VoiceProfileEventKind {
     AssignmentSet,
     /// A speaker row's roster link was removed.
     AssignmentCleared,
+    /// Every enrolment in the library was destroyed at once (VP-095). The one
+    /// kind that names no person, because it is about all of them.
+    AllForgotten,
 }
 
 impl VoiceProfileEventKind {
@@ -85,6 +88,7 @@ impl VoiceProfileEventKind {
             Self::SuggestionCorrected => "suggestion_corrected",
             Self::AssignmentSet => "assignment_set",
             Self::AssignmentCleared => "assignment_cleared",
+            Self::AllForgotten => "all_forgotten",
         }
     }
 }
@@ -94,8 +98,9 @@ impl VoiceProfileEventKind {
 pub struct StoredVoiceProfileEvent {
     /// Row identity.
     pub id: String,
-    /// Person the event is about. Not a foreign key: it survives deletion.
-    pub person_id: PersonId,
+    /// Person the event is about, or `None` for the library-wide
+    /// "forget everyone" event. Not a foreign key: it survives deletion.
+    pub person_id: Option<PersonId>,
     /// What happened.
     pub kind: String,
     /// Counts and versions, as a JSON object. Never an embedding.
@@ -108,9 +113,14 @@ pub struct StoredVoiceProfileEvent {
 ///
 /// `detail` must be a JSON **object**; the schema rejects anything else, which
 /// keeps the journal machine-readable for the §12.3 consent export.
+///
+/// `person_id` is `None` only for [`VoiceProfileEventKind::AllForgotten`], and
+/// the schema's `CHECK` enforces that pairing in both directions: a per-person
+/// event cannot lose its subject, and the library-wide one cannot borrow a
+/// person it did not single out.
 pub(crate) async fn journal(
     tx: &mut Transaction<'_, Sqlite>,
-    person_id: PersonId,
+    person_id: Option<PersonId>,
     kind: VoiceProfileEventKind,
     detail: &str,
     at: Timestamp,
@@ -120,7 +130,7 @@ pub(crate) async fn journal(
          VALUES (?1, ?2, ?3, ?4, ?5)",
     )
     .bind(uuid::Uuid::now_v7().to_string())
-    .bind(person_id.to_string())
+    .bind(person_id.map(|id| id.to_string()))
     .bind(kind.as_str())
     .bind(detail)
     .bind(at.as_millis())
@@ -155,6 +165,9 @@ pub struct StoredEnrollment {
     pub last_matched_at: Option<Timestamp>,
     /// `active` or `expired`.
     pub status: String,
+    /// When retention elapsed and the exemplars were destroyed (VP-130). The
+    /// row survives as a tombstoned name for 30 days after this moment.
+    pub expired_at: Option<Timestamp>,
     /// When the enrolment was created.
     pub created_at: Timestamp,
 }
@@ -337,7 +350,7 @@ impl VoiceEnrollmentRepository {
         .await?;
         journal(
             &mut tx,
-            person_id,
+            Some(person_id),
             VoiceProfileEventKind::Enrolled,
             &serde_json::json!({
                 "consent_version": draft.consent_version,
@@ -355,6 +368,7 @@ impl VoiceEnrollmentRepository {
             retention_months: draft.retention_months,
             last_matched_at: None,
             status: "active".to_owned(),
+            expired_at: None,
             created_at: at,
         })
     }
@@ -370,7 +384,7 @@ impl VoiceEnrollmentRepository {
     ) -> PersistenceResult<Option<StoredEnrollment>> {
         let row = sqlx::query(
             "SELECT person_id, consent_version, consent_note, retention_months, last_matched_at,
-                    status, created_at
+                    status, expired_at, created_at
              FROM person_voice_enrollments WHERE person_id = ?1",
         )
         .bind(person_id.to_string())
@@ -479,7 +493,7 @@ impl VoiceEnrollmentRepository {
         .await?;
         journal(
             &mut tx,
-            exemplar.person_id,
+            Some(exemplar.person_id),
             VoiceProfileEventKind::ExemplarAdded,
             &serde_json::json!({
                 "model_id": exemplar.model_id,
@@ -550,7 +564,7 @@ impl VoiceEnrollmentRepository {
             .await?;
         journal(
             &mut tx,
-            person_id,
+            Some(person_id),
             VoiceProfileEventKind::EnrollmentDeleted,
             &serde_json::json!({
                 "exemplars_destroyed": counts.exemplars,
@@ -567,6 +581,11 @@ impl VoiceEnrollmentRepository {
     /// Expire an enrolment: destroy its exemplar ciphertexts, keep the row as a
     /// tombstone so the UI can explain why matching stopped (VP-130).
     ///
+    /// Expiring an already-expired enrolment does nothing and journals nothing:
+    /// the retention sweep is allowed to run twice over the same library — and
+    /// will, every time it is resumed after a crash — so a second pass must not
+    /// invent a second deletion event for a profile that was already emptied.
+    ///
     /// # Errors
     ///
     /// [`PersistenceError::RecordNotFound`] when there is no enrolment.
@@ -576,16 +595,23 @@ impl VoiceEnrollmentRepository {
         at: Timestamp,
     ) -> PersistenceResult<EnrollmentDeletion> {
         let mut tx = self.db.begin_write().await?;
-        let affected = sqlx::query(
-            "UPDATE person_voice_enrollments SET status = 'expired' WHERE person_id = ?1",
+        let status: Option<String> =
+            sqlx::query_scalar("SELECT status FROM person_voice_enrollments WHERE person_id = ?1")
+                .bind(person_id.to_string())
+                .fetch_optional(&mut *tx)
+                .await?;
+        let status = status.ok_or(PersistenceError::RecordNotFound)?;
+        if status != "active" {
+            return Ok(EnrollmentDeletion::default());
+        }
+        sqlx::query(
+            "UPDATE person_voice_enrollments SET status = 'expired', expired_at = ?2
+             WHERE person_id = ?1",
         )
         .bind(person_id.to_string())
+        .bind(at.as_millis())
         .execute(&mut *tx)
-        .await?
-        .rows_affected();
-        if affected == 0 {
-            return Err(PersistenceError::RecordNotFound);
-        }
+        .await?;
         let counts = tier_counts(&mut tx, person_id).await?;
         sqlx::query("DELETE FROM voice_exemplars WHERE person_id = ?1")
             .bind(person_id.to_string())
@@ -593,7 +619,7 @@ impl VoiceEnrollmentRepository {
             .await?;
         journal(
             &mut tx,
-            person_id,
+            Some(person_id),
             VoiceProfileEventKind::EnrollmentExpired,
             &serde_json::json!({ "exemplars_destroyed": counts.exemplars }).to_string(),
             at,
@@ -793,7 +819,7 @@ impl VoiceEnrollmentRepository {
         .await?;
         journal(
             &mut tx,
-            current.person_id,
+            Some(current.person_id),
             kind,
             &serde_json::json!({
                 "score": current.score,
@@ -812,6 +838,469 @@ impl VoiceEnrollmentRepository {
             decided_at: Some(at),
             ..current
         })
+    }
+
+    /// What the biometric tier holds across the whole library, and how many
+    /// roster entries would survive erasing it (VP-095 disclosure).
+    ///
+    /// # Errors
+    ///
+    /// Propagates persistence failures.
+    pub async fn tier_totals(&self) -> PersistenceResult<ForgetAllOutcome> {
+        let count = |sql: &'static str| {
+            let pool = self.db.pool().clone();
+            async move {
+                sqlx::query_scalar::<_, i64>(sql)
+                    .fetch_one(&pool)
+                    .await
+                    .map(|value| u32::try_from(value).unwrap_or(u32::MAX))
+            }
+        };
+        Ok(ForgetAllOutcome {
+            enrollments: count("SELECT COUNT(*) FROM person_voice_enrollments").await?,
+            exemplars: count("SELECT COUNT(*) FROM voice_exemplars").await?,
+            suggestions: count("SELECT COUNT(*) FROM speaker_suggestions").await?,
+            people_kept: count("SELECT COUNT(*) FROM people").await?,
+        })
+    }
+
+    /// "Forget everyone" (VP-095), the row half: every enrolment, exemplar and
+    /// suggestion in the library goes, in one transaction, with one journal
+    /// event carrying the exact counts the disclosure showed.
+    ///
+    /// The roster survives untouched — those are names, not voiceprints — and
+    /// so do the per-recording `speakers.name` snapshots and their links.
+    ///
+    /// This is only half the erasure. The other half is destroying the
+    /// `SecretScope::VoiceProfileKey` entry, which is what makes ciphertexts
+    /// outside this database (an encrypted backup the user already wrote)
+    /// permanently unreadable; that lives in
+    /// `plaudon_app_core::voice_profiles`, because this crate never holds the
+    /// key. Running it twice is not an error.
+    ///
+    /// # Errors
+    ///
+    /// Propagates persistence failures.
+    pub async fn forget_all(&self, at: Timestamp) -> PersistenceResult<ForgetAllOutcome> {
+        let mut tx = self.db.begin_write().await?;
+        let enrollments: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM person_voice_enrollments")
+            .fetch_one(&mut *tx)
+            .await?;
+        let exemplars: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM voice_exemplars")
+            .fetch_one(&mut *tx)
+            .await?;
+        let suggestions: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM speaker_suggestions")
+            .fetch_one(&mut *tx)
+            .await?;
+        let people_kept: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM people")
+            .fetch_one(&mut *tx)
+            .await?;
+
+        sqlx::query("DELETE FROM speaker_suggestions")
+            .execute(&mut *tx)
+            .await?;
+        // Exemplars cascade from the enrolment they belong to.
+        sqlx::query("DELETE FROM person_voice_enrollments")
+            .execute(&mut *tx)
+            .await?;
+
+        let outcome = ForgetAllOutcome {
+            enrollments: u32::try_from(enrollments).unwrap_or(u32::MAX),
+            exemplars: u32::try_from(exemplars).unwrap_or(u32::MAX),
+            suggestions: u32::try_from(suggestions).unwrap_or(u32::MAX),
+            people_kept: u32::try_from(people_kept).unwrap_or(u32::MAX),
+        };
+        journal(
+            &mut tx,
+            None,
+            VoiceProfileEventKind::AllForgotten,
+            &serde_json::json!({
+                "enrollments_destroyed": outcome.enrollments,
+                "exemplars_destroyed": outcome.exemplars,
+                "suggestions_destroyed": outcome.suggestions,
+                "people_kept": outcome.people_kept,
+            })
+            .to_string(),
+            at,
+        )
+        .await?;
+        tx.commit().await?;
+        Ok(outcome)
+    }
+
+    /// Active enrolments whose retention term has elapsed at `now` (VP-130).
+    ///
+    /// "Used" is deliberately broad — a match, a stored exemplar, a confirmed
+    /// or corrected suggestion, or the enrolment itself being created — because
+    /// the clock exists to delete material nobody is using, not to delete
+    /// material somebody is using in a way this query failed to notice.
+    ///
+    /// The term is calendar months through SQLite's own date arithmetic, so
+    /// "12 months" means twelve months and not 360 days: the user may shorten
+    /// the term, never lengthen it past the schema's `CHECK`.
+    ///
+    /// # Errors
+    ///
+    /// Propagates persistence failures.
+    pub async fn retention_candidates(&self, now: Timestamp) -> PersistenceResult<Vec<PersonId>> {
+        let rows = sqlx::query(
+            "SELECT person_id FROM (
+                 SELECT e.person_id AS person_id,
+                        e.retention_months AS retention_months,
+                        MAX(COALESCE(e.last_matched_at, 0),
+                            e.created_at,
+                            COALESCE((SELECT MAX(x.created_at) FROM voice_exemplars x
+                                       WHERE x.person_id = e.person_id), 0),
+                            COALESCE((SELECT MAX(s.decided_at) FROM speaker_suggestions s
+                                       WHERE s.person_id = e.person_id
+                                         AND s.state IN ('confirmed', 'corrected')), 0)
+                        ) AS last_used_at
+                 FROM person_voice_enrollments e
+                 WHERE e.status = 'active'
+             )
+             WHERE CAST(strftime('%s', datetime(last_used_at / 1000, 'unixepoch',
+                                                '+' || retention_months || ' months'))
+                        AS INTEGER) * 1000 <= ?1
+             ORDER BY person_id",
+        )
+        .bind(now.as_millis())
+        .fetch_all(self.db.pool())
+        .await?;
+        rows.iter()
+            .map(|row| parse_person(&row.get::<String, _>("person_id")))
+            .collect()
+    }
+
+    /// Expired enrolments whose tombstone has outlived the visibility window
+    /// (VP-130: the name stays for 30 days so the user can see *why* matching
+    /// stopped, then the row goes too).
+    ///
+    /// # Errors
+    ///
+    /// Propagates persistence failures.
+    pub async fn tombstoned_before(&self, cutoff: Timestamp) -> PersistenceResult<Vec<PersonId>> {
+        let rows = sqlx::query(
+            "SELECT person_id FROM person_voice_enrollments
+              WHERE status = 'expired' AND expired_at IS NOT NULL AND expired_at <= ?1
+              ORDER BY person_id",
+        )
+        .bind(cutoff.as_millis())
+        .fetch_all(self.db.pool())
+        .await?;
+        rows.iter()
+            .map(|row| parse_person(&row.get::<String, _>("person_id")))
+            .collect()
+    }
+
+    /// Open a retention sweep, or adopt the one an interrupted pass left
+    /// behind.
+    ///
+    /// Resuming reuses the unfinished row rather than starting a new one, so
+    /// the counts a user eventually sees cover the work both attempts did and
+    /// a crashed pass cannot quietly disappear from the record.
+    ///
+    /// # Errors
+    ///
+    /// Propagates persistence failures.
+    pub async fn open_retention_sweep(&self, at: Timestamp) -> PersistenceResult<RetentionSweep> {
+        if let Some(existing) = self.unfinished_retention_sweep().await? {
+            return Ok(existing);
+        }
+        let id = Uuid::now_v7().to_string();
+        sqlx::query(
+            "INSERT INTO voice_retention_sweeps
+                 (id, planned_at, state, expired_count, purged_count, completed_at)
+             VALUES (?1, ?2, 'planned', 0, 0, NULL)",
+        )
+        .bind(&id)
+        .bind(at.as_millis())
+        .execute(self.db.pool())
+        .await?;
+        Ok(RetentionSweep {
+            id,
+            planned_at: at,
+            expired: 0,
+            purged: 0,
+            completed_at: None,
+        })
+    }
+
+    /// The sweep a crash interrupted, if there is one.
+    ///
+    /// # Errors
+    ///
+    /// Propagates persistence failures.
+    pub async fn unfinished_retention_sweep(&self) -> PersistenceResult<Option<RetentionSweep>> {
+        let row = sqlx::query(
+            "SELECT id, planned_at, expired_count, purged_count, completed_at
+               FROM voice_retention_sweeps WHERE state = 'planned'
+              ORDER BY planned_at, id LIMIT 1",
+        )
+        .fetch_optional(self.db.pool())
+        .await?;
+        Ok(row.map(|row| RetentionSweep {
+            id: row.get("id"),
+            planned_at: Timestamp::from_millis(row.get::<i64, _>("planned_at")),
+            expired: u32::try_from(row.get::<i64, _>("expired_count")).unwrap_or(u32::MAX),
+            purged: u32::try_from(row.get::<i64, _>("purged_count")).unwrap_or(u32::MAX),
+            completed_at: row
+                .get::<Option<i64>, _>("completed_at")
+                .map(Timestamp::from_millis),
+        }))
+    }
+
+    /// Record what a sweep has destroyed so far.
+    ///
+    /// # Errors
+    ///
+    /// Propagates persistence failures.
+    pub async fn advance_retention_sweep(
+        &self,
+        sweep_id: &str,
+        expired: u32,
+        purged: u32,
+    ) -> PersistenceResult<()> {
+        sqlx::query(
+            "UPDATE voice_retention_sweeps
+                SET expired_count = expired_count + ?2, purged_count = purged_count + ?3
+              WHERE id = ?1",
+        )
+        .bind(sweep_id)
+        .bind(i64::from(expired))
+        .bind(i64::from(purged))
+        .execute(self.db.pool())
+        .await?;
+        Ok(())
+    }
+
+    /// Close a sweep. Closing a closed sweep changes nothing.
+    ///
+    /// # Errors
+    ///
+    /// Propagates persistence failures.
+    pub async fn complete_retention_sweep(
+        &self,
+        sweep_id: &str,
+        at: Timestamp,
+    ) -> PersistenceResult<()> {
+        sqlx::query(
+            "UPDATE voice_retention_sweeps SET state = 'completed', completed_at = ?2
+              WHERE id = ?1 AND state = 'planned'",
+        )
+        .bind(sweep_id)
+        .bind(at.as_millis())
+        .execute(self.db.pool())
+        .await?;
+        Ok(())
+    }
+
+    /// Delete an expired enrolment's tombstone row, keeping the person.
+    ///
+    /// # Errors
+    ///
+    /// Propagates persistence failures.
+    pub async fn purge_tombstone(
+        &self,
+        person_id: PersonId,
+        at: Timestamp,
+    ) -> PersistenceResult<bool> {
+        let mut tx = self.db.begin_write().await?;
+        let affected = sqlx::query(
+            "DELETE FROM person_voice_enrollments WHERE person_id = ?1 AND status = 'expired'",
+        )
+        .bind(person_id.to_string())
+        .execute(&mut *tx)
+        .await?
+        .rows_affected();
+        if affected == 0 {
+            return Ok(false);
+        }
+        journal(
+            &mut tx,
+            Some(person_id),
+            VoiceProfileEventKind::EnrollmentDeleted,
+            &serde_json::json!({
+                "exemplars_destroyed": 0,
+                "suggestions_destroyed": 0,
+                "reason": "retention_tombstone_removed",
+            })
+            .to_string(),
+            at,
+        )
+        .await?;
+        tx.commit().await?;
+        Ok(true)
+    }
+}
+
+/// What "forget everyone" destroyed, and what it deliberately kept (VP-095).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ForgetAllOutcome {
+    /// Enrolments destroyed.
+    pub enrollments: u32,
+    /// Exemplar ciphertexts destroyed.
+    pub exemplars: u32,
+    /// Suggestions destroyed.
+    pub suggestions: u32,
+    /// Roster entries left alone. They are names, not voiceprints.
+    pub people_kept: u32,
+}
+
+/// One retention pass, as journalled.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RetentionSweep {
+    /// Row identity.
+    pub id: String,
+    /// When the pass was planned.
+    pub planned_at: Timestamp,
+    /// Enrolments expired so far, across resumptions.
+    pub expired: u32,
+    /// Tombstones removed so far, across resumptions.
+    pub purged: u32,
+    /// When the pass finished, if it has.
+    pub completed_at: Option<Timestamp>,
+}
+
+/// `app_preferences` key holding [`VoiceProfileGate`].
+pub const GATE_PREFERENCE_KEY: &str = "voice_profiles.gate";
+
+/// The feature's runtime state: the matching toggle and the consent gate
+/// behind it (spec §12.2, VP-003, VP-120).
+///
+/// Two independent facts, kept separately on purpose. `enabled` is the toggle
+/// the user flips; `consent_version` is the disclosure text they accepted. A
+/// build that bumps the disclosure, or a restore that brought somebody else's
+/// profiles into this library (VP-078), leaves the accepted version stale or
+/// absent — and the feature stays off until the gate is passed again, rather
+/// than inheriting an activation that was never granted here.
+#[derive(Debug, Clone, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct VoiceProfileGate {
+    /// Whether biometric matching is on. Off by default, always (VP-003).
+    #[serde(default)]
+    pub enabled: bool,
+    /// Disclosure version the user accepted, when they have.
+    #[serde(default)]
+    pub consent_version: Option<String>,
+    /// When they accepted it.
+    #[serde(default)]
+    pub consent_recorded_at: Option<i64>,
+    /// Set by a restore that carried voice profiles: the gate must be re-run
+    /// in this library before any of them is used (VP-078).
+    #[serde(default)]
+    pub restore_pending_consent: bool,
+}
+
+impl VoiceProfileGate {
+    /// Whether biometric work may run right now: the toggle is on, a
+    /// disclosure version was accepted, and no restore is waiting for the gate.
+    #[must_use]
+    pub fn is_active(&self) -> bool {
+        self.enabled && self.consent_version.is_some() && !self.restore_pending_consent
+    }
+}
+
+/// Reads and writes the feature gate.
+///
+/// It lives in `app_preferences` rather than in a table of its own because it
+/// is exactly one row of application state, and because the archive snapshot
+/// deliberately never carries `app_preferences`: an activation cannot travel
+/// to another machine inside a backup.
+#[derive(Debug, Clone)]
+pub struct VoiceProfileGateRepository {
+    db: Database,
+}
+
+impl VoiceProfileGateRepository {
+    /// Open the repository.
+    #[must_use]
+    pub const fn new(db: Database) -> Self {
+        Self { db }
+    }
+
+    /// The current gate. A library that never stored one is off, ungated.
+    ///
+    /// A stored value that will not parse is treated as "off": the failure mode
+    /// of a corrupt preference must be the safe state, not an inherited
+    /// activation.
+    ///
+    /// # Errors
+    ///
+    /// Propagates persistence failures.
+    pub async fn load(&self) -> PersistenceResult<VoiceProfileGate> {
+        let stored: Option<String> =
+            sqlx::query_scalar("SELECT value_json FROM app_preferences WHERE key = ?1")
+                .bind(GATE_PREFERENCE_KEY)
+                .fetch_optional(self.db.pool())
+                .await?;
+        Ok(stored
+            .and_then(|json| serde_json::from_str(&json).ok())
+            .unwrap_or_default())
+    }
+
+    /// Replace the gate.
+    ///
+    /// # Errors
+    ///
+    /// Propagates persistence failures.
+    pub async fn store(&self, gate: &VoiceProfileGate) -> PersistenceResult<()> {
+        let json = serde_json::to_string(gate).map_err(|_| PersistenceError::IntegrityFailed)?;
+        sqlx::query(
+            "INSERT INTO app_preferences (key, version, value_json) VALUES (?1, 1, ?2)
+             ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json",
+        )
+        .bind(GATE_PREFERENCE_KEY)
+        .bind(json)
+        .execute(self.db.pool())
+        .await?;
+        Ok(())
+    }
+
+    /// Turn the feature off without touching the recorded consent history.
+    ///
+    /// # Errors
+    ///
+    /// Propagates persistence failures.
+    pub async fn disable(&self) -> PersistenceResult<VoiceProfileGate> {
+        let mut gate = self.load().await?;
+        gate.enabled = false;
+        self.store(&gate).await?;
+        Ok(gate)
+    }
+
+    /// Mark that restored voice data is waiting for the consent gate, and turn
+    /// the feature off until it is passed (VP-078).
+    ///
+    /// # Errors
+    ///
+    /// Propagates persistence failures.
+    pub async fn require_consent_after_restore(&self) -> PersistenceResult<VoiceProfileGate> {
+        let mut gate = self.load().await?;
+        gate.enabled = false;
+        gate.restore_pending_consent = true;
+        self.store(&gate).await?;
+        Ok(gate)
+    }
+
+    /// Record that the user passed the gate for `consent_version` and turn the
+    /// feature on. This is the only way `restore_pending_consent` clears.
+    ///
+    /// # Errors
+    ///
+    /// Propagates persistence failures.
+    pub async fn activate(
+        &self,
+        consent_version: &str,
+        at: Timestamp,
+    ) -> PersistenceResult<VoiceProfileGate> {
+        let gate = VoiceProfileGate {
+            enabled: true,
+            consent_version: Some(consent_version.to_owned()),
+            consent_recorded_at: Some(at.as_millis()),
+            restore_pending_consent: false,
+        };
+        self.store(&gate).await?;
+        Ok(gate)
     }
 }
 
@@ -894,6 +1383,9 @@ fn decode_enrollment(row: &sqlx::sqlite::SqliteRow) -> PersistenceResult<StoredE
             .try_get::<Option<i64>, _>("last_matched_at")?
             .map(Timestamp::from_millis),
         status: row.try_get("status")?,
+        expired_at: row
+            .try_get::<Option<i64>, _>("expired_at")?
+            .map(Timestamp::from_millis),
         created_at: Timestamp::from_millis(row.try_get::<i64, _>("created_at")?),
     })
 }

@@ -1,0 +1,1 @@
+{"schema_version": "archive-voiceprofile/1", "person_id": "018f3b3a-7b4f-7c21-9a3e-2b1f0c5d6e7a", "enrollment": {"consent_version": "voice-consent/1", "consent_note": null, "retention_months": 12, "last_matched_at": null, "status": "active", "expired_at": null, "created_at": 1}, "exemplars": [], "embedding": "AAAA"}

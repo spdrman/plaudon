@@ -69,6 +69,7 @@ async fn an_archive_has_the_spec_namespaces_and_a_verifying_manifest() {
                 destination: backups.clone(),
                 password: None,
                 sensitive_profile: false,
+                include_voice_profiles: false,
             },
             NOW,
         )
@@ -136,6 +137,7 @@ async fn a_plaintext_round_trip_into_a_clean_install_reproduces_the_library() {
                 destination: backups,
                 password: None,
                 sensitive_profile: false,
+                include_voice_profiles: false,
             },
             NOW,
         )
@@ -244,6 +246,7 @@ async fn a_plaintext_round_trip_into_a_clean_install_reproduces_the_library() {
                 destination: second_backups,
                 password: None,
                 sensitive_profile: false,
+                include_voice_profiles: false,
             },
             NOW,
         )
@@ -265,6 +268,7 @@ async fn an_encrypted_round_trip_needs_the_password_and_no_keychain() {
                 destination: backups,
                 password: Some(PASSWORD.to_owned()),
                 sensitive_profile: false,
+                include_voice_profiles: false,
             },
             NOW,
         )
@@ -346,6 +350,7 @@ async fn a_tampered_encrypted_archive_is_rejected_before_any_user_data_moves() {
                 destination: backups,
                 password: Some(PASSWORD.to_owned()),
                 sensitive_profile: false,
+                include_voice_profiles: false,
             },
             NOW,
         )
@@ -398,6 +403,7 @@ async fn an_archive_carries_no_credential_shaped_value() {
                 destination: backups,
                 password: None,
                 sensitive_profile: false,
+                include_voice_profiles: false,
             },
             NOW,
         )
@@ -460,6 +466,7 @@ async fn a_credential_in_an_annotation_aborts_the_backup_with_no_file_left_behin
                 destination: backups.clone(),
                 password: None,
                 sensitive_profile: false,
+                include_voice_profiles: false,
             },
             NOW,
         )
@@ -482,6 +489,7 @@ async fn merge_mode_reports_a_conflict_instead_of_overwriting() {
                 destination: backups,
                 password: None,
                 sensitive_profile: false,
+                include_voice_profiles: false,
             },
             NOW,
         )
@@ -555,6 +563,7 @@ async fn restoring_into_a_non_empty_library_as_new_is_refused() {
                 destination: backups,
                 password: None,
                 sensitive_profile: false,
+                include_voice_profiles: false,
             },
             NOW,
         )
@@ -590,6 +599,7 @@ async fn a_deleted_recording_is_not_resurrected_by_a_restore_unless_asked() {
                 destination: backups,
                 password: None,
                 sensitive_profile: false,
+                include_voice_profiles: false,
             },
             NOW,
         )
@@ -662,6 +672,7 @@ async fn archive_operations_are_recorded_for_diagnostics() {
                 destination: backups,
                 password: Some(PASSWORD.to_owned()),
                 sensitive_profile: false,
+                include_voice_profiles: false,
             },
             NOW,
         )
@@ -691,6 +702,7 @@ async fn the_manifest_lists_the_settings_that_do_not_travel() {
                 destination: backups,
                 password: None,
                 sensitive_profile: false,
+                include_voice_profiles: false,
             },
             NOW,
         )
@@ -757,6 +769,7 @@ async fn creation_streams_rather_than_buffering_the_archive() {
                 destination: backups,
                 password: Some(PASSWORD.to_owned()),
                 sensitive_profile: false,
+                include_voice_profiles: false,
             },
             NOW,
         )
@@ -803,6 +816,7 @@ async fn an_archive_from_another_operating_system_restores_unchanged() {
                 destination: backups,
                 password: None,
                 sensitive_profile: false,
+                include_voice_profiles: false,
             },
             NOW,
         )
@@ -872,6 +886,7 @@ async fn an_archive_to_archive_round_trip_preserves_the_manifest() {
                 destination: out_dir(dir.path(), "backups"),
                 password: None,
                 sensitive_profile: false,
+                include_voice_profiles: false,
             },
             NOW,
         )
@@ -901,6 +916,7 @@ async fn an_archive_to_archive_round_trip_preserves_the_manifest() {
                 destination: out_dir(dir.path(), "backups-2"),
                 password: None,
                 sensitive_profile: false,
+                include_voice_profiles: false,
             },
             NOW,
         )
