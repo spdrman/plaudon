@@ -42,7 +42,7 @@ struct FixtureTurn {
 struct Fixture {
     name: String,
     provenance: String,
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "fixture documents its own duration for readers")]
     duration_ms: u64,
     reference: Vec<FixtureTurn>,
     hypothesis: Vec<FixtureTurn>,
@@ -57,22 +57,38 @@ struct Provenance {
     fixture_source: String,
 }
 
+/// Roll-up across every fixture. Speaker and cluster counts are deliberately
+/// absent here: identifiers are per-fixture, so a cross-fixture count would be
+/// a number with no meaning (spec 17.6 forbids unsupported aggregate claims).
+#[derive(Debug, Serialize)]
+struct DerAggregate {
+    der: f64,
+    missed_ms: u64,
+    false_alarm_ms: u64,
+    confusion_ms: u64,
+    total_reference_ms: u64,
+    overlapping_reference_ms: u64,
+    scored_frames: usize,
+    excluded_frames: usize,
+    overlap_regions_skipped: bool,
+    collar_ms: u64,
+}
+
+/// One fixture's measurement with the provenance of the annotation.
+#[derive(Debug, Serialize)]
+struct FixtureMeasurement {
+    name: String,
+    provenance: String,
+    report: DerReport,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
 enum DiarizationBlock {
     Measured {
-        der: f64,
-        missed_ms: u64,
-        false_alarm_ms: u64,
-        confusion_ms: u64,
-        total_reference_ms: u64,
-        overlapping_reference_ms: u64,
-        reference_speaker_count: usize,
-        hypothesis_cluster_count: usize,
-        scored_frames: usize,
-        excluded_frames: usize,
-        overlap_regions_skipped: bool,
-        collar_ms: u64,
+        fixture_count: usize,
+        aggregate: DerAggregate,
+        fixtures: Vec<FixtureMeasurement>,
     },
     Skipped {
         reason: String,
@@ -102,9 +118,6 @@ enum CorpusAvailability {
         provenance: String,
         key_point_count: usize,
     },
-    Absent {
-        reason: String,
-    },
 }
 
 #[derive(Debug, Serialize)]
@@ -125,8 +138,7 @@ struct QualityReport {
 fn load_fixture(path: &Path) -> Result<Fixture, String> {
     let content = std::fs::read_to_string(path)
         .map_err(|e| format!("Failed to read {}: {}", path.display(), e))?;
-    serde_json::from_str(&content)
-        .map_err(|e| format!("Failed to parse {}: {}", path.display(), e))
+    serde_json::from_str(&content).map_err(|e| format!("Failed to parse {}: {}", path.display(), e))
 }
 
 fn score_fixture(fixture: &Fixture) -> Result<DerReport, String> {
@@ -149,9 +161,9 @@ fn score_fixture(fixture: &Fixture) -> Result<DerReport, String> {
         .iter()
         .map(|t| {
             Ok(SpeakerTurn::new(
-                t.cluster
-                    .as_ref()
-                    .ok_or_else(|| format!("Hypothesis turn missing cluster in {}", fixture.name))?,
+                t.cluster.as_ref().ok_or_else(|| {
+                    format!("Hypothesis turn missing cluster in {}", fixture.name)
+                })?,
                 t.start_ms,
                 t.end_ms,
             ))
@@ -165,67 +177,53 @@ fn score_fixture(fixture: &Fixture) -> Result<DerReport, String> {
     ))
 }
 
-fn aggregate_der_reports(reports: &[DerReport]) -> DiarizationBlock {
-    if reports.is_empty() {
+fn aggregate_der_reports(measurements: Vec<FixtureMeasurement>) -> DiarizationBlock {
+    if measurements.is_empty() {
         return DiarizationBlock::Skipped {
             reason: "no_fixtures_found".to_string(),
         };
     }
 
-    let mut total_missed = 0u64;
-    let mut total_false_alarm = 0u64;
-    let mut total_confusion = 0u64;
-    let mut total_reference = 0u64;
-    let mut total_overlapping = 0u64;
-    let mut total_scored_frames = 0usize;
-    let mut total_excluded_frames = 0usize;
-    let mut all_speakers = std::collections::BTreeSet::new();
-    let mut all_clusters = std::collections::BTreeSet::new();
+    let mut missed_ms = 0u64;
+    let mut false_alarm_ms = 0u64;
+    let mut confusion_ms = 0u64;
+    let mut total_reference_ms = 0u64;
+    let mut overlapping_reference_ms = 0u64;
+    let mut scored_frames = 0usize;
+    let mut excluded_frames = 0usize;
 
-    for report in reports {
-        total_missed += report.missed_ms;
-        total_false_alarm += report.false_alarm_ms;
-        total_confusion += report.confusion_ms;
-        total_reference += report.total_reference_ms;
-        total_overlapping += report.overlapping_reference_ms;
-        total_scored_frames += report.scored_frames;
-        total_excluded_frames += report.excluded_frames;
-        // Note: We can't aggregate speaker/cluster counts meaningfully across
-        // fixtures since they use different identifiers. We'll use the counts
-        // from the largest fixture as representative.
-        if report.reference_speaker_count > all_speakers.len() {
-            all_speakers.clear();
-            for _ in 0..report.reference_speaker_count {
-                all_speakers.insert(());
-            }
-        }
-        if report.hypothesis_cluster_count > all_clusters.len() {
-            all_clusters.clear();
-            for _ in 0..report.hypothesis_cluster_count {
-                all_clusters.insert(());
-            }
-        }
+    for measurement in &measurements {
+        missed_ms += measurement.report.missed_ms;
+        false_alarm_ms += measurement.report.false_alarm_ms;
+        confusion_ms += measurement.report.confusion_ms;
+        total_reference_ms += measurement.report.total_reference_ms;
+        overlapping_reference_ms += measurement.report.overlapping_reference_ms;
+        scored_frames += measurement.report.scored_frames;
+        excluded_frames += measurement.report.excluded_frames;
     }
 
-    let der = if total_reference == 0 {
+    let der = if total_reference_ms == 0 {
         0.0
     } else {
-        (total_missed + total_false_alarm + total_confusion) as f64 / total_reference as f64
+        (missed_ms + false_alarm_ms + confusion_ms) as f64 / total_reference_ms as f64
     };
 
+    let first = &measurements[0].report;
     DiarizationBlock::Measured {
-        der,
-        missed_ms: total_missed,
-        false_alarm_ms: total_false_alarm,
-        confusion_ms: total_confusion,
-        total_reference_ms: total_reference,
-        overlapping_reference_ms: total_overlapping,
-        reference_speaker_count: all_speakers.len(),
-        hypothesis_cluster_count: all_clusters.len(),
-        scored_frames: total_scored_frames,
-        excluded_frames: total_excluded_frames,
-        overlap_regions_skipped: reports.first().map_or(false, |r| r.overlap_regions_skipped),
-        collar_ms: reports.first().map_or(0, |r| r.collar_ms),
+        fixture_count: measurements.len(),
+        aggregate: DerAggregate {
+            der,
+            missed_ms,
+            false_alarm_ms,
+            confusion_ms,
+            total_reference_ms,
+            overlapping_reference_ms,
+            scored_frames,
+            excluded_frames,
+            overlap_regions_skipped: first.overlap_regions_skipped,
+            collar_ms: first.collar_ms,
+        },
+        fixtures: measurements,
     }
 }
 
@@ -234,11 +232,7 @@ fn gather_provenance(fixture_dir: &Path, fixture_names: &[String]) -> Provenance
     let os_build = gather_os_build();
     let toolchain = gather_toolchain();
     let commit = gather_commit();
-    let fixture_source = format!(
-        "{} ({})",
-        fixture_dir.display(),
-        fixture_names.join(", ")
-    );
+    let fixture_source = format!("{} ({})", fixture_dir.display(), fixture_names.join(", "));
 
     Provenance {
         hardware,
@@ -251,7 +245,7 @@ fn gather_provenance(fixture_dir: &Path, fixture_names: &[String]) -> Provenance
 
 fn gather_hardware() -> String {
     let arch = std::env::consts::ARCH;
-    
+
     #[cfg(target_os = "macos")]
     {
         let brand = Command::new("sysctl")
@@ -260,7 +254,7 @@ fn gather_hardware() -> String {
             .ok()
             .and_then(|o| String::from_utf8(o.stdout).ok())
             .map(|s| s.trim().to_string());
-        
+
         let memsize = Command::new("sysctl")
             .args(["-n", "hw.memsize"])
             .output()
@@ -268,7 +262,7 @@ fn gather_hardware() -> String {
             .and_then(|o| String::from_utf8(o.stdout).ok())
             .and_then(|s| s.trim().parse::<u64>().ok())
             .map(|bytes| format!("{} GB", bytes / (1024 * 1024 * 1024)));
-        
+
         match (brand, memsize) {
             (Some(cpu), Some(mem)) => format!("{} {} {}", arch, cpu, mem),
             (Some(cpu), None) => format!("{} {}", arch, cpu),
@@ -276,7 +270,7 @@ fn gather_hardware() -> String {
             (None, None) => arch.to_string(),
         }
     }
-    
+
     #[cfg(not(target_os = "macos"))]
     {
         arch.to_string()
@@ -285,7 +279,7 @@ fn gather_hardware() -> String {
 
 fn gather_os_build() -> String {
     let os = std::env::consts::OS;
-    
+
     #[cfg(target_os = "macos")]
     {
         if let Some(build) = Command::new("sw_vers")
@@ -298,7 +292,7 @@ fn gather_os_build() -> String {
             return format!("{} {}", os, build);
         }
     }
-    
+
     #[cfg(target_os = "windows")]
     {
         if let Some(ver) = Command::new("cmd")
@@ -311,7 +305,7 @@ fn gather_os_build() -> String {
             return format!("{} {}", os, ver);
         }
     }
-    
+
     os.to_string()
 }
 
@@ -335,38 +329,104 @@ fn gather_commit() -> String {
         .unwrap_or_else(|| "unknown".to_string())
 }
 
+/// An opt-in tool-quality fixture.
+///
+/// Spec 17.4 scores flashcards/Q&A "using an opt-in labeled educational
+/// corpus". Scoring needs three things together: the labelled key points, the
+/// transcript the artifacts were generated from, and the artifacts. They live
+/// in one file so a measurement can never be assembled from mismatched parts.
+#[derive(Debug, Deserialize)]
+struct ToolFixture {
+    corpus: plaudon_ai_tools::metrics::LabeledCorpus,
+    /// Segment texts of the transcript the artifacts cite, in order.
+    segments: Vec<String>,
+    /// The generated artifacts, before anchor verification.
+    artifacts: serde_json::Value,
+}
+
 fn score_tool_quality(corpus_path: Option<&PathBuf>) -> ToolQualityBlock {
     let Some(path) = corpus_path else {
         return ToolQualityBlock::Skipped {
             reason: "corpus_not_available".to_string(),
         };
     };
-
-    // Spec 17.4: when corpus is absent, report skipped, never fabricate.
-    match plaudon_ai_tools::metrics::load_corpus(path) {
-        Ok(None) => ToolQualityBlock::Skipped {
+    if !path.exists() {
+        return ToolQualityBlock::Skipped {
             reason: "corpus_not_available".to_string(),
-        },
-        Ok(Some(corpus)) => {
-            // We have a corpus, but we need a transcript revision to score it.
-            // Since this is a diarization-focused binary and we don't have
-            // access to transcript revisions here, we report the corpus as
-            // present but metrics as null (not scored in this context).
-            ToolQualityBlock::Measured {
-                corpus: CorpusAvailability::Present {
-                    name: corpus.name.clone(),
-                    provenance: corpus.provenance.clone(),
-                    key_point_count: corpus.key_points.len(),
-                },
-                factual_correctness: None,
-                coverage: None,
-                redundant_question_rate: None,
-                grounding_precision: None,
+        };
+    }
+
+    let text = match std::fs::read_to_string(path) {
+        Ok(text) => text,
+        Err(error) => {
+            return ToolQualityBlock::Skipped {
+                reason: format!("corpus_unreadable: {error}"),
             }
         }
-        Err(e) => ToolQualityBlock::Skipped {
-            reason: format!("corpus_load_error: {}", e),
+    };
+    let fixture: ToolFixture = match serde_json::from_str(&text) {
+        Ok(fixture) => fixture,
+        Err(error) => {
+            // A corpus without the transcript and artifacts cannot be scored.
+            // Reporting that is the honest outcome; emitting null scores under
+            // a "measured" status would claim a measurement we did not make.
+            return ToolQualityBlock::Skipped {
+                reason: format!("corpus_incomplete: {error}"),
+            };
+        }
+    };
+
+    let revision = plaudon_ai_tools::testing::revision_from_segments(
+        plaudon_domain::transcript::AlignmentOrigin::Native,
+        fixture
+            .segments
+            .iter()
+            .enumerate()
+            .map(|(index, text)| {
+                let seq = u32::try_from(index).unwrap_or(0);
+                plaudon_domain::transcript::TranscriptSegment::timed(
+                    seq,
+                    u64::from(seq) * 1_000,
+                    u64::from(seq) * 1_000 + 900,
+                    text.clone(),
+                )
+            })
+            .collect(),
+    );
+
+    let validation =
+        match plaudon_ai_tools::study::study_artifacts_from_value(&fixture.artifacts, &revision) {
+            Ok(validation) => validation,
+            Err(error) => {
+                return ToolQualityBlock::Skipped {
+                    reason: format!("artifacts_rejected: {error}"),
+                }
+            }
+        };
+
+    let report = plaudon_ai_tools::metrics::score_study_artifacts(
+        &validation.accepted,
+        &revision,
+        Some(&fixture.corpus),
+    );
+
+    let convert = |metric: Option<plaudon_ai_tools::metrics::ScoredMetric>| {
+        metric.map(|m| ScoredMetric {
+            value: m.value,
+            sample_size: m.sample_size,
+        })
+    };
+
+    ToolQualityBlock::Measured {
+        corpus: CorpusAvailability::Present {
+            name: fixture.corpus.name.clone(),
+            provenance: fixture.corpus.provenance.clone(),
+            key_point_count: fixture.corpus.key_points.len(),
         },
+        factual_correctness: convert(report.factual_correctness),
+        coverage: convert(report.coverage),
+        redundant_question_rate: convert(report.redundant_question_rate),
+        grounding_precision: convert(report.grounding_precision),
     }
 }
 
@@ -386,19 +446,21 @@ fn main() -> ExitCode {
         }
     };
 
-    let mut fixtures = Vec::new();
-    let mut reports = Vec::new();
+    let mut measurements = Vec::new();
     let mut fixture_names = Vec::new();
 
+    let mut fixture_paths = fixture_paths;
+    fixture_paths.sort();
     for path in &fixture_paths {
         match load_fixture(path) {
             Ok(fixture) => {
                 fixture_names.push(fixture.name.clone());
                 match score_fixture(&fixture) {
-                    Ok(report) => {
-                        reports.push(report);
-                        fixtures.push(fixture);
-                    }
+                    Ok(report) => measurements.push(FixtureMeasurement {
+                        name: fixture.name.clone(),
+                        provenance: fixture.provenance.clone(),
+                        report,
+                    }),
                     Err(e) => {
                         eprintln!("Failed to score fixture {}: {}", path.display(), e);
                         return ExitCode::FAILURE;
@@ -412,7 +474,7 @@ fn main() -> ExitCode {
         }
     }
 
-    let diarization = aggregate_der_reports(&reports);
+    let diarization = aggregate_der_reports(measurements);
     let tool_quality = score_tool_quality(args.tool_corpus.as_ref());
     let provenance = gather_provenance(&args.fixtures, &fixture_names);
 

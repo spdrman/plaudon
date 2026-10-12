@@ -27,7 +27,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use plaudon_app_core::import::ImportService;
 use plaudon_domain::error::{AppError, AppErrorCode, DiagnosticLog, ErrorEnvelope};
-use plaudon_domain::ids::{RecordingId, TranscriptRevisionId};
+use plaudon_domain::ids::{RecordingId, SpeakerId, TranscriptRevisionId};
 use plaudon_domain::media::Sha256Digest;
 use plaudon_domain::model::{EngineId, ModelIdentity};
 use plaudon_domain::time::Timestamp;
@@ -1320,15 +1320,13 @@ impl SpeakersPort for LocalBackend {
             let id: String = row.get("id");
             let cluster_key: Option<String> = row.get("cluster_key");
             let provenance: String = row.get("provenance");
-            let renamed_at: Option<String> = row.get("renamed_at");
-            let confirmed_at: Option<String> = row.get("confirmed_at");
 
             speakers.push(plaudon_app_core::speakers::Speaker {
                 id: id
                     .parse()
                     .map_err(|_| internal("stored speaker id is not a uuid"))?,
                 recording_id,
-                cluster_key: cluster_key.map(|k| k.into()),
+                cluster_key: cluster_key.map(plaudon_ai_diarization::ClusterKey::new),
                 original_label: row.get("original_label"),
                 label: row.get("label"),
                 name: row.get("name"),
@@ -1340,14 +1338,12 @@ impl SpeakersPort for LocalBackend {
                     _ => return Err(internal("unknown speaker provenance")),
                 },
                 user_confirmed: row.get("user_confirmed"),
-                renamed_at: renamed_at
-                    .map(|s| rfc3339_opt("speakers.renamed_at", Some(s)))
-                    .transpose()?
-                    .flatten(),
-                confirmed_at: confirmed_at
-                    .map(|s| rfc3339_opt("speakers.confirmed_at", Some(s)))
-                    .transpose()?
-                    .flatten(),
+                renamed_at: row
+                    .get::<Option<i64>, _>("renamed_at")
+                    .map(Timestamp::from_millis),
+                confirmed_at: row
+                    .get::<Option<i64>, _>("confirmed_at")
+                    .map(Timestamp::from_millis),
             });
         }
 

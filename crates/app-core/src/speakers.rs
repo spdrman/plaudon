@@ -127,7 +127,7 @@ pub const MAX_NAME_CHARS: usize = 120;
 pub struct SpeakerRegistry {
     /// Recording these rows belong to.
     pub recording_id: RecordingId,
-    speakers: Vec<Speaker>,
+    pub speakers: Vec<Speaker>,
 }
 
 impl SpeakerRegistry {

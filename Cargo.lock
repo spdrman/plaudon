@@ -3459,6 +3459,7 @@ dependencies = [
  "hex",
  "jsonschema",
  "keyring",
+ "plaudon-ai-diarization",
  "plaudon-app-core",
  "plaudon-domain",
  "plaudon-notifications",

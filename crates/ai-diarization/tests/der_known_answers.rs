@@ -4,6 +4,7 @@ use plaudon_ai_diarization::contract::SpeakerTurn;
 use plaudon_ai_diarization::der::{diarization_error_rate, DerOptions, ReferenceTurn};
 use serde::Deserialize;
 use std::path::Path;
+use std::path::PathBuf;
 
 #[derive(Debug, Deserialize)]
 struct FixtureExpected {
@@ -117,8 +118,13 @@ fn verify_fixture(fixture: &Fixture) {
 
 #[test]
 fn two_speaker_clean_matches_hand_calculation() {
-    let fixture = load_fixture(Path::new("tests/fixtures/diarization/two-speaker-clean.json"));
-    assert_eq!(fixture.provenance, "Synthetic annotation authored for the plaudon-m repository");
+    let fixture_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/diarization/two-speaker-clean.json");
+    let fixture = load_fixture(&fixture_path);
+    assert_eq!(
+        fixture.provenance,
+        "Synthetic annotation authored for the plaudon-m repository"
+    );
     verify_fixture(&fixture);
 
     // Verify no overlapping speech
@@ -141,10 +147,13 @@ fn two_speaker_clean_matches_hand_calculation() {
 
 #[test]
 fn three_speaker_overlap_matches_hand_calculation() {
-    let fixture = load_fixture(Path::new(
-        "tests/fixtures/diarization/three-speaker-overlap.json",
-    ));
-    assert_eq!(fixture.provenance, "Synthetic annotation authored for the plaudon-m repository");
+    let fixture_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/diarization/three-speaker-overlap.json");
+    let fixture = load_fixture(&fixture_path);
+    assert_eq!(
+        fixture.provenance,
+        "Synthetic annotation authored for the plaudon-m repository"
+    );
     verify_fixture(&fixture);
 
     // Verify overlapping speech is detected
@@ -171,10 +180,13 @@ fn three_speaker_overlap_matches_hand_calculation() {
 
 #[test]
 fn single_speaker_silence_matches_hand_calculation() {
-    let fixture = load_fixture(Path::new(
-        "tests/fixtures/diarization/single-speaker-silence.json",
-    ));
-    assert_eq!(fixture.provenance, "Synthetic annotation authored for the plaudon-m repository");
+    let fixture_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/diarization/single-speaker-silence.json");
+    let fixture = load_fixture(&fixture_path);
+    assert_eq!(
+        fixture.provenance,
+        "Synthetic annotation authored for the plaudon-m repository"
+    );
     verify_fixture(&fixture);
 
     // Verify false alarms in silence

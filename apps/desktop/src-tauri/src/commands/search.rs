@@ -19,7 +19,7 @@ pub async fn search_library(
     let page_limit = limit(request.limit)?;
     let page = SearchPage {
         limit: page_limit,
-        offset: cursor.offset(),
+        offset: cursor.offset() as u32,
     };
 
     let results = ports.search.search(&request.query, page).await?;

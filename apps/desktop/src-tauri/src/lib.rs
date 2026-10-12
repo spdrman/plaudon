@@ -119,7 +119,7 @@ pub async fn build_ports(
         activity: Arc::clone(&backend) as Arc<dyn ActivityPort>,
         import: Arc::clone(&backend) as Arc<dyn ImportPort>,
         settings: Arc::clone(&backend) as Arc<dyn SettingsPort>,
-        export: backend as Arc<dyn ExportPort>,
+        export: Arc::clone(&backend) as Arc<dyn ExportPort>,
         search: Arc::clone(&backend) as Arc<dyn SearchPort>,
         speakers: Arc::clone(&backend) as Arc<dyn SpeakersPort>,
         secrets,
