@@ -264,8 +264,8 @@ impl TranscriptFacts {
 pub struct EvidenceFacts {
     /// JSON Pointer into the output body the anchor supports.
     pub item_path: String,
-    /// Segment the anchor resolves to.
-    pub segment_id: String,
+    /// Segment the anchor resolves to, when the cited span exists.
+    pub segment_id: Option<String>,
     /// Position of that segment in its revision, when resolvable.
     pub segment_index: Option<u32>,
     /// Start offset of that segment, when real times exist.
@@ -798,8 +798,8 @@ impl BundleLoader {
                 .map_err(|_| ExportError::IntegrityFailed)?;
             let body_json: String = row.get("body_json");
             let evidence_rows = sqlx::query(
-                "SELECT item_path, segment_id, quote, verification_status
-                 FROM output_evidence WHERE output_id = ?1 ORDER BY item_path, segment_id",
+                "SELECT item_path, cited_revision_id, seq_index, quote, verification_status
+                 FROM output_evidence WHERE output_id = ?1 ORDER BY item_path, claim_id, position",
             )
             .bind(&output_id)
             .fetch_all(self.db.pool())
@@ -809,16 +809,19 @@ impl BundleLoader {
             let evidence = evidence_rows
                 .iter()
                 .map(|evidence| {
-                    let segment_id: String = evidence.get("segment_id");
+                    let cited_revision: String = evidence.get("cited_revision_id");
+                    let seq_index =
+                        u32::try_from(evidence.get::<i64, _>("seq_index")).unwrap_or(u32::MAX);
                     let located = transcripts
                         .iter()
+                        .filter(|t| t.id.to_string() == cited_revision)
                         .flat_map(|t| t.segments.iter())
-                        .find(|segment| segment.id == segment_id);
+                        .find(|segment| segment.seq_index == seq_index);
                     EvidenceFacts {
                         item_path: evidence.get("item_path"),
                         segment_index: located.map(|segment| segment.seq_index),
                         start_ms: located.and_then(|segment| segment.start_ms),
-                        segment_id,
+                        segment_id: located.map(|segment| segment.id.clone()),
                         quote: evidence.get("quote"),
                         verification_status: evidence.get("verification_status"),
                     }

@@ -13,10 +13,11 @@ use plaudon_persistence::{Database, PersistenceError};
 use sqlx::Row;
 
 use super::documents::{
-    AnnotationDocument, EvidenceRow, MediaAssetRow, MediaRevisionRow, OutputDocument, OutputRow,
-    RecordDocument, RecordingMediaRow, RecordingRow, SegmentRow, SourceDocument, SourceItemRow,
-    SpeakerRow, ToolDocument, TranscriptAnnotationRow, TranscriptDocument, TranscriptRow, WordRow,
-    ANNOTATION_SCHEMA, OUTPUT_SCHEMA, RECORD_SCHEMA, SOURCE_SCHEMA, TOOL_SCHEMA, TRANSCRIPT_SCHEMA,
+    AnnotationDocument, ClaimRow, EvidenceRow, MediaAssetRow, MediaRevisionRow, OutputDocument,
+    OutputRow, RecordDocument, RecordingMediaRow, RecordingRow, SegmentRow, SourceDocument,
+    SourceItemRow, SpeakerRow, ToolDocument, TranscriptAnnotationRow, TranscriptDocument,
+    TranscriptRow, WordRow, ANNOTATION_SCHEMA, OUTPUT_SCHEMA, RECORD_SCHEMA, SOURCE_SCHEMA,
+    TOOL_SCHEMA, TRANSCRIPT_SCHEMA,
 };
 use crate::error::{ExportError, ExportResult};
 
@@ -360,9 +361,20 @@ impl LibrarySnapshot {
         let mut out = Vec::with_capacity(rows.len());
         for row in &rows {
             let output_id: String = row.get("id");
+            let claim_rows = sqlx::query(
+                "SELECT id, item_path, kind, category, claim_text, state, entailment,
+                        review_reasons_json, reviewer, reviewed_at, review_accepted, review_note
+                 FROM output_claims WHERE output_id = ?1 ORDER BY item_path, id",
+            )
+            .bind(&output_id)
+            .fetch_all(self.db.pool())
+            .await
+            .map_err(PersistenceError::from)?;
             let evidence_rows = sqlx::query(
-                "SELECT id, item_path, segment_id, quote, verification_status
-                 FROM output_evidence WHERE output_id = ?1 ORDER BY item_path, segment_id",
+                "SELECT id, claim_id, position, item_path, cited_revision_id, seq_index,
+                        char_start, char_end, quote, verification_status, rejection_code,
+                        matched_text, alignment_origin, seek_ms
+                 FROM output_evidence WHERE output_id = ?1 ORDER BY claim_id, position",
             )
             .bind(&output_id)
             .fetch_all(self.db.pool())
@@ -388,10 +400,36 @@ impl LibrarySnapshot {
                     .iter()
                     .map(|evidence| EvidenceRow {
                         id: evidence.get("id"),
+                        claim_id: evidence.get("claim_id"),
+                        position: evidence.get("position"),
                         item_path: evidence.get("item_path"),
-                        segment_id: evidence.get("segment_id"),
+                        cited_revision_id: evidence.get("cited_revision_id"),
+                        seq_index: evidence.get("seq_index"),
+                        char_start: evidence.get("char_start"),
+                        char_end: evidence.get("char_end"),
                         quote: evidence.get("quote"),
                         verification_status: evidence.get("verification_status"),
+                        rejection_code: evidence.get("rejection_code"),
+                        matched_text: evidence.get("matched_text"),
+                        alignment_origin: evidence.get("alignment_origin"),
+                        seek_ms: evidence.get("seek_ms"),
+                    })
+                    .collect(),
+                claims: claim_rows
+                    .iter()
+                    .map(|claim| ClaimRow {
+                        id: claim.get("id"),
+                        item_path: claim.get("item_path"),
+                        kind: claim.get("kind"),
+                        category: claim.get("category"),
+                        claim_text: claim.get("claim_text"),
+                        state: claim.get("state"),
+                        entailment: claim.get("entailment"),
+                        review_reasons_json: claim.get("review_reasons_json"),
+                        reviewer: claim.get("reviewer"),
+                        reviewed_at: claim.get("reviewed_at"),
+                        review_accepted: claim.get("review_accepted"),
+                        review_note: claim.get("review_note"),
                     })
                     .collect(),
             });

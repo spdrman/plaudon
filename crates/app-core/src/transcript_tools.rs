@@ -91,7 +91,7 @@ impl StudyOutputWriter {
         artifacts: &StudyArtifacts,
         provenance: &OutputProvenance,
     ) -> PersistenceResult<StoredStudyOutput> {
-        let segment_ids = self.segment_ids(provenance.transcript_revision_id).await?;
+        let segments = self.segments(provenance.transcript_revision_id).await?;
         let mut output_ids = Vec::new();
         let mut evidence_rows = 0;
         let mut tx = self.db.pool().begin().await?;
@@ -154,22 +154,56 @@ impl StudyOutputWriter {
             .await?;
 
             for (item_path, anchors) in items {
-                for anchor in anchors {
-                    let segment_id = segment_ids
+                // Every cited item is a claim; the anchors hang off it
+                // (EPIC I schema: `output_evidence.claim_id` is NOT NULL).
+                let claim_id = Uuid::now_v7().to_string();
+                sqlx::query(
+                    "INSERT INTO output_claims (
+                         id, output_id, item_path, kind, category, claim_text, state, entailment
+                     ) VALUES (?1, ?2, ?3, 'summary_statement', 'general', ?4,
+                               'source_linked', 'not_checked')",
+                )
+                .bind(&claim_id)
+                .bind(output_id.to_string())
+                .bind(&item_path)
+                .bind(&item_path)
+                .execute(&mut *tx)
+                .await?;
+
+                for (position, anchor) in anchors.iter().enumerate() {
+                    let segment = segments
                         .iter()
-                        .find(|(seq, _)| *seq == anchor.seq_index)
-                        .map(|(_, id)| id.clone())
+                        .find(|segment| segment.seq_index == anchor.seq_index)
                         .ok_or(PersistenceError::RecordNotFound)?;
+                    let (status, rejection, matched, origin) =
+                        match span_text(segment, anchor.char_start, anchor.char_end) {
+                            Some(text) if text == anchor.excerpt => {
+                                ("verified", None, Some(text), Some("none"))
+                            }
+                            Some(_) => ("rejected", Some("excerpt_mismatch"), None, None),
+                            None => ("rejected", Some("span_out_of_bounds"), None, None),
+                        };
                     sqlx::query(
-                        "INSERT INTO output_evidence (id, output_id, item_path, segment_id,
-                             quote, verification_status)
-                         VALUES (?1, ?2, ?3, ?4, ?5, 'source_linked')",
+                        "INSERT INTO output_evidence (
+                             id, output_id, claim_id, position, item_path, cited_revision_id,
+                             seq_index, char_start, char_end, quote, verification_status,
+                             rejection_code, matched_text, alignment_origin
+                         ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14)",
                     )
                     .bind(Uuid::now_v7().to_string())
                     .bind(output_id.to_string())
+                    .bind(&claim_id)
+                    .bind(i64::try_from(position).unwrap_or(i64::MAX))
                     .bind(&item_path)
-                    .bind(&segment_id)
+                    .bind(anchor.revision_id.to_string())
+                    .bind(i64::from(anchor.seq_index))
+                    .bind(i64::from(anchor.char_start))
+                    .bind(i64::from(anchor.char_end))
                     .bind(&anchor.excerpt)
+                    .bind(status)
+                    .bind(rejection)
+                    .bind(matched)
+                    .bind(origin)
                     .execute(&mut *tx)
                     .await?;
                     evidence_rows += 1;
@@ -185,12 +219,12 @@ impl StudyOutputWriter {
         })
     }
 
-    async fn segment_ids(
+    async fn segments(
         &self,
         revision_id: TranscriptRevisionId,
-    ) -> PersistenceResult<Vec<(u32, String)>> {
+    ) -> PersistenceResult<Vec<StoredSegment>> {
         let rows = sqlx::query(
-            "SELECT seq_index, id FROM transcript_segments
+            "SELECT seq_index, text FROM transcript_segments
              WHERE transcript_revision_id = ?1 ORDER BY seq_index",
         )
         .bind(revision_id.to_string())
@@ -198,13 +232,34 @@ impl StudyOutputWriter {
         .await?;
         rows.into_iter()
             .map(|row| {
-                Ok((
-                    u32::try_from(row.try_get::<i64, _>("seq_index")?).unwrap_or(0),
-                    row.try_get("id")?,
-                ))
+                Ok(StoredSegment {
+                    seq_index: u32::try_from(row.try_get::<i64, _>("seq_index")?).unwrap_or(0),
+                    text: row.try_get("text")?,
+                })
             })
             .collect()
     }
+}
+
+/// One segment of the cited revision, as stored.
+struct StoredSegment {
+    seq_index: u32,
+    text: String,
+}
+
+/// The text occupying `[start, end)` in `char` offsets, or `None` when the
+/// span runs past the end of the segment.
+fn span_text(segment: &StoredSegment, start: u32, end: u32) -> Option<String> {
+    if end <= start {
+        return None;
+    }
+    let start = usize::try_from(start).ok()?;
+    let end = usize::try_from(end).ok()?;
+    let chars: Vec<char> = segment.text.chars().collect();
+    if end > chars.len() {
+        return None;
+    }
+    Some(chars[start..end].iter().collect())
 }
 
 /// The outcome of one scripted or interactive question.

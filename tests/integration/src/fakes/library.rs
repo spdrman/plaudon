@@ -361,25 +361,52 @@ pub async fn seed(root: &Path, with_secrets: bool) -> SeededLibrary {
     .await
     .expect("insert output");
 
-    for (index, (item_path, status)) in [
-        ("/action_items/0/verb", "source_linked"),
-        ("/decisions/0/statement", "human_confirmed"),
-        ("/summary", "unverified"),
+    for (index, (item_path, state, kind)) in [
+        ("/action_items/0/verb", "source_linked", "action_item"),
+        ("/decisions/0/statement", "human_confirmed", "decision"),
+        ("/summary", "unverified", "summary_statement"),
     ]
     .into_iter()
     .enumerate()
     {
+        let quote = "Dana will send the deck on Friday.";
+        let claim_id = Uuid::now_v7().to_string();
+        let confirmed = state == "human_confirmed";
+        sqlx::query(
+            "INSERT INTO output_claims
+                 (id, output_id, item_path, kind, category, claim_text, state, entailment,
+                  review_reasons_json, reviewer, reviewed_at, review_accepted, review_note)
+             VALUES (?1, ?2, ?3, ?4, 'general', ?5, ?6, 'not_checked', '[]', ?7, ?8, ?9, NULL)",
+        )
+        .bind(&claim_id)
+        .bind(&output_id)
+        .bind(item_path)
+        .bind(kind)
+        .bind(quote)
+        .bind(state)
+        .bind(confirmed.then(|| "reviewer@example.test".to_owned()))
+        .bind(confirmed.then_some(1_700_000_050_000_i64))
+        .bind(confirmed.then_some(1_i64))
+        .execute(db.pool())
+        .await
+        .expect("insert claim");
+
+        let seq_index = i64::try_from(index.min(segment_ids.len() - 1)).unwrap_or(0);
         sqlx::query(
             "INSERT INTO output_evidence
-                 (id, output_id, item_path, segment_id, quote, verification_status)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                 (id, output_id, claim_id, position, item_path, cited_revision_id, seq_index,
+                  char_start, char_end, quote, verification_status, matched_text,
+                  alignment_origin)
+             VALUES (?1, ?2, ?3, 0, ?4, ?5, ?6, 0, ?7, ?8, 'verified', ?8, 'native')",
         )
         .bind(Uuid::now_v7().to_string())
         .bind(&output_id)
+        .bind(&claim_id)
         .bind(item_path)
-        .bind(&segment_ids[index.min(segment_ids.len() - 1)])
-        .bind("Dana will send the deck on Friday.")
-        .bind(status)
+        .bind(native_revision.to_string())
+        .bind(seq_index)
+        .bind(i64::try_from(quote.chars().count()).unwrap_or(0))
+        .bind(quote)
         .execute(db.pool())
         .await
         .expect("insert evidence");

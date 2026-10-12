@@ -295,20 +295,68 @@ pub struct TranscriptDocument {
     pub annotations: Vec<TranscriptAnnotationRow>,
 }
 
+/// One claim row, the parent of its anchors.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ClaimRow {
+    /// Row identity.
+    pub id: String,
+    /// JSON Pointer into the output body.
+    pub item_path: String,
+    /// Claim kind.
+    pub kind: String,
+    /// Sensitivity category.
+    pub category: String,
+    /// The claim text.
+    pub claim_text: String,
+    /// Claim state.
+    pub state: String,
+    /// Entailment verdict.
+    pub entailment: String,
+    /// Review reasons, as stored JSON.
+    pub review_reasons_json: String,
+    /// Reviewer identity, when a human reviewed the claim.
+    pub reviewer: Option<String>,
+    /// Review instant, in epoch milliseconds.
+    pub reviewed_at: Option<i64>,
+    /// Whether the reviewer accepted the claim.
+    pub review_accepted: Option<i64>,
+    /// Reviewer note.
+    pub review_note: Option<String>,
+}
+
 /// One evidence anchor row.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct EvidenceRow {
     /// Row identity.
     pub id: String,
+    /// Claim the anchor belongs to.
+    pub claim_id: String,
+    /// Position of the anchor within the claim.
+    pub position: i64,
     /// JSON Pointer into the output body.
     pub item_path: String,
-    /// Segment the anchor resolves to.
-    pub segment_id: String,
+    /// Revision the model cited, which need not exist.
+    pub cited_revision_id: String,
+    /// Segment position inside the cited revision.
+    pub seq_index: i64,
+    /// Inclusive start of the span, in `char` offsets.
+    pub char_start: i64,
+    /// Exclusive end of the span, in `char` offsets.
+    pub char_end: i64,
     /// The quoted passage.
     pub quote: String,
     /// Verification status.
     pub verification_status: String,
+    /// Why the anchor was rejected, when it was.
+    pub rejection_code: Option<String>,
+    /// The text actually occupying the span, when verified.
+    pub matched_text: Option<String>,
+    /// Alignment origin of the cited revision, when verified.
+    pub alignment_origin: Option<String>,
+    /// Playback position, only when the revision carries alignment.
+    pub seek_ms: Option<i64>,
 }
 
 /// A generated output row.
@@ -349,6 +397,8 @@ pub struct OutputDocument {
     pub output: OutputRow,
     /// Anchors, in stable order.
     pub evidence: Vec<EvidenceRow>,
+    /// Claims, in stable order.
+    pub claims: Vec<ClaimRow>,
 }
 
 /// `sources/<source id>.json`.

@@ -30,6 +30,9 @@ struct FixtureTurn {
 struct Fixture {
     name: String,
     provenance: String,
+    /// Present in every fixture file; the metric itself derives duration from
+    /// the turns, so this is only read back when a fixture is hand-checked.
+    #[allow(dead_code)]
     duration_ms: u64,
     reference: Vec<FixtureTurn>,
     hypothesis: Vec<FixtureTurn>,

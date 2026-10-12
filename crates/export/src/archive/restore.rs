@@ -702,18 +702,56 @@ impl Restorer {
             .rows_affected();
             report.outputs_restored += affected;
 
+            // Claims first: `output_evidence.claim_id` references them.
+            for claim in &document.claims {
+                sqlx::query(
+                    "INSERT OR IGNORE INTO output_claims
+                         (id, output_id, item_path, kind, category, claim_text, state,
+                          entailment, review_reasons_json, reviewer, reviewed_at,
+                          review_accepted, review_note)
+                     VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13)",
+                )
+                .bind(&claim.id)
+                .bind(&output.id)
+                .bind(&claim.item_path)
+                .bind(&claim.kind)
+                .bind(&claim.category)
+                .bind(&claim.claim_text)
+                .bind(&claim.state)
+                .bind(&claim.entailment)
+                .bind(&claim.review_reasons_json)
+                .bind(claim.reviewer.as_deref())
+                .bind(claim.reviewed_at)
+                .bind(claim.review_accepted)
+                .bind(claim.review_note.as_deref())
+                .execute(&mut *tx)
+                .await
+                .map_err(PersistenceError::from)?;
+            }
+
             for evidence in &document.evidence {
                 sqlx::query(
                     "INSERT OR IGNORE INTO output_evidence
-                         (id, output_id, item_path, segment_id, quote, verification_status)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                         (id, output_id, claim_id, position, item_path, cited_revision_id,
+                          seq_index, char_start, char_end, quote, verification_status,
+                          rejection_code, matched_text, alignment_origin, seek_ms)
+                     VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15)",
                 )
                 .bind(&evidence.id)
                 .bind(&output.id)
+                .bind(&evidence.claim_id)
+                .bind(evidence.position)
                 .bind(&evidence.item_path)
-                .bind(&evidence.segment_id)
+                .bind(&evidence.cited_revision_id)
+                .bind(evidence.seq_index)
+                .bind(evidence.char_start)
+                .bind(evidence.char_end)
                 .bind(&evidence.quote)
                 .bind(&evidence.verification_status)
+                .bind(evidence.rejection_code.as_deref())
+                .bind(evidence.matched_text.as_deref())
+                .bind(evidence.alignment_origin.as_deref())
+                .bind(evidence.seek_ms)
                 .execute(&mut *tx)
                 .await
                 .map_err(PersistenceError::from)?;

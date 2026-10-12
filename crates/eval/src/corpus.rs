@@ -387,7 +387,7 @@ mod tests {
 
     #[test]
     fn evidence_validation_rejects_out_of_bounds() {
-        let mut fixture = CorpusFixture {
+        let fixture = CorpusFixture {
             id: "test".to_owned(),
             title: "Test".to_owned(),
             template_id: "general_meeting".to_owned(),
