@@ -370,17 +370,31 @@ installs the pinned WiX toolset as a .NET global tool.
 
 ## 9. Releases
 
-`.github/workflows/release.yml` builds what a user installs: the macOS arm64 `Plaudon.app` (zipped,
-features `apple-bridge,local-whisper`) and the Windows x64 `.msi` (features `local-whisper`). A tag
-push (`v*`) runs all three jobs and drafts a GitHub release; `workflow_dispatch` runs the two build
-jobs and uploads artifacts without touching releases.
+A release is cut by moving `main` onto the `release` branch:
+
+```sh
+git push origin main:release     # the first one creates the branch
+```
+
+That push is the only manual step. `.github/workflows/release.yml` does the rest — build, tag,
+release, merge back — with no external script beyond the two packaging scripts above.
 
 | Job | Runner | What it does |
 | --- | --- | --- |
-| `version` | ubuntu-latest | refuses a tag that is not `v<workspace version>` |
-| `macos` | macos-15 | optional Developer ID keychain and notarytool credential from secrets, `package-macos-egui.sh`, a ten-second launch of the unzipped bundle against a throwaway `PLAUDON_DATA_DIR`, SHA-256, artifact upload, keychain deleted even on failure |
-| `windows` | windows-2025 | optional PFX from a secret, `package-windows-egui.ps1`, `plaudon.exe --version` against the staged payload (the GUI binary has no `--version`; installing the `.msi` needs an interactive session and is not attempted), SHA-256, artifact upload |
-| `publish` | ubuntu-latest, tags only, the only job with `contents: write` | assembles `checksums.txt`, reads both signing reports and **drafts** the release |
+| `version` | ubuntu-latest | reads the workspace version, derives `v<version>`, and **fails if that tag already exists** — a second release of the same version is a mistake, not a retry |
+| `macos` | macos-15 | optional Developer ID keychain and notarytool API key from secrets, `package-macos-egui.sh --features local-whisper`, a ten-second launch of the unzipped bundle against a throwaway `PLAUDON_DATA_DIR`, SHA-256, artifact upload, keychain deleted even on failure |
+| `windows` | windows-2025 | Vulkan SDK (ggml's Windows GPU backend) and the pinned WiX toolset, optional PFX from a secret, `package-windows-egui.ps1 -Features local-whisper`, `plaudon.exe --version` against the staged payload (the GUI binary has no `--version`; installing the `.msi` needs an interactive session and is not attempted), SHA-256, artifact upload |
+| `publish` | ubuntu-latest, `release` branch only, `contents: write` | creates the tag at the released commit, assembles `checksums.txt`, reads both signing reports and **drafts** the release |
+| `merge-back` | ubuntu-latest, `release` branch only, `contents`/`pull-requests`/`issues: write` | opens a tracking issue and a `release → main` pull request and merges it with `--merge` |
+
+`workflow_dispatch` runs the two build jobs and stops: artifacts, no tag, no release, no merge.
+
+**The macOS bundle is built without `apple-bridge`, and that is a gap rather than a preference.**
+`native/apple-bridge` uses `SpeechTranscriber`, `AssetInventory` and `LanguageModelError`, so it
+compiles only against the macOS 27 SDK; no hosted runner image has one (macos-15 carries Xcode 16.4,
+macos-26 tops out at Xcode 26.6, and both were tried). Until an image ships Xcode 27 the released
+bundle reports the Apple engines as unavailable in this build, and `cargo_features` in the signing
+report says what was actually built.
 
 Signing is optional and fails open into honesty, never into a claim: with no credentials the
 packaging scripts exit 3, which this workflow accepts as "built, not publishable". The `publish`
@@ -388,10 +402,28 @@ job then marks the release a prerelease, labels both assets `UNSIGNED / NOT NOTA
 build`, and says so at the top of the notes. A release is only described as signed when
 `macos-signing-report.json` says `signature_status: verified` *and* `notarization_status: verified`
 and `windows-signing-report.json` says `signature_status: verified`; a missing or malformed report
-counts as unsigned. Every release is created as a draft — publishing is a human decision.
+counts as unsigned. Every release is created as a draft — publishing is a human decision. The tag,
+however, is created by the workflow and not by publishing the draft, so the released commit is
+identifiable even while the draft sits unpublished.
 
 Secrets, all optional, none of them echoed: `PLAUDON_MACOS_CERTIFICATE_BASE64`,
 `PLAUDON_MACOS_CERTIFICATE_PASSWORD`, `PLAUDON_MACOS_IDENTITY`, `PLAUDON_NOTARY_KEY_BASE64`,
 `PLAUDON_NOTARY_KEY_ID`, `PLAUDON_NOTARY_ISSUER_ID`, `PLAUDON_WINDOWS_CERT_BASE64`,
 `PLAUDON_WINDOWS_CERT_PASSWORD`. The macOS certificate is imported into a temporary keychain that
 the job deletes in an `always()` step.
+
+**Two GitHub behaviours the workflow is built around.** Anything `GITHUB_TOKEN` does — the tag, the
+release, the merge commit on `main` — raises no workflow event, so nothing downstream is triggered
+and CI does **not** re-run on the merge commit; the tree that was built and released is the tree
+that lands on `main`. And `gh pr create` from a workflow needs *Settings → Actions → General →
+Workflow permissions → "Allow GitHub Actions to create and approve pull requests"*. At the time of
+writing that setting is **off** in this repository
+(`gh api repos/spdrman/plaudon/actions/permissions/workflow` reports
+`can_approve_pull_request_reviews: false`), so `merge-back` will fail until it is switched on; it
+detects exactly that failure and prints the setting to enable rather than GitHub's own message. The
+release itself is unaffected when that happens: the tag exists, the draft exists, and the merge can
+be done by hand or by re-running the job.
+
+If the merge-back pull request conflicts, the job fails loudly and leaves the pull request open
+rather than merging anything blind. Re-running it after `main` already contains the release is a
+no-op.
