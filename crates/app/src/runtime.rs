@@ -461,7 +461,7 @@ mod tests {
             } => {
                 assert_eq!(answered, id);
                 assert_eq!(command, "list_recordings");
-                match result.expect("an empty library lists successfully") {
+                match (*result).expect("an empty library lists successfully") {
                     AppResponse::ListRecordings(page) => assert!(page.items.is_empty()),
                     other => panic!("unexpected {other:?}"),
                 }

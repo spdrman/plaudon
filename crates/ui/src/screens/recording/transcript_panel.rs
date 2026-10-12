@@ -33,7 +33,7 @@ use egui::Ui;
 use plaudon_app::command::{AppCommand, AppResponse};
 use plaudon_app::dto::{
     GetTranscriptRequest, ListSpeakersRequest, ListSpeakersResponse, RecordingDetail, RevisionKind,
-    SaveTranscriptRevisionRequest, SegmentEdit, TranscriptPage, TranscriptRevisionRef,
+    SaveTranscriptRevisionRequest, SegmentEdit, SpeakerDto, TranscriptPage, TranscriptRevisionRef,
     TranscriptSegmentDto,
 };
 use plaudon_domain::error::{AppErrorCode, ErrorEnvelope};
@@ -152,6 +152,10 @@ impl TranscriptBinding {
     }
 
     /// Route a dispatcher answer. Returns whether it was this panel's.
+    ///
+    /// A speaker answer is this panel's *and* the outputs column's — the
+    /// chips and the speaker list render the same rows — so the host hands
+    /// the three labelling answers to both rather than to the first taker.
     pub fn on_response(
         &mut self,
         command: &'static str,
@@ -162,6 +166,9 @@ impl TranscriptBinding {
             "get_transcript" => self.on_page(result, out),
             "save_transcript_revision" => self.on_saved(result),
             "list_speakers" => self.on_speakers(result),
+            "rename_speaker" | "confirm_speaker" | "reset_speaker" => {
+                self.on_speaker_operation(result)
+            }
             _ => false,
         }
     }
@@ -260,27 +267,38 @@ impl TranscriptBinding {
         true
     }
 
+    /// One speaker row, patched in place.
+    ///
+    /// The answer to a rename, a confirmation or a reset is the stored row,
+    /// so the chips are correct in the same frame without a refetch — and
+    /// without a second round trip that could answer out of order.
+    fn on_speaker_operation(&mut self, result: &Result<AppResponse, ErrorEnvelope>) -> bool {
+        let speaker = match result {
+            Ok(
+                AppResponse::RenameSpeaker(answer)
+                | AppResponse::ConfirmSpeaker(answer)
+                | AppResponse::ResetSpeaker(answer),
+            ) => &answer.speaker,
+            _ => return false,
+        };
+        if Some(speaker.recording_id) != self.recording_id {
+            return false;
+        }
+        let Some(slot) = self
+            .speakers
+            .iter()
+            .position(|choice| choice.id == speaker.speaker_id)
+        else {
+            return false;
+        };
+        self.speakers[slot] = choice(speaker);
+        self.speaker_ids = speaker_ids(&self.speakers);
+        true
+    }
+
     fn apply_speakers(&mut self, response: &ListSpeakersResponse) {
-        self.speaker_ids = response
-            .speakers
-            .iter()
-            .map(|speaker| (speaker.label.clone(), speaker.speaker_id))
-            .collect();
-        self.speakers = response
-            .speakers
-            .iter()
-            .map(|speaker| {
-                // The qualifier is the backend's own distinction between a
-                // confirmed identity and a machine label; the view adds
-                // nothing to it.
-                let qualifier = if speaker.confirmed {
-                    "confirmed".to_owned()
-                } else {
-                    format!("machine label {}", speaker.original_label)
-                };
-                SpeakerChoice::new(speaker.speaker_id, speaker.label.clone(), qualifier)
-            })
-            .collect();
+        self.speakers = response.speakers.iter().map(choice).collect();
+        self.speaker_ids = speaker_ids(&self.speakers);
     }
 
     /// Draw the panel.
@@ -401,6 +419,40 @@ impl TranscriptBinding {
             ui.label("This revision is not the current one, so it is read-only.");
         }
     }
+}
+
+/// One speaker row as the chips present it.
+///
+/// The arguments handed to the honesty rule are the same ones
+/// `plaudon-export` hands it for the same row — current label, typed name,
+/// confirmation — so a chip and a bundle say the same thing. The machine
+/// label rides along so a renamed-but-unconfirmed row can still show which
+/// cluster the name is attached to.
+fn choice(speaker: &SpeakerDto) -> SpeakerChoice {
+    SpeakerChoice {
+        id: speaker.speaker_id,
+        label: speaker.label.clone(),
+        machine_label: speaker.original_label.clone(),
+        name: speaker.name.clone(),
+        confirmed: speaker.confirmed,
+    }
+}
+
+/// The label-to-row index the segments are matched through.
+///
+/// A segment carries whatever `speakers.label` held when its page was read,
+/// which a rename moves, so both the current and the machine label resolve
+/// to the row. Without that, a page that arrives after a rename loses its
+/// attribution and the chip reads "No speaker" for a segment that has one.
+fn speaker_ids(speakers: &[SpeakerChoice]) -> Vec<(String, SpeakerId)> {
+    let mut pairs = Vec::with_capacity(speakers.len());
+    for speaker in speakers {
+        pairs.push((speaker.label.clone(), speaker.id));
+        if speaker.machine_label != speaker.label {
+            pairs.push((speaker.machine_label.clone(), speaker.id));
+        }
+    }
+    pairs
 }
 
 /// Ask for one page of a transcript.

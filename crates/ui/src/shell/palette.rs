@@ -232,6 +232,12 @@ impl Palette {
                     .hint_text("Type a command")
                     .desired_width(f32::INFINITY),
             );
+            // A hint is painted, not announced: without this the field is
+            // reported as an unnamed text input and a screen reader says
+            // "edit text, blank" (parity row S17).
+            ui.ctx().accesskit_node_builder(field.id, |node| {
+                node.set_label("Search commands");
+            });
             if !self.focus_requested {
                 field.request_focus();
                 self.focus_requested = true;

@@ -100,3 +100,75 @@ row. Git dependencies stay denied (`deny.toml`), so reuse means vendoring a pinn
   `docs/licensing/third-party-register.md` and gated by `cargo deny`.
 - Two frontends coexist until the O2.5 cutover. `plaudon-desktop` keeps working against the same
   `plaudon-app` crate, so there is one implementation of the commands, not two.
+
+## Amendment, 2026-10-12: a native application menu on macOS (parity row S8)
+
+**What changes.** O1.3 drew the shell's menu as an egui `MenuBar` inside the window on every
+platform, and `crates/ui/src/shell/menu.rs` recorded two reasons for refusing a native one: `muda`
+would be a new external dependency outside the vendored set, needing its own licence-register row
+and `cargo deny` review; and a platform menu renders nothing a kittest harness can see and carries
+no AccessKit tree of its own, so the keyboard-reachability and screen-reader evidence of items 2 and
+3 above would stop at the menu. macOS gets a native application menu from now on. Both halves of
+that rationale are answered below rather than quietly dropped.
+
+**The dependency objection was stale, and the evidence says so.** `muda` 0.20 is already in the
+graph and already carries a register row, because the status item links it:
+`cargo tree -i muda --target aarch64-apple-darwin -e normal` reaches it through `tray-icon` 0.25
+(from `apps/plaudon-egui`) and through `tauri` 2 (from the shell being replaced). Naming it directly
+in `apps/plaudon-egui`'s `[target.'cfg(target_os = "macos")'.dependencies]`, at the same version and
+with `default-features = false` — the same way `tray-icon` takes it, which is what keeps muda's GTK
+and `libxdo` defaults out — therefore adds no package: muda's own dependencies
+(`crossbeam-channel`, `dpi`, `keyboard-types`, `objc2*`, `once_cell`, `png`, `serde`, `thiserror`)
+were all already resolved through `tray-icon`.
+`cargo deny --all-features check licenses bans sources advisories` was run before and after the
+change and ends the same way both times — `advisories FAILED, bans FAILED, licenses FAILED, sources
+ok` — on the same pre-existing findings, none of which names `muda` or `tray-icon`: our own
+workspace crates carrying no `license` field (`plaudon-egress-harness`, `plaudon-egress-monitor`,
+`plaudon-egress-scenario`, `plaudon-recording-sources`), the wildcard versions internal crates use
+for each other, duplicate-version warnings, and two unmaintained advisories — `instant`, reached
+through `notify` from `plaudon-source-folder`, and `proc-macro-error`, reached only on the Linux GTK
+target of the legacy Tauri tree. The register row for both crates now states what is linked, on
+which targets, and why.
+
+**The accessibility objection is answered by construction, not by doing without.**
+
+1. **One description, two menus.** `plaudon_ui::shell::menu::menu_model` is the only statement of
+   what the menu contains. The in-window `MenuBar` walks it; `plaudon_egui::app_menu` turns the same
+   walk into an `NSMenu`. The two drift tests (`every_menu_entry_names_a_registered_command`,
+   `every_shell_command_is_reachable_from_the_menu_or_is_a_key_only_action`) now assert about that
+   description, so they hold for both menus at once, and `plaudon_egui::app_menu`'s own tests assert
+   that the planned native menu lists exactly `menu_command_ids()`.
+2. **One path for an activation.** A native row carries the shell command identifier as its `muda`
+   id; the identifier is routed back and run through `Shell::run_command` — the same function the
+   in-window row, the command palette and the keyboard chord all end in. Accelerators are the live
+   `KeyMap`'s chords rendered by `shortcuts::display`, so a rebinding moves both menus and nothing is
+   retyped.
+3. **The evidence harness is untouched.** The in-window bar is hidden only at run time, by the
+   installer, and only after the native menu was accepted and installed; no `cfg` and no target
+   decides it. A test build installs no native menu, so `a11y::nodes` and `a11y::focus_order` see the
+   in-window menu bar on every platform, macOS included, and a macOS build whose native menu failed
+   to install keeps a working menu rather than none.
+4. **The gap item 7 asks us to record.** An `NSMenu` is not in our AccessKit tree: VoiceOver reads it
+   through AppKit's own accessibility, which is the platform's implementation of its own menu bar and
+   not something we can assert on. Nothing is reachable *only* from it — every row it shows is also
+   an in-window row, a palette entry and, where one is bound, a chord — so no command's keyboard or
+   screen-reader evidence depends on it. The manual screen-reader script covers the native bar on
+   macOS.
+
+**Rejected alternatives.**
+
+- *Keep the in-window menu only.* It leaves a macOS application with no About, no Services, no Hide
+  and a Cmd+Q belonging to nobody, which is the parity gap S8 names.
+- *Write the native menu from its own table.* Two sources of truth is the failure the command
+  registry exists to prevent, and the drift tests could not see it.
+- *Reach `muda` through `tray_icon::menu`.* It is the same code and would add nothing either, but it
+  would make the application menu depend on the tray crate for its types, so dropping the tray would
+  silently take the menu with it.
+- *Add an Edit menu of predefined items.* `copy:`, `paste:` and friends are AppKit selectors an egui
+  window does not implement; the rows would be visible and dead. Editing chords stay egui's own and
+  stay listed in the keyboard reference.
+
+**Consequence.** Quit is now `muda`'s predefined item, which is AppKit's `terminate:`. That posts
+`applicationWillTerminate:`, winit's delegate turns it into its exit handling and eframe calls
+`App::on_exit`, so `PlaudonShell::shutdown` still runs: screens get their last turn, the shell state
+is flushed and the engine keeps its shutdown grace. The orderly-shutdown guarantee is unchanged.

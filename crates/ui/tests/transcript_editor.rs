@@ -48,9 +48,6 @@ impl EditorApp {
         if output.save_request.is_some() {
             self.output.save_request = output.save_request;
         }
-        if output.speaker_changed.is_some() {
-            self.output.speaker_changed = output.speaker_changed;
-        }
         if output.conflict_choice.is_some() {
             self.output.conflict_choice = output.conflict_choice;
         }
@@ -221,7 +218,7 @@ fn replace_all_from_the_find_bar_is_a_single_undo_step() {
 }
 
 #[test]
-fn a_speaker_is_reassigned_from_the_chip_without_touching_the_text() {
+fn the_speaker_chip_states_who_is_speaking_and_offers_no_assignment_it_cannot_save() {
     let dana = SpeakerId::new();
     let sam = SpeakerId::new();
     let mut session = EditSession::new(document_with(&["we will pay", "that is final"]));
@@ -232,18 +229,38 @@ fn a_speaker_is_reassigned_from_the_chip_without_touching_the_text() {
 
     let mut app = EditorApp::new(session);
     app.speakers = vec![
-        SpeakerChoice::new(dana, "Speaker 1", "inferred cluster"),
-        SpeakerChoice::new(sam, "Sam", "confirmed"),
+        // Renamed but not confirmed: the typed name is on the row, and the
+        // chip still has to call it a cluster.
+        SpeakerChoice {
+            id: dana,
+            label: "Dana".to_owned(),
+            machine_label: "Speaker 1".to_owned(),
+            name: Some("Dana".to_owned()),
+            confirmed: false,
+        },
+        SpeakerChoice {
+            id: sam,
+            label: "Sam".to_owned(),
+            machine_label: "Speaker 2".to_owned(),
+            name: Some("Sam".to_owned()),
+            confirmed: true,
+        },
     ];
     let mut harness = harness(app);
-
-    harness
-        .get_by_label("Speaker: Speaker 1 (inferred cluster)")
-        .click();
-    harness.run();
-    harness.get_by_label("Sam (confirmed)").click();
     harness.run();
 
+    // The qualifier is in the accessible name, not in a colour or a hover,
+    // and the machine label travels with a renamed row.
+    let chip = harness.get_by_label("Speaker: Dana (inferred cluster), machine label Speaker 1");
+    chip.click();
+    harness.run();
+
+    // No reassignment menu opened, and nothing in the document moved.
+    assert!(
+        harness.query_by_label("Reassign this segment").is_none(),
+        "nothing on the wire persists a segment-to-speaker assignment, so the chip must not \
+         offer one"
+    );
     assert_eq!(
         harness
             .state()
@@ -252,13 +269,33 @@ fn a_speaker_is_reassigned_from_the_chip_without_touching_the_text() {
             .segment(first)
             .expect("segment")
             .speaker_id,
-        Some(sam)
+        Some(dana)
     );
+    assert!(!harness.state().output.edited);
     assert_eq!(harness.state().text(0), "we will pay");
-    assert_eq!(
-        harness.state().output.speaker_changed,
-        Some((first, Some(sam)))
-    );
+}
+
+#[test]
+fn a_confirmed_speaker_chip_says_confirmed() {
+    let sam = SpeakerId::new();
+    let mut session = EditSession::new(document_with(&["that is final"]));
+    let only = session.document().first_id().expect("segment");
+    session.set_speaker(only, Some(sam)).expect("speaker");
+
+    let mut app = EditorApp::new(session);
+    app.speakers = vec![SpeakerChoice {
+        id: sam,
+        label: "Sam".to_owned(),
+        machine_label: "Speaker 2".to_owned(),
+        name: Some("Sam".to_owned()),
+        confirmed: true,
+    }];
+    let mut harness = harness(app);
+    harness.run();
+
+    // Confirmed: the name is the identity, so there is no cluster to name —
+    // the machine label stays with it as provenance, not as a qualifier.
+    harness.get_by_label("Speaker: Sam (confirmed), machine label Speaker 2");
 }
 
 #[test]

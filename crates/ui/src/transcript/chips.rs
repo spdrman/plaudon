@@ -7,57 +7,60 @@
 //!   alignment is labelled approximate, in the accessible name as well as in
 //!   the tooltip, so the qualification is not colour- or hover-only.
 //! * a speaker label is a *cluster* label until a human confirmed it, and the
-//!   qualifier that says so travels with it (spec 8.7, 17.6). The UI never
-//!   composes the qualifier itself: it renders what the backend supplied.
+//!   qualifier that says so travels with it (spec 8.7, 17.6). The wording is
+//!   [`plaudon_domain::speaker::display`], the same function the export
+//!   bundle renders with, so a transcript on screen and the same transcript
+//!   in a bundle cannot disagree about who was speaking.
+//!
+//! The chip **reads**. Nothing on the wire persists a segment-to-speaker
+//! assignment — `save_transcript_revision` carries `{index, text}` and
+//! nothing else — so the chip offers no reassignment it could not save.
 
-use egui::{Align, Button, Layout, Rect, Response, Ui};
+use egui::{Align, Button, Label, Layout, Rect, Response, Ui};
 use plaudon_domain::ids::SpeakerId;
 use plaudon_domain::timerange::SourceTimeMs;
 use plaudon_domain::transcript::AlignmentOrigin;
 use plaudon_transcript_doc::clipboard::format_clock;
 
-/// One speaker the user may assign to a segment.
+/// One speaker, as a transcript chip presents them.
 ///
-/// The label and qualifier come from `plaudon_app_core::speakers::SpeakerDisplay`;
-/// this crate transports them, it does not invent them.
+/// Carries the facts the honesty rule needs rather than a composed string,
+/// so no caller can supply a second wording.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SpeakerChoice {
     /// Speaker row identity.
     pub id: SpeakerId,
-    /// Display label, as the backend resolved it.
+    /// The row's current label, as the backend resolved it. A rename moves
+    /// it; this is the field the export bundle renders.
     pub label: String,
-    /// The honesty qualifier that must accompany the label.
-    pub qualifier: String,
+    /// The machine-assigned label the row started with, which a reset
+    /// restores. Shown alongside a renamed label so a user can always see
+    /// which cluster an unconfirmed name is attached to.
+    pub machine_label: String,
+    /// The name a user typed, when one has been typed.
+    pub name: Option<String>,
+    /// Whether the user confirmed the name as this person's identity.
+    pub confirmed: bool,
 }
 
 impl SpeakerChoice {
-    /// A choice.
-    #[must_use]
-    pub fn new(id: SpeakerId, label: impl Into<String>, qualifier: impl Into<String>) -> Self {
-        Self {
-            id,
-            label: label.into(),
-            qualifier: qualifier.into(),
-        }
-    }
-
     /// Label and qualifier as one string.
     #[must_use]
     pub fn render(&self) -> String {
-        format!("{} ({})", self.label, self.qualifier)
+        plaudon_domain::speaker::display(&self.label, self.name.as_deref(), self.confirmed)
     }
-}
 
-/// What the user did with a speaker chip.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SpeakerAction {
-    /// Nothing.
-    None,
-    /// Assign this speaker to the segment.
-    Assign(Option<SpeakerId>),
-    /// Assign this speaker to every segment currently attributed to the
-    /// segment's speaker.
-    AssignEverywhere(Option<SpeakerId>),
+    /// The rendered label, plus the cluster it came from when a rename has
+    /// moved the two apart.
+    #[must_use]
+    pub fn render_with_origin(&self) -> String {
+        let rendered = self.render();
+        if self.label == self.machine_label {
+            rendered
+        } else {
+            format!("{rendered}, machine label {}", self.machine_label)
+        }
+    }
 }
 
 /// Draw the timestamp gutter for one segment.
@@ -111,56 +114,30 @@ pub fn timestamp(
     seek
 }
 
-/// Draw the speaker chip for one segment, with its reassignment menu.
-pub fn speaker(
-    ui: &mut Ui,
-    rect: Rect,
-    speaker_id: Option<SpeakerId>,
-    speakers: &[SpeakerChoice],
-    editable: bool,
-) -> SpeakerAction {
+/// Where a speaker's name is changed, said once so the chip and its tests
+/// quote the same sentence.
+pub const SPEAKER_EDIT_HINT: &str =
+    "Speaker names are changed under Speaker identification in the Outputs tab. \
+     Moving one segment to a different speaker is not something this build can save.";
+
+/// Draw the speaker chip for one segment.
+///
+/// Read-only: see the module comment. The chip states who the backend
+/// attributes the segment to, with the qualifier that says whether that is a
+/// claim or a cluster, and points at the control that can actually change it.
+pub fn speaker(ui: &mut Ui, rect: Rect, speaker_id: Option<SpeakerId>, speakers: &[SpeakerChoice]) {
     let current = speaker_id.and_then(|id| speakers.iter().find(|choice| choice.id == id));
-    let label = current.map_or_else(|| "No speaker".to_owned(), SpeakerChoice::render);
-    let mut action = SpeakerAction::None;
+    let shown = current.map_or_else(|| "No speaker".to_owned(), SpeakerChoice::render);
+    let spoken = current.map_or_else(
+        || "No speaker".to_owned(),
+        SpeakerChoice::render_with_origin,
+    );
 
-    let response: Response = ui.put(rect, Button::new(elide(&label, 24)).small());
+    let response: Response = ui.put(rect, Label::new(elide(&shown, 24)).truncate());
     response.widget_info(|| {
-        egui::WidgetInfo::labeled(
-            egui::WidgetType::Button,
-            editable,
-            format!("Speaker: {label}"),
-        )
+        egui::WidgetInfo::labeled(egui::WidgetType::Label, true, format!("Speaker: {spoken}"))
     });
-    let response = response.on_hover_text(&label);
-
-    if editable {
-        egui::Popup::menu(&response).show(|ui| {
-            ui.label("Reassign this segment");
-            for choice in speakers {
-                if ui.button(choice.render()).clicked() {
-                    action = SpeakerAction::Assign(Some(choice.id));
-                    ui.close();
-                }
-            }
-            if ui.button("No speaker").clicked() {
-                action = SpeakerAction::Assign(None);
-                ui.close();
-            }
-            if speaker_id.is_some() {
-                ui.separator();
-                ui.label("Reassign every segment of this speaker");
-                for choice in speakers {
-                    if Some(choice.id) != speaker_id
-                        && ui.button(format!("All → {}", choice.render())).clicked()
-                    {
-                        action = SpeakerAction::AssignEverywhere(Some(choice.id));
-                        ui.close();
-                    }
-                }
-            }
-        });
-    }
-    action
+    response.on_hover_text(format!("{spoken}\n\n{SPEAKER_EDIT_HINT}"));
 }
 
 fn elide(text: &str, max_chars: usize) -> String {

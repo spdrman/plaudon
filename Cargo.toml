@@ -80,7 +80,21 @@ flate2 = "1"
 hex = "0.4"
 jsonschema = { version = "0.26", default-features = false }
 libc = "0.2"
+# The macOS application menu (parity row S8). Already in the graph: the tray
+# links it, at this version, which is why it adds no package and no licence
+# question. `default-features = false` for the same reason `tray-icon` does
+# it: muda's defaults pull GTK and libxdo, which are Linux-only and are never
+# wanted here, this being a macOS-only dependency.
+muda = { version = "0.20", default-features = false }
 notify = { version = "7", default-features = false, features = ["macos_fsevent"] }
+# The Objective-C runtime bindings `tray-icon` and `muda` already pull on
+# macOS, at these versions. `apps/plaudon-egui` names them directly for the
+# one AppKit callback winit does not surface: `application:openURLs:`
+# (parity row C10). Per-header features are selected at the use site;
+# `default-features = false` keeps the rest of AppKit out of the build.
+objc2 = { version = "0.6", default-features = false, features = ["std"] }
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std"] }
 # Pure-Rust Opus decoder (BSD-3-Clause, no dependencies, no build script, no C
 # toolchain and no system library). Chosen in O1.6 (#214) on measured evidence
 # against libopus; see docs/licensing/third-party-register.md and

@@ -19,6 +19,7 @@
 //! * **No polling.** The shell repaints when there is an event, an input or
 //!   a running animation. It asks for a frame only when it has a reason.
 
+pub mod activation;
 pub mod commands;
 pub mod host;
 pub mod intents;
@@ -33,6 +34,7 @@ pub mod statusbar;
 pub mod toolbar;
 pub mod window_state;
 
+pub use activation::{ActivationTarget, OpenRequest};
 pub use commands::{CommandGroup, CommandRegistry, CommandSpec, RegisterError, ShellAction};
 pub use host::HostHooks;
 pub use palette::Palette;
@@ -105,6 +107,7 @@ pub struct Shell {
     dirty: bool,
     pending_import: Option<CommandId>,
     activation_requested: bool,
+    in_window_menu: bool,
 }
 
 impl Shell {
@@ -139,6 +142,7 @@ impl Shell {
             dirty: false,
             pending_import: None,
             activation_requested: false,
+            in_window_menu: true,
         }
     }
 
@@ -171,6 +175,32 @@ impl Shell {
     #[must_use]
     pub fn command_specs(&self) -> &[CommandSpec] {
         self.commands.all()
+    }
+
+    /// The live command registry, for a host that has to mirror the menu
+    /// somewhere this crate cannot reach — the macOS application menu is the
+    /// only such place.
+    #[must_use]
+    pub const fn commands(&self) -> &CommandRegistry {
+        &self.commands
+    }
+
+    /// The live key map, so a mirrored menu shows the chords the shell will
+    /// actually honour rather than the defaults.
+    #[must_use]
+    pub const fn keymap(&self) -> &KeyMap {
+        &self.keymap
+    }
+
+    /// Tell the shell whether to draw its own menu bar.
+    ///
+    /// The host turns this off only when it has installed a *working* native
+    /// menu over the same description ([`menu::menu_model`]); nothing in this
+    /// crate decides it by target, so a test build — which installs no native
+    /// menu — always keeps the in-window bar and with it the AccessKit
+    /// evidence ADR-0023 asks for.
+    pub const fn set_in_window_menu(&mut self, visible: bool) {
+        self.in_window_menu = visible;
     }
 
     /// The keyboard overrides the user has made.
@@ -411,16 +441,102 @@ impl Shell {
     /// from an event that names nothing — it raises the window and leaves
     /// the user where they were.
     fn activate(&mut self, event: &UiEvent) {
-        self.activation_requested = true;
-        if let Some(recording_id) = event.recording_id {
-            self.navigate(Route::LibraryRecording {
-                recording_id: recording_id.to_string(),
-            });
-        } else if let Some(job_id) = event.job_id {
-            self.navigate(Route::JobsJob {
-                job_id: job_id.to_string(),
-            });
+        match ActivationTarget::from_event(event) {
+            Some(target) => self.activate_target(target),
+            None => self.activate_window(),
         }
+    }
+
+    /// Show what a deep link, a notification or a tray click named (parity
+    /// rows C10 and J15).
+    ///
+    /// The host calls this directly: a `plaudon://` URL is already a target,
+    /// and making the host fabricate a `§15.3` event to deliver one would
+    /// put a second, fake event source into a stream whose whole value is
+    /// that everything in it was committed by the application layer.
+    pub fn activate_target(&mut self, target: ActivationTarget) {
+        self.activate_window();
+        self.navigate(target.route());
+    }
+
+    /// Raise the window without going anywhere.
+    ///
+    /// A tray click and an activation that names nothing both mean "come
+    /// forward", and neither is a reason to move the user.
+    pub fn activate_window(&mut self) {
+        self.activation_requested = true;
+    }
+
+    /// Open documents the desktop handed over (parity row C10).
+    ///
+    /// The installer claims the `.plaudon` extension and the audio types the
+    /// importer accepts, so this is where that claim is honoured: audio is
+    /// imported exactly as the Import command imports it, and an archive
+    /// opens the restore flow with that archive already chosen — the user
+    /// still inspects and confirms, because nothing may restore a library
+    /// because a file was double-clicked.
+    ///
+    /// Paths the host refused are reported rather than dropped, by their
+    /// stable reason code: the path itself is user data the window has no
+    /// reason to echo.
+    pub fn open_files(&mut self, request: OpenRequest, host: &ShellHost<'_>) {
+        if !request.audio.is_empty() {
+            let count = request.audio.len();
+            self.navigate(Route::Library);
+            self.pending_import = Some(self.send(
+                host,
+                AppCommand::ImportFiles(ImportFilesRequest {
+                    paths: request.audio,
+                    duplicate_policy: DuplicatePolicy::OpenExisting,
+                }),
+            ));
+            self.status = format!("Importing {count} file(s)…");
+        }
+        if let Some(archive) = request.archives.first() {
+            self.open_archive(archive, host);
+            if request.archives.len() > 1 {
+                self.bus.toasts.push(
+                    ToastTone::Warning,
+                    "Only the first archive was opened",
+                    Some("A library is restored from one archive at a time.".to_owned()),
+                );
+            }
+        }
+        if !request.refused.is_empty() {
+            let count = request.refused.len();
+            self.bus.toasts.push(
+                ToastTone::Warning,
+                format!("{count} file(s) could not be opened"),
+                Some(format!("Reason(s): {}.", request.refused.join(", "))),
+            );
+        }
+    }
+
+    /// Hand a portable archive to the screen that owns restoring.
+    fn open_archive(&mut self, path: &str, host: &ShellHost<'_>) {
+        self.navigate(Route::Settings);
+        let taken = self
+            .with_active_screen(host, |screen, cx| screen.on_open_archive(path, cx))
+            .unwrap_or(false);
+        if taken {
+            "Opened an archive to restore from".clone_into(&mut self.status);
+        } else {
+            self.bus.toasts.push(
+                ToastTone::Warning,
+                "This archive could not be opened",
+                Some("Backup and restore is not available in this build.".to_owned()),
+            );
+        }
+    }
+
+    /// Record the light/dark preference the operating system reports.
+    ///
+    /// egui reads the system appearance itself where the windowing backend
+    /// exposes it ([`crate::theme::ThemeState::observe_system`]); this is the
+    /// host's second source, for the platforms where it does not, and it is
+    /// pushed rather than polled.
+    pub fn set_system_dark(&mut self, dark: bool) {
+        self.theme.system_dark = dark;
     }
 
     /// Whether the window should be raised and focused, consumed once.
@@ -673,11 +789,13 @@ impl Shell {
     fn shell_ui(&mut self, ui: &mut egui::Ui, host: &ShellHost<'_>) {
         let mut invoked: Vec<String> = Vec::new();
 
-        egui::Panel::top("plaudon-menu-bar").show(ui, |ui| {
-            if let Some(id) = menu::menu_bar(ui, &self.commands, &self.keymap) {
-                invoked.push(id);
-            }
-        });
+        if self.in_window_menu {
+            egui::Panel::top("plaudon-menu-bar").show(ui, |ui| {
+                if let Some(id) = menu::menu_bar(ui, &self.commands, &self.keymap) {
+                    invoked.push(id);
+                }
+            });
+        }
         egui::Panel::top("plaudon-toolbar").show(ui, |ui| {
             let items = toolbar_items();
             let title = self.route.title();

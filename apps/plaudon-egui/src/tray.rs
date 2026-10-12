@@ -115,7 +115,7 @@ mod backend {
     use std::sync::Mutex;
 
     use plaudon_platform::tray::{Tray, TrayError, TrayEvent, TrayItemId, TrayItemKind, TrayModel};
-    use tray_icon::menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem};
+    use tray_icon::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem};
     use tray_icon::{Icon, TrayIcon, TrayIconBuilder, TrayIconEvent};
 
     /// A real status item.
@@ -217,10 +217,11 @@ mod backend {
                     events.push(TrayEvent::IconActivated);
                 }
             }
-            while let Ok(event) = MenuEvent::receiver().try_recv() {
-                events.push(TrayEvent::MenuItemSelected(TrayItemId::new(
-                    event.id.as_ref(),
-                )));
+            // Not `MenuEvent::receiver()`: that channel is shared with the
+            // macOS application menu, so one router hands each consumer its
+            // own identifiers (see `crate::menu_events`).
+            for id in crate::menu_events::drain_tray() {
+                events.push(TrayEvent::MenuItemSelected(TrayItemId::new(&id)));
             }
             events
         }

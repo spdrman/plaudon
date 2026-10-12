@@ -7,13 +7,11 @@
 //! of writing it anywhere — peak building never materialises the recording,
 //! on disk or in memory.
 //!
-//! Opus used to be the one gap: Symphonia has no Opus decoder for any
-//! feature set, and device `.ASR` derivatives are remuxed to Ogg Opus by
-//! `plaudon_plaud_protocol::remux_to_ogg_opus`, so such a file was refused
-//! here. O1.6 (#214) closed it inside `plaudon_audio` — a pure-Rust decoder
-//! registered on `plaudon_audio::codecs::registry()`, which this decode path
-//! already goes through — so an Opus recording now builds a pyramid like any
-//! other, and the test below holds that.
+//! The codec set is `plaudon_audio::codecs::registry()`: Symphonia's enabled
+//! decoders plus the pure-Rust Opus one. Ogg Opus matters in particular
+//! because device `.ASR` derivatives are remuxed to it by
+//! `plaudon_plaud_protocol::remux_to_ogg_opus`, so a device recording builds a
+//! pyramid exactly like an imported WAV does, and the tests below hold that.
 
 use std::path::{Path, PathBuf};
 

@@ -144,6 +144,15 @@ impl DetailPanels for LivePanels {
         if self.playback.on_response(command, result) {
             return;
         }
+        // A speaker answer belongs to two panels at once: the chips in the
+        // transcript and the list in the outputs column render the same
+        // rows. Handing it to the first taker is how the list stayed empty
+        // while the transcript had the names all along.
+        if is_speaker_answer(command) {
+            self.transcript.on_response(command, result, out);
+            self.ai.on_response(command, result);
+            return;
+        }
         if self.transcript.on_response(command, result, out) {
             return;
         }
@@ -157,4 +166,12 @@ impl DetailPanels for LivePanels {
     fn local_only(&self) -> bool {
         self.ai.local_only()
     }
+}
+
+/// Whether an answer describes speaker rows, which two panels render.
+fn is_speaker_answer(command: &'static str) -> bool {
+    matches!(
+        command,
+        "list_speakers" | "rename_speaker" | "confirm_speaker" | "reset_speaker"
+    )
 }

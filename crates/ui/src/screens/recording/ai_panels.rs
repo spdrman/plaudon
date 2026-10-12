@@ -22,7 +22,7 @@ use plaudon_app::command::{AppCommand, AppResponse};
 use plaudon_app::dto::{
     Capabilities, EventKind, ExportMediaResponse, JobKind, JobPage, JobSummary, ListJobsRequest,
     ListModelsRequest, ListModelsResponse, ListOutputsRequest, ListOutputsResponse,
-    ListSpeakersResponse, RecordingDetail, UiEvent,
+    ListSpeakersResponse, RecordingDetail, SpeakerDto, UiEvent,
 };
 use plaudon_domain::error::ErrorEnvelope;
 use plaudon_domain::ids::RecordingId;
@@ -210,6 +210,17 @@ impl AiBinding {
                 self.speakers = Some(speakers.clone());
                 true
             }
+            Ok(
+                AppResponse::RenameSpeaker(answer)
+                | AppResponse::ConfirmSpeaker(answer)
+                | AppResponse::ResetSpeaker(answer),
+            ) => {
+                self.patch_speaker(&answer.speaker);
+                // The answer is the stored row, so the refusal that was on
+                // screen no longer describes anything.
+                self.error = None;
+                true
+            }
             Ok(AppResponse::ListJobs(page)) => {
                 self.jobs = Some(page.clone());
                 true
@@ -223,6 +234,25 @@ impl AiBinding {
                 true
             }
             _ => false,
+        }
+    }
+
+    /// Replace one row of the held speaker list with the stored row a
+    /// labelling command answered with.
+    ///
+    /// Patching rather than refetching: the answer *is* what `list_speakers`
+    /// would say, so a second round trip would only add a window in which
+    /// the screen shows the old name.
+    fn patch_speaker(&mut self, speaker: &SpeakerDto) {
+        let Some(held) = self.speakers.as_mut() else {
+            return;
+        };
+        if let Some(row) = held
+            .speakers
+            .iter_mut()
+            .find(|row| row.speaker_id == speaker.speaker_id)
+        {
+            *row = speaker.clone();
         }
     }
 
@@ -396,6 +426,10 @@ fn is_ours(command: &'static str) -> bool {
             | "list_models"
             | "list_outputs"
             | "list_jobs"
+            | "list_speakers"
+            | "rename_speaker"
+            | "confirm_speaker"
+            | "reset_speaker"
             | "export_media"
             | "export_recording"
             | "start_processing"

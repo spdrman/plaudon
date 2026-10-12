@@ -25,7 +25,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use plaudon_app::dto::EventKind;
-use plaudon_platform::activation::{self, Activation};
+use plaudon_platform::activation::{self, Activation, LaunchRequest};
 use plaudon_platform::clipboard::{host_clipboard, Clipboard, ClipboardError};
 use plaudon_platform::dragdrop::{self, DropClassification};
 use plaudon_platform::opener::{NativeOpener, OpenError, Opener};
@@ -40,6 +40,11 @@ pub enum DesktopEvent {
     FocusWindow,
     /// Navigate somewhere, because a notification or a deep link said so.
     Activate(Activation),
+    /// Open documents the desktop handed over: a double-clicked `.plaudon`
+    /// archive, a file dropped on the window, or a path in the argument
+    /// vector. Already classified against the approved roots, rejections
+    /// included, because a refusal is reported and not dropped.
+    Open(DropClassification),
     /// A tray menu row was chosen.
     TrayCommand(TrayItemId),
     /// The user asked to quit from the tray.
@@ -147,7 +152,20 @@ impl Desktop {
                 TrayEvent::MenuItemSelected(id) => events.push(DesktopEvent::TrayCommand(id)),
             }
         }
+        // macOS hands a running application its documents and links as Apple
+        // events rather than arguments (`crate::mac_open`); everything else
+        // has already delivered them through `launch_event`.
+        #[cfg(target_os = "macos")]
+        for raw in crate::mac_open::drain_pending() {
+            events.extend(self.open_event(&raw));
+        }
         events
+    }
+
+    /// Route one thing the OS asked the running application to open.
+    #[must_use]
+    pub fn open_event(&self, raw: &str) -> Option<DesktopEvent> {
+        activation::open_request(raw, &self.approved_roots).map(desktop_event)
     }
 
     /// Re-read the operating system's light/dark preference.
@@ -192,14 +210,20 @@ impl Desktop {
         activation::from_notification_token(token).map(DesktopEvent::Activate)
     }
 
-    /// Route a deep link handed over on the command line at launch.
+    /// What the process was launched to do (matrix row C10).
+    ///
+    /// Parsed before the window exists, because the argument vector is the
+    /// whole mechanism on Windows — the installer registers
+    /// `"%EXEPATH%" "%1"` for both the `.plaudon` extension and the
+    /// `plaudon://` scheme — and because a deep link must not wait for a
+    /// first frame.
     #[must_use]
-    pub fn activation_from_launch<I, S>(arguments: I) -> Option<DesktopEvent>
+    pub fn launch_event<I, S>(arguments: I, approved_roots: &[PathBuf]) -> Option<DesktopEvent>
     where
         I: IntoIterator<Item = S>,
         S: AsRef<str>,
     {
-        activation::from_launch_arguments(arguments).map(DesktopEvent::Activate)
+        activation::launch_request(arguments, approved_roots).map(desktop_event)
     }
 
     /// Put non-secret text on the clipboard.
@@ -220,6 +244,17 @@ impl Desktop {
     /// Open an `http`, `https` or `mailto` URL in the OS handler.
     pub fn open_url(&self, url: &str) -> Result<(), OpenError> {
         self.opener.open_url(url)
+    }
+}
+
+/// One parsed request, as the event the shell reacts to.
+///
+/// The mapping is total, which is what keeps "the OS asked for this" and
+/// "the window did this" from drifting apart.
+fn desktop_event(request: LaunchRequest) -> DesktopEvent {
+    match request {
+        LaunchRequest::Activate(activation) => DesktopEvent::Activate(activation),
+        LaunchRequest::Open(classified) => DesktopEvent::Open(classified),
     }
 }
 
@@ -374,15 +409,71 @@ mod tests {
 
     #[test]
     fn a_launch_argument_can_carry_a_deep_link_and_argv_zero_cannot() {
+        let no_roots: Vec<PathBuf> = Vec::new();
         assert_eq!(
-            Desktop::activation_from_launch(["plaudon-egui", "plaudon://settings"]),
+            Desktop::launch_event(["plaudon-egui", "plaudon://settings"], &no_roots),
             Some(DesktopEvent::Activate(Activation::Settings))
         );
         assert_eq!(
-            Desktop::activation_from_launch(["plaudon://settings"]),
+            Desktop::launch_event(["plaudon://settings"], &no_roots),
             None,
             "argv[0] is the program, not a link"
         );
+    }
+
+    #[test]
+    fn a_launched_archive_becomes_an_open_and_a_stray_path_becomes_a_refusal() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let archive = root.path().join("library.plaudon");
+        std::fs::write(&archive, b"PK").expect("write");
+        let roots = vec![std::fs::canonicalize(root.path()).expect("canonical root")];
+
+        let event = Desktop::launch_event(
+            ["plaudon-egui".to_owned(), archive.display().to_string()],
+            &roots,
+        );
+        let Some(DesktopEvent::Open(classified)) = event else {
+            panic!("a double-clicked archive opens");
+        };
+        assert_eq!(classified.archives.len(), 1);
+
+        let elsewhere = tempfile::tempdir().expect("tempdir");
+        let escaped = elsewhere.path().join("library.plaudon");
+        std::fs::write(&escaped, b"PK").expect("write");
+        let event = Desktop::launch_event(
+            ["plaudon-egui".to_owned(), escaped.display().to_string()],
+            &roots,
+        );
+        let Some(DesktopEvent::Open(classified)) = event else {
+            panic!("the refusal is still reported");
+        };
+        assert!(classified.is_empty());
+        assert_eq!(classified.rejected.len(), 1);
+    }
+
+    #[test]
+    fn a_running_application_opens_what_the_os_handed_it() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let archive = root.path().join("library.plaudon");
+        std::fs::write(&archive, b"PK").expect("write");
+        let desktop = Desktop::with_parts(
+            Box::new(FakeClipboard::new()),
+            Box::new(FakeOpener::new()),
+            Box::new(FixedOsTheme::silent()),
+            Box::new(FakeTray::new()),
+            TraySupport::Supported { backend: "fake" },
+            vec![std::fs::canonicalize(root.path()).expect("canonical root")],
+        );
+        let url = format!("file://{}", archive.display());
+        let Some(DesktopEvent::Open(classified)) = desktop.open_event(&url) else {
+            panic!("a file url opens the document");
+        };
+        assert_eq!(classified.archives.len(), 1);
+        assert_eq!(
+            desktop.open_event("plaudon://settings"),
+            Some(DesktopEvent::Activate(Activation::Settings))
+        );
+        assert_eq!(desktop.open_event("https://example.invalid/"), None);
     }
 
     #[test]

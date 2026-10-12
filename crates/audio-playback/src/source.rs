@@ -31,8 +31,10 @@ pub enum SourceError {
         #[source]
         source: std::io::Error,
     },
-    /// Symphonia could not make sense of the container or the codec. An Ogg
-    /// Opus device derivative lands here: no Opus decoder is compiled in.
+    /// Neither the container nor the codec could be decoded. The codec set is
+    /// `plaudon_audio::codecs::registry()` — Symphonia's enabled decoders plus
+    /// the pure-Rust Opus one — so a file that lands here is one transcription
+    /// would refuse too, which keeps the two halves of the app honest.
     #[error("cannot decode {path}: {detail}")]
     Unsupported {
         /// File involved.
