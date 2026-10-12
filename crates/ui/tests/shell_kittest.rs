@@ -686,5 +686,8 @@ fn the_ready_shell_matches_its_baseline() {
     // Deterministic frame: nothing in it is minted during the test — no
     // identifiers, no timestamps, no durations (docs/EGUI_TESTING.md §4.5).
     assert_eq!(harness.state().shell.status(), "Ready");
+    // "Follow the system" on a host that reports no appearance is light, as
+    // it was in the shell being replaced (`systemDark: false`).
+    assert_eq!(Tokens::get(&harness.ctx).theme, ThemeKind::Light);
     visual::assert_snapshot(&mut harness, "shell-ready");
 }
