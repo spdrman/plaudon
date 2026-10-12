@@ -263,8 +263,12 @@ $Audit = ($AuditJson -join "") | ConvertFrom-Json
 # which for a package that must never be machine-wide is just as wrong.
 $RegistryRoots = @($Audit.roots)
 $RegistryKeys = @($Audit.keys)
-if ($RegistryRoots.Count -eq 0) {
-    Write-Error "reason=missing_binary: the built package has no Registry rows; the association claim did not make it in"
+# An audit that reads nothing passes everything, so the row count is checked
+# against the source rather than against zero: every RegistryValue in the
+# .wxs must have become a row in the database.
+$ExpectedRegistryRows = ([regex]::Matches($WxsText, "<RegistryValue\b")).Count
+if ($RegistryRoots.Count -lt $ExpectedRegistryRows) {
+    Write-Error "reason=missing_binary: the built package has $($RegistryRoots.Count) Registry rows, and the .wxs writes $ExpectedRegistryRows; the association claim did not survive the build, or could not be read back"
     exit 1
 }
 for ($Index = 0; $Index -lt $RegistryRoots.Count; $Index++) {
@@ -345,6 +349,9 @@ Write-Host "sha256:   $Sha"
 Write-Host "signature: $SignStatus ($SignDetail)"
 
 if ($SignStatus -ne "verified") {
-    Write-Error "reason=missing_credential: the installer is built but NOT publishable"
+    # Not Write-Error: $ErrorActionPreference is Stop, so a written error
+    # terminates the script with status 1 and the deliberate 3 — "built, NOT
+    # publishable" — would never reach the caller that keys off it.
+    [Console]::Error.WriteLine("reason=missing_credential: the installer is built but NOT publishable")
     exit 3
 }
