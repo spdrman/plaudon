@@ -11,7 +11,9 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
+plaudon-audio = { workspace = true }
 plaudon-domain = { workspace = true }
+plaudon-plaud-protocol = { workspace = true }
 plaudon-recording-sources = { workspace = true }
 serde = { workspace = true }
 sha2 = { workspace = true }
