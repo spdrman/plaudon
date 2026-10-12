@@ -189,7 +189,7 @@ cells:
     last_verified_at: null
     verified_import_recorded: false
     known_limitations:
-      - "No release of the official CLI has been exercised by this build; the committed table crates/source-plaud-cli/cli-compatibility.yaml is deliberately empty, so every version fails closed as CLI_UNSUPPORTED (ADR-0040)."
+      - "No release of the official CLI has been exercised by this build; the committed table crates/source-plaud-cli/cli-compatibility.yaml is deliberately empty, so every version fails closed as CLI_UNSUPPORTED (ADR-0050)."
       - "JSON mode, stable tabular output, pagination, exit codes and a stable download URL format are all unverified (spec 2.1)."
       - "The npm package listing declares no license; we neither bundle nor redistribute it."
       - "Whether a Google or Apple PLAUD login works with the CLI is unverified; no token-paste workaround will be offered."

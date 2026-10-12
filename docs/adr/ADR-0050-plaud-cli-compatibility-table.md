@@ -1,4 +1,4 @@
-# ADR-0040: The PLAUD Cloud CLI connector is version-locked and ships with an empty compatibility table
+# ADR-0050: The PLAUD Cloud CLI connector is version-locked and ships with an empty compatibility table
 
 - **Status:** Accepted
 - **Date:** 2026-10-11
