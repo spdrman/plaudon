@@ -95,6 +95,27 @@ outside the application bundle.
 | Apple on-device speech and language assets | Apple platform assets | never redistributed | n/a | Downloaded by the operating system on the user's instruction. |
 | Any diarization model (for example pyannote) | gated, varies | excluded pending a separate review | n/a | Not introduced; §8.7 requires a feasibility and licensing spike first. |
 
+## Evaluation corpora (speaker matching, VOICE_PROFILES_SPEC §17.2)
+
+The speaker-matching harness (`crates/eval/src/speaker/`,
+[docs/benchmarks/speaker-match-eval.md](../benchmarks/speaker-match-eval.md))
+scores embeddings, never audio, so the repository carries fixture *ground
+truth* and checksums — never corpus samples. The allowlist below is enforced in
+code: `FixtureCorpus` has exactly these variants, and `FixtureManifest::parse`
+additionally rejects the forbidden names wherever they appear in a manifest,
+including in free text.
+
+| Corpus | Licence | Redistribution | Attribution | Decision |
+|---|---|---|---|---|
+| LibriSpeech `test-clean` (openslr.org/12) | CC-BY-4.0, derived from public-domain LibriVox recordings | never vendored; a contributor downloads it and builds fixtures locally | "LibriSpeech (Panayotov et al.), CC-BY-4.0" in any artifact built from it | Allowed as the source of seeded multi-speaker sessions with exact RTTM. Real readers' voices, so the consent-free tier stays TTS-only (§17.5). |
+| MUSAN (openslr.org/17) | CC-BY-4.0 | never vendored; local noise variants only | "MUSAN (Snyder et al.), CC-BY-4.0" | Allowed as the noise condition. |
+| Kokoro-82M TTS (`hexgrad/Kokoro-82M`) | Apache-2.0 | never vendored; generated locally | "Kokoro-82M, Apache-2.0" | Allowed as the zero-human-voices smoke tier. |
+| Scripted vectors (`plaudon-eval`) | n/a — generated from a seed | committed (no recorded material) | none | The hermetic CI tier. Produces no accuracy claim about any model. |
+| AMI, ICSI | CC-BY-4.0 | **download-on-demand, developer-local only** | required if figures are published | Never in the repository and never in CI: gigabytes of real meetings, used as an accuracy gate a developer runs deliberately. |
+| VoxCeleb 1/2, VoxConverse | form-gated, "research purposes", underlying YouTube copyright never licensed to the publisher | **never in the repository or CI** | n/a | Excluded. Developer-local evaluation only, never a committed fixture or a derived one. |
+| AISHELL-4 (openslr.org/111) | CC-BY-**SA**-4.0 | **never vendored, never mixed into derived fixtures** | n/a | Excluded: ShareAlike contamination risk for anything derived from it. |
+| sherpa-onnx release-tag test wavs | no stated licence | never vendored | n/a | Excluded. No licence means no permission. |
+
 ## Audit hook
 
 `scripts/license-audit.sh` runs `cargo deny check licenses bans sources

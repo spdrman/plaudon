@@ -4648,6 +4648,8 @@ name = "plaudon-eval"
 version = "0.1.0"
 dependencies = [
  "jsonschema",
+ "plaudon-ai-diarization",
+ "plaudon-app-core",
  "plaudon-domain",
  "serde",
  "serde_json",
