@@ -45,8 +45,11 @@ plaudon-notifications = { path = "crates/notifications" }
 plaudon-automation = { path = "crates/automation" }
 plaudon-diagnostics = { path = "crates/diagnostics" }
 
+argon2 = "0.6"
 async-trait = "0.1"
 fs4 = "1"
+chacha20poly1305 = { version = "0.10", features = ["stream"] }
+flate2 = "1"
 hex = "0.4"
 jsonschema = { version = "0.26", default-features = false }
 libc = "0.2"

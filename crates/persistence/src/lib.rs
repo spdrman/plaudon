@@ -12,7 +12,9 @@
 //!   a filesystem rename.
 
 pub mod archive;
+pub mod backups;
 pub mod db;
+pub mod deletion;
 pub mod error;
 pub mod journal;
 pub mod migrations;
