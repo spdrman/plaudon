@@ -4,7 +4,7 @@
 //! application bug cannot write a state the schema is supposed to forbid.
 
 use plaudon_persistence::db::Database;
-use plaudon_persistence::migrations::MigrationRunner;
+use plaudon_persistence::migrations::{Migration, MigrationRunner, MIGRATIONS};
 use sqlx::Row;
 
 /// Column names that would indicate secret material at rest. An opaque vault
@@ -345,4 +345,454 @@ async fn the_required_indices_exist_verbatim() {
             "missing index {required}"
         );
     }
+}
+
+// ---------------------------------------------------------------------------
+// Voice profiles (migration 0900): the roster and its biometric tier
+// (VOICE_PROFILES_SPEC VP-070..VP-080, ADR-0080, ADR-0082).
+// ---------------------------------------------------------------------------
+
+/// A recording, a media asset, a diarization run and one speaker row — the
+/// pre-existing shape every voice-profile row hangs off.
+async fn recording_with_a_speaker(db: &Database) {
+    sqlx::query("INSERT INTO recordings (id, title, created_at) VALUES ('r1','Weekly',0)")
+        .execute(db.pool())
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO media_assets (id, sha256, byte_length, relative_path, quality_class, verification_state, created_at) VALUES ('m1', ?1, 1, 'media/sha256/aa/x.wav','user_supplied_file','verified',0)")
+        .bind("e".repeat(64))
+        .execute(db.pool())
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO diarization_runs (id, recording_id, media_asset_id, provider_id, privacy_class, status, input_sha256, created_at) VALUES ('run1','r1','m1','local','local_only','succeeded',?1,0)")
+        .bind("e".repeat(64))
+        .execute(db.pool())
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO speakers (id, recording_id, label, name, provenance, user_confirmed, cluster_key, original_label) VALUES ('sp1','r1','Priya','Priya','user_confirmed',1,'c0','Speaker 1')")
+        .execute(db.pool())
+        .await
+        .unwrap();
+}
+
+async fn person(db: &Database, id: &str, name: &str) {
+    sqlx::query("INSERT INTO people (id, display_name, created_at, updated_at, status) VALUES (?1, ?2, 0, 0, 'active')")
+        .bind(id.to_owned())
+        .bind(name.to_owned())
+        .execute(db.pool())
+        .await
+        .unwrap();
+}
+
+async fn enrollment(db: &Database, person_id: &str) {
+    sqlx::query("INSERT INTO person_voice_enrollments (person_id, consent_version, retention_months, status, created_at) VALUES (?1,'v1',12,'active',0)")
+        .bind(person_id.to_owned())
+        .execute(db.pool())
+        .await
+        .unwrap();
+}
+
+async fn exemplar(db: &Database, id: &str, person_id: &str) {
+    sqlx::query("INSERT INTO voice_exemplars (id, person_id, recording_id, diarization_run_id, cluster_key, speech_ms, model_id, model_version, model_sha256, embedding_dim, embedding_cipher, embedding_nonce, created_at) VALUES (?1, ?2, 'r1', 'run1', 'c0', 4000, 'wespeaker-resnet34-lm', '1.0', ?3, 192, ?4, ?5, 0)")
+        .bind(id.to_owned())
+        .bind(person_id.to_owned())
+        .bind("f".repeat(64))
+        .bind(vec![7u8; 32])
+        .bind(vec![9u8; 24])
+        .execute(db.pool())
+        .await
+        .unwrap();
+}
+
+async fn suggestion(db: &Database, id: &str, person_id: &str, cluster: &str) {
+    sqlx::query("INSERT INTO speaker_suggestions (id, recording_id, diarization_run_id, cluster_key, person_id, score, score_kind, band, state, model_id, model_version, created_at) VALUES (?1,'r1','run1',?2,?3,0.87,'cosine_similarity_asnorm','suggest','pending','wespeaker-resnet34-lm','1.0',0)")
+        .bind(id.to_owned())
+        .bind(cluster.to_owned())
+        .bind(person_id.to_owned())
+        .execute(db.pool())
+        .await
+        .unwrap();
+}
+
+async fn count(db: &Database, sql: &str) -> i64 {
+    sqlx::query(sqlx::AssertSqlSafe(sql.to_owned()))
+        .fetch_one(db.pool())
+        .await
+        .unwrap()
+        .get(0)
+}
+
+#[tokio::test]
+async fn the_voice_profile_tables_and_the_speaker_link_exist() {
+    let (_dir, db) = migrated().await;
+    let tables = table_names(&db).await;
+    for required in [
+        "people",
+        "person_voice_enrollments",
+        "voice_exemplars",
+        "speaker_suggestions",
+        "voice_profile_events",
+    ] {
+        assert!(
+            tables.contains(&required.to_owned()),
+            "missing voice-profile table {required}"
+        );
+    }
+    assert!(
+        column_names(&db, "speakers")
+            .await
+            .contains(&"person_id".to_owned()),
+        "speakers must carry the roster link (VP-072)"
+    );
+
+    let indices: Vec<String> = sqlx::query("SELECT name FROM sqlite_master WHERE type = 'index'")
+        .fetch_all(db.pool())
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|row| row.get::<String, _>(0))
+        .collect();
+    for required in [
+        "ix_people_status_name",
+        "ix_voice_exemplars_person",
+        "ix_speaker_suggestions_person",
+        "ix_voice_profile_events_person",
+        "ix_speakers_person",
+    ] {
+        assert!(
+            indices.contains(&required.to_owned()),
+            "missing index {required}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn the_roster_tier_needs_nothing_from_the_biometric_tier() {
+    // VP-011 / §12.2A: a name-only roster entry is complete on its own, and a
+    // speaker row can be assigned to it without any enrolment existing.
+    let (_dir, db) = migrated().await;
+    recording_with_a_speaker(&db).await;
+    person(&db, "p1", "Priya").await;
+    sqlx::query("UPDATE speakers SET person_id = 'p1' WHERE id = 'sp1'")
+        .execute(db.pool())
+        .await
+        .unwrap();
+
+    assert_eq!(
+        count(&db, "SELECT COUNT(*) FROM person_voice_enrollments").await,
+        0
+    );
+    assert_eq!(
+        count(
+            &db,
+            "SELECT COUNT(*) FROM speakers WHERE person_id = 'p1' AND name = 'Priya'"
+        )
+        .await,
+        1
+    );
+}
+
+#[tokio::test]
+async fn an_exemplar_cannot_exist_without_an_enrolment() {
+    let (_dir, db) = migrated().await;
+    recording_with_a_speaker(&db).await;
+    person(&db, "p1", "Priya").await;
+
+    let orphan = sqlx::query("INSERT INTO voice_exemplars (id, person_id, speech_ms, model_id, model_version, model_sha256, embedding_dim, embedding_cipher, embedding_nonce, created_at) VALUES ('x1','p1',4000,'m','1',?1,192,?2,?3,0)")
+        .bind("f".repeat(64))
+        .bind(vec![7u8; 32])
+        .bind(vec![9u8; 24])
+        .execute(db.pool())
+        .await;
+    assert!(
+        orphan.is_err(),
+        "an embedding without a consented enrolment must be unrepresentable"
+    );
+}
+
+#[tokio::test]
+async fn the_biometric_tier_refuses_rows_that_break_its_own_rules() {
+    let (_dir, db) = migrated().await;
+    recording_with_a_speaker(&db).await;
+    person(&db, "p1", "Priya").await;
+    enrollment(&db, "p1").await;
+
+    // Retention is bounded at 12 months and cannot be zero (VP-130).
+    person(&db, "p2", "Sam").await;
+    let too_long = sqlx::query("INSERT INTO person_voice_enrollments (person_id, consent_version, retention_months, status, created_at) VALUES ('p2','v1',24,'active',0)")
+        .execute(db.pool())
+        .await;
+    assert!(too_long.is_err(), "retention beyond 12 months is forbidden");
+
+    // An exemplar below the enrolment minimum is unrepresentable (VP-064).
+    let too_short = sqlx::query("INSERT INTO voice_exemplars (id, person_id, speech_ms, model_id, model_version, model_sha256, embedding_dim, embedding_cipher, embedding_nonce, created_at) VALUES ('x1','p1',400,'m','1',?1,192,?2,?3,0)")
+        .bind("f".repeat(64))
+        .bind(vec![7u8; 32])
+        .bind(vec![9u8; 24])
+        .execute(db.pool())
+        .await;
+    assert!(
+        too_short.is_err(),
+        "speech_ms below one second is forbidden"
+    );
+
+    // A nonce that is not an XChaCha20-Poly1305 nonce is unrepresentable.
+    let bad_nonce = sqlx::query("INSERT INTO voice_exemplars (id, person_id, speech_ms, model_id, model_version, model_sha256, embedding_dim, embedding_cipher, embedding_nonce, created_at) VALUES ('x2','p1',4000,'m','1',?1,192,?2,?3,0)")
+        .bind("f".repeat(64))
+        .bind(vec![7u8; 32])
+        .bind(vec![9u8; 12])
+        .execute(db.pool())
+        .await;
+    assert!(bad_nonce.is_err(), "a 12-byte nonce must be rejected");
+}
+
+#[tokio::test]
+async fn a_suggestion_is_a_score_with_an_honest_decision_state() {
+    let (_dir, db) = migrated().await;
+    recording_with_a_speaker(&db).await;
+    person(&db, "p1", "Priya").await;
+    person(&db, "p2", "Sam").await;
+    enrollment(&db, "p1").await;
+    suggestion(&db, "s1", "p1", "c0").await;
+
+    // The same (run, cluster, person) cannot be suggested twice (VP-102).
+    let duplicate = sqlx::query("INSERT INTO speaker_suggestions (id, recording_id, diarization_run_id, cluster_key, person_id, score, score_kind, band, state, model_id, model_version, created_at) VALUES ('s2','r1','run1','c0','p1',0.9,'cosine_similarity_asnorm','suggest','pending','m','1',0)")
+        .execute(db.pool())
+        .await;
+    assert!(duplicate.is_err(), "suggestions are idempotent per cluster");
+
+    // A pending row cannot claim it was decided, and a settled one must say when.
+    let pending_decided =
+        sqlx::query("UPDATE speaker_suggestions SET decided_at = 5 WHERE id = 's1'")
+            .execute(db.pool())
+            .await;
+    assert!(pending_decided.is_err());
+    let settled_without_time =
+        sqlx::query("UPDATE speaker_suggestions SET state = 'confirmed' WHERE id = 's1'")
+            .execute(db.pool())
+            .await;
+    assert!(settled_without_time.is_err());
+
+    // A correction names somebody else, and only a correction may (VP-216).
+    let correction_without_person = sqlx::query(
+        "UPDATE speaker_suggestions SET state = 'corrected', decided_at = 5 WHERE id = 's1'",
+    )
+    .execute(db.pool())
+    .await;
+    assert!(correction_without_person.is_err());
+    let self_correction = sqlx::query("UPDATE speaker_suggestions SET state = 'corrected', corrected_person_id = 'p1', decided_at = 5 WHERE id = 's1'")
+        .execute(db.pool())
+        .await;
+    assert!(self_correction.is_err());
+    sqlx::query("UPDATE speaker_suggestions SET state = 'corrected', corrected_person_id = 'p2', decided_at = 5 WHERE id = 's1'")
+        .execute(db.pool())
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn deleting_an_enrolment_destroys_the_voiceprint_and_keeps_the_person() {
+    // VP-080: "deleting an enrolment destroys its exemplars and leaves the
+    // person as a name-only roster entry".
+    let (_dir, db) = migrated().await;
+    recording_with_a_speaker(&db).await;
+    person(&db, "p1", "Priya").await;
+    enrollment(&db, "p1").await;
+    exemplar(&db, "x1", "p1").await;
+    sqlx::query("UPDATE speakers SET person_id = 'p1' WHERE id = 'sp1'")
+        .execute(db.pool())
+        .await
+        .unwrap();
+
+    sqlx::query("DELETE FROM person_voice_enrollments WHERE person_id = 'p1'")
+        .execute(db.pool())
+        .await
+        .unwrap();
+
+    assert_eq!(count(&db, "SELECT COUNT(*) FROM voice_exemplars").await, 0);
+    assert_eq!(count(&db, "SELECT COUNT(*) FROM people").await, 1);
+    assert_eq!(
+        count(
+            &db,
+            "SELECT COUNT(*) FROM speakers WHERE person_id = 'p1' AND name = 'Priya'"
+        )
+        .await,
+        1,
+        "the roster link and the name snapshot survive losing the voiceprint"
+    );
+}
+
+#[tokio::test]
+async fn deleting_a_person_severs_links_and_leaves_every_name_snapshot() {
+    // VP-080 / VP-213d: the biometric rows go, the transcripts keep their labels.
+    let (_dir, db) = migrated().await;
+    recording_with_a_speaker(&db).await;
+    person(&db, "p1", "Priya").await;
+    enrollment(&db, "p1").await;
+    exemplar(&db, "x1", "p1").await;
+    suggestion(&db, "s1", "p1", "c0").await;
+    sqlx::query("UPDATE speakers SET person_id = 'p1' WHERE id = 'sp1'")
+        .execute(db.pool())
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO voice_profile_events (id, person_id, kind, detail_json, created_at) VALUES ('e1','p1','enrolled','{\"consent_version\":\"v1\"}',0)")
+        .execute(db.pool())
+        .await
+        .unwrap();
+
+    sqlx::query("DELETE FROM people WHERE id = 'p1'")
+        .execute(db.pool())
+        .await
+        .unwrap();
+
+    assert_eq!(count(&db, "SELECT COUNT(*) FROM voice_exemplars").await, 0);
+    assert_eq!(
+        count(&db, "SELECT COUNT(*) FROM person_voice_enrollments").await,
+        0
+    );
+    assert_eq!(
+        count(&db, "SELECT COUNT(*) FROM speaker_suggestions").await,
+        0
+    );
+    assert_eq!(
+        count(
+            &db,
+            "SELECT COUNT(*) FROM speakers WHERE id = 'sp1' AND person_id IS NULL AND name = 'Priya'"
+        )
+        .await,
+        1,
+        "the name snapshot must outlive the roster entry"
+    );
+    assert_eq!(
+        count(&db, "SELECT COUNT(*) FROM voice_profile_events").await,
+        1,
+        "the consent journal must outlive the person it describes (VP-080)"
+    );
+}
+
+#[tokio::test]
+async fn deleting_a_recording_keeps_the_exemplar_and_forgets_where_it_came_from() {
+    // VP-080: an exemplar belongs to the enrolment, not to the recording;
+    // suggestions about that recording go with it.
+    let (_dir, db) = migrated().await;
+    recording_with_a_speaker(&db).await;
+    person(&db, "p1", "Priya").await;
+    enrollment(&db, "p1").await;
+    exemplar(&db, "x1", "p1").await;
+    suggestion(&db, "s1", "p1", "c0").await;
+
+    // The real deletion path (`DeletionService`) removes a recording's own
+    // rows first; what matters here is what that does to the voice tier.
+    sqlx::query("DELETE FROM speakers WHERE recording_id = 'r1'")
+        .execute(db.pool())
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM diarization_runs WHERE recording_id = 'r1'")
+        .execute(db.pool())
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM recording_media WHERE recording_id = 'r1'")
+        .execute(db.pool())
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM recordings WHERE id = 'r1'")
+        .execute(db.pool())
+        .await
+        .unwrap();
+
+    assert_eq!(
+        count(
+            &db,
+            "SELECT COUNT(*) FROM voice_exemplars WHERE id = 'x1' AND recording_id IS NULL AND diarization_run_id IS NULL"
+        )
+        .await,
+        1
+    );
+    assert_eq!(
+        count(&db, "SELECT COUNT(*) FROM speaker_suggestions").await,
+        0
+    );
+}
+
+#[tokio::test]
+async fn the_journal_accepts_only_known_kinds_and_json_objects() {
+    let (_dir, db) = migrated().await;
+    let bad_kind = sqlx::query("INSERT INTO voice_profile_events (id, person_id, kind, detail_json, created_at) VALUES ('e1','p1','voiceprint_sold','{}',0)")
+        .execute(db.pool())
+        .await;
+    assert!(bad_kind.is_err());
+    let bad_detail = sqlx::query("INSERT INTO voice_profile_events (id, person_id, kind, detail_json, created_at) VALUES ('e2','p1','person_created','not json',0)")
+        .execute(db.pool())
+        .await;
+    assert!(bad_detail.is_err());
+    sqlx::query("INSERT INTO voice_profile_events (id, person_id, kind, detail_json, created_at) VALUES ('e3','p1','person_created','{\"display_name\":\"Priya\"}',0)")
+        .execute(db.pool())
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn migrating_a_populated_0800_library_backs_up_first_and_keeps_its_data() {
+    // VP-074: the 0900 upgrade behaves like every other upgrade — a verified
+    // pre-migration backup, then an additive schema change that touches no
+    // existing row.
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("app.sqlite");
+    let db = Database::open(&path).await.unwrap();
+
+    let through_0800: Vec<Migration> = MIGRATIONS
+        .iter()
+        .copied()
+        .filter(|migration| migration.version <= 800)
+        .collect();
+    assert_eq!(
+        through_0800.last().map(|m| m.version),
+        Some(800),
+        "this test models the library shipped before voice profiles"
+    );
+    MigrationRunner::with_migrations(through_0800.clone())
+        .run(&db)
+        .await
+        .unwrap();
+    recording_with_a_speaker(&db).await;
+
+    let report = MigrationRunner::new().run(&db).await.unwrap();
+    assert_eq!(report.applied, vec![900]);
+    let backup = report
+        .backup_path
+        .expect("an upgrade of a populated library must back up first");
+    assert!(backup.exists(), "{} must exist", backup.display());
+
+    // The backup is the previous schema, untouched by 0900.
+    let restored = Database::open(&backup).await.unwrap();
+    let before: Vec<String> = sqlx::query("PRAGMA table_info(speakers)")
+        .fetch_all(restored.pool())
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|row| row.get::<String, _>("name"))
+        .collect();
+    assert!(!before.contains(&"person_id".to_owned()));
+    restored.close().await;
+
+    // The upgraded library kept every row and gained the link column, NULL.
+    assert_eq!(
+        count(
+            &db,
+            "SELECT COUNT(*) FROM speakers WHERE id = 'sp1' AND name = 'Priya' AND person_id IS NULL"
+        )
+        .await,
+        1
+    );
+    assert_eq!(count(&db, "SELECT COUNT(*) FROM recordings").await, 1);
+    assert_eq!(count(&db, "SELECT COUNT(*) FROM diarization_runs").await, 1);
+    assert_eq!(count(&db, "SELECT COUNT(*) FROM people").await, 0);
+
+    // And a person can now be assigned in that upgraded library.
+    person(&db, "p1", "Priya").await;
+    sqlx::query("UPDATE speakers SET person_id = 'p1' WHERE id = 'sp1'")
+        .execute(db.pool())
+        .await
+        .unwrap();
+    db.close().await;
 }

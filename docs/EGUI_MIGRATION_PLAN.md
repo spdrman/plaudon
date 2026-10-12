@@ -328,6 +328,7 @@ backup at `<db>.pre-migration-<v>.bak`, tracked in `schema_migrations` with SHA-
 | 600 | `0600_meeting_intelligence.sql` | pipeline stage runs, `output_claims`, `output_evidence`, `output_dependencies`, staleness triggers |
 | 700 | `0700_export_deletion.sql` | deletion records/suppressions, `archive_backups`, `export_derivatives` |
 | 800 | `0800_source_reconciliation.sql` | source export artifacts, `watched_folders`, `watched_folder_items` |
+| 900 | `0900_voice_profiles.sql` | `people` (the master speaker list), `person_voice_enrollments`, `voice_exemplars`, `speaker_suggestions`, `voice_profile_events`, `speakers.person_id` |
 
 Migration 300 is the shell's own schema. It stays: `activity_events` backs the Activity screen,
 `event_log` provides the UI event sequence, `recording_import_metadata` holds the original file name.
