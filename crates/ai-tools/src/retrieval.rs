@@ -238,7 +238,7 @@ mod tests {
         let revision = fixture_revision(AlignmentOrigin::Native);
         let hits =
             Retriever::over_revision(&revision).retrieve("quarterly dividend in Patagonia", 5);
-        assert!(hits.is_empty());
+        assert!(hits.is_empty(), "expected hits to be empty, got {hits:?}");
     }
 
     #[test]
@@ -267,16 +267,28 @@ mod tests {
     fn an_empty_or_punctuation_only_query_retrieves_nothing() {
         let revision = fixture_revision(AlignmentOrigin::Native);
         let retriever = Retriever::over_revision(&revision);
-        assert!(retriever.retrieve("", 5).is_empty());
-        assert!(retriever.retrieve("*** !!! ???", 5).is_empty());
+        assert!(
+            retriever.retrieve("", 5).is_empty(),
+            "an empty query retrieves nothing"
+        );
+        assert!(
+            retriever.retrieve("*** !!! ???", 5).is_empty(),
+            "a punctuation-only query retrieves nothing"
+        );
     }
 
     #[test]
     fn an_empty_revision_is_handled_without_dividing_by_zero() {
         let revision = crate::testing::revision_from_segments(AlignmentOrigin::None, Vec::new());
         let retriever = Retriever::over_revision(&revision);
-        assert!(retriever.is_empty());
-        assert!(retriever.retrieve("anything", 5).is_empty());
+        assert!(
+            retriever.is_empty(),
+            "expected retriever to be empty, got {retriever:?}"
+        );
+        assert!(
+            retriever.retrieve("anything", 5).is_empty(),
+            "an empty revision retrieves nothing"
+        );
     }
 
     #[test]

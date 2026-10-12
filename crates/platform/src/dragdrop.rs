@@ -226,7 +226,7 @@ mod tests {
         );
         assert!(out.rejected.is_empty(), "nothing in this drop is refusable");
         assert_eq!(out.accepted_count(), 3);
-        assert!(!out.is_empty());
+        assert!(!out.is_empty(), "expected out to be non-empty");
     }
 
     #[test]

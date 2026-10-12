@@ -95,7 +95,7 @@ mod tests {
     use super::*;
     use plaudon_app::dto::EventKind;
 
-    fn event(payload: serde_json::Value) -> UiEvent {
+    fn event(payload: &serde_json::Value) -> UiEvent {
         UiEvent {
             seq: 1,
             kind: EventKind::ActivationRequested,
@@ -114,7 +114,7 @@ mod tests {
     #[test]
     fn an_event_naming_a_recording_names_a_recording() {
         let recording_id = RecordingId::new();
-        let mut raised = event(serde_json::json!({}));
+        let mut raised = event(&serde_json::json!({}));
         raised.recording_id = Some(recording_id);
         assert_eq!(
             ActivationTarget::from_event(&raised),
@@ -124,7 +124,7 @@ mod tests {
 
     #[test]
     fn a_settings_activation_is_read_from_the_hint_it_was_published_with() {
-        let raised = event(serde_json::json!({ "target": { "kind": "settings", "id": null } }));
+        let raised = event(&serde_json::json!({ "target": { "kind": "settings", "id": null } }));
         assert_eq!(
             ActivationTarget::from_event(&raised),
             Some(ActivationTarget::Settings)
@@ -134,12 +134,12 @@ mod tests {
     #[test]
     fn an_event_that_names_nothing_names_nothing() {
         assert_eq!(
-            ActivationTarget::from_event(&event(serde_json::json!({}))),
+            ActivationTarget::from_event(&event(&serde_json::json!({}))),
             None
         );
         assert_eq!(
             ActivationTarget::from_event(&event(
-                serde_json::json!({ "target": { "kind": "something-else" } })
+                &serde_json::json!({ "target": { "kind": "something-else" } })
             )),
             None
         );

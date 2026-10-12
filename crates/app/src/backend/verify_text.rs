@@ -476,7 +476,7 @@ impl LocalBackend {
         let card = self.card_for(ModelTask::TextGeneration, model_id).await?;
         let mut model = card_dto(&card);
         if let Some(engine) = local_engine {
-            model.engine = engine.to_owned();
+            engine.clone_into(&mut model.engine);
             model.pricing = on_device_pricing();
             model.privacy = on_device_privacy(engine);
         }

@@ -487,7 +487,11 @@ fn choosing_a_folder_asks_the_host_to_open_the_picker() {
         intent,
         SettingsIntent::PickFolder(FolderPurpose::ExportDestination)
     )));
-    assert!(harness.state().command_names().is_empty());
+    assert!(
+        harness.state().command_names().is_empty(),
+        "expected harness.state().command_names() to be empty, got {:?}",
+        harness.state().command_names()
+    );
 }
 
 #[test]
@@ -567,7 +571,11 @@ fn an_empty_registry_says_so_instead_of_listing_nothing() {
     harness.get_by_label(
         "The shell has not published its command registry yet, so there are no shortcuts to list.",
     );
-    assert!(button_labels(&harness).is_empty());
+    assert!(
+        button_labels(&harness).is_empty(),
+        "expected button_labels(&harness) to be empty, got {:?}",
+        button_labels(&harness)
+    );
 }
 
 #[test]
@@ -624,7 +632,11 @@ fn escape_leaves_capture_mode_without_changing_anything() {
     assert!(!announces(&harness, "Press the new shortcut for Jobs"));
     harness.get_by_label("Change the shortcut for Jobs");
     harness.get_by_label("Cmd+2");
-    assert!(harness.state().command_names().is_empty());
+    assert!(
+        harness.state().command_names().is_empty(),
+        "expected harness.state().command_names() to be empty, got {:?}",
+        harness.state().command_names()
+    );
 }
 
 #[test]
@@ -963,7 +975,11 @@ fn local_only_mode_suppression_is_stated_and_no_control_makes_a_request() {
         intent,
         SettingsIntent::CopyText(text) if text == "1.4.2"
     )));
-    assert!(harness.state().command_names().is_empty());
+    assert!(
+        harness.state().command_names().is_empty(),
+        "expected harness.state().command_names() to be empty, got {:?}",
+        harness.state().command_names()
+    );
 }
 
 #[test]

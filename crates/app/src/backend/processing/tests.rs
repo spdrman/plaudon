@@ -71,7 +71,7 @@ impl Pipeline {
                 .with_stt_engines(vec![stt.shared()])
                 .with_text_model(text.shared()),
         );
-        let pool = workers.map(|count| ProcessingHandle::start(Arc::clone(&backend), Some(count)));
+        let pool = workers.map(|count| ProcessingHandle::start(&backend, Some(count)));
         Self {
             fixture,
             backend,
@@ -308,7 +308,7 @@ async fn a_kill_mid_job_leaves_a_retryable_job_and_no_output() {
                 .with_pace_ms(200)
                 .shared()],
     ));
-    let pool = ProcessingHandle::start(Arc::clone(&backend), Some(1));
+    let pool = ProcessingHandle::start(&backend, Some(1));
 
     let path = fixture.source_file("interrupted.wav", b"bytes of interrupted");
     let response = backend
@@ -401,7 +401,7 @@ async fn a_kill_mid_job_leaves_a_retryable_job_and_no_output() {
     );
 
     // And the user's retry runs it again, to completion this time.
-    let pool = ProcessingHandle::start(Arc::clone(&restarted), Some(1));
+    let pool = ProcessingHandle::start(&restarted, Some(1));
     let retried = restarted
         .retry_job(transcribe, false)
         .await
@@ -769,7 +769,7 @@ async fn a_real_whisper_model_transcribes_the_committed_clip() {
     std::fs::copy(&model, installed.join("ggml-tiny.en.bin")).expect("the weights are installed");
 
     let backend = Arc::new(fixture.backend.clone());
-    let pool = ProcessingHandle::start(Arc::clone(&backend), Some(1));
+    let pool = ProcessingHandle::start(&backend, Some(1));
 
     let staged = fixture.imports.path().join("jfk.wav");
     std::fs::copy(&clip, &staged).expect("the clip is staged");

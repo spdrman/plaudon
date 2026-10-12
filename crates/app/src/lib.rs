@@ -291,8 +291,7 @@ pub async fn build_ports_with(
             "startup reconciliation did not complete"
         );
     }
-    let processing =
-        crate::backend::processing::ProcessingHandle::start(Arc::clone(&backend), None);
+    let processing = crate::backend::processing::ProcessingHandle::start(&backend, None);
     let events = backend.events().clone();
     // The library is open, so a real radio can now be given the committer it
     // needs. A supplied radio passes straight through.

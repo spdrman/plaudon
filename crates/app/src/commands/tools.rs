@@ -319,9 +319,12 @@ mod tests {
                 );
             }
         }
-        assert!(fake.asks.lock().is_empty());
-        assert!(fake.studies.lock().is_empty());
-        assert!(fake.recordings.lock().is_empty());
+        assert!(fake.asks.lock().is_empty(), "no ask may be dispatched");
+        assert!(fake.studies.lock().is_empty(), "no study may be dispatched");
+        assert!(
+            fake.recordings.lock().is_empty(),
+            "no recording may be read"
+        );
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -341,7 +344,7 @@ mod tests {
                 .expect_err("a hostile tool id is refused");
             assert_eq!(error.code(), AppErrorCode::InvalidArgument, "{bad:?}");
         }
-        assert!(fake.studies.lock().is_empty());
+        assert!(fake.studies.lock().is_empty(), "no study may be dispatched");
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

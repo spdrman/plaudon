@@ -330,7 +330,10 @@ mod tests {
     #[test]
     fn an_empty_distribution_reports_zeros_rather_than_panicking() {
         let samples = Samples::new("empty", "op");
-        assert!(samples.is_empty());
+        assert!(
+            samples.is_empty(),
+            "expected samples to be empty, got {samples:?}"
+        );
         let summary = samples.summarize();
         assert_eq!(summary.samples, 0);
         assert!((summary.p95_ms - 0.0).abs() < f64::EPSILON);

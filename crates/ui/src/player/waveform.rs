@@ -511,6 +511,6 @@ mod tests {
             0.0,
             &PlayerStyle::default(),
         );
-        assert!(mesh.is_empty());
+        assert!(mesh.is_empty(), "expected mesh to be empty, got {mesh:?}");
     }
 }

@@ -79,7 +79,7 @@ pub fn toolbar(
             ui,
             "Import status",
             "All import states",
-            query.import_status.first().copied(),
+            query.import_status.first(),
             &IMPORT_STATUS_OPTIONS,
             |status| import_status(status).label.to_owned(),
             QueryAction::ImportStatus,
@@ -89,7 +89,7 @@ pub fn toolbar(
             ui,
             "Transcription status",
             "All transcription states",
-            query.transcription_status.first().copied(),
+            query.transcription_status.first(),
             &TRANSCRIPTION_STATUS_OPTIONS,
             |status| transcription_status(status).label.to_owned(),
             QueryAction::TranscriptionStatus,
@@ -103,7 +103,7 @@ pub fn toolbar(
             ui,
             "Source",
             "All sources",
-            query.sources.first().cloned(),
+            query.sources.first(),
             &sources,
             |value: String| {
                 SOURCE_OPTIONS
@@ -119,7 +119,7 @@ pub fn toolbar(
             ui,
             "Tag",
             "All tags",
-            query.tags.first().cloned(),
+            query.tags.first(),
             &tags,
             |tag: String| tag,
             QueryAction::Tag,
@@ -128,10 +128,14 @@ pub fn toolbar(
 
     ui.horizontal_wrapped(|ui| {
         if let Some(action) = day_field(ui, "From date (YYYY-MM-DD)", query.date_from.as_deref()) {
-            output.actions.push(QueryAction::DateFrom(action));
+            output
+                .actions
+                .push(QueryAction::DateFrom(action.into_bound()));
         }
         if let Some(action) = day_field(ui, "To date (YYYY-MM-DD)", query.date_to.as_deref()) {
-            output.actions.push(QueryAction::DateTo(action));
+            output
+                .actions
+                .push(QueryAction::DateTo(action.into_bound()));
         }
         if query.has_active_filters() && ui.button("Clear filters").clicked() {
             state.set_text("");
@@ -152,7 +156,8 @@ pub fn toolbar(
             }
         } else {
             // One scheduled wake-up, not a repaint every frame.
-            ui.ctx().request_repaint_after(SEARCH_DEBOUNCE - elapsed);
+            ui.ctx()
+                .request_repaint_after(SEARCH_DEBOUNCE.saturating_sub(elapsed));
         }
     }
 
@@ -165,7 +170,7 @@ fn choice_filter<T, F, A>(
     ui: &mut Ui,
     label: &str,
     all_label: &str,
-    selected: Option<T>,
+    selected: Option<&T>,
     options: &[T],
     describe: F,
     action: A,
@@ -177,7 +182,7 @@ where
 {
     let mut chosen: Option<Option<T>> = None;
     let selected_text = selected
-        .clone()
+        .cloned()
         .map_or_else(|| all_label.to_owned(), &describe);
     egui::ComboBox::from_label(label)
         .selected_text(selected_text)
@@ -186,7 +191,7 @@ where
                 chosen = Some(None);
             }
             for option in options {
-                let is_selected = selected.as_ref() == Some(option);
+                let is_selected = selected == Some(option);
                 if ui
                     .selectable_label(is_selected, describe(option.clone()))
                     .clicked()
@@ -198,10 +203,28 @@ where
     chosen.map(action)
 }
 
+/// What the user did to a day field: typed a day, or emptied it.
+enum DayEdit {
+    /// The field is now empty, so the bound is gone.
+    Cleared,
+    /// The field now holds this text, which may still be an incomplete day.
+    Typed(String),
+}
+
+impl DayEdit {
+    /// The bound to send, where "cleared" and "no day" are the same thing.
+    fn into_bound(self) -> Option<String> {
+        match self {
+            Self::Cleared => None,
+            Self::Typed(day) => Some(day),
+        }
+    }
+}
+
 /// A calendar-day field. An incomplete or malformed day is simply not a
 /// bound — [`super::query::date_bound_from`] drops it — so the user can type
 /// freely without the list jumping on every character.
-fn day_field(ui: &mut Ui, label: &str, value: Option<&str>) -> Option<Option<String>> {
+fn day_field(ui: &mut Ui, label: &str, value: Option<&str>) -> Option<DayEdit> {
     let mut text = value.unwrap_or_default().to_owned();
     let field_label = ui.label(label);
     let field = ui.add(
@@ -211,7 +234,11 @@ fn day_field(ui: &mut Ui, label: &str, value: Option<&str>) -> Option<Option<Str
     );
     let field = field.labelled_by(field_label.id);
     if field.changed() {
-        Some((!text.is_empty()).then_some(text))
+        Some(if text.is_empty() {
+            DayEdit::Cleared
+        } else {
+            DayEdit::Typed(text)
+        })
     } else {
         None
     }

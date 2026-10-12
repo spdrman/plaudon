@@ -113,6 +113,6 @@ mod tests {
 
     #[test]
     fn draining_an_empty_channel_is_free_and_returns_nothing() {
-        assert!(drain_tray().is_empty());
+        assert!(drain_tray().is_empty(), "the tray queue starts empty");
     }
 }
