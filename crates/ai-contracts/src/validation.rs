@@ -20,37 +20,11 @@ use serde::{Deserialize, Serialize};
 use crate::extraction::{ExtractedItem, OwnerRef};
 use crate::template::OutputTemplate;
 
-/// How the structured output contract was enforced on the provider side (spec 9.5).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum CompatibilityMode {
-    /// The provider accepted a JSON Schema response format.
-    SchemaEnforced,
-    /// The provider does not support response formats; JSON was requested in
-    /// the prompt and bounded repair is permitted.
-    PromptConstrained,
-}
-
-impl CompatibilityMode {
-    /// Stable wire string.
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::SchemaEnforced => "schema_enforced",
-            Self::PromptConstrained => "prompt_constrained",
-        }
-    }
-
-    /// Parse a persisted wire string.
-    #[must_use]
-    pub fn from_str_opt(raw: &str) -> Option<Self> {
-        match raw {
-            "schema_enforced" => Some(Self::SchemaEnforced),
-            "prompt_constrained" => Some(Self::PromptConstrained),
-            _ => None,
-        }
-    }
-}
+/// How the structured output contract was enforced on the provider side.
+///
+/// Defined in [`plaudon_domain::output`] so the repository can persist it
+/// without depending on this crate's validator (spec 9.5).
+pub use plaudon_domain::output::CompatibilityMode;
 
 /// How many repair attempts are permitted (spec 9.5 "bounded schema repair").
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

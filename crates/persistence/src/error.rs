@@ -35,6 +35,10 @@ pub enum PersistenceError {
     /// A filesystem operation failed.
     #[error("filesystem operation failed")]
     Io(#[source] std::io::Error),
+    /// A stored row, or a row about to be stored, does not satisfy the
+    /// schema contract this build enforces.
+    #[error("a record did not match the schema contract: {0}")]
+    Invalid(String),
 }
 
 impl PersistenceError {
@@ -50,6 +54,7 @@ impl PersistenceError {
             Self::IntegrityFailed => AppErrorCode::IntegrityFailed,
             Self::ArchivePathRejected(_) => AppErrorCode::ArchivePathRejected,
             Self::CrossVolumeCommit => AppErrorCode::CrossVolumeCommit,
+            Self::Invalid(_) => AppErrorCode::MalformedOutput,
         }
     }
 }

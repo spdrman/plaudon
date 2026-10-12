@@ -90,6 +90,12 @@ async fn every_spec_13_2_core_table_exists() {
         "tombstones",
         "device_credential_refs",
         "compatibility_evidence",
+        // EPIC I: meeting intelligence and source grounding (migration 0500).
+        "pipeline_stage_runs",
+        "output_claims",
+        "output_dependencies",
+        "transcript_tools",
+        "tool_runs",
     ] {
         assert!(
             tables.contains(&required.to_owned()),

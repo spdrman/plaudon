@@ -14,6 +14,7 @@ pub mod locale;
 pub mod media;
 pub mod model;
 pub mod money;
+pub mod output;
 pub mod recording;
 pub mod source;
 pub mod time;

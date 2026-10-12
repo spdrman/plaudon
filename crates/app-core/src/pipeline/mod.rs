@@ -37,15 +37,18 @@ use plaudon_ai_contracts::validation::{
     AcceptedItem, CompatibilityMode, OutputValidator, RejectedItem, RepairPolicy, SpeakerDirectory,
     ValidationReport, ValidatorBuildError,
 };
+#[allow(unused_imports)]
 use plaudon_domain::anchor::SourceAnchor;
 use plaudon_domain::capability::Tri;
 use plaudon_domain::claim::{Claim, GroundingSummary};
 use plaudon_domain::ids::{OutputId, RecordingId, StageRunId, TranscriptRevisionId};
 use plaudon_domain::media::Sha256Digest;
 use plaudon_domain::model::ModelIdentity;
+use plaudon_domain::output::OutputStatus;
 use plaudon_domain::time::Timestamp;
 use plaudon_domain::transcript::TranscriptRevision;
 use plaudon_jobs::key::{ProcessingJobKey, ProcessingStage};
+use plaudon_persistence::intelligence::GeneratedOutput;
 use serde::{Deserialize, Serialize};
 
 use crate::chunking::{
@@ -107,228 +110,24 @@ impl Clock for SteppingClock {
     }
 }
 
-/// A stage of the §9.1 pipeline.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum StageKind {
-    /// Canonicalize and hash the input revision.
-    Normalize,
-    /// Summarize one chronological chunk.
-    SectionSummary,
-    /// Consolidate section summaries.
-    ConsolidatedSummary,
-    /// Produce the structured record.
-    StructuredExtraction,
-    /// Resolve every anchor against the immutable revision.
-    CitationVerification,
-}
+/// The §9.1 stage vocabulary and the provenance record each stage writes.
+///
+/// These live in [`plaudon_domain::output`] because the repository that
+/// stores an output and the pipeline that produces one must agree on them,
+/// and only the domain crate sits below both.
+pub use plaudon_domain::output::{
+    CoverageState, SectionSummary, StageKind, StageProvenance, SummaryBullet, SummaryResponse,
+};
 
-impl StageKind {
-    /// Every stage in execution order.
-    pub const ORDER: &'static [Self] = &[
-        Self::Normalize,
-        Self::SectionSummary,
-        Self::ConsolidatedSummary,
-        Self::StructuredExtraction,
-        Self::CitationVerification,
-    ];
-
-    /// Stable wire string.
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Normalize => "normalize",
-            Self::SectionSummary => "section_summary",
-            Self::ConsolidatedSummary => "consolidated_summary",
-            Self::StructuredExtraction => "structured_extraction",
-            Self::CitationVerification => "citation_verification",
-        }
-    }
-
-    /// Parse a persisted wire string.
-    #[must_use]
-    pub fn from_str_opt(raw: &str) -> Option<Self> {
-        Self::ORDER
-            .iter()
-            .copied()
-            .find(|stage| stage.as_str() == raw)
-    }
-
-    /// Version of this stage's implementation.
-    ///
-    /// Bumping a stage version changes the job key and therefore produces a
-    /// new output revision rather than overwriting the previous one.
-    #[must_use]
-    pub const fn stage_version(self) -> &'static str {
-        match self {
-            Self::Normalize => "1.0.0",
-            Self::SectionSummary => "1.0.0",
-            Self::ConsolidatedSummary => "1.0.0",
-            Self::StructuredExtraction => "1.0.0",
-            Self::CitationVerification => "1.0.0",
-        }
-    }
-
-    /// Whether this stage dispatches to a model.
-    #[must_use]
-    pub const fn is_inference(self) -> bool {
-        matches!(
-            self,
-            Self::SectionSummary | Self::ConsolidatedSummary | Self::StructuredExtraction
-        )
-    }
-
-    /// Corresponding job-key stage (§14.2).
-    #[must_use]
-    pub const fn job_stage(self) -> ProcessingStage {
-        match self {
-            Self::Normalize => ProcessingStage::Normalize,
-            Self::SectionSummary => ProcessingStage::SectionSummary,
-            Self::ConsolidatedSummary => ProcessingStage::ConsolidatedSummary,
-            Self::StructuredExtraction => ProcessingStage::StructuredExtraction,
-            Self::CitationVerification => ProcessingStage::CitationVerification,
-        }
-    }
-}
-
-/// Everything recorded about one executed stage (spec 9.1, 13.3 `tool_runs`).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct StageProvenance {
-    /// Stage run identity.
-    pub id: StageRunId,
-    /// Position in the run, starting at zero.
-    pub sequence: u32,
-    /// Which stage ran.
-    pub stage: StageKind,
-    /// Version of the stage implementation.
-    pub stage_version: String,
-    /// Version of the pipeline as a whole.
-    pub pipeline_version: String,
-    /// Exact transcript revision the stage read.
-    pub transcript_revision_id: TranscriptRevisionId,
-    /// Digest of the stage's canonical input.
-    pub input_sha256: Sha256Digest,
-    /// Digest of the stage's canonical output.
-    pub output_sha256: Sha256Digest,
-    /// Model that produced the output, for inference stages.
-    pub model: Option<ModelIdentity>,
-    /// How the structured-output contract was enforced, for inference stages.
-    pub compatibility_mode: Option<CompatibilityMode>,
-    /// Bounded repair attempts consumed by this stage.
-    pub repair_attempts: u8,
-    /// Version of the template's prompt text.
-    pub prompt_version: String,
-    /// Version of the prompt envelope this build assembles.
-    pub prompt_envelope_version: String,
-    /// Template identity.
-    pub template_id: String,
-    /// Template version.
-    pub template_version: String,
-    /// Version of the response schema the stage required.
-    pub schema_version: String,
-    /// Segment range the stage read, for chunked stages.
-    pub segment_range: Option<Range<u32>>,
-    /// Previous stage run whose output was reused instead of recomputed.
-    pub reused_from: Option<StageRunId>,
-    /// When the stage started.
-    pub started_at: Timestamp,
-    /// When the stage ended.
-    pub ended_at: Timestamp,
-}
-
-impl StageProvenance {
-    /// Whether every provenance field required by spec 9.1 is populated.
-    ///
-    /// Used by the completeness property test and by the repository before a
-    /// row is written: a stage without provenance is never persisted.
-    #[must_use]
-    pub fn is_complete(&self) -> bool {
-        !self.stage_version.is_empty()
-            && !self.pipeline_version.is_empty()
-            && !self.prompt_version.is_empty()
-            && !self.prompt_envelope_version.is_empty()
-            && !self.template_id.is_empty()
-            && !self.template_version.is_empty()
-            && !self.schema_version.is_empty()
-            && (!self.stage.is_inference()
-                || self.reused_from.is_some()
-                || (self.model.is_some() && self.compatibility_mode.is_some()))
-    }
-}
-
-/// One bullet of a section or consolidated summary.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SummaryBullet {
-    /// The bullet text.
-    pub text: String,
-    /// Anchors the model supplied for the bullet.
-    #[serde(default)]
-    pub anchors: Vec<SourceAnchor>,
-}
-
-/// The response shape of a section or consolidated summary stage.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SummaryResponse {
-    /// Bullets produced for this chunk.
-    pub bullets: Vec<SummaryBullet>,
-    /// First segment index the model reports having read.
-    pub covered_first_segment: u32,
-    /// Last segment index the model reports having read.
-    pub covered_last_segment: u32,
-}
-
-/// A persisted section summary, reusable by a targeted regeneration.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SectionSummary {
-    /// Stage run that produced it.
-    pub stage_run_id: StageRunId,
-    /// Chunk index within the plan.
-    pub chunk_index: u32,
-    /// Segment range the chunk contained.
-    pub segments: Range<u32>,
-    /// Digest of the exact segment text the chunk contained.
-    pub input_sha256: Sha256Digest,
-    /// The model's output.
-    pub response: SummaryResponse,
-}
-
-impl SectionSummary {
-    /// Whether the model reported reading the whole chunk it was given.
-    #[must_use]
-    pub fn covers_its_chunk(&self) -> bool {
-        self.response.covered_first_segment <= self.segments.start
-            && self.response.covered_last_segment + 1 >= self.segments.end
-    }
-}
-
-/// How much of the transcript the finished output actually reflects.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "state", rename_all = "snake_case")]
-pub enum CoverageState {
-    /// Every segment was read, and every model reported reading its chunk.
-    Full,
-    /// Every segment was sent, but a model reported reading less than it was
-    /// given. The output is usable but is not claimed to be complete.
-    ModelReportedPartial {
-        /// Chunk indices whose model under-reported coverage.
-        chunks: Vec<u32>,
-    },
-}
-
-impl CoverageState {
-    /// Whether the output may be presented as a complete summary.
-    #[must_use]
-    pub const fn is_full(&self) -> bool {
-        matches!(self, Self::Full)
-    }
-
-    /// Stable wire string.
-    #[must_use]
-    pub const fn as_str(&self) -> &'static str {
-        match self {
-            Self::Full => "full",
-            Self::ModelReportedPartial { .. } => "model_reported_partial",
-        }
+/// The job-key stage (§14.2) corresponding to a pipeline stage.
+#[must_use]
+pub const fn job_stage(stage: StageKind) -> ProcessingStage {
+    match stage {
+        StageKind::Normalize => ProcessingStage::Normalize,
+        StageKind::SectionSummary => ProcessingStage::SectionSummary,
+        StageKind::ConsolidatedSummary => ProcessingStage::ConsolidatedSummary,
+        StageKind::StructuredExtraction => ProcessingStage::StructuredExtraction,
+        StageKind::CitationVerification => ProcessingStage::CitationVerification,
     }
 }
 
@@ -407,7 +206,7 @@ impl PipelineRequest {
 
         let mut key = ProcessingJobKey::new(
             self.audio_sha256.to_hex(),
-            stage.job_stage(),
+            job_stage(stage),
             self.capabilities.engine_id.as_str().to_owned(),
             self.capabilities.model.model_id.clone(),
         );
@@ -491,6 +290,58 @@ impl PipelineOutcome {
             .iter()
             .filter(|claim| claim.review_required())
             .collect()
+    }
+
+    /// Whether the output needs human attention before it can be trusted.
+    #[must_use]
+    pub fn status(&self) -> OutputStatus {
+        if self.rejected.is_empty()
+            && self.coverage.is_full()
+            && self.review_required_claims().is_empty()
+        {
+            OutputStatus::Complete
+        } else {
+            OutputStatus::NeedsReview
+        }
+    }
+
+    /// Convert into the record the repository stores.
+    ///
+    /// `output_type` is the §13.2 `ai_outputs.output_type` discriminator, for
+    /// example `meeting_summary`.
+    #[must_use]
+    pub fn to_generated_output(&self, output_type: impl Into<String>) -> GeneratedOutput {
+        GeneratedOutput {
+            id: self.output_id,
+            recording_id: self.recording_id,
+            transcript_revision_id: self.transcript_revision_id,
+            output_type: output_type.into(),
+            pipeline_version: self.pipeline_version.clone(),
+            template_id: self.template_id.clone(),
+            template_version: self.template_version.clone(),
+            model_id: self
+                .stages
+                .iter()
+                .rev()
+                .find_map(|stage| stage.model.as_ref().map(ToString::to_string))
+                .unwrap_or_default(),
+            prompt_version: self.prompt_version.clone(),
+            schema_version: self.schema_version.clone(),
+            input_sha256: self.input_sha256,
+            output_sha256: self.output_sha256,
+            body: self.body.clone(),
+            status: self.status(),
+            coverage: self.coverage.clone(),
+            compatibility_mode: self.compatibility_mode,
+            grounding: self.grounding,
+            rejected: self.rejected.clone(),
+            directives: serde_json::to_value(&self.detected_directives)
+                .unwrap_or_else(|_| serde_json::Value::Array(Vec::new())),
+            stages: self.stages.clone(),
+            section_summaries: self.section_summaries.clone(),
+            claims: self.claims.clone(),
+            created_at: self.created_at,
+        }
     }
 }
 

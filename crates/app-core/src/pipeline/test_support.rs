@@ -1,6 +1,6 @@
 //! Deterministic fixtures shared by the pipeline unit tests.
 
-use std::sync::Mutex;
+use parking_lot::Mutex;
 
 use async_trait::async_trait;
 use plaudon_ai_contracts::capabilities::TextModelCapabilities;
@@ -143,12 +143,12 @@ impl ScriptedModel {
 
     /// Every prompt the pipeline sent, in order.
     pub(crate) fn prompts(&self) -> Vec<String> {
-        self.prompts.lock().expect("prompt log").clone()
+        self.prompts.lock().clone()
     }
 
     /// Number of model calls that happened.
     pub(crate) fn call_count(&self) -> usize {
-        self.prompts.lock().expect("prompt log").len()
+        self.prompts.lock().len()
     }
 }
 
@@ -166,14 +166,10 @@ impl TextModel for ScriptedModel {
         if ctx.is_cancelled() {
             return Err(TextModelError::Cancelled);
         }
-        self.prompts
-            .lock()
-            .expect("prompt log")
-            .push(request.prompt.clone());
+        self.prompts.lock().push(request.prompt.clone());
         let next = self
             .script
             .lock()
-            .expect("script")
             .pop_front()
             .unwrap_or(Reply::Fail(TextModelError::EngineFailure));
         match next {
