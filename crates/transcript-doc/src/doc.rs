@@ -17,10 +17,10 @@
 use std::collections::HashMap;
 
 use plaudon_domain::ids::{RecordingId, SpeakerId, TranscriptRevisionId};
+use plaudon_domain::timerange::SourceTimeMs;
 use plaudon_domain::transcript::{
     AlignmentOrigin, Confidence, TranscriptRevision, TranscriptSegment, WordAlignment,
 };
-use plaudon_domain::timerange::SourceTimeMs;
 
 use crate::text::SegmentText;
 
@@ -307,8 +307,12 @@ impl TranscriptDocument {
                 .iter()
                 .map(|segment| SegmentSeed {
                     seq_index: segment.seq_index,
-                    start_ms: permits_times.then(|| segment.start.map(SourceTimeMs::get)).flatten(),
-                    end_ms: permits_times.then(|| segment.end.map(SourceTimeMs::get)).flatten(),
+                    start_ms: permits_times
+                        .then(|| segment.start.map(SourceTimeMs::get))
+                        .flatten(),
+                    end_ms: permits_times
+                        .then(|| segment.end.map(SourceTimeMs::get))
+                        .flatten(),
                     text: segment.text.clone(),
                     speaker_id: segment.speaker_id,
                     confidence: segment.confidence.clone(),
@@ -326,8 +330,12 @@ impl TranscriptDocument {
         self.segments.push(Segment {
             id,
             seq_index: seed.seq_index,
-            start: permits_times.then(|| seed.start_ms.map(SourceTimeMs::new)).flatten(),
-            end: permits_times.then(|| seed.end_ms.map(SourceTimeMs::new)).flatten(),
+            start: permits_times
+                .then(|| seed.start_ms.map(SourceTimeMs::new))
+                .flatten(),
+            end: permits_times
+                .then(|| seed.end_ms.map(SourceTimeMs::new))
+                .flatten(),
             speaker_id: seed.speaker_id,
             base_speaker_id: seed.speaker_id,
             confidence: seed.confidence,
@@ -652,20 +660,29 @@ mod tests {
         assert_eq!(document.position(ids[1]), Some(1));
         assert_eq!(document.next_id(ids[0]), Some(ids[1]));
         assert_eq!(document.previous_id(ids[0]), None);
-        assert_eq!(document.segment(ids[2]).map(|s| s.text().into_owned()), Some("three".to_owned()));
+        assert_eq!(
+            document.segment(ids[2]).map(|s| s.text().into_owned()),
+            Some("three".to_owned())
+        );
     }
 
     #[test]
     fn editing_does_not_change_identities_or_seq_indices() {
         let mut document = document_with(&["one", "two"]);
         let ids: Vec<SegmentId> = document.segments().iter().map(|s| s.id).collect();
-        document.insert_text(ids[0], 3, " thousand").expect("insert");
+        document
+            .insert_text(ids[0], 3, " thousand")
+            .expect("insert");
         assert_eq!(
             document.segments().iter().map(|s| s.id).collect::<Vec<_>>(),
             ids
         );
         assert_eq!(
-            document.segments().iter().map(|s| s.seq_index).collect::<Vec<_>>(),
+            document
+                .segments()
+                .iter()
+                .map(|s| s.seq_index)
+                .collect::<Vec<_>>(),
             vec![0, 1]
         );
         assert_eq!(document.text_edits(), vec![(0, "one thousand".to_owned())]);
@@ -724,7 +741,10 @@ mod tests {
         assert!(!document.is_dirty());
         assert_eq!(document.base_revision_id(), saved);
         assert_eq!(document.saved_revisions(), &[saved]);
-        assert_eq!(document.segment(id).expect("segment").original_text(), "one!");
+        assert_eq!(
+            document.segment(id).expect("segment").original_text(),
+            "one!"
+        );
     }
 
     #[test]

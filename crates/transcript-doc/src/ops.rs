@@ -82,9 +82,7 @@ impl Op {
             Self::Delete { at, text } => {
                 document.delete_text(at.segment, at.offset, text).map(drop)
             }
-            Self::SetSpeaker {
-                segment, after, ..
-            } => document.set_speaker(*segment, *after),
+            Self::SetSpeaker { segment, after, .. } => document.set_speaker(*segment, *after),
         }
     }
 
@@ -92,10 +90,9 @@ impl Op {
     #[must_use]
     pub fn resulting_position(&self) -> Option<Position> {
         match self {
-            Self::Insert { at, text } => Some(Position::new(
-                at.segment,
-                at.offset + text.chars().count(),
-            )),
+            Self::Insert { at, text } => {
+                Some(Position::new(at.segment, at.offset + text.chars().count()))
+            }
             Self::Delete { at, .. } => Some(*at),
             Self::SetSpeaker { .. } => None,
         }
@@ -191,10 +188,7 @@ impl OpGroup {
 }
 
 /// Apply every operation of a group, in order.
-pub fn apply_group(
-    document: &mut TranscriptDocument,
-    group: &OpGroup,
-) -> Result<(), DocError> {
+pub fn apply_group(document: &mut TranscriptDocument, group: &OpGroup) -> Result<(), DocError> {
     for op in &group.ops {
         op.apply(document)?;
     }
@@ -202,10 +196,7 @@ pub fn apply_group(
 }
 
 /// Undo a group: apply the inverse of each operation, last one first.
-pub fn revert_group(
-    document: &mut TranscriptDocument,
-    group: &OpGroup,
-) -> Result<(), DocError> {
+pub fn revert_group(document: &mut TranscriptDocument, group: &OpGroup) -> Result<(), DocError> {
     for op in group.ops.iter().rev() {
         op.inverse().apply(document)?;
     }
@@ -230,7 +221,10 @@ mod tests {
             text: "not ".to_owned(),
         };
         op.apply(&mut document).expect("apply");
-        assert_eq!(document.segment(id).expect("segment").text(), "we will not pay");
+        assert_eq!(
+            document.segment(id).expect("segment").text(),
+            "we will not pay"
+        );
         op.inverse().apply(&mut document).expect("invert");
         assert_eq!(document.segment(id).expect("segment").text(), "we will pay");
     }
@@ -272,7 +266,10 @@ mod tests {
             after: Some(speaker),
         };
         op.apply(&mut document).expect("apply");
-        assert_eq!(document.segment(id).expect("segment").speaker_id, Some(speaker));
+        assert_eq!(
+            document.segment(id).expect("segment").speaker_id,
+            Some(speaker)
+        );
         op.inverse().apply(&mut document).expect("invert");
         assert_eq!(document.segment(id).expect("segment").speaker_id, None);
     }

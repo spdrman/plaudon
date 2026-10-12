@@ -195,9 +195,7 @@ pub fn move_position(
             .map_or(Position::new(segment.id, segment.char_len()), |next| {
                 Position::new(next.id, offset.min(next.char_len()))
             }),
-        Motion::DocumentStart => document
-            .first_id()
-            .map_or(position, Position::start_of),
+        Motion::DocumentStart => document.first_id().map_or(position, Position::start_of),
         Motion::DocumentEnd => document
             .last_id()
             .and_then(|last| document.segment(last))

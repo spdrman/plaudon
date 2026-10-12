@@ -305,11 +305,16 @@ mod tests {
         let document = dirty_document();
         let mut autosave = Autosave::default();
         autosave.note_edit(0);
-        autosave.take_request(DEFAULT_DEBOUNCE_MS, &document).expect("request");
+        autosave
+            .take_request(DEFAULT_DEBOUNCE_MS, &document)
+            .expect("request");
         autosave.note_conflict();
         assert_eq!(autosave.state(), AutosaveState::Conflict);
         assert_eq!(autosave.take_request(1_000_000, &document), None);
-        assert!(document.is_dirty(), "the user's text must survive a conflict");
+        assert!(
+            document.is_dirty(),
+            "the user's text must survive a conflict"
+        );
         autosave.clear_conflict(1_000_000);
         assert!(autosave
             .take_request(1_000_000 + DEFAULT_DEBOUNCE_MS, &document)
@@ -321,10 +326,15 @@ mod tests {
         let document = dirty_document();
         let mut autosave = Autosave::default();
         autosave.note_edit(0);
-        autosave.take_request(DEFAULT_DEBOUNCE_MS, &document).expect("request");
+        autosave
+            .take_request(DEFAULT_DEBOUNCE_MS, &document)
+            .expect("request");
         autosave.note_failed(DEFAULT_DEBOUNCE_MS);
         assert_eq!(autosave.state(), AutosaveState::Retrying);
-        assert_eq!(autosave.take_request(DEFAULT_DEBOUNCE_MS + 1, &document), None);
+        assert_eq!(
+            autosave.take_request(DEFAULT_DEBOUNCE_MS + 1, &document),
+            None
+        );
         assert!(autosave
             .take_request(DEFAULT_DEBOUNCE_MS + DEFAULT_RETRY_BACKOFF_MS, &document)
             .is_some());

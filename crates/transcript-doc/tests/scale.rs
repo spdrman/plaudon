@@ -88,7 +88,10 @@ fn a_three_hour_transcript_stays_inside_the_editing_budgets() {
     session.set_search_query(SearchQuery::literal("schedule"));
     let search = at.elapsed();
     let matches = session.search().len();
-    assert!(matches > 1_000, "expected a transcript-wide match set, got {matches}");
+    assert!(
+        matches > 1_000,
+        "expected a transcript-wide match set, got {matches}"
+    );
     report("literal search over 30k segments", search, SEARCH_BUDGET);
 
     let at = Instant::now();
@@ -97,7 +100,11 @@ fn a_three_hour_transcript_stays_inside_the_editing_budgets() {
         case_sensitive: false,
         whole_word: true,
     });
-    report("whole-word search over 30k segments", at.elapsed(), SEARCH_BUDGET);
+    report(
+        "whole-word search over 30k segments",
+        at.elapsed(),
+        SEARCH_BUDGET,
+    );
 
     // Replace-all, which is one undo step covering every match.
     let at = Instant::now();
