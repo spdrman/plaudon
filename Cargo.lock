@@ -5521,9 +5521,11 @@ dependencies = [
  "plaudon-craft-ui",
  "plaudon-diagnostics",
  "plaudon-domain",
+ "plaudon-ui",
  "plaudon-ui-testkit",
  "rfd 0.17.2",
  "tempfile",
+ "tokio",
  "tracing",
 ]
 
@@ -5924,8 +5926,14 @@ version = "0.1.0"
 dependencies = [
  "egui",
  "egui_kittest",
+ "plaudon-app",
+ "plaudon-craft-ui",
  "plaudon-domain",
  "plaudon-transcript-doc",
+ "plaudon-ui-testkit",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tracing",
 ]
 
 [[package]]
