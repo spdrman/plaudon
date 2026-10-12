@@ -2398,6 +2398,18 @@ pub struct VerifyModelResponse {
 // a `*_ui_label()` helper in `plaudon_source_plaud_device`; the UI renders the
 // strings and never composes a compatibility claim of its own.
 
+/// Register status of a probed device profile.
+///
+/// Aliased here, like [`PlaudConnectorState`], so a user interface can name
+/// the type of a DTO field without depending on a source crate directly.
+pub type DeviceSupportStatus = plaudon_source_plaud_device::SupportStatus;
+
+/// How sure the application is that it is talking to the device it means.
+pub type DeviceIdentityAssurance = plaudon_source_plaud_device::IdentityAssurance;
+
+/// Ledger state of one device transfer (App. B.6).
+pub type DeviceTransferState = plaudon_source_plaud_device::TransferState;
+
 /// The App. B.8 list sections.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
