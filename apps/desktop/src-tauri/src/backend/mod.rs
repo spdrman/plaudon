@@ -242,27 +242,13 @@ impl LocalBackend {
         &self,
         preferences: &Preferences,
     ) -> Result<OsNotificationPermission, AppError> {
-        let observed = self.notifications.apply_settings(&preferences.notifications).await;
-        self.put_setting(NOTIFICATION_PERMISSION_KEY, &permission_str(observed)).await?;
+        let observed = self
+            .notifications
+            .apply_settings(&preferences.notifications)
+            .await;
+        self.put_setting(NOTIFICATION_PERMISSION_KEY, &permission_str(observed))
+            .await?;
         Ok(observed)
-    }
-
-    /// The permission last observed from the operating system.
-    async fn os_notification_permission(&self) -> OsNotificationPermission {
-        match self
-            .setting::<String>(NOTIFICATION_PERMISSION_KEY)
-            .await
-            .ok()
-            .flatten()
-            .as_deref()
-        {
-            Some("granted") => OsNotificationPermission::Granted,
-            Some("denied") => OsNotificationPermission::Denied,
-            Some("unsupported") => OsNotificationPermission::Unsupported,
-            // Nothing has prompted the OS yet; the notification service writes
-            // the observed answer here the first time it does.
-            _ => OsNotificationPermission::NotRequested,
-        }
     }
 
     /* ------------------------------------------------------------- library */
@@ -1336,8 +1322,10 @@ pub(crate) mod testing {
     }
 
     pub(crate) async fn backend_fixture() -> Fixture {
-        fixture_with_notifier(RecordingNotifier::with_permission(OsPermission::NotRequested))
-            .await
+        fixture_with_notifier(RecordingNotifier::with_permission(
+            OsPermission::NotRequested,
+        ))
+        .await
     }
 
     /// A fixture whose notifications go to `notifier`.
@@ -1381,7 +1369,7 @@ mod tests {
     use super::testing::backend_fixture;
     use super::*;
     use crate::dto::{DuplicatePolicy, ImportOutcome, JobState, RecordingSort};
-    use crate::ports::{ImportPort, JobsPort, MachineSegment};
+    use crate::ports::{ActivityPort, ImportPort, JobsPort, MachineSegment};
     use crate::validate::ValidatedListJobs;
 
     fn list_all() -> ValidatedListRecordings {
@@ -1865,5 +1853,187 @@ mod tests {
                 kind.as_str()
             );
         }
+    }
+
+    /// Enable notifications for the import category and report what the OS
+    /// answered.
+    async fn enable_import_notifications(
+        fixture: &super::testing::Fixture,
+    ) -> OsNotificationPermission {
+        let mut categories = BTreeMap::new();
+        for category in NotificationCategory::ALL {
+            categories.insert(*category, *category == NotificationCategory::ImportFinished);
+        }
+        fixture
+            .backend
+            .set_notification_settings(NotificationSettings {
+                enabled: true,
+                categories,
+            })
+            .await
+            .unwrap()
+            .os_permission
+    }
+
+    async fn import_one(fixture: &super::testing::Fixture, name: &str) {
+        let path = fixture.source_file(name, format!("RIFF {name}").as_bytes());
+        fixture
+            .backend
+            .import_files(vec![path], crate::dto::DuplicatePolicy::Ask)
+            .await
+            .unwrap();
+        fixture.backend.notifications().flush().await;
+    }
+
+    async fn only_activity_entry(fixture: &super::testing::Fixture) -> crate::dto::ActivityEntry {
+        let page = fixture
+            .backend
+            .list_activity(crate::validate::ValidatedListActivity {
+                cursor: PageCursor::START,
+                limit: 10,
+            })
+            .await
+            .unwrap();
+        assert_eq!(page.items.len(), 1);
+        page.items[0].clone()
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_granted_notification_is_delivered_and_carries_no_user_content() {
+        let fixture = super::testing::fixture_with_notifier(
+            plaudon_notifications::testing::RecordingNotifier::granted(),
+        )
+        .await;
+        assert_eq!(
+            enable_import_notifications(&fixture).await,
+            OsNotificationPermission::Granted
+        );
+
+        import_one(&fixture, "quarterly-board-review.wav").await;
+
+        let entry = only_activity_entry(&fixture).await;
+        assert!(entry.notification_delivered);
+        assert_eq!(entry.notification_suppressed_reason, None);
+        assert_eq!(entry.title, "Import finished");
+
+        let deliveries = fixture.notifier.deliveries().await;
+        assert_eq!(deliveries.len(), 1);
+        let payload = format!("{} {}", deliveries[0].title, deliveries[0].body);
+        for forbidden in [
+            "quarterly-board-review",
+            ".wav",
+            "/",
+            "added to your library",
+        ] {
+            assert!(
+                !payload.contains(forbidden),
+                "payload leaked {forbidden}: {payload}"
+            );
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_denied_permission_still_leaves_the_activity_entry_and_a_completed_job() {
+        let fixture = super::testing::fixture_with_notifier(
+            plaudon_notifications::testing::RecordingNotifier::with_permission(
+                plaudon_notifications::OsPermission::Denied,
+            ),
+        )
+        .await;
+        assert_eq!(
+            enable_import_notifications(&fixture).await,
+            OsNotificationPermission::Denied
+        );
+
+        import_one(&fixture, "denied.wav").await;
+
+        let entry = only_activity_entry(&fixture).await;
+        assert!(!entry.notification_delivered);
+        assert_eq!(
+            entry.notification_suppressed_reason.as_deref(),
+            Some("suppressed_by_os_permission")
+        );
+        assert_eq!(fixture.notifier.deliveries().await.len(), 0);
+
+        let jobs = fixture
+            .backend
+            .list_jobs(ValidatedListJobs {
+                cursor: PageCursor::START,
+                limit: 10,
+                states: Vec::new(),
+                kinds: Vec::new(),
+            })
+            .await
+            .unwrap();
+        assert_eq!(jobs.items[0].state, JobState::Completed);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_panicking_or_hanging_backend_cannot_touch_the_job() {
+        for behavior in [
+            plaudon_notifications::testing::Behavior::Panic,
+            plaudon_notifications::testing::Behavior::Hang(std::time::Duration::from_secs(30)),
+        ] {
+            let notifier = plaudon_notifications::testing::RecordingNotifier::granted();
+            notifier.set_behavior(behavior).await;
+            let fixture = super::testing::fixture_with_notifier(notifier).await;
+            enable_import_notifications(&fixture).await;
+
+            import_one(&fixture, "contained.wav").await;
+
+            let entry = only_activity_entry(&fixture).await;
+            assert!(!entry.notification_delivered);
+            assert!(entry.notification_suppressed_reason.is_some());
+
+            let page = fixture.backend.list_recordings(list_all()).await.unwrap();
+            assert_eq!(page.total, 1, "the import committed despite the backend");
+            let jobs = fixture
+                .backend
+                .list_jobs(ValidatedListJobs {
+                    cursor: PageCursor::START,
+                    limit: 10,
+                    states: Vec::new(),
+                    kinds: Vec::new(),
+                })
+                .await
+                .unwrap();
+            assert_eq!(jobs.items[0].state, JobState::Completed);
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn an_opted_out_category_records_activity_without_touching_the_os() {
+        let fixture = super::testing::fixture_with_notifier(
+            plaudon_notifications::testing::RecordingNotifier::granted(),
+        )
+        .await;
+        // Master switch on, this category off.
+        let mut categories = BTreeMap::new();
+        for category in NotificationCategory::ALL {
+            categories.insert(*category, false);
+        }
+        fixture
+            .backend
+            .set_notification_settings(NotificationSettings {
+                enabled: true,
+                categories,
+            })
+            .await
+            .unwrap();
+
+        import_one(&fixture, "silent.wav").await;
+
+        let entry = only_activity_entry(&fixture).await;
+        assert!(!entry.notification_delivered);
+        assert_eq!(
+            entry.notification_suppressed_reason.as_deref(),
+            Some("suppressed_by_preference")
+        );
+        assert_eq!(fixture.notifier.deliveries().await.len(), 0);
+        assert_eq!(
+            fixture.notifier.permission_prompts().await,
+            0,
+            "an opted-out category never prompts the OS"
+        );
     }
 }

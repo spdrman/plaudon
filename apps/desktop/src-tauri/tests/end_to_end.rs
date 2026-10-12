@@ -543,3 +543,49 @@ async fn the_media_scheme_serves_ranges_and_refuses_anything_but_a_recording_id(
         assert_eq!(response.body.len(), 0);
     }
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn enabling_notifications_prompts_once_and_reports_what_the_os_answered() {
+    // The OS has not been asked yet; enabling the first category is the only
+    // moment the shell prompts (spec §5.5).
+    let notifier = RecordingNotifier::with_permission(OsPermission::NotRequested);
+    notifier.granting_on_request(OsPermission::Granted).await;
+    let harness = Harness::with_notifier(notifier).await;
+
+    assert_eq!(
+        harness.notifier.permission_prompts().await,
+        0,
+        "opening the library never prompts"
+    );
+
+    let mut categories = std::collections::BTreeMap::new();
+    for category in NotificationCategory::ALL {
+        categories.insert(*category, *category == NotificationCategory::ImportFinished);
+    }
+    let response = settings::set_notification_settings(
+        &harness.ports,
+        plaudon_desktop::dto::SetNotificationSettingsRequest {
+            settings: plaudon_desktop::dto::NotificationSettings {
+                enabled: true,
+                categories,
+            },
+        },
+    )
+    .await
+    .expect("the settings are stored");
+    assert_eq!(
+        response.os_permission,
+        plaudon_desktop::dto::OsNotificationPermission::Granted,
+        "the response reports what the dispatcher observed"
+    );
+    assert_eq!(harness.notifier.permission_prompts().await, 1);
+
+    // The same permission is then reported by get_capabilities.
+    let capabilities = settings::get_capabilities(&harness.ports)
+        .await
+        .expect("capabilities are reported");
+    assert_eq!(
+        capabilities.permissions["notifications"],
+        plaudon_desktop::dto::PermissionState::Granted
+    );
+}

@@ -43,7 +43,11 @@ impl NotificationService {
     /// Service over an existing dispatcher.
     #[must_use]
     pub fn new(dispatcher: Arc<plaudon_notifications::Dispatcher>, pool: SqlitePool) -> Self {
-        Self { dispatcher, pool, in_flight: Arc::new(Mutex::new(Vec::new())) }
+        Self {
+            dispatcher,
+            pool,
+            in_flight: Arc::new(Mutex::new(Vec::new())),
+        }
     }
 
     /// The dispatcher, for callers that need to inspect settings in tests.
@@ -215,6 +219,9 @@ pub type ActivationHandler = Arc<dyn Fn(Option<NotificationTarget>) + Send + Syn
 /// `on_activated` routes a click back into the app. macOS carries the target
 /// in `targetContentIdentifier` and the application delegate calls
 /// [`activation_target`] with it; Windows hands it to the toast backend.
+// Taken by value because the Windows backend stores the handler; the other
+// targets simply drop it.
+#[allow(clippy::needless_pass_by_value)]
 #[must_use]
 pub fn platform_notifier(on_activated: ActivationHandler) -> Arc<dyn Notifier> {
     #[cfg(target_os = "macos")]
@@ -293,8 +300,14 @@ mod tests {
 
     #[test]
     fn every_permission_maps_onto_the_wire_contract() {
-        assert_eq!(map_permission(OsPermission::Granted), OsNotificationPermission::Granted);
-        assert_eq!(map_permission(OsPermission::Denied), OsNotificationPermission::Denied);
+        assert_eq!(
+            map_permission(OsPermission::Granted),
+            OsNotificationPermission::Granted
+        );
+        assert_eq!(
+            map_permission(OsPermission::Denied),
+            OsNotificationPermission::Denied
+        );
         assert_eq!(
             map_permission(OsPermission::NotRequested),
             OsNotificationPermission::NotRequested
@@ -310,11 +323,87 @@ mod tests {
         let notifier = UnsupportedNotifier;
         assert_eq!(notifier.permission().await, OsPermission::Unsupported);
         let request = privacy::build(
-            NotificationContext::ImportFinished { imported: 1, failed: 0, recording: None },
+            NotificationContext::ImportFinished {
+                imported: 1,
+                failed: 0,
+                recording: None,
+            },
             Timestamp::EPOCH,
         );
         let outcome = notifier.deliver(&request).await;
         assert!(!outcome.delivered());
         assert_eq!(outcome.suppression_reason(), Some("unsupported"));
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_valid_activation_token_publishes_exactly_one_event() {
+        use crate::backend::store::Store;
+        use crate::events::RecordingEventSink;
+
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path()).await.unwrap();
+        let sink = Arc::new(RecordingEventSink::new());
+        let events = EventPublisher::new(store.pool().clone(), Arc::clone(&sink) as Arc<_>);
+
+        let recording_id = plaudon_domain::ids::RecordingId::new();
+        let token = NotificationTarget::Recording(recording_id).activation_token();
+        let target = activation_target(&token).expect("our own token round-trips");
+        publish_activation(&events, target).await;
+
+        let emitted = sink.events();
+        assert_eq!(emitted.len(), 1);
+        assert_eq!(emitted[0].kind, EventKind::ActivationRequested);
+        assert_eq!(emitted[0].recording_id, Some(recording_id));
+        let json = serde_json::to_value(&emitted[0]).unwrap();
+        assert_eq!(json["kind"], "ui.activation_requested");
+        assert_eq!(json["payload"]["target"]["kind"], "recording");
+        assert_eq!(json["payload"]["target"]["id"], recording_id.to_string());
+        store.db().close().await;
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_foreign_activation_token_is_ignored() {
+        use crate::backend::store::Store;
+        use crate::events::RecordingEventSink;
+
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path()).await.unwrap();
+        let sink = Arc::new(RecordingEventSink::new());
+        let events = EventPublisher::new(store.pool().clone(), Arc::clone(&sink) as Arc<_>);
+
+        for token in [
+            "",
+            "recording:not-a-uuid",
+            "secrets:/etc/passwd",
+            "settings:extra",
+            "x",
+        ] {
+            if let Some(target) = activation_target(token) {
+                publish_activation(&events, target).await;
+            }
+        }
+        assert_eq!(sink.events().len(), 0, "a foreign token must not navigate");
+        store.db().close().await;
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_settings_activation_carries_no_id() {
+        use crate::backend::store::Store;
+        use crate::events::RecordingEventSink;
+
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path()).await.unwrap();
+        let sink = Arc::new(RecordingEventSink::new());
+        let events = EventPublisher::new(store.pool().clone(), Arc::clone(&sink) as Arc<_>);
+
+        let token = NotificationTarget::Settings.activation_token();
+        publish_activation(&events, activation_target(&token).unwrap()).await;
+
+        let json = serde_json::to_value(&sink.events()[0]).unwrap();
+        assert_eq!(json["payload"]["target"]["kind"], "settings");
+        assert_eq!(json["payload"]["target"]["id"], serde_json::Value::Null);
+        assert_eq!(json["recording_id"], serde_json::Value::Null);
+        assert_eq!(json["job_id"], serde_json::Value::Null);
+        store.db().close().await;
     }
 }

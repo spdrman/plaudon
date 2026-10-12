@@ -166,12 +166,13 @@ pub fn run() {
 
             // A notification click routes back through the same handle.
             let activation_handle = handle.clone();
-            let on_activated: notify::ActivationHandler =
-                Arc::new(move |target: Option<plaudon_notifications::NotificationTarget>| {
+            let on_activated: notify::ActivationHandler = Arc::new(
+                move |target: Option<plaudon_notifications::NotificationTarget>| {
                     if let Some(target) = target {
                         activate(&activation_handle, target);
                     }
-                });
+                },
+            );
             // Preferences are loaded by the backend; the dispatcher starts
             // disabled so nothing can be delivered before they are applied.
             let dispatcher = Arc::new(plaudon_notifications::Dispatcher::new(

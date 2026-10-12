@@ -60,11 +60,14 @@ fn no_source_file_installs_a_non_redacting_tracing_subscriber() {
 
 #[test]
 fn the_crate_declares_no_tracing_subscriber_dependency() {
-    let manifest = fs::read_to_string(
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml"),
-    )
-    .expect("the crate manifest is readable");
-    for forbidden in ["tracing-subscriber", "tracing-log", "env_logger", "simple_logger"] {
+    let manifest = fs::read_to_string(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml"))
+        .expect("the crate manifest is readable");
+    for forbidden in [
+        "tracing-subscriber",
+        "tracing-log",
+        "env_logger",
+        "simple_logger",
+    ] {
         assert!(
             !manifest.contains(forbidden),
             "{forbidden} must not be a dependency of the desktop shell: logging goes through \
