@@ -29,7 +29,7 @@
 # installed against this build: the npm package listing declares no license, so
 # we neither bundle nor redistribute it, and spec 2.1 forbids assuming its
 # output contract. That is a recorded finding, not an omission — see
-# docs/adr/ADR-0031-plaud-cli-compatibility-table.md for how to add a row.
+# docs/adr/ADR-0040-plaud-cli-compatibility-table.md for how to add a row.
 
 schema_version: 1
 updated_at: "2026-10-11"
