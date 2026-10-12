@@ -366,6 +366,47 @@ pub struct RecordingDetail {
     pub outputs: Vec<RecordingOutput>,
 }
 
+/// `resolve_media` request.
+///
+/// The native player needs a file to open; the archive layout is the
+/// application layer's business, so the view asks for a recording by
+/// identity and never composes a path of its own.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ResolveMediaRequest {
+    /// Recording whose archived media is wanted.
+    pub recording_id: String,
+}
+
+/// `resolve_media` response: where the archived bytes of one recording are.
+///
+/// `Debug` is written by hand and prints no path: §15.4 keeps filesystem
+/// paths out of anything that can be logged, and a derived `Debug` on a
+/// struct whose whole purpose is to carry one would be the easiest way to
+/// break that rule by accident.
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MediaLocation {
+    /// Recording the bytes belong to, echoed back so a late answer can be
+    /// matched to the recording the view is showing now.
+    pub recording_id: RecordingId,
+    /// Absolute path of the archived file inside the library.
+    pub path: String,
+    /// Content type recorded for these bytes.
+    pub content_type: String,
+    /// Length of the archived file.
+    pub byte_length: u64,
+}
+
+impl std::fmt::Debug for MediaLocation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MediaLocation")
+            .field("recording_id", &self.recording_id)
+            .field("path", &"<redacted>")
+            .field("content_type", &self.content_type)
+            .field("byte_length", &self.byte_length)
+            .finish()
+    }
+}
+
 /// Sortable column of the library list.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

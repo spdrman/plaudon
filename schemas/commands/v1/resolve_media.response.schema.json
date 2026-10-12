@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/resolve_media.response.schema.json",
+  "title": "resolve_media.response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["recording_id", "path", "content_type", "byte_length"],
+  "properties": {
+    "recording_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Recording the bytes belong to."
+    },
+    "path": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Absolute path of the archived file inside the library. Never logged (spec 15.4)."
+    },
+    "content_type": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Content type recorded for these bytes."
+    },
+    "byte_length": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Length of the archived file."
+    }
+  }
+}

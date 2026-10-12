@@ -43,19 +43,20 @@ use crate::dto::{
     ListModelsRequest, ListModelsResponse, ListNearbyDevicesRequest, ListOutputsRequest,
     ListOutputsResponse, ListRecordingsRequest, ListSourceArtifactsRequest,
     ListSourceArtifactsResponse, ListSpeakersRequest, ListSpeakersResponse, LocalOnlyModeResponse,
-    NotificationSettingsResponse, PlaudConnectRequest, PlaudConnectorSnapshot,
+    MediaLocation, NotificationSettingsResponse, PlaudConnectRequest, PlaudConnectorSnapshot,
     PlaudDisconnectResponse, PlaudImportRequest, PlaudImportResponse, PlaudListRequest,
     PlaudListResponse, Preferences, RecordingDetail, RecordingPage, RegenerateOutputRequest,
-    RegenerateOutputResponse, RenameSpeakerRequest, ResetSpeakerRequest, RestoreArchiveRequest,
-    RestoreArchiveResponse, RetryJobRequest, ReviewClaimRequest, ReviewClaimResponse,
-    RevokeCloudConsentRequest, SaveTranscriptRevisionRequest, SaveTranscriptRevisionResponse,
-    SearchLibraryRequest, SearchLibraryResponse, SetAppearanceRequest, SetCloudBudgetRequest,
-    SetEnginePreferencesRequest, SetExportDefaultsRequest, SetLocalOnlyModeRequest,
-    SetModelPreferenceRequest, SetModelPreferenceResponse, SetNotificationSettingsRequest,
-    SetOpenRouterKeyRequest, SetShortcutsRequest, SourceAddFolderRequest, SourceAddFolderResponse,
-    SourceReconcileRequest, SourceReconcileResponse, SourceSyncRequest, SourceSyncResponse,
-    SpeakerOperationResponse, StartProcessingRequest, StartProcessingResponse, StatusResponse,
-    TranscriptPage, VerifyModelRequest, VerifyModelResponse,
+    RegenerateOutputResponse, RenameSpeakerRequest, ResetSpeakerRequest, ResolveMediaRequest,
+    RestoreArchiveRequest, RestoreArchiveResponse, RetryJobRequest, ReviewClaimRequest,
+    ReviewClaimResponse, RevokeCloudConsentRequest, SaveTranscriptRevisionRequest,
+    SaveTranscriptRevisionResponse, SearchLibraryRequest, SearchLibraryResponse,
+    SetAppearanceRequest, SetCloudBudgetRequest, SetEnginePreferencesRequest,
+    SetExportDefaultsRequest, SetLocalOnlyModeRequest, SetModelPreferenceRequest,
+    SetModelPreferenceResponse, SetNotificationSettingsRequest, SetOpenRouterKeyRequest,
+    SetShortcutsRequest, SourceAddFolderRequest, SourceAddFolderResponse, SourceReconcileRequest,
+    SourceReconcileResponse, SourceSyncRequest, SourceSyncResponse, SpeakerOperationResponse,
+    StartProcessingRequest, StartProcessingResponse, StatusResponse, TranscriptPage,
+    VerifyModelRequest, VerifyModelResponse,
 };
 use crate::dto::{
     InspectModelPackRequest, InspectModelPackResponse, InstallModelFromPackRequest,
@@ -163,6 +164,7 @@ command_surface! {
         "list_recordings" => ListRecordings: library::list_recordings(ListRecordingsRequest) -> RecordingPage,
         "import_files" => ImportFiles: import::import_files(ImportFilesRequest) -> ImportFilesResponse,
         "get_recording" => GetRecording: library::get_recording(GetRecordingRequest) -> RecordingDetail,
+        "resolve_media" => ResolveMedia: media::resolve_media(ResolveMediaRequest) -> MediaLocation,
         "get_transcript" => GetTranscript: transcript::get_transcript(GetTranscriptRequest) -> TranscriptPage,
         "save_transcript_revision" => SaveTranscriptRevision: transcript::save_transcript_revision(SaveTranscriptRevisionRequest) -> SaveTranscriptRevisionResponse,
         "list_jobs" => ListJobs: jobs::list_jobs(ListJobsRequest) -> JobPage,
@@ -383,11 +385,12 @@ mod tests {
             "the Tauri allowlist listed the archive commands twice; this surface must not"
         );
         // 54 published by the Tauri shell, plus the eleven EPIC O task O2.4
-        // added for settings the React frontend never had.
-        assert_eq!(COMMAND_NAMES.len(), 65);
+        // added for settings the React frontend never had, plus the one O2.7
+        // added because a native player cannot be handed a URL.
+        assert_eq!(COMMAND_NAMES.len(), 66);
     }
 
-    /// Commands the egui settings screen added (EPIC O task O2.4).
+    /// Commands the egui build added (EPIC O tasks O2.4 and O2.7).
     ///
     /// They are deliberately absent from the Tauri allowlist: the React shell
     /// cannot call them, and widening its IPC surface for a frontend that is
@@ -404,6 +407,9 @@ mod tests {
         "remove_local_model",
         "verify_local_model",
         "get_update_status",
+        // O2.7: the Tauri shell served media over a custom URI scheme; a
+        // native player opens a file instead.
+        "resolve_media",
     ];
 
     #[test]
