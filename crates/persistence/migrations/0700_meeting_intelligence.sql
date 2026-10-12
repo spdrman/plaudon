@@ -1,4 +1,4 @@
--- EPIC I: meeting intelligence and source grounding (migration range 0600-0699).
+-- EPIC I: meeting intelligence and source grounding (migration range 0700-0799).
 --
 -- Spec §9.1 requires that every generated output records the exact transcript
 -- revision and the model/prompt/template/stage versions each stage ran with.
