@@ -68,7 +68,7 @@ and why, and the consequences we accept.
 
 ## Speaker voice profiles (0080-0089)
 
-- [ADR-0080: Voice profiles are biometric data — off by default, local-only, user-deletable to the key](ADR-0080-voice-profiles-are-biometric-data-off-by-default-local-only.md) — Proposed, 2026-10-12 (VOICE_PROFILES_SPEC §1, §7, §11, §12, §13; spec §16.3, §16.4, §13.5)
+- [ADR-0080: Voice profiles are biometric data — off by default, local-only, user-deletable to the key](ADR-0080-voice-profiles-are-biometric-data-off-by-default-local-only.md) — Proposed, 2026-10-12; amended 2026-10-12 for the master speaker list, which is name-only and outside the biometric rules (VOICE_PROFILES_SPEC §1, §7, §9A, §11, §12, §13; spec §1.7, §8.7, §16.3, §16.4, §13.5)
 - [ADR-0081: Speaker embedding runtime and model licensing](ADR-0081-speaker-embedding-runtime-and-model-licensing.md) — Proposed, 2026-10-12 (VOICE_PROFILES_SPEC §5, §14; spec §8.7, §12, §3.1; extends ADR-0400)
 - [ADR-0082: A voice match is a suggestion, never an identity](ADR-0082-a-voice-match-is-a-suggestion-never-an-identity.md) — Proposed, 2026-10-12 (VOICE_PROFILES_SPEC §6, §16; spec §8.7, §17.6, §16.6)
 
