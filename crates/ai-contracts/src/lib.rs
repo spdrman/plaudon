@@ -13,14 +13,21 @@
 //!   success.
 
 pub mod capabilities;
+pub mod hallucination;
 pub mod job;
 pub mod policy;
 pub mod stt;
 pub mod text;
+pub mod transcript;
+pub mod tri;
+pub mod truthfulness;
 
 pub use capabilities::{
     AvailabilityReason, HardwareRequirements, MediaFormat, PricingBasis, PrivacyClass,
     RequestFamily, SttCapabilities, TextModelCapabilities,
+};
+pub use hallucination::{
+    annotate, detect_hallucinations, ConfidenceFloor, HallucinationPolicy, SpeechActivity,
 };
 pub use job::{CancellationToken, JobContext, Progress, ProgressSink};
 pub use plaudon_domain::capability::{CapabilityEnvelope, CapabilityStatus, Known, Tri};
@@ -28,6 +35,14 @@ pub use plaudon_domain::transcript::AlignmentOrigin;
 pub use policy::{select_stt_engine, EngineRejection, EngineSelection, SttRequirements};
 pub use stt::{SpeechToText, SttError, SttInput, TranscriptDraft, TranscriptSegmentDraft};
 pub use text::{StructuredRequest, StructuredResponse, TextModel, TextModelError};
+pub use transcript::{
+    AnnotationKind, ChunkingStrategy, DraftWordAlignment, NormalizationProfile, SourceTime,
+    TimePrecision, TranscriptAnnotation,
+};
+pub use tri::{KnownLimit, LimitCheck};
+pub use truthfulness::{
+    assert_no_claim_inflation, validate_draft, ClaimInflation, TruthfulnessViolation,
+};
 
 /// Cargo package name of this crate, used by the workspace layout conformance test.
 pub const PACKAGE_NAME: &str = "plaudon-ai-contracts";

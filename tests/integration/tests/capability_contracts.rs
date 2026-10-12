@@ -11,6 +11,7 @@ use plaudon_ai_contracts::job::{JobContext, RecordingProgressSink};
 use plaudon_ai_contracts::policy::{select_stt_engine, EngineRejection, SttRequirements};
 use plaudon_ai_contracts::stt::{SpeechToText, SttError, SttInput, TranscriptSegmentDraft};
 use plaudon_ai_contracts::text::{StructuredRequest, TextModel, TextModelError};
+use plaudon_ai_contracts::transcript::{ChunkingStrategy, SourceTime};
 use plaudon_domain::capability::{CapabilityStatus, Known, Tri};
 use plaudon_domain::ids::{DeviceRecordingId, JobId, RecordingId};
 use plaudon_domain::locale::LanguageTag;
@@ -20,10 +21,8 @@ use plaudon_domain::source::{
     ExternalRecordingId, SourceAccountScope, SourceIdentityKey, SourceKind,
 };
 use plaudon_domain::time::Timestamp;
-use plaudon_domain::timerange::SourceTimeMs;
 use plaudon_domain::transcript::{
     AlignmentOrigin, RevisionOrigin, RevisionStatus, TranscriptRevision, TranscriptRevisionDraft,
-    TranscriptSegment,
 };
 use plaudon_integration_tests::fakes::device::FakeDeviceRecording;
 use plaudon_integration_tests::fakes::source::FakeSourceItem;
@@ -84,7 +83,16 @@ fn stt_input(bytes: &[u8]) -> SttInput {
         format: MediaFormat::new("wav", "pcm_s16le"),
         duration_ms: Some(1_000),
         locale_hint: Some(LanguageTag::parse("en-US").unwrap()),
+        sample_rate_hz: 16_000,
+        channels: 1,
+        source_sample_offset: 0,
+        normalization_profile: None,
+        chunking_strategy: ChunkingStrategy::SingleChunk,
     }
+}
+
+fn at(millis: u64) -> SourceTime {
+    SourceTime::from_millis(millis, 16_000)
 }
 
 fn validated_device_cell() -> DeviceCapabilities {
@@ -300,8 +308,8 @@ async fn a_fake_engine_drives_the_transcription_use_case_end_to_end() {
         vec![
             TranscriptSegmentDraft {
                 seq_index: 0,
-                start: Some(SourceTimeMs::new(0)),
-                end: Some(SourceTimeMs::new(500)),
+                start: Some(at(0)),
+                end: Some(at(500)),
                 text: "hello".into(),
                 confidence: None,
                 speaker_id: None,
@@ -309,8 +317,8 @@ async fn a_fake_engine_drives_the_transcription_use_case_end_to_end() {
             },
             TranscriptSegmentDraft {
                 seq_index: 1,
-                start: Some(SourceTimeMs::new(500)),
-                end: Some(SourceTimeMs::new(1_000)),
+                start: Some(at(500)),
+                end: Some(at(1_000)),
                 text: "world".into(),
                 confidence: None,
                 speaker_id: None,
@@ -341,15 +349,7 @@ async fn a_fake_engine_drives_the_transcription_use_case_end_to_end() {
         segments: draft
             .segments
             .iter()
-            .map(|segment| TranscriptSegment {
-                seq_index: segment.seq_index,
-                start: segment.start,
-                end: segment.end,
-                text: segment.text.clone(),
-                confidence: segment.confidence.clone(),
-                speaker_id: segment.speaker_id,
-                words: segment.words.clone(),
-            })
+            .map(TranscriptSegmentDraft::to_domain_segment)
             .collect(),
     })
     .unwrap();
@@ -366,8 +366,8 @@ async fn a_cancelled_transcription_returns_cancelled_not_a_partial_draft() {
         AlignmentOrigin::Native,
         vec![TranscriptSegmentDraft {
             seq_index: 0,
-            start: Some(SourceTimeMs::new(0)),
-            end: Some(SourceTimeMs::new(10)),
+            start: Some(at(0)),
+            end: Some(at(10)),
             text: "x".into(),
             confidence: None,
             speaker_id: None,
