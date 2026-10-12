@@ -26,9 +26,11 @@ plaudon-app = { workspace = true }
 plaudon-craft-ui = { workspace = true }
 plaudon-domain = { workspace = true }
 plaudon-diagnostics = { workspace = true }
+plaudon-ui = { workspace = true }
 eframe = { workspace = true, features = ["default_fonts", "wgpu", "accesskit"] }
 egui = { workspace = true, features = ["default_fonts"] }
 rfd = { workspace = true, features = ["xdg-portal"] }
+tokio = { workspace = true }
 tracing = { workspace = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
