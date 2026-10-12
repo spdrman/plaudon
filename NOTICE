@@ -1,0 +1,42 @@
+Plaudon
+Copyright (c) 2026 the Plaudon authors.
+Licensed under the Apache License, Version 2.0 (LICENSE).
+
+Third-party material bundled in this repository
+===============================================
+
+Source code vendored into this repository, with its upstream licence and the
+attribution its licence requires. The full licence texts are kept beside each
+vendored copy; the provenance of every file (upstream path, revision and the
+modifications made) is in the file's own header and in the directory's
+README.md. Binary and model dependencies that are resolved at build time rather
+than vendored are recorded in docs/licensing/third-party-register.md.
+
+---------------------------------------------------------------------------
+third_party/craft-ui
+---------------------------------------------------------------------------
+
+Adapted from craft-libs (https://github.com/storytold/craft-libs), crate
+`craft-ui` (`crates/ui`), revision 1aa81a773aa9198a0e4c0daeda954d622475af38.
+
+    craft-libs
+    Copyright (c) 2026 ArtCraft Team and the craft-libs contributors.
+    Licensed under the MIT License or the Apache License, Version 2.0, at your
+    option (third_party/craft-ui/LICENSE-MIT,
+    third_party/craft-ui/LICENSE-APACHE).
+
+Vendored: the split geometry (`SplitAxis`, `SplitSize`, `SplitLayout`,
+`split_rect`) and the accessible `ResizeHandle`, with their tests. Modified by
+the Plaudon authors: let-chains rewritten for edition 2021, the optional serde
+derives removed, `#[derive(Debug)]` added, the toolbar module not vendored, and
+formatting adjusted to this repository's rustfmt configuration. No upstream
+asset, icon, font or brand material is included.
+
+craft-libs' own NOTICE records that the pane sizing and resize boundaries in
+`crates/ui/src/layout` draw on FilmCraft (`crates/ui-egui/src/dock.rs`,
+revision 7b6c134472287db4367fca80bcb498240ba36567) and EffectCraft
+(`crates/ui-egui/src/dock.rs`, revision
+2a460986ee7a4b32656a3d434849693904b486bc), both
+Copyright (c) 2026 ArtCraft Team and their respective contributors, both
+licensed MIT OR Apache-2.0. That attribution is carried here as Apache-2.0 §4(d)
+requires; the full upstream NOTICE is at third_party/craft-ui/NOTICE.

@@ -24,6 +24,16 @@ allow = [
     "CC0-1.0",
     "Unlicense",
     "BSL-1.0",
+    # Font licences reached through `eframe/default_fonts` ->
+    # `epaint_default_fonts`, whose expression is
+    # "(MIT OR Apache-2.0) AND OFL-1.1 AND Ubuntu-font-1.0". Reviewed for EPIC O
+    # task O1.2: both are permissive for redistribution of the font files as
+    # part of an application, require the copyright and licence notice to travel
+    # with them (recorded in docs/licensing/third-party-register.md), and
+    # neither reaches our own source. OFL-1.1 forbids selling the fonts on their
+    # own and reserves the font names, which we do not do and do not rename.
+    "OFL-1.1",
+    "Ubuntu-font-1.0",
 ]
 
 [bans]
