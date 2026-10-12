@@ -1484,7 +1484,14 @@ async fn the_roster_round_trips_with_matching_off_and_never_reaches_the_embedder
         .await
         .expect("a cluster is assigned with matching off");
     assert!(assigned.applied);
-    assert!(assigned.segments_assigned > 0, "{assigned:?}");
+    assert!(!assigned.assigned_segments.is_empty(), "{assigned:?}");
+    assert!(
+        assigned
+            .assigned_segments
+            .windows(2)
+            .all(|pair| pair[0] < pair[1]),
+        "segment indexes are ascending and distinct: {assigned:?}"
+    );
     let (person_id, name, confirmed) = pipeline.stored_speaker(speaker.id).await;
     assert_eq!(
         person_id.as_deref(),
@@ -1732,7 +1739,7 @@ async fn enrolling_then_confirming_a_suggestion_names_the_cluster_and_its_segmen
         .expect("a confirmation applies the person");
     assert!(decision.applied);
     assert_eq!(decision.state, "confirmed");
-    assert!(decision.segments_assigned > 0, "{decision:?}");
+    assert!(!decision.assigned_segments.is_empty(), "{decision:?}");
     let (person_id, name, confirmed) = pipeline.stored_speaker(speaker.id).await;
     assert_eq!(
         person_id.as_deref(),
@@ -1819,7 +1826,7 @@ async fn rejecting_never_renames_and_reject_then_pick_records_the_correction() {
         .expect("a rejection settles");
     assert_eq!(decision.state, "rejected");
     assert!(!decision.applied, "a rejection never renames");
-    assert_eq!(decision.segments_assigned, 0);
+    assert_eq!(decision.assigned_segments, Vec::<u32>::new());
     let (person_id, name, _) = pipeline.stored_speaker(speaker.id).await;
     assert_eq!(person_id, None);
     assert_eq!(name, None);

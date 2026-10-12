@@ -63,6 +63,7 @@ const fn route_for(destination: SettingsDestination) -> Route {
         SettingsDestination::Sources => Route::SettingsSources,
         SettingsDestination::Activity => Route::SettingsActivity,
         SettingsDestination::Jobs => Route::Jobs,
+        SettingsDestination::People => Route::People,
     }
 }
 
@@ -324,6 +325,7 @@ mod tests {
             Route::SettingsActivity
         );
         assert_eq!(route_for(SettingsDestination::Jobs), Route::Jobs);
+        assert_eq!(route_for(SettingsDestination::People), Route::People);
     }
 
     #[test]

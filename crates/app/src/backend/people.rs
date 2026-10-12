@@ -94,6 +94,8 @@ pub(crate) fn speaker_dto(row: &StoredSpeaker) -> SpeakerDto {
     SpeakerDto {
         speaker_id: row.id,
         recording_id: row.recording_id,
+        cluster_key: row.cluster_key.clone(),
+        person_id: row.person_id,
         label: row.label.clone(),
         name: row.name.clone(),
         confirmed: row.user_confirmed,
@@ -301,7 +303,7 @@ impl LocalBackend {
                 applied: false,
                 speaker: speaker_dto(speaker),
                 person: None,
-                segments_assigned: 0,
+                assigned_segments: Vec::new(),
                 segment_exceptions: exceptions,
             });
         }
@@ -317,11 +319,11 @@ impl LocalBackend {
                 other => people_error(other),
             })?;
 
-        let mut segments_assigned = 0u32;
+        let mut assigned_segments = Vec::new();
         if let (Some(revision_id), Some(run), Some(cluster_key)) =
             (revision, run.as_ref(), cluster.as_deref())
         {
-            segments_assigned = speakers
+            assigned_segments = speakers
                 .assign_cluster_segments(revision_id, run.id, cluster_key, speaker.id)
                 .await
                 .map_err(people_error)?;
@@ -343,7 +345,7 @@ impl LocalBackend {
                 person_id: person.id,
                 display_name: person.display_name,
             }),
-            segments_assigned,
+            assigned_segments,
             segment_exceptions: exceptions,
         })
     }
@@ -590,7 +592,7 @@ impl PeoplePort for LocalBackend {
                 applied: true,
                 speaker: speaker_dto(&refreshed),
                 person: None,
-                segments_assigned: 0,
+                assigned_segments: Vec::new(),
                 segment_exceptions: 0,
             });
         };

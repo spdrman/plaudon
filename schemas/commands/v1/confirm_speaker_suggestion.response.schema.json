@@ -10,7 +10,7 @@
     "applied",
     "speaker",
     "person",
-    "segments_assigned",
+    "assigned_segments",
     "segment_exceptions"
   ],
   "properties": {
@@ -37,9 +37,12 @@
     "person": {
       "$ref": "#/$defs/person_ref"
     },
-    "segments_assigned": {
-      "type": "integer",
-      "minimum": 0
+    "assigned_segments": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 0
+      }
     },
     "segment_exceptions": {
       "type": "integer",
@@ -53,6 +56,8 @@
       "required": [
         "speaker_id",
         "recording_id",
+        "cluster_key",
+        "person_id",
         "label",
         "name",
         "confirmed",
@@ -67,6 +72,20 @@
         },
         "recording_id": {
           "type": "string",
+          "format": "uuid"
+        },
+        "cluster_key": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "person_id": {
+          "type": [
+            "string",
+            "null"
+          ],
           "format": "uuid"
         },
         "label": {

@@ -185,6 +185,9 @@ impl TranscriptBinding {
                 self.on_speaker_operation(result)
             }
             "set_segment_speaker" => self.on_segment_speaker(result),
+            "assign_cluster_person"
+            | "confirm_speaker_suggestion"
+            | "reject_speaker_suggestion" => self.on_cluster_assignment(result),
             _ => false,
         }
     }
@@ -309,6 +312,60 @@ impl TranscriptBinding {
         };
         self.speakers[slot] = choice(speaker);
         self.speaker_ids = speaker_ids(&self.speakers);
+        true
+    }
+
+    /// The answer to a cluster assignment (`VOICE_PROFILES_SPEC` VP-211,
+    /// VP-212).
+    ///
+    /// Two things land here, and both are the stored truth rather than a
+    /// guess: the speaker row — a cluster assigned to a person carries that
+    /// person's name — and the exact segments the application attributed, so
+    /// the open document moves them in **one** undo step. A refused
+    /// assignment (`applied: false`, because segments were set individually)
+    /// changes nothing here; the panel that asked is showing the question.
+    fn on_cluster_assignment(&mut self, result: &Result<AppResponse, ErrorEnvelope>) -> bool {
+        let (speaker, assigned) = match result {
+            Ok(AppResponse::AssignClusterPerson(answer)) => {
+                if !answer.applied {
+                    return false;
+                }
+                (Some(&answer.speaker), answer.assigned_segments.as_slice())
+            }
+            Ok(
+                AppResponse::ConfirmSpeakerSuggestion(decision)
+                | AppResponse::RejectSpeakerSuggestion(decision),
+            ) => {
+                if !decision.applied {
+                    return false;
+                }
+                (
+                    decision.speaker.as_ref(),
+                    decision.assigned_segments.as_slice(),
+                )
+            }
+            _ => return false,
+        };
+        let Some(speaker) = speaker else {
+            return false;
+        };
+        if Some(speaker.recording_id) != self.recording_id {
+            return false;
+        }
+        if let Some(slot) = self
+            .speakers
+            .iter()
+            .position(|choice| choice.id == speaker.speaker_id)
+        {
+            self.speakers[slot] = choice(speaker);
+            self.speaker_ids = speaker_ids(&self.speakers);
+        }
+        if let Some(session) = self.session.as_mut() {
+            // A read-only revision refuses the move, which is correct: its
+            // attribution is not editable, and the next read shows the stored
+            // one.
+            let _ = session.assign_cluster(assigned, Some(speaker.speaker_id));
+        }
         true
     }
 

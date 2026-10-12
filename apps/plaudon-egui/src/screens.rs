@@ -51,6 +51,13 @@ pub fn register_all(
         plaudon_ui::screens::devices::shell_adapter::DevicesShellScreen::new(),
     ));
 
+    // `VOICE_PROFILES_SPEC` §9A (VP-091, VP-093): the master speaker list,
+    // which is a top-level destination because every recording assigns from
+    // it — and which works whether or not biometric matching is on.
+    app.shell_mut().register(Box::new(
+        plaudon_ui::screens::people::PeopleShellScreen::new(),
+    ));
+
     // Matrix row A12: an honest placeholder — "no template backend exists",
     // not "this screen was not built" — until EPIC O task O2.6 (#224) lands
     // the template commands and its own screen.

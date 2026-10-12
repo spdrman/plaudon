@@ -12,9 +12,10 @@ use egui_kittest::kittest::Queryable as _;
 use egui_kittest::Harness;
 use plaudon_app::command::{AppCommand, AppResponse};
 use plaudon_app::dto::{
-    Appearance, Capabilities, ConsentSummary, Contrast, HardwareInfo, LocalOnlyModeResponse,
-    NotificationCategory, OsInfo, OsNotificationPermission, PermissionState, Platform, Preferences,
-    StatusResponse, StorageCapability,
+    ActivationDisclosureDto, Appearance, Capabilities, ConsentGateDto, ConsentSummary, Contrast,
+    ForgetAllVoiceProfilesResponse, HardwareInfo, LocalOnlyModeResponse, NotificationCategory,
+    OsInfo, OsNotificationPermission, PermissionState, Platform, Preferences, StatusResponse,
+    StorageCapability, VoiceProfileSettingsDto,
 };
 use plaudon_app::settings_presentation::{
     format_bytes, local_only_status, notification_permission_copy, openrouter_key_status,
@@ -23,12 +24,13 @@ use plaudon_app::settings_presentation::{
 };
 use plaudon_domain::error::{AppErrorCode, ErrorEnvelope};
 use plaudon_domain::ids::DiagnosticId;
+use plaudon_domain::time::Timestamp;
 use plaudon_ui::settings::ai_key::AiKeySection;
 use plaudon_ui::settings::appearance::AppearanceSection;
 use plaudon_ui::settings::consent::ConsentSection;
 use plaudon_ui::settings::links::LinksSection;
 use plaudon_ui::settings::notifications::NotificationsSection;
-use plaudon_ui::settings::privacy::PrivacySection;
+use plaudon_ui::settings::privacy::{self, PrivacySection};
 use plaudon_ui::settings::storage::StorageSection;
 use plaudon_ui::settings::{
     Section, SettingsData, SettingsDestination, SettingsIntent, SettingsOutput, VisualsTokens,
@@ -835,4 +837,458 @@ fn both_navigation_buttons_are_keyboard_reachable() {
             "{label} not in {order:?}"
         );
     }
+}
+
+/* ------------------------------------------------------- voice profiles */
+
+fn disclosure() -> ActivationDisclosureDto {
+    ActivationDisclosureDto {
+        version: "2026-03-01".to_owned(),
+        title: "Before you turn on voice matching".to_owned(),
+        body: vec![
+            "A voiceprint is a list of numbers computed from speech on this device.".to_owned(),
+            "It is stored encrypted here and is never sent anywhere.".to_owned(),
+        ],
+        two_tier_sentence: "Keeping a list of names and assigning them to recordings needs no \
+special consent; computing a voiceprint to recognise someone automatically does."
+            .to_owned(),
+        responsibility_sentence: "People you enrol must agree first, and that is your \
+responsibility, not this software's."
+            .to_owned(),
+        retention_default_months: 6,
+    }
+}
+
+fn voice_settings() -> VoiceProfileSettingsDto {
+    VoiceProfileSettingsDto {
+        enabled: false,
+        consent: ConsentGateDto {
+            state: "off".to_owned(),
+            reason: None,
+            accepted_version: None,
+            accepted_at: None,
+            required_version: "2026-03-01".to_owned(),
+        },
+        disclosure: disclosure(),
+        enrolled_people: 3,
+        exemplars: 7,
+        pending_suggestions: 2,
+        roster_people: 11,
+        key_available: true,
+        embedder_available: true,
+        enrol_speech_ms: 10_000,
+        exemplar_speech_ms: 4_000,
+    }
+}
+
+/// The settings cache with a voice-profile answer folded in.
+fn data_with_voice(voice: VoiceProfileSettingsDto) -> SettingsData {
+    SettingsData {
+        voice_profiles: Some(voice),
+        ..data_with(capabilities())
+    }
+}
+
+fn forget_response(applied: bool) -> ForgetAllVoiceProfilesResponse {
+    ForgetAllVoiceProfilesResponse {
+        applied,
+        enrollments: 3,
+        exemplars: 7,
+        suggestions: 2,
+        people_kept: 11,
+        key_present: true,
+        key_destroyed: applied,
+        feature_disabled: applied,
+        limits: vec![
+            "Names already written into transcripts or exports stay as plain text and are not \
+recalled."
+                .to_owned(),
+            "No claim is made that erased bytes are unrecoverable from the drive's flash sectors."
+                .to_owned(),
+        ],
+    }
+}
+
+/// Every voice-profile command raised so far, ignoring the egress ones.
+fn voice_commands(harness: &Harness<'_, SectionApp<PrivacySection>>) -> Vec<&'static str> {
+    harness
+        .state()
+        .out
+        .command_names()
+        .into_iter()
+        .filter(|name| name.contains("voice"))
+        .collect()
+}
+
+#[test]
+fn the_voice_toggle_is_off_and_asks_for_nothing_before_the_settings_arrive() {
+    let mut harness = harness(PrivacySection::default(), data_with(capabilities()));
+    harness.run();
+
+    assert!(announces(&harness, privacy::VOICE_UNREAD));
+    let ticked: Vec<Option<String>> = a11y::nodes(&harness)
+        .into_iter()
+        .filter(|node| node.label.as_deref() == Some(privacy::VOICE_TOGGLE))
+        .map(|node| node.value)
+        .collect();
+    assert_eq!(ticked.len(), 1, "the toggle is on screen exactly once");
+
+    harness.get_by_label(privacy::VOICE_TOGGLE).click();
+    harness.run();
+
+    assert!(
+        voice_commands(&harness).is_empty(),
+        "a toggle that has not been told the setting cannot change it: {:?}",
+        harness.state().out.command_names()
+    );
+}
+
+#[test]
+fn turning_voice_matching_on_sends_nothing_until_the_disclosure_is_accepted() {
+    let mut harness = harness(PrivacySection::default(), data_with_voice(voice_settings()));
+    harness.run();
+
+    harness.get_by_label(privacy::VOICE_TOGGLE).click();
+    harness.run();
+
+    assert!(
+        voice_commands(&harness).is_empty(),
+        "the toggle alone never turns a biometric feature on"
+    );
+
+    let shown = disclosure();
+    assert!(announces(&harness, &shown.title));
+    for paragraph in &shown.body {
+        assert!(announces(&harness, paragraph), "missing {paragraph:?}");
+    }
+    assert!(announces(&harness, &shown.two_tier_sentence));
+    assert!(announces(&harness, &shown.responsibility_sentence));
+    assert!(announces(&harness, "Retention default:"));
+    assert!(announces(&harness, "6 months"));
+
+    harness.get_by_label(privacy::ACCEPT_DISCLOSURE).click();
+    harness.run();
+
+    assert_eq!(voice_commands(&harness), ["set_voice_profiles_enabled"]);
+    match harness.state().commands().first() {
+        Some(AppCommand::SetVoiceProfilesEnabled(request)) => {
+            assert!(request.enabled);
+            assert_eq!(
+                request.accept_disclosure_version.as_deref(),
+                Some(shown.version.as_str()),
+                "the acceptance carries the version the backend named"
+            );
+        }
+        other => panic!("expected set_voice_profiles_enabled, got {other:?}"),
+    }
+}
+
+#[test]
+fn escaping_the_disclosure_leaves_voice_matching_alone() {
+    let mut harness = harness(PrivacySection::default(), data_with_voice(voice_settings()));
+    harness.run();
+
+    harness.get_by_label(privacy::VOICE_TOGGLE).click();
+    harness.run();
+    assert!(announces(&harness, &disclosure().title));
+
+    harness.key_press(egui::Key::Escape);
+    harness.run();
+    harness.run();
+
+    assert!(
+        !announces(&harness, &disclosure().title),
+        "Escape closes the disclosure"
+    );
+    assert!(
+        voice_commands(&harness).is_empty(),
+        "backing out of a consent gate consents to nothing"
+    );
+}
+
+#[test]
+fn turning_voice_matching_off_sends_no_disclosure_version() {
+    let mut voice = voice_settings();
+    voice.enabled = true;
+    voice.consent.state = "active".to_owned();
+    voice.consent.accepted_version = Some("2026-03-01".to_owned());
+    let mut harness = harness(PrivacySection::default(), data_with_voice(voice));
+    harness.run();
+
+    harness.get_by_label(privacy::VOICE_TOGGLE).click();
+    harness.run();
+
+    assert_eq!(voice_commands(&harness), ["set_voice_profiles_enabled"]);
+    match harness.state().commands().first() {
+        Some(AppCommand::SetVoiceProfilesEnabled(request)) => {
+            assert!(!request.enabled);
+            assert!(
+                request.accept_disclosure_version.is_none(),
+                "nothing is consented to by switching a feature off"
+            );
+        }
+        other => panic!("expected set_voice_profiles_enabled, got {other:?}"),
+    }
+}
+
+#[test]
+fn a_changed_disclosure_version_re_prompts_and_names_the_reason() {
+    let mut voice = voice_settings();
+    voice.consent.state = "disclosure_required".to_owned();
+    voice.consent.reason = Some("version_changed".to_owned());
+    voice.consent.accepted_version = Some("2025-09-01".to_owned());
+    let mut harness = harness(PrivacySection::default(), data_with_voice(voice));
+    harness.run();
+
+    assert!(announces_containing(&harness, "⚠ Disclosure not accepted"));
+    assert!(announces_containing(
+        &harness,
+        "changed since you accepted it"
+    ));
+    assert!(
+        voice_commands(&harness).is_empty(),
+        "nothing is pre-ticked and nothing is sent by being asked"
+    );
+
+    harness.get_by_label(privacy::REVIEW_DISCLOSURE).click();
+    harness.run();
+    assert!(announces(&harness, &disclosure().title));
+}
+
+#[test]
+fn a_silent_credential_store_disables_the_toggle_and_says_why() {
+    let mut voice = voice_settings();
+    voice.key_available = false;
+    let mut harness = harness(PrivacySection::default(), data_with_voice(voice));
+    harness.run();
+
+    assert!(announces_containing(
+        &harness,
+        "⚠ Locked — no credential store"
+    ));
+    assert!(announces_containing(
+        &harness,
+        "refuse to run rather than store a voiceprint in plaintext"
+    ));
+
+    harness.get_by_label(privacy::VOICE_TOGGLE).click();
+    harness.run();
+
+    assert!(
+        !announces(&harness, &disclosure().title),
+        "a locked feature does not offer its consent gate"
+    );
+    assert!(
+        voice_commands(&harness).is_empty(),
+        "a locked feature asks for nothing: {:?}",
+        voice_commands(&harness)
+    );
+}
+
+#[test]
+fn a_build_without_an_embedder_says_so_and_still_takes_the_preference() {
+    let mut voice = voice_settings();
+    voice.embedder_available = false;
+    let mut harness = harness(PrivacySection::default(), data_with_voice(voice));
+    harness.run();
+
+    assert!(announces_containing(
+        &harness,
+        "– No speaker-embedding model in this build"
+    ));
+    assert!(announces_containing(
+        &harness,
+        "not a claim that matching works"
+    ));
+
+    harness.get_by_label(privacy::VOICE_TOGGLE).click();
+    harness.run();
+    assert!(announces(&harness, &disclosure().title));
+}
+
+#[test]
+fn the_voice_block_offers_the_people_list_either_way() {
+    let mut harness = harness(PrivacySection::default(), data_with_voice(voice_settings()));
+    harness.run();
+
+    assert!(announces_containing(
+        &harness,
+        "works whether or not matching is on"
+    ));
+
+    harness.get_by_label(privacy::OPEN_PEOPLE).click();
+    harness.run();
+
+    let destinations: Vec<SettingsDestination> = harness
+        .state()
+        .out
+        .intents
+        .iter()
+        .filter_map(|intent| match intent {
+            SettingsIntent::Navigate(destination) => Some(*destination),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(destinations, [SettingsDestination::People]);
+}
+
+#[test]
+fn forgetting_everyone_discloses_the_counts_and_every_limit_verbatim() {
+    let mut harness = harness(PrivacySection::default(), data_with_voice(voice_settings()));
+    harness.run();
+
+    harness.get_by_label(privacy::FORGET_BUTTON).click();
+    harness.run();
+
+    assert_eq!(voice_commands(&harness), ["forget_all_voice_profiles"]);
+    match harness.state().commands().first() {
+        Some(AppCommand::ForgetAllVoiceProfiles(request)) => {
+            assert!(!request.apply, "the first call only discloses");
+        }
+        other => panic!("expected forget_all_voice_profiles, got {other:?}"),
+    }
+
+    let response = forget_response(false);
+    harness.state_mut().respond(
+        "forget_all_voice_profiles",
+        &Ok(AppResponse::ForgetAllVoiceProfiles(response.clone())),
+    );
+    harness.state_mut().forget();
+    harness.run();
+
+    assert!(announces(&harness, "Enrolments:"));
+    assert!(announces(&harness, "3"));
+    assert!(announces(&harness, "Exemplars:"));
+    assert!(announces(&harness, "7"));
+    assert!(announces(&harness, "Suggestions:"));
+    assert!(announces(&harness, "People kept:"));
+    assert!(announces(&harness, "11"));
+    assert!(announces_containing(&harness, "present"));
+    for limit in &response.limits {
+        assert!(announces(&harness, limit), "missing limit {limit:?}");
+    }
+    assert!(announces_containing(
+        &harness,
+        "People list and every speaker assignment survive"
+    ));
+}
+
+#[test]
+fn forgetting_everyone_waits_for_the_typed_phrase() {
+    let mut harness = harness(PrivacySection::default(), data_with_voice(voice_settings()));
+    harness.run();
+    harness.state_mut().respond(
+        "forget_all_voice_profiles",
+        &Ok(AppResponse::ForgetAllVoiceProfiles(forget_response(false))),
+    );
+    harness.run();
+    harness.state_mut().forget();
+
+    harness.get_by_label(privacy::FORGET_CONFIRM).click();
+    harness.run();
+    assert!(
+        voice_commands(&harness).is_empty(),
+        "an untyped confirmation erases nothing"
+    );
+
+    harness
+        .get_by_role_and_label(egui::accesskit::Role::TextInput, privacy::FORGET_FIELD)
+        .focus();
+    harness.run();
+    harness
+        .get_by_role_and_label(egui::accesskit::Role::TextInput, privacy::FORGET_FIELD)
+        .type_text("  Forget Everyone  ");
+    harness.run();
+    harness.get_by_label(privacy::FORGET_CONFIRM).click();
+    harness.run();
+
+    assert_eq!(voice_commands(&harness), ["forget_all_voice_profiles"]);
+    match harness.state().commands().first() {
+        Some(AppCommand::ForgetAllVoiceProfiles(request)) => assert!(request.apply),
+        other => panic!("expected forget_all_voice_profiles, got {other:?}"),
+    }
+}
+
+#[test]
+fn the_forget_receipt_states_the_key_the_switch_and_the_surviving_roster() {
+    let mut harness = harness(PrivacySection::default(), data_with_voice(voice_settings()));
+    harness.run();
+    harness.state_mut().respond(
+        "forget_all_voice_profiles",
+        &Ok(AppResponse::ForgetAllVoiceProfiles(forget_response(true))),
+    );
+    harness.run();
+
+    assert!(announces_containing(
+        &harness,
+        "encryption key is gone from the operating system's credential store"
+    ));
+    assert!(announces(&harness, "Voice matching is now off."));
+    assert!(announces_containing(
+        &harness,
+        "People list and every speaker assignment survive"
+    ));
+    assert!(
+        voice_commands(&harness).contains(&"get_voice_profile_settings"),
+        "the counts are re-read rather than guessed: {:?}",
+        voice_commands(&harness)
+    );
+}
+
+#[test]
+fn a_rejected_toggle_change_shows_the_envelope_and_offers_the_gate_again() {
+    let mut harness = harness(PrivacySection::default(), data_with_voice(voice_settings()));
+    harness.run();
+    harness.state_mut().respond(
+        "set_voice_profiles_enabled",
+        &Err(envelope("The consent gate refused the change.")),
+    );
+    harness.state_mut().forget();
+    harness.run();
+
+    assert!(announces(
+        &harness,
+        "✕ The consent gate refused the change."
+    ));
+    harness.get_by_label(privacy::RETRY_VOICE).click();
+    harness.run();
+    assert!(announces(&harness, &disclosure().title));
+}
+
+#[test]
+fn every_voice_profile_control_is_named_with_matching_off() {
+    let mut harness = harness(PrivacySection::default(), data_with_voice(voice_settings()));
+    harness.run();
+
+    a11y::assert_every_control_is_named(&harness, "privacy section with voice matching off", &[]);
+
+    let order = a11y::focus_order(&mut harness, 12);
+    for label in [privacy::VOICE_TOGGLE, privacy::OPEN_PEOPLE] {
+        assert!(
+            order.contains(&label.to_owned()),
+            "{label} not in {order:?}"
+        );
+    }
+}
+
+#[test]
+fn every_voice_profile_control_is_named_with_matching_on() {
+    let mut voice = voice_settings();
+    voice.enabled = true;
+    voice.consent.state = "active".to_owned();
+    voice.consent.accepted_version = Some("2026-03-01".to_owned());
+    voice.consent.accepted_at = Some(Timestamp::from_millis(1_772_000_000_000));
+    let mut harness = harness(PrivacySection::default(), data_with_voice(voice));
+    harness.run();
+    harness.state_mut().respond(
+        "forget_all_voice_profiles",
+        &Ok(AppResponse::ForgetAllVoiceProfiles(forget_response(false))),
+    );
+    harness.run();
+
+    a11y::assert_every_control_is_named(
+        &harness,
+        "privacy section with voice matching on and the erasure disclosed",
+        &[],
+    );
 }

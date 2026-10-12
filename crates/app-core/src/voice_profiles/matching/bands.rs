@@ -53,6 +53,20 @@ impl Band {
             Band::Suggest => Some("suggest"),
         }
     }
+
+    /// How this band is worded where a user sees it (VP-172).
+    ///
+    /// `Band::None` has no wording because it is never recorded and so never
+    /// reaches a surface. Going through [`plaudon_domain::speaker::MatchBand`]
+    /// keeps the stored value and the sentence from drifting apart.
+    #[must_use]
+    pub const fn display_band(self) -> Option<plaudon_domain::speaker::MatchBand> {
+        match self {
+            Band::None => None,
+            Band::Weak => Some(plaudon_domain::speaker::MatchBand::Possible),
+            Band::Suggest => Some(plaudon_domain::speaker::MatchBand::Strong),
+        }
+    }
 }
 
 /// Why a threshold set was refused.
@@ -286,6 +300,17 @@ mod tests {
         assert_eq!(Band::Suggest.column_value(), Some("suggest"));
         // ADR-0082: `Suggest` is the strongest band that exists.
         assert_eq!(Band::Suggest.max(Band::Weak), Band::Suggest);
+    }
+
+    #[test]
+    fn the_stored_band_value_and_the_displayed_band_agree_for_every_variant() {
+        for band in [Band::None, Band::Weak, Band::Suggest] {
+            let displayed = band
+                .column_value()
+                .and_then(plaudon_domain::speaker::MatchBand::from_column);
+            assert_eq!(displayed, band.display_band(), "{band:?}");
+            assert_eq!(displayed.is_some(), band.is_recorded(), "{band:?}");
+        }
     }
 
     #[test]

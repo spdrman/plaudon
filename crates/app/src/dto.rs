@@ -2027,6 +2027,19 @@ pub struct SpeakerDto {
     pub speaker_id: SpeakerId,
     /// Recording.
     pub recording_id: RecordingId,
+    /// The diarization cluster this row stands for, `None` when the row did
+    /// not come from a run.
+    ///
+    /// Enrolment and exemplar addition both take a cluster key, and the
+    /// per-recording speaker panel is where a user asks for them (VP-092,
+    /// VP-094).
+    pub cluster_key: Option<String>,
+    /// The roster person this row is linked to (VP-010), `None` for a
+    /// name-only row.
+    ///
+    /// The person picker shows which roster entry a cluster currently
+    /// resolves to from this field rather than guessing from the label.
+    pub person_id: Option<PersonId>,
     /// Current label. A rename overwrites it; a reset restores
     /// `original_label`.
     pub label: String,
@@ -4306,8 +4319,11 @@ pub struct AssignClusterPersonResponse {
     pub speaker: SpeakerDto,
     /// Who it points at, `None` after a clear.
     pub person: Option<PersonRefDto>,
-    /// Segments attributed in this action.
-    pub segments_assigned: u32,
+    /// Zero-based `seq_index` of every transcript segment this action
+    /// attributed, ascending; empty when nothing was written. The UI turns
+    /// one assignment into exactly one undo step over these segments
+    /// (VP-212), which needs the indexes and not a count.
+    pub assigned_segments: Vec<u32>,
     /// Segments that had been attributed individually (VP-211).
     pub segment_exceptions: u32,
 }
@@ -4640,8 +4656,9 @@ pub struct SpeakerSuggestionDecisionDto {
     pub speaker: Option<SpeakerDto>,
     /// The person now assigned, when one was.
     pub person: Option<PersonRefDto>,
-    /// Segments attributed in this action.
-    pub segments_assigned: u32,
+    /// Zero-based `seq_index` of every transcript segment this action
+    /// attributed, ascending; empty when nothing was written.
+    pub assigned_segments: Vec<u32>,
     /// Segments that had been attributed individually (VP-211).
     pub segment_exceptions: u32,
 }

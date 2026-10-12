@@ -91,9 +91,14 @@ fn viewer(speakers: Vec<SpeakerDto>) -> Harness<'static, ViewerApp> {
                         title: "Board meeting",
                         capabilities: Some(&app.capabilities),
                     };
-                    let output = app
-                        .viewer
-                        .ui(ui, context, None, Some(&app.speakers), fx::NOW_MS);
+                    let output = app.viewer.ui(
+                        ui,
+                        context,
+                        None,
+                        Some(&app.speakers),
+                        plaudon_ui::ai::VoiceContext::default(),
+                        fx::NOW_MS,
+                    );
                     app.collected.absorb(output);
                 });
             },
@@ -304,6 +309,8 @@ fn row(
     SpeakerDto {
         speaker_id,
         recording_id,
+        cluster_key: Some("SPEAKER_00".to_owned()),
+        person_id: None,
         // A rename overwrites the label; a reset restores `original_label`.
         label: name.unwrap_or(MACHINE_LABEL).to_owned(),
         name: name.map(ToOwned::to_owned),
@@ -409,6 +416,52 @@ fn one_speaker_list_feeds_both_the_chips_and_the_speaker_panel() {
             .count(),
         3,
         "two transcript chips and the speaker panel, all saying the same thing: {text}"
+    );
+}
+
+#[test]
+fn a_cluster_assignment_reaches_the_chips_and_the_panel_in_the_same_frame() {
+    // `VOICE_PROFILES_SPEC` VP-092/VP-211: assigning a cluster to a roster
+    // person renames the speaker row, and the answer is the stored row, so
+    // the transcript chips and the speaker panel both move without a refetch.
+    let speaker_id = SpeakerId::new();
+    let mut harness = opened(speaker_id, None, false);
+    let recording_id = harness.state().detail.summary.recording_id;
+    let before = harness.state().names.len();
+
+    let mut stored = row(recording_id, speaker_id, Some("Priya"), true);
+    stored.person_id = Some(plaudon_domain::ids::PersonId::new());
+    let assigned = Ok(AppResponse::AssignClusterPerson(
+        plaudon_app::dto::AssignClusterPersonResponse {
+            applied: true,
+            speaker: stored.clone(),
+            person: Some(plaudon_app::dto::PersonRefDto {
+                person_id: stored.person_id.expect("the assigned person"),
+                display_name: "Priya".to_owned(),
+            }),
+            // The two segments of the fixture transcript.
+            assigned_segments: vec![0, 1],
+            segment_exceptions: 0,
+        },
+    ));
+    harness
+        .state_mut()
+        .answer("assign_cluster_person", &assigned);
+    harness.run();
+
+    let text = announced(&harness);
+    assert!(
+        text.contains("Speaker: Priya (confirmed)"),
+        "the assignment did not reach the chips and the panel: {text}"
+    );
+    assert!(
+        !text.contains("inferred cluster"),
+        "an assigned cluster is a person a human pointed at: {text}"
+    );
+    assert_eq!(
+        harness.state().names.len(),
+        before,
+        "the answer carries the stored row, so nothing is refetched"
     );
 }
 
@@ -525,6 +578,8 @@ fn second_row(recording_id: RecordingId, speaker_id: SpeakerId) -> SpeakerDto {
     SpeakerDto {
         speaker_id,
         recording_id,
+        cluster_key: Some("SPEAKER_01".to_owned()),
+        person_id: None,
         label: "Speaker 2".to_owned(),
         name: None,
         confirmed: false,
@@ -584,7 +639,10 @@ fn the_segment_chip_offers_the_recordings_speakers_and_asks_for_the_assignment()
         offered.contains("Speaker 2 (inferred cluster)"),
         "{offered}"
     );
-    assert!(offered.contains("No speaker"), "{offered}");
+    assert!(
+        offered.contains(plaudon_ui::transcript::NO_SPEAKER),
+        "{offered}"
+    );
 
     harness.get_by_label("Speaker 2 (inferred cluster)").click();
     harness.run();

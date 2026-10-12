@@ -256,7 +256,7 @@ fn the_contract_covers_every_destination_the_router_knows() {
     // deliberate guarantee rather than a coincidence.
     assert_eq!(
         Destination::ALL.len(),
-        6,
+        7,
         "a destination was added or removed; the S17 sweep iterates \
          Destination::ALL, and the manual script in \
          docs/accessibility/manual-screen-reader-script.md \
