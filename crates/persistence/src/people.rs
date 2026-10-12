@@ -178,7 +178,7 @@ impl PeopleRepository {
         .await?;
         journal(
             &mut tx,
-            id,
+            Some(id),
             VoiceProfileEventKind::PersonCreated,
             &serde_json::json!({ "display_name": draft.display_name }).to_string(),
             at,
@@ -275,7 +275,7 @@ impl PeopleRepository {
             let recordings = linked_recording_count(&mut tx, id).await?;
             journal(
                 &mut tx,
-                id,
+                Some(id),
                 VoiceProfileEventKind::PersonRenamed,
                 &serde_json::json!({
                     "from": previous,
@@ -351,7 +351,7 @@ impl PeopleRepository {
         .await?;
         journal(
             &mut tx,
-            person_id,
+            Some(person_id),
             VoiceProfileEventKind::AssignmentSet,
             &serde_json::json!({
                 "recording_id": recording_id,
@@ -393,7 +393,7 @@ impl PeopleRepository {
             .await?;
         journal(
             &mut tx,
-            person,
+            Some(person),
             VoiceProfileEventKind::AssignmentCleared,
             &serde_json::json!({ "speaker_id": speaker_id.to_string() }).to_string(),
             at,
@@ -516,7 +516,7 @@ impl PeopleRepository {
         .await?;
         let loser_enrolment = sqlx::query(
             "SELECT consent_version, consent_note, retention_months, last_matched_at, status,
-                    created_at
+                    expired_at, created_at
              FROM person_voice_enrollments WHERE person_id = ?1",
         )
         .bind(loser.to_string())
@@ -531,8 +531,8 @@ impl PeopleRepository {
                     sqlx::query(
                         "INSERT INTO person_voice_enrollments
                              (person_id, consent_version, consent_note, retention_months,
-                              last_matched_at, status, created_at)
-                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                              last_matched_at, status, expired_at, created_at)
+                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
                     )
                     .bind(survivor.to_string())
                     .bind(row.try_get::<String, _>("consent_version")?)
@@ -540,6 +540,7 @@ impl PeopleRepository {
                     .bind(retention)
                     .bind(last_matched)
                     .bind(row.try_get::<String, _>("status")?)
+                    .bind(row.try_get::<Option<i64>, _>("expired_at")?)
                     .bind(row.try_get::<i64, _>("created_at")?)
                     .execute(&mut *tx)
                     .await?;
@@ -637,7 +638,7 @@ impl PeopleRepository {
         .to_string();
         journal(
             &mut tx,
-            survivor,
+            Some(survivor),
             VoiceProfileEventKind::PersonMerged,
             &detail,
             at,
@@ -645,7 +646,7 @@ impl PeopleRepository {
         .await?;
         journal(
             &mut tx,
-            loser,
+            Some(loser),
             VoiceProfileEventKind::PersonMerged,
             &detail,
             at,
@@ -695,7 +696,7 @@ impl PeopleRepository {
         };
         journal(
             &mut tx,
-            id,
+            Some(id),
             VoiceProfileEventKind::PersonDeleted,
             &serde_json::json!({
                 "speaker_links_severed": outcome.severed_speaker_links,
@@ -727,10 +728,10 @@ impl PeopleRepository {
         .await?;
         rows.into_iter()
             .map(|row| {
-                let person_id: String = row.try_get("person_id")?;
+                let person_id: Option<String> = row.try_get("person_id")?;
                 Ok(StoredVoiceProfileEvent {
                     id: row.try_get("id")?,
-                    person_id: parse_person(&person_id)?,
+                    person_id: person_id.as_deref().map(parse_person).transpose()?,
                     kind: row.try_get("kind")?,
                     detail_json: row.try_get("detail_json")?,
                     created_at: Timestamp::from_millis(row.try_get::<i64, _>("created_at")?),

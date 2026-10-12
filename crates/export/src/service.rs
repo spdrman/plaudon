@@ -21,12 +21,14 @@ use uuid::Uuid;
 
 use crate::archive::crypto::KdfProfile;
 use crate::archive::documents::{
-    ANNOTATION_SCHEMA, OUTPUT_SCHEMA, RECORD_SCHEMA, SOURCE_SCHEMA, TOOL_SCHEMA, TRANSCRIPT_SCHEMA,
+    ANNOTATION_SCHEMA, OUTPUT_SCHEMA, PERSON_SCHEMA, RECORD_SCHEMA, SOURCE_SCHEMA, TOOL_SCHEMA,
+    TRANSCRIPT_SCHEMA,
 };
 use crate::archive::manifest::ARCHIVE_EXTENSION;
 use crate::archive::reader::InspectionReport;
 use crate::archive::restore::{RestoreOptions, RestorePreview, RestoreReport, Restorer};
 use crate::archive::snapshot::LibrarySnapshot;
+use crate::archive::voiceprofiles::{VoiceProfileDocument, VoiceProfilePermit};
 use crate::archive::writer::{ArchiveBuilder, Protection};
 use crate::bundle::BundleLoader;
 use crate::captions::{self, CaptionFormat};
@@ -160,6 +162,15 @@ pub struct BackupRequest {
     /// Whether to use the heavier Argon2id profile.
     #[serde(default)]
     pub sensitive_profile: bool,
+    /// Whether to include the biometric voice tier (VP-078).
+    ///
+    /// Off by default, and only honoured for an encrypted archive: with no
+    /// password the request is refused outright rather than silently producing
+    /// a backup without the data the user asked for. The name-only roster is
+    /// not affected — it travels in every backup, like any other library data
+    /// (VP-077).
+    #[serde(default)]
+    pub include_voice_profiles: bool,
 }
 
 /// Response for `create_portable_backup`.
@@ -185,6 +196,9 @@ pub struct BackupResponse {
     pub manifest_schema_version: String,
     /// Settings that do not travel with the archive.
     pub nonportable_settings: Vec<String>,
+    /// How many voice-profile entries the archive carries. Zero unless the
+    /// user asked for them and the archive is encrypted (VP-078).
+    pub voice_profiles_included: u64,
 }
 
 /// Request for `inspect_restore_archive`.
@@ -446,6 +460,16 @@ impl ExportService {
             )?;
         }
 
+        // The roster is ordinary library data and travels either way (VP-077).
+        for person in snapshot.people_documents().await? {
+            let document = serde_json::to_vec(&person)?;
+            builder.add_document(
+                &format!("people/{}.json", person.id),
+                PERSON_SCHEMA,
+                &document,
+            )?;
+        }
+
         let mut media_seen: Vec<String> = Vec::new();
         for recording_id in snapshot.recording_ids().await? {
             let record = snapshot.record_document(&recording_id).await?;
@@ -509,6 +533,23 @@ impl ExportService {
             None => Protection::Plaintext,
         };
 
+        // The biometric tier, last and only on request. The permit is the
+        // refusal: asking for voice profiles without a password fails here,
+        // before a single entry is staged, and no file is written (VP-078).
+        let mut voice_profiles_included = 0u64;
+        if request.include_voice_profiles {
+            let permit = VoiceProfilePermit::for_protection(&protection)?;
+            for profile in snapshot.voice_profile_documents().await? {
+                let document = serde_json::to_vec(&profile)?;
+                builder.add_voice_document(
+                    &VoiceProfileDocument::entry_path(&profile.person_id),
+                    &document,
+                    permit,
+                )?;
+                voice_profiles_included += 1;
+            }
+        }
+
         let stamp = now
             .to_rfc3339()
             .unwrap_or_else(|| now.as_millis().to_string())
@@ -550,6 +591,7 @@ impl ExportService {
             integrity_note: artifact.manifest.integrity_note,
             manifest_schema_version: artifact.manifest.schema_version,
             nonportable_settings: artifact.manifest.nonportable_settings,
+            voice_profiles_included,
         })
     }
 

@@ -51,7 +51,13 @@ pub const MAX_MANIFEST_BYTES: u64 = 256 * 1024 * 1024;
 /// Honest description of what the integrity digest proves (spec 13.6).
 pub const INTEGRITY_NOTE: &str = "This digest proves the archive's entry list has not changed since it was written. It is an integrity check, not an authenticity signature: it says nothing about who produced the archive unless the file is separately signed with a trusted key.";
 
-/// Namespaces an entry path may start with (spec 13.6).
+/// Namespaces an entry path may start with (spec 13.6, VP-077/VP-078).
+///
+/// `people/` is ordinary library data — a contact list travels like tags and
+/// titles do. `voiceprofiles/` is the biometric tier and travels only under
+/// `Protection::Encrypted`, which [`super::voiceprofiles::VoiceProfilePermit`]
+/// enforces at the point an entry is staged; listing the namespace here says
+/// where such an entry may appear, not that it may appear at all.
 pub const NAMESPACES: &[&str] = &[
     "records/",
     "media/",
@@ -60,6 +66,8 @@ pub const NAMESPACES: &[&str] = &[
     "sources/",
     "tools/",
     "annotations/",
+    "people/",
+    "voiceprofiles/",
 ];
 
 /// Whether the archive body is encrypted.

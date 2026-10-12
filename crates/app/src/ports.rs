@@ -671,6 +671,7 @@ pub trait ArchivePort: Send + Sync {
         destination: crate::validate::ValidatedDirectory,
         password: Option<String>,
         sensitive_profile: bool,
+        include_voice_profiles: bool,
     ) -> Result<crate::dto::CreateBackupResponse, AppError>;
 
     /// Validate an archive and report what it holds, writing nothing.

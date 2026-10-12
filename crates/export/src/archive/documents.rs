@@ -24,6 +24,8 @@ pub const OUTPUT_SCHEMA: &str = "archive-output/1";
 pub const SOURCE_SCHEMA: &str = "archive-source/1";
 /// Schema version of `tools/<tool id>.json`.
 pub const TOOL_SCHEMA: &str = "archive-tool/1";
+/// Schema version of `people/<person id>.json`.
+pub const PERSON_SCHEMA: &str = "archive-person/1";
 
 /// A stored media blob, as restored into `media_assets`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -157,6 +159,14 @@ pub struct SpeakerRow {
     pub provenance: String,
     /// Whether a human confirmed the identity.
     pub user_confirmed: bool,
+    /// Roster person this label is linked to, when one is (VP-072).
+    ///
+    /// The link is ordinary library data and travels with the roster; `name`
+    /// above stays the per-recording text snapshot beside it, which is why
+    /// severing the link never costs a recording its labels (VP-080).
+    /// Defaulted so an archive written before the roster existed still reads.
+    #[serde(default)]
+    pub person_id: Option<String>,
 }
 
 /// `annotations/<recording id>.json`: everything the user typed.
@@ -458,6 +468,38 @@ pub struct ToolDocument {
     pub prompt_version: String,
     /// Output schema version.
     pub output_schema_version: String,
+}
+
+/// `people/<person id>.json`: one roster entry.
+///
+/// The roster travels in **every** portable backup, plaintext or encrypted,
+/// like any other library data: a display name, alternate spellings and
+/// optional contact fields are a contact list, not a voiceprint, and no
+/// biometric definition reaches them (spec §12.2A, VP-077). The biometric tier
+/// that may hang off the same person is a different namespace with a different
+/// rule — see [`crate::archive::voiceprofiles`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PersonDocument {
+    /// Document schema version.
+    pub schema_version: String,
+    /// Person identity.
+    pub id: String,
+    /// Name shown wherever the person appears.
+    pub display_name: String,
+    /// Alternate spellings, used for search and merge candidates.
+    pub aliases: Vec<String>,
+    /// Optional contact address.
+    pub email: Option<String>,
+    /// Optional organisation.
+    pub organisation: Option<String>,
+    /// `active`, or `merged` for a merge tombstone whose id the journal still
+    /// refers to.
+    pub status: String,
+    /// Row creation instant, in epoch milliseconds.
+    pub created_at: i64,
+    /// Last edit instant, in epoch milliseconds.
+    pub updated_at: i64,
 }
 
 #[cfg(test)]

@@ -56,7 +56,9 @@ pub use vendor_artifacts::{
     VendorArtifactImporter, VendorArtifactRef, VendorImportCapability, VendorImportMode,
 };
 pub use voice_profiles::{
-    EmbeddingCipher, ExemplarBinding, SealedEmbedding, VoiceProfileError, VoiceProfileResult,
+    EmbeddingCipher, ExemplarBinding, ForgetAllDisclosure, ForgetAllReceipt, RetentionReport,
+    SealedEmbedding, VoiceProfileEraser, VoiceProfileError, VoiceProfileResult,
+    VoiceRetentionService,
 };
 
 /// Cargo package name of this crate, used by the workspace layout conformance test.
