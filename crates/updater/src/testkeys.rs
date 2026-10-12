@@ -168,6 +168,43 @@ pub const FOREIGN_TARGET: Target = Target::new(
     crate::manifest::Arch::X86_64,
 );
 
+/// Version of the baseline installation the suites bootstrap from.
+pub const BASE_VERSION: Version = Version::new(1, 0, 0);
+
+/// Version every well-formed update fixture installs.
+pub const UPDATE_VERSION: Version = Version::new(1, 1, 0);
+
+/// Version of the downgrade fixture: older than [`BASE_VERSION`].
+pub const DOWNGRADE_VERSION: Version = Version::new(0, 9, 0);
+
+/// `minimum_supported_version` carried by the baseline and update fixtures.
+pub const FIXTURE_FLOOR: Version = Version::new(1, 0, 0);
+
+/// Fixture name of the baseline installation.
+pub const BASE_FIXTURE_NAME: &str = "installed-base";
+
+/// Every committed fixture, as `(name, artifact)`.
+///
+/// This is the single definition shared by the generator
+/// (`tests/fixture_generator.rs`) and by every suite that loads the
+/// committed bytes, so a fixture cannot silently drift from the code that
+/// produced it.
+#[must_use]
+pub fn fixture_set() -> Vec<(&'static str, Artifact)> {
+    let mut set = vec![(
+        BASE_FIXTURE_NAME,
+        build_artifact(FixtureFlaw::None, BASE_VERSION, FIXTURE_FLOOR),
+    )];
+    for flaw in FixtureFlaw::ALL {
+        let (version, floor) = match flaw {
+            FixtureFlaw::Downgrade => (DOWNGRADE_VERSION, DOWNGRADE_VERSION),
+            _ => (UPDATE_VERSION, FIXTURE_FLOOR),
+        };
+        set.push((flaw.fixture_name(), build_artifact(*flaw, version, floor)));
+    }
+    set
+}
+
 /// Build one artifact with the given deviation.
 ///
 /// `version` is the release the manifest installs and `floor` its
@@ -202,18 +239,21 @@ pub fn build_artifact(flaw: FixtureFlaw, version: Version, floor: Version) -> Ar
         ),
     };
 
-    let mut manifest_json =
-        serde_json::to_string_pretty(&manifest).expect("manifest serializes");
-    let signature = key.sign(manifest_json.as_bytes());
+    // Sign the *exact* text that will sit in the envelope's `manifest`
+    // member, indentation included: the verifier covers those bytes
+    // verbatim and never re-serializes.
+    let manifest_json = serde_json::to_string_pretty(&manifest).expect("manifest serializes");
+    let mut embedded = manifest_json.replace('\n', "\n  ");
+    let signature = key.sign(embedded.as_bytes());
 
     if flaw == FixtureFlaw::TamperedManifestField {
         // Edit a signed field after signing: the published digest now names
         // a different package than the signature covers.
         let honest_digest = manifest.package_sha256.to_hex();
         let tampered_digest = flip_last_hex_nibble(&honest_digest);
-        manifest_json = manifest_json.replace(&honest_digest, &tampered_digest);
+        embedded = embedded.replace(&honest_digest, &tampered_digest);
         assert!(
-            manifest_json.contains(&tampered_digest),
+            embedded.contains(&tampered_digest),
             "the tampered-manifest fixture must actually differ"
         );
     }
@@ -228,9 +268,8 @@ pub fn build_artifact(flaw: FixtureFlaw, version: Version, floor: Version) -> Ar
         )
     };
 
-    let indented = manifest_json.replace('\n', "\n  ");
     let envelope = format!(
-        "{{\n  \"schema_version\": {MANIFEST_SCHEMA_VERSION},\n  \"manifest\": {indented},\n  \"signing_key_id\": \"{key_id}\"{signature_field}\n}}\n"
+        "{{\n  \"schema_version\": {MANIFEST_SCHEMA_VERSION},\n  \"manifest\": {embedded},\n  \"signing_key_id\": \"{key_id}\"{signature_field}\n}}\n"
     );
 
     let package = match flaw {

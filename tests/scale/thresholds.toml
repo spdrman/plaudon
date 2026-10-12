@@ -1,0 +1,112 @@
+# N1.4 performance budgets (spec 17.5, 18.6A UI row).
+#
+# These are ceilings, not targets. `cargo test -p plaudon-scale-tests` compares
+# the measured p50, p95 and max of every benchmark against the numbers here and
+# fails the run on any breach. Changing what counts as acceptable therefore
+# means editing this file, in a commit someone reviews.
+#
+# How the numbers were set: each budget is the measurement taken on the
+# reference machine recorded in docs/benchmarks/N1.4-scale.md, rounded up and
+# given `headroom_ratio` of slack for machine noise. Budgets are latency, which
+# is hardware-dependent; a slower CI machine is expected to need its own
+# documented raise rather than a silent per-host override — there is no
+# environment variable that can loosen a budget.
+#
+# Grammar: `[table]` headers and `key = number | "string"`. Parsed by
+# tests/scale/src/thresholds.rs.
+
+[policy]
+schema_version = 1
+
+# Budgets sit this far above a healthy reference measurement.
+headroom_ratio = 0.50
+
+# A single commit may raise one budget by at most this fraction. Anything
+# larger is a performance regression that needs an ADR, not a bigger number.
+max_single_raise_ratio = 0.25
+
+rule = "A benchmark over budget fails the run. Fix the regression, or raise the budget here with the measurement and the reason in the commit message; a raise above max_single_raise_ratio needs an ADR."
+
+# ---------------------------------------------------------------------------
+# Memory-bound harness (spec 17.5: growth proportional to the active chunk
+# window, not to total decoded PCM).
+# ---------------------------------------------------------------------------
+[memory]
+
+# Peak working-set growth allowed, as a multiple of the active chunk window.
+window_multiple = 8.0
+
+# Fixed allowance on top of the window, covering allocator arenas, the test
+# harness itself and page-granularity accounting. 16 MiB.
+slack_bytes = 16777216
+
+# The deliberately unbounded control must grow by at least this fraction of
+# the PCM it retains, otherwise the harness is not sensitive enough for its
+# own assertion to mean anything.
+control_detection_ratio = 0.5
+
+# ---------------------------------------------------------------------------
+# CI tier: 501 recordings, 8000 segments.
+# ---------------------------------------------------------------------------
+[ci.library_page_offset]
+p50_ms = 3.0
+p95_ms = 5.0
+max_ms = 25.0
+
+[ci.library_page_keyset]
+p50_ms = 3.0
+p95_ms = 5.0
+max_ms = 25.0
+
+[ci.transcript_search]
+p50_ms = 25.0
+p95_ms = 40.0
+max_ms = 90.0
+
+[ci.transcript_viewport]
+p50_ms = 2.0
+p95_ms = 4.0
+max_ms = 20.0
+
+[ci.archive_accounting]
+p50_ms = 60.0
+p95_ms = 90.0
+max_ms = 180.0
+
+[ci.export_manifest]
+p50_ms = 3.0
+p95_ms = 6.0
+max_ms = 30.0
+
+# ---------------------------------------------------------------------------
+# Full tier: 10,001 recordings, 180,000 segments (spec 17.5 size).
+# ---------------------------------------------------------------------------
+[full.library_page_offset]
+p50_ms = 20.0
+p95_ms = 35.0
+max_ms = 120.0
+
+[full.library_page_keyset]
+p50_ms = 20.0
+p95_ms = 35.0
+max_ms = 120.0
+
+[full.transcript_search]
+p50_ms = 400.0
+p95_ms = 600.0
+max_ms = 1200.0
+
+[full.transcript_viewport]
+p50_ms = 4.0
+p95_ms = 8.0
+max_ms = 40.0
+
+[full.archive_accounting]
+p50_ms = 900.0
+p95_ms = 1400.0
+max_ms = 2500.0
+
+[full.export_manifest]
+p50_ms = 5.0
+p95_ms = 10.0
+max_ms = 50.0

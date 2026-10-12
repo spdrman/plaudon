@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.local/schemas/update-manifest.v1.schema.json",
+  "title": "Signed update manifest envelope v1",
+  "description": "The document served by the pinned update endpoint (spec 2.4, 16.5). The detached `manifest_signature` covers the exact bytes of the `manifest` member as they appear in this document; verifiers must not re-serialize it. Structural validity proves nothing about authenticity: every hostile fixture in tests/fixtures/updater also satisfies this schema and is rejected by cryptographic verification instead.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "manifest",
+    "signing_key_id"
+  ],
+  "properties": {
+    "schema_version": {
+      "description": "Envelope schema version.",
+      "type": "integer",
+      "const": 1
+    },
+    "manifest": {
+      "$ref": "#/$defs/manifest"
+    },
+    "signing_key_id": {
+      "description": "Id of the pinned ed25519 key that signed both the manifest bytes and the package bytes. A key id outside the compiled-in trusted set is rejected (UnknownKey).",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "manifest_signature": {
+      "description": "Base64 (standard alphabet, padded) ed25519 detached signature over the exact bytes of `manifest`. Absent or empty means unsigned, which is rejected (UnsignedManifest).",
+      "type": "string",
+      "pattern": "^$|^[A-Za-z0-9+/]{86}==$"
+    }
+  },
+  "$defs": {
+    "version": {
+      "description": "Release version, major.minor.patch, no pre-release or build metadata, no leading zeroes.",
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+    },
+    "manifest": {
+      "description": "The signed update document. Every member participates in the manifest signature.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "minimum_supported_version",
+        "target",
+        "package_url",
+        "package_sha256",
+        "package_size",
+        "package_signature"
+      ],
+      "properties": {
+        "version": {
+          "description": "Version this package installs.",
+          "$ref": "#/$defs/version"
+        },
+        "minimum_supported_version": {
+          "description": "Lowest version the installation may run after any install or rollback decision made with this manifest. Rollback honours this floor unless the artifact is the retained, previously verified one (spec 16.5).",
+          "$ref": "#/$defs/version"
+        },
+        "target": {
+          "description": "Platform and architecture this package is built for. A manifest for any other target is rejected (UnsupportedTarget, spec 22 item 17).",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "platform",
+            "arch"
+          ],
+          "properties": {
+            "platform": {
+              "type": "string",
+              "enum": [
+                "mac_os",
+                "windows",
+                "linux"
+              ]
+            },
+            "arch": {
+              "type": "string",
+              "enum": [
+                "aarch64",
+                "x86_64"
+              ]
+            }
+          }
+        },
+        "package_url": {
+          "description": "Where the package is published. Never dereferenced in Local-only Mode (spec 16.2A, 22 item 15).",
+          "type": "string",
+          "pattern": "^https://",
+          "maxLength": 2048
+        },
+        "package_sha256": {
+          "description": "Lowercase hex SHA-256 of the package bytes.",
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "package_size": {
+          "description": "Exact byte length of the package, so a short read is reported as TruncatedPackage rather than a digest mismatch.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "package_signature": {
+          "description": "Base64 (standard alphabet, padded) ed25519 detached signature over the package bytes, by the same key that signed the manifest.",
+          "type": "string",
+          "pattern": "^[A-Za-z0-9+/]{86}==$"
+        }
+      }
+    }
+  }
+}

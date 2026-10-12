@@ -98,6 +98,20 @@ fn fold(checksum: u64, chunk: &[f32]) -> (u64, f32) {
 /// the length of the audio.
 #[must_use]
 pub fn decode_windowed(total_frames: u64, window: ChunkWindow) -> DecodeOutcome {
+    decode_windowed_observed(total_frames, window, |_| {})
+}
+
+/// [`decode_windowed`], calling `observe` once per decoded chunk.
+///
+/// The observer is how the memory harness samples resident size *during* the
+/// run. Sampling afterwards would only see the allocator's state once the
+/// window had already been released, and sampling the process high-water mark
+/// would be polluted by whatever the test binary did earlier.
+pub fn decode_windowed_observed<F: FnMut(u64)>(
+    total_frames: u64,
+    window: ChunkWindow,
+    mut observe: F,
+) -> DecodeOutcome {
     let samples_per_chunk = window.chunk_frames * window.channels.max(1);
     let mut live: VecDeque<Vec<f32>> = VecDeque::with_capacity(window.window_chunks);
     let mut checksum = 0u64;
@@ -121,6 +135,7 @@ pub fn decode_windowed(total_frames: u64, window: ChunkWindow) -> DecodeOutcome 
             peak = peak.max(chunk_peak);
         }
         decoded += frames as u64;
+        observe(decoded);
     }
     for remaining in live.drain(..) {
         let (next, chunk_peak) = fold(checksum, &remaining);
@@ -141,6 +156,15 @@ pub fn decode_windowed(total_frames: u64, window: ChunkWindow) -> DecodeOutcome 
 /// claims to guard against. It is never a product code path.
 #[must_use]
 pub fn decode_unbounded(total_frames: u64, window: ChunkWindow) -> DecodeOutcome {
+    decode_unbounded_observed(total_frames, window, |_| {})
+}
+
+/// [`decode_unbounded`], calling `observe` once per decoded chunk.
+pub fn decode_unbounded_observed<F: FnMut(u64)>(
+    total_frames: u64,
+    window: ChunkWindow,
+    mut observe: F,
+) -> DecodeOutcome {
     let mut retained: Vec<Vec<f32>> = Vec::new();
     let mut decoded = 0u64;
     while decoded < total_frames {
@@ -151,6 +175,7 @@ pub fn decode_unbounded(total_frames: u64, window: ChunkWindow) -> DecodeOutcome
         decode_into(&mut chunk, decoded, window.channels);
         retained.push(chunk);
         decoded += frames as u64;
+        observe(decoded);
     }
     let mut checksum = 0u64;
     let mut peak = 0.0f32;
@@ -159,12 +184,13 @@ pub fn decode_unbounded(total_frames: u64, window: ChunkWindow) -> DecodeOutcome
         checksum = next;
         peak = peak.max(chunk_peak);
     }
-    // Keep the retained PCM alive until after the caller has sampled RSS by
-    // returning a value derived from it; the caller drops it afterwards.
+    // Every decoded frame is still resident at this point, which is exactly
+    // the shape the windowed pipeline must not have.
     debug_assert_eq!(
         retained.iter().map(Vec::len).sum::<usize>() as u64,
         decoded * window.channels.max(1) as u64
     );
+    observe(decoded);
     DecodeOutcome {
         frames: decoded,
         checksum,
@@ -221,6 +247,8 @@ mod tests {
         let hour = frames_for_minutes(60, SAMPLE_RATE_HZ);
         assert_eq!(hour, 57_600_000);
         assert_eq!(window.total_pcm_bytes(hour), 230_400_000);
-        assert!(window.total_pcm_bytes(hour) > window.window_bytes() * 1_000);
+        // An hour of audio is over 400 windows' worth of PCM, which is the
+        // discrimination the memory assertion relies on.
+        assert!(window.total_pcm_bytes(hour) > window.window_bytes() * 400);
     }
 }

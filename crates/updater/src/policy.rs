@@ -178,6 +178,13 @@ impl<T: UpdateTransport, V: UpdateVerifier> UpdateChecker<T, V> {
         self.policy
     }
 
+    /// The transport this checker would use. Reading it is not a request;
+    /// the suites use it to assert an invocation count of zero (§22 item 15).
+    #[must_use]
+    pub const fn transport(&self) -> &T {
+        &self.transport
+    }
+
     /// Check for an update.
     ///
     /// When the policy suppresses checks this returns

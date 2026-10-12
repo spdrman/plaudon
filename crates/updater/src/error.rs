@@ -230,7 +230,7 @@ impl UpdateError {
             Self::Interrupted(_) => AppErrorCode::Canceled,
             Self::NoRetainedVersion => AppErrorCode::RecordNotFound,
             Self::JournalCorrupt(_) | Self::SlotIncomplete { .. } => AppErrorCode::IntegrityFailed,
-            Self::Io { .. } | Self::Encoding { .. } => AppErrorCode::StorageFailure,
+            Self::Io { .. } | Self::Encoding { .. } => AppErrorCode::StorageUnavailable,
         }
     }
 }

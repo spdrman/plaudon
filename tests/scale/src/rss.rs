@@ -110,7 +110,10 @@ mod platform {
             let mut info: libc::mach_task_basic_info = std::mem::zeroed();
             let mut count = libc::MACH_TASK_BASIC_INFO_COUNT;
             let status = libc::task_info(
-                libc::mach_task_self(),
+                // `mach_task_self_` is the task port constant the kernel
+                // publishes for this process; the `mach_task_self()` wrapper
+                // is deprecated in favour of a separate crate we do not need.
+                libc::mach_task_self_,
                 libc::MACH_TASK_BASIC_INFO,
                 std::ptr::addr_of_mut!(info).cast::<libc::integer_t>(),
                 &raw mut count,

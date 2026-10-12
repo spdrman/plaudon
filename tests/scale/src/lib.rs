@@ -26,6 +26,7 @@
 //! fails the test run when it exceeds its recorded budget.
 
 pub mod load;
+pub mod memory;
 pub mod metrics;
 pub mod pcm;
 pub mod results;

@@ -694,4 +694,292 @@ mod tests {
             }
         }
     }
+
+    // ---- Shared setup -----------------------------------------------------
+
+    use crate::error::VerifyError;
+    use crate::testkeys::{build_artifact, Artifact, FixtureFlaw, FIXTURE_TARGET};
+    use crate::verify::Ed25519Verifier;
+
+    const V1: Version = Version::new(1, 0, 0);
+    const V2: Version = Version::new(1, 1, 0);
+    const FLOOR: Version = Version::new(1, 0, 0);
+
+    fn verifier() -> Arc<dyn UpdateVerifier> {
+        Arc::new(Ed25519Verifier::new(crate::testkeys::test_trusted_keys()))
+    }
+
+    fn artifact(flaw: FixtureFlaw, version: Version) -> Artifact {
+        build_artifact(flaw, version, FLOOR)
+    }
+
+    /// A bootstrapped installation sitting on v1.0.0.
+    fn bootstrapped(root: &Path) -> Installer {
+        let shipped = artifact(FixtureFlaw::None, V1);
+        Installer::bootstrap(
+            root,
+            verifier(),
+            FIXTURE_TARGET,
+            shipped.envelope.as_bytes(),
+            &shipped.package,
+        )
+        .expect("the shipped build verifies")
+    }
+
+    // ---- §18.9 critical-transition checklist ------------------------------
+
+    /// Positive path (§16.5, §22 item 8).
+    #[test]
+    fn a_validly_signed_update_installs() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let mut installer = bootstrapped(root.path());
+        assert_eq!(installer.installed_version(), V1);
+
+        let update = artifact(FixtureFlaw::None, V2);
+        let installed = installer
+            .install(update.envelope.as_bytes(), &update.package)
+            .expect("a validly signed update installs");
+
+        assert_eq!(installed, V2);
+        assert_eq!(installer.installed_version(), V2);
+        assert_eq!(installer.retained_version(), Some(V1));
+        assert!(installer.journal().pending.is_none());
+
+        let launchable = installer.launchable().expect("new version is launchable");
+        assert_eq!(launchable.version, V2);
+        assert_eq!(launchable.slot, Slot::B);
+        assert_eq!(
+            fs::read(&launchable.payload).expect("payload readable"),
+            update.package
+        );
+        // Staging is gone; the retained slot still holds v1 byte-for-byte.
+        assert!(!root.path().join(STAGING_DIR).exists());
+        assert_eq!(
+            fs::read(slot_dir(root.path(), Slot::A).join(PAYLOAD_FILE)).expect("retained payload"),
+            artifact(FixtureFlaw::None, V1).package
+        );
+    }
+
+    /// Negative path (§18.5 "reject unsigned or corrupted application
+    /// updates"): one flipped package byte, nothing installed.
+    #[test]
+    fn a_tampered_package_is_rejected() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let mut installer = bootstrapped(root.path());
+        let hostile = artifact(FixtureFlaw::TamperedPackageByte, V2);
+
+        let error = installer
+            .install(hostile.envelope.as_bytes(), &hostile.package)
+            .expect_err("a tampered package must be refused");
+        assert!(
+            matches!(
+                error,
+                UpdateError::Verify(VerifyError::DigestMismatch { .. })
+            ),
+            "expected a digest mismatch, got {error:?}"
+        );
+
+        // No partial install: still v1, no pending record, no staging, and
+        // the inactive slot was never written.
+        assert_eq!(installer.installed_version(), V1);
+        assert!(installer.journal().pending.is_none());
+        assert!(!root.path().join(STAGING_DIR).exists());
+        assert!(!slot_dir(root.path(), Slot::B).exists());
+        assert_eq!(installer.launchable().expect("still launchable").version, V1);
+    }
+
+    /// Crash recovery (§14.6, §18.6A "Archive" row): the process is killed at
+    /// every single state-machine point and the installation must still come
+    /// up on a complete, digest-matching version.
+    #[test]
+    fn an_interruption_at_every_step_leaves_a_launchable_application() {
+        for point in InterruptPoint::ALL {
+            let root = tempfile::tempdir().expect("tempdir");
+            let update = artifact(FixtureFlaw::None, V2);
+
+            // Forward points: kill during the v1 -> v2 install.
+            // Rollback points: commit v2 first, then kill during rollback.
+            let interrupted = if point.is_rollback() {
+                let mut installer = bootstrapped(root.path());
+                installer
+                    .install(update.envelope.as_bytes(), &update.package)
+                    .expect("forward install succeeds");
+                let mut installer = Installer::open(root.path(), verifier(), FIXTURE_TARGET)
+                    .expect("reopen")
+                    .with_interrupt_hook(Arc::new(InterruptAt(*point)));
+                installer.rollback()
+            } else {
+                let mut installer =
+                    bootstrapped(root.path()).with_interrupt_hook(Arc::new(InterruptAt(*point)));
+                installer.install(update.envelope.as_bytes(), &update.package)
+            };
+
+            assert!(
+                matches!(interrupted, Err(UpdateError::Interrupted(p)) if p == *point),
+                "the hook must stop the machine at {point}, got {interrupted:?}"
+            );
+
+            // The process is conceptually dead; a fresh launch re-opens.
+            let reopened = Installer::open(root.path(), verifier(), FIXTURE_TARGET)
+                .unwrap_or_else(|e| panic!("a kill at {point} left an unopenable journal: {e}"));
+            let state = reopened
+                .launchable()
+                .unwrap_or_else(|e| panic!("a kill at {point} left no launchable version: {e}"));
+
+            // The only two acceptable outcomes are "previous" and "new".
+            let expected = if point.is_rollback() { [V2, V1] } else { [V1, V2] };
+            assert!(
+                expected.contains(&state.version),
+                "a kill at {point} left version {}, expected one of {expected:?}",
+                state.version
+            );
+            // Launchable means the bytes are really there and really match.
+            let payload = fs::read(&state.payload).expect("payload readable");
+            assert_eq!(sha256(&payload), reopened.journal().active.package_sha256);
+            assert_eq!(
+                payload,
+                artifact(FixtureFlaw::None, state.version).package,
+                "a kill at {point} left a payload that is not a release build"
+            );
+            // Recovery always clears the pending record and the staging area.
+            assert!(reopened.journal().pending.is_none());
+            assert!(!root.path().join(STAGING_DIR).exists());
+        }
+    }
+
+    // ---- Additional state-machine invariants ------------------------------
+
+    #[test]
+    fn rollback_returns_to_the_retained_version_and_can_toggle_back() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let mut installer = bootstrapped(root.path());
+        let update = artifact(FixtureFlaw::None, V2);
+        installer
+            .install(update.envelope.as_bytes(), &update.package)
+            .expect("install");
+
+        assert_eq!(installer.rollback().expect("rollback"), V1);
+        assert_eq!(installer.installed_version(), V1);
+        assert_eq!(installer.retained_version(), Some(V2));
+        assert_eq!(installer.launchable().expect("launchable").version, V1);
+
+        assert_eq!(installer.rollback().expect("roll forward again"), V2);
+        assert_eq!(installer.installed_version(), V2);
+    }
+
+    #[test]
+    fn rollback_without_a_retained_version_is_refused() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let mut installer = bootstrapped(root.path());
+        assert!(matches!(
+            installer.rollback(),
+            Err(UpdateError::NoRetainedVersion)
+        ));
+    }
+
+    #[test]
+    fn a_tampered_retained_payload_blocks_rollback() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let mut installer = bootstrapped(root.path());
+        let update = artifact(FixtureFlaw::None, V2);
+        installer
+            .install(update.envelope.as_bytes(), &update.package)
+            .expect("install");
+
+        // Flip a byte in the retained v1 payload.
+        let retained = slot_dir(root.path(), Slot::A).join(PAYLOAD_FILE);
+        let mut bytes = fs::read(&retained).expect("read retained");
+        let last = bytes.len() - 1;
+        bytes[last] ^= 0x01;
+        fs::write(&retained, &bytes).expect("write retained");
+
+        let error = installer.rollback().expect_err("rollback must re-verify");
+        assert!(
+            matches!(
+                error,
+                UpdateError::Verify(VerifyError::DigestMismatch { .. })
+            ),
+            "expected a digest mismatch, got {error:?}"
+        );
+        assert_eq!(installer.installed_version(), V2, "active slot must not move");
+        assert_eq!(installer.launchable().expect("launchable").version, V2);
+    }
+
+    #[test]
+    fn a_substituted_rollback_artifact_cannot_bypass_the_floor() {
+        let root = tempfile::tempdir().expect("tempdir");
+        // Ship 1.2.0 with a floor of 1.2.0, then update to 1.3.0.
+        let shipped = build_artifact(FixtureFlaw::None, Version::new(1, 2, 0), Version::new(1, 2, 0));
+        let mut installer = Installer::bootstrap(
+            root.path(),
+            verifier(),
+            FIXTURE_TARGET,
+            shipped.envelope.as_bytes(),
+            &shipped.package,
+        )
+        .expect("bootstrap");
+        let update =
+            build_artifact(FixtureFlaw::None, Version::new(1, 3, 0), Version::new(1, 2, 0));
+        installer
+            .install(update.envelope.as_bytes(), &update.package)
+            .expect("install");
+        assert_eq!(installer.journal().floor, Version::new(1, 2, 0));
+
+        // Swap the retained slot for a *validly signed* but ancient release.
+        let ancient =
+            build_artifact(FixtureFlaw::None, Version::new(0, 9, 0), Version::new(0, 9, 0));
+        let slot = installer.journal().previous.expect("retained").slot;
+        fs::write(slot_dir(root.path(), slot).join(PAYLOAD_FILE), &ancient.package)
+            .expect("write payload");
+        fs::write(
+            slot_dir(root.path(), slot).join(MANIFEST_FILE),
+            ancient.envelope.as_bytes(),
+        )
+        .expect("write manifest");
+
+        let error = installer.rollback().expect_err("the floor must hold");
+        assert!(
+            matches!(
+                error,
+                UpdateError::Verify(VerifyError::DowngradeBlocked { offered, floor, .. })
+                    if offered == Version::new(0, 9, 0) && floor == Version::new(1, 2, 0)
+            ),
+            "expected a blocked downgrade, got {error:?}"
+        );
+        assert_eq!(installer.installed_version(), Version::new(1, 3, 0));
+    }
+
+    #[test]
+    fn installing_over_the_retained_slot_drops_the_stale_rollback_claim() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let mut installer = bootstrapped(root.path());
+        let v2 = artifact(FixtureFlaw::None, V2);
+        installer
+            .install(v2.envelope.as_bytes(), &v2.package)
+            .expect("install v2");
+        // v3 targets slot A, which currently retains v1.
+        let v3 = artifact(FixtureFlaw::None, Version::new(1, 2, 0));
+        installer
+            .install(v3.envelope.as_bytes(), &v3.package)
+            .expect("install v3");
+        assert_eq!(installer.retained_version(), Some(V2));
+        assert_eq!(installer.rollback().expect("rollback to v2"), V2);
+    }
+
+    #[test]
+    fn a_journal_naming_one_slot_twice_is_corrupt() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let installer = bootstrapped(root.path());
+        let mut journal = installer.journal().clone();
+        journal.previous = Some(journal.active);
+        fs::write(
+            root.path().join(JOURNAL_FILE),
+            serde_json::to_vec(&journal).expect("encode"),
+        )
+        .expect("write");
+        assert!(matches!(
+            Installer::open(root.path(), verifier(), FIXTURE_TARGET),
+            Err(UpdateError::JournalCorrupt(_))
+        ));
+    }
 }
