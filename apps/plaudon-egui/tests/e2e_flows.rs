@@ -151,8 +151,19 @@ fn imported_in(dir: &Path, count: usize, hooks: HostHooks, size: egui::Vec2) -> 
     support::settle(&mut harness);
     support::run_until_announced(&mut harness, "Import an audio file");
     harness.get_by_label("Import an audio file").click();
+    // A library row appears as soon as the media is committed, which is
+    // *before* the import job records the provenance that goes with it (the
+    // original file name lands in recording_import_metadata, and until it
+    // does the detail falls back to the title). Waiting for the row alone
+    // therefore opens recordings mid-import: observed as
+    // `opening_a_recording_shows_its_provenance_and_the_enforced_privacy_mode`
+    // failing on a loaded runner and passing on an idle one. The import is
+    // finished when its job says it is.
     support::run_until_frame(&mut harness, "the imported recordings", |harness| {
         recordings(harness.state()).len() == count
+            && jobs(harness.state())
+                .iter()
+                .all(|job| job.state.is_terminal())
     });
     (harness, device)
 }
@@ -418,7 +429,8 @@ fn opening_a_recording_shows_its_provenance_and_the_enforced_privacy_mode() {
     }
     assert!(
         support::announces(&harness, "board-meeting.wav"),
-        "the original file name is not shown"
+        "the original file name is not shown: {:?}",
+        support::announced(&harness)
     );
     assert!(
         support::announces(&harness, &row.sha256.to_hex()[..12]),
