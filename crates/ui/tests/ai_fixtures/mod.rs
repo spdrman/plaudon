@@ -169,6 +169,7 @@ pub fn capabilities(local_only: bool, consents: Vec<ConsentSummary>) -> Capabili
                 enabled: true,
                 categories: BTreeMap::new(),
             },
+            export_defaults: plaudon_app::dto::ExportDefaults::default(),
         },
         openrouter_key_present: true,
         cloud_consents: consents,
