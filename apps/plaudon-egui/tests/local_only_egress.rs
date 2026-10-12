@@ -20,11 +20,13 @@
 //!   drives the one flow in this build that genuinely reaches the transport
 //!   and asserts the watch sees it. Without that test, the zero in the first
 //!   test could just as easily mean the transport was never installed.
-//! * **Nothing is asserted that the application does not do.** This build has
-//!   no executor for a local job (`crates/app/src/backend/cloud.rs`
-//!   `queue_local_job` only opens a row) and no verified cloud model (a
-//!   pinned-allowlist card is unverified until a capability probe runs), so
-//!   the assertions stop exactly where the behaviour does, and say so.
+//! * **Nothing is asserted that the application does not do.** The local
+//!   stages here run for real — the job engine claims them, the worker runs
+//!   the executor and the output is committed — against scripted engines
+//!   installed at the `plaudon_ai_contracts` boundary, so the zero at the end
+//!   is a zero for work that actually happened. There is still no verified
+//!   cloud model (a pinned-allowlist card is unverified until a capability
+//!   probe runs), so the cloud assertions stop where that behaviour does.
 
 mod support;
 
@@ -44,12 +46,11 @@ use plaudon_app::dto::{
     SetModelPreferenceRequest, SetOpenRouterKeyRequest, SortDirection, StartProcessingRequest,
     StartProcessingResponse,
 };
-use plaudon_app::ports::{MachineRevisionSpec, MachineSegment};
 use plaudon_app::runtime::AppEngine;
 use plaudon_app::shell_state::ShellStateStore;
+use plaudon_app::testing_engines::{ScriptedStt, ScriptedTextModel, SCRIPTED_STT_ENGINE};
 use plaudon_domain::error::{AppErrorCode, ErrorEnvelope};
 use plaudon_domain::ids::RecordingId;
-use plaudon_domain::transcript::AlignmentOrigin;
 use plaudon_egui::shell_app::PlaudonShell;
 use plaudon_security::outbound::http::{GatedRequest, HttpResponse};
 use plaudon_ui::shell::{HostHooks, Route};
@@ -165,9 +166,27 @@ fn write_wav(path: &Path) {
 /// registration itself is still [`support::app_over`], so the application a
 /// test drives is the one the binary ships.
 fn watched_app(data_dir: &Path, hooks: HostHooks, watch: &EgressWatch) -> PlaudonShell {
-    let engine =
-        AppEngine::start(support::config(data_dir).with_cloud_transport(watch.transport()))
-            .expect("the engine starts over the library");
+    let engine = AppEngine::start(
+        support::config(data_dir)
+            .with_cloud_transport(watch.transport())
+            // Real executors, scripted engines: the processing path that runs
+            // here is the production one, so "nothing left the machine" is a
+            // claim about work that actually ran.
+            .with_stt_engines(vec![ScriptedStt::new(&[
+                "We agreed to ship on Friday.",
+            ])
+            .shared()])
+            .with_text_model(
+                ScriptedTextModel::new(serde_json::json!({
+                    "decisions": [],
+                    "action_items": [],
+                    "open_questions": [],
+                    "risks": []
+                }))
+                .shared(),
+            ),
+    )
+    .expect("the engine starts over the library");
     // Parity row S15: until the first-run flow has been recorded the shell
     // draws setup instead of the window. Local-only Mode is left off here and
     // set afterwards through `set_local_only_mode`, which is the command
@@ -332,24 +351,20 @@ fn import_through_the_ui(harness: &mut Harness<'_, PlaudonShell>) -> RecordingId
         .recording_id
 }
 
-/// Give `recording_id` a transcript the way the STT EPIC will: through the
-/// port an engine calls when it finishes. No model runs, and nothing is sent.
-fn record_machine_transcript(app: &PlaudonShell, recording_id: RecordingId) {
-    let ports = app.engine().ports().clone();
-    let spec = MachineRevisionSpec {
-        recording_id,
-        segments: vec![
-            MachineSegment::text_only("we agreed to ship on Friday"),
-            MachineSegment::text_only("Dana owns the release notes"),
-        ],
-        engine_id: "test.fixture".to_owned(),
-        model_id: "fixture".to_owned(),
-        alignment_origin: AlignmentOrigin::None,
-    };
-    app.engine()
-        .handle()
-        .block_on(ports.transcript.create_machine_revision(spec))
-        .expect("the fixture transcript is stored");
+/// Paint frames until every job of `kind` for `recording_id` is terminal.
+///
+/// Frames rather than sleeps: the shell is what learns about the worker, and
+/// a test that asserts on jobs while the window is frozen is asserting about
+/// a different application.
+fn run_until_settled(
+    harness: &mut Harness<'_, PlaudonShell>,
+    recording_id: RecordingId,
+    kind: JobKind,
+) {
+    support::run_until(harness, "the job to finish", |app| {
+        let states = jobs_of(app, recording_id, kind);
+        !states.is_empty() && states.iter().all(|state| state.is_terminal())
+    });
 }
 
 /* ------------------------------------------------------------------- tests */
@@ -414,32 +429,22 @@ fn local_only_mode_authorizes_no_outbound_request_across_import_transcribe_and_s
         });
     support::run_until_announced(&mut harness, &stt[0].display_name);
 
-    // 4. A transcript, created at the edge the STT EPIC calls.
-    record_machine_transcript(harness.state(), recording_id);
-    harness.run_steps(4);
-
-    // 5. Transcribe with a local engine. With nothing configured the app
+    // 4. Transcribe with a local engine. With nothing configured the app
     //    refuses rather than inventing a model, and that refusal is the
     //    honest first observation.
     let unconfigured = start_processing(harness.state(), recording_id, ProcessingStage::Transcribe)
         .expect_err("no model is configured for the transcribe stage yet");
     assert_eq!(unconfigured.code, AppErrorCode::ModelUnavailable);
 
-    // The capability report lists the local engine but no installed model for
-    // it on this machine (`installed_models` is empty in a hermetic build), so
-    // the id below is the test's own. Nothing validates it, because nothing
-    // runs it: `queue_local_job` opens a row and this build has no executor
-    // for it — which is exactly why the job is asserted to stay queued.
-    let stt_engine = stt[0].clone();
-    let stt_model = stt_engine
-        .installed_models
-        .first()
-        .map_or_else(|| "fixture-local-stt".to_owned(), |m| m.model_id.clone());
+    // The engine the worker will actually run is the scripted one this test
+    // installed, so the stage runs to completion here instead of stopping at
+    // `queued` — which is the point: the zero below is now a zero *with the
+    // executors wired*, not a zero because nothing ran.
     prefer_model(
         harness.state(),
         ProcessingStage::Transcribe,
-        &stt_engine.engine_id,
-        &stt_model,
+        SCRIPTED_STT_ENGINE,
+        "scripted-small",
     )
     .expect("a local engine may be preferred while local-only mode is on");
     let queued = start_processing(harness.state(), recording_id, ProcessingStage::Transcribe)
@@ -450,50 +455,36 @@ fn local_only_mode_authorizes_no_outbound_request_across_import_transcribe_and_s
         "a local run is not blocked: {:?}",
         queued.blocked_reason
     );
+    run_until_settled(&mut harness, recording_id, JobKind::Transcribe);
     assert_eq!(
         jobs_of(harness.state(), recording_id, JobKind::Transcribe),
-        vec![JobState::Queued],
-        "this build has no executor for a local transcription job, so it stays queued"
+        vec![JobState::Completed],
+        "the local transcription ran on this machine and committed its output"
     );
 
-    // 6. Summarize with a local engine, if the build reports one.
-    let text = local_engines(&report, EngineStage::Text);
-    match text.first() {
-        Some(engine) => {
-            prefer_model(
-                harness.state(),
-                ProcessingStage::ConsolidatedSummary,
-                &engine.engine_id,
-                "fixture-local-text",
-            )
-            .expect("a local text engine may be preferred while local-only mode is on");
-            let summary = start_processing(
-                harness.state(),
-                recording_id,
-                ProcessingStage::ConsolidatedSummary,
-            )
-            .expect("a local summary is accepted under local-only mode");
-            assert_eq!(summary.dispatch, "queued");
-            assert_eq!(
-                jobs_of(harness.state(), recording_id, JobKind::Summarize),
-                vec![JobState::Queued],
-                "this build has no executor for a local summary job either"
-            );
-        }
-        None => {
-            // No local text engine exists in this build: the honest outcome is
-            // a refusal, never a queued job that nothing can run.
-            let refused = start_processing(
-                harness.state(),
-                recording_id,
-                ProcessingStage::ConsolidatedSummary,
-            )
-            .expect_err("without a local text engine the summary stage has no model");
-            assert_eq!(refused.code, AppErrorCode::ModelUnavailable);
-        }
-    }
+    // 5. Summarize over the committed revision, on the local text model.
+    prefer_model(
+        harness.state(),
+        ProcessingStage::ConsolidatedSummary,
+        SCRIPTED_STT_ENGINE,
+        "scripted-small",
+    )
+    .expect("a local text engine may be preferred while local-only mode is on");
+    let summary = start_processing(
+        harness.state(),
+        recording_id,
+        ProcessingStage::ConsolidatedSummary,
+    )
+    .expect("a local summary is accepted under local-only mode");
+    assert_eq!(summary.dispatch, "queued");
+    run_until_settled(&mut harness, recording_id, JobKind::Summarize);
+    assert_eq!(
+        jobs_of(harness.state(), recording_id, JobKind::Summarize),
+        vec![JobState::Completed],
+        "the local summary ran on this machine too"
+    );
 
-    // 7. A cloud engine cannot even be chosen while the mode is on.
+    // 6. A cloud engine cannot even be chosen while the mode is on.
     let refused = prefer_model(
         harness.state(),
         ProcessingStage::Transcribe,
@@ -503,7 +494,7 @@ fn local_only_mode_authorizes_no_outbound_request_across_import_transcribe_and_s
     .expect_err("local-only mode forbids selecting a cloud model");
     assert_eq!(refused.code, AppErrorCode::LocalOnlyMode);
 
-    // 8. The catalogue the picker shows is the pinned allowlist, and it says
+    // 7. The catalogue the picker shows is the pinned allowlist, and it says
     //    why. Nothing was fetched to build it.
     let catalogue = list_models(harness.state(), ProcessingStage::Transcribe);
     assert_eq!(catalogue.catalog_source, "pinned_allowlist");
@@ -512,7 +503,7 @@ fn local_only_mode_authorizes_no_outbound_request_across_import_transcribe_and_s
         Some("local_only_mode")
     );
 
-    // 9. Paint a few more frames so every panel that was going to ask for
+    // 8. Paint a few more frames so every panel that was going to ask for
     //    something has asked, then close the window the way the binary does.
     harness.run_steps(8);
     harness.state_mut().shutdown();

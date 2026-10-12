@@ -63,6 +63,7 @@ pub struct EngineConfig {
     radio: Arc<dyn DeviceRadio>,
     cloud_transport: Option<Arc<dyn plaudon_ai_openrouter::transport::AsyncHttpTransport>>,
     notifier: Option<Arc<dyn plaudon_notifications::Notifier>>,
+    engines: crate::EngineOverrides,
     worker_threads: Option<usize>,
 }
 
@@ -91,6 +92,7 @@ impl EngineConfig {
             radio: Arc::new(NoRadio),
             cloud_transport: None,
             notifier: None,
+            engines: crate::EngineOverrides::default(),
             worker_threads: None,
         }
     }
@@ -144,6 +146,29 @@ impl EngineConfig {
     #[must_use]
     pub fn with_radio(mut self, radio: Arc<dyn DeviceRadio>) -> Self {
         self.radio = radio;
+        self
+    }
+
+    /// Replace the speech engines the transcribe executor probes for.
+    ///
+    /// Tests use this to run the whole import → transcribe → summarize path
+    /// against scripted engines, with no model file and no network.
+    #[must_use]
+    pub fn with_stt_engines(
+        mut self,
+        engines: Vec<Arc<dyn plaudon_ai_contracts::stt::SpeechToText>>,
+    ) -> Self {
+        self.engines.stt = engines;
+        self
+    }
+
+    /// Replace the text model every summarization and tool run uses.
+    #[must_use]
+    pub fn with_text_model(
+        mut self,
+        model: Arc<dyn plaudon_ai_contracts::text::TextModel>,
+    ) -> Self {
+        self.engines.text = Some(model);
         self
     }
 
@@ -260,6 +285,7 @@ impl AppEngine {
             config.approved_roots,
             config.radio,
             config.cloud_transport,
+            config.engines,
         ))?;
         *publisher.lock() = Some(ports.events.clone());
 
@@ -330,13 +356,16 @@ impl AppEngine {
         self.events.sender().send(event);
     }
 
-    /// Stop accepting events and wind the runtime down.
+    /// Stop the job workers, stop accepting events and wind the runtime down.
     ///
-    /// Tasks are given `grace` to finish; anything still running is abandoned,
-    /// which is safe because every durable step commits before it reports.
+    /// Workers are given `grace` to finish the job they hold; anything still
+    /// running is abandoned, which is safe because every durable step commits
+    /// before it reports and the next start reconciles the row (§14.7).
     pub fn shutdown(mut self, grace: std::time::Duration) {
         self.events.close();
         if let Some(runtime) = self.runtime.take() {
+            let processing = self.ports.processing.clone();
+            runtime.block_on(async move { processing.stop(grace).await });
             runtime.shutdown_timeout(grace);
         }
     }

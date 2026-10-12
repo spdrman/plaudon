@@ -229,6 +229,21 @@ pub struct ModelProbeRecord {
     /// locally calculable and is reported as unknown rather than guessed.
     #[serde(default)]
     pub audio_tokens_per_second: Known<u32>,
+    /// Whether an observed exchange returned a body that satisfied the JSON
+    /// schema the request declared.
+    ///
+    /// Text generation has no request family to establish (App. A.3), so this
+    /// is what an observed text exchange actually demonstrates. `Unknown` is
+    /// not support: a text card is never verified without a `Yes` here.
+    #[serde(default)]
+    pub structured_output: Tri,
+    /// Output budget an observed exchange accepted and answered within.
+    ///
+    /// The declared budget of a successful exchange, never a catalogue figure
+    /// and never rounded upward: the exchange proves the model answered under
+    /// *this* ceiling, not that a larger one would be honoured.
+    #[serde(default)]
+    pub max_output_tokens: Known<u64>,
     /// Date the record was established, as `YYYY-MM-DD`.
     pub observed_on: String,
     /// Free-form notes. Never contains request or response bodies.
@@ -262,6 +277,8 @@ impl ModelProbeRecord {
                 Known::Unknown
             },
             audio_tokens_per_second: Known::Unknown,
+            structured_output: Tri::Unknown,
+            max_output_tokens: Known::Unknown,
             observed_on: observed_on.into(),
             notes: String::new(),
         }

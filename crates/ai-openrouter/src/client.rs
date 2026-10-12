@@ -865,13 +865,17 @@ pub struct GenerationOutcome {
 
 impl OpenRouterTextModel {
     /// Bind a client to a model card and a job.
+    ///
+    /// Schema enforcement starts from what the card's capability check
+    /// observed: asking for it on a model that never demonstrated it would be
+    /// requesting an unverified feature (§9.5).
     #[must_use]
     pub fn new(card: ModelCard, dispatcher: CloudDispatcher, binding: JobBinding) -> Self {
         Self {
+            supports_structured_output: card.supports_structured_output,
             card,
             dispatcher,
             binding,
-            supports_structured_output: Tri::Unknown,
             now_unix: 0,
         }
     }
@@ -1025,6 +1029,10 @@ impl TextModel for OpenRouterTextModel {
         };
         capabilities.offline = Tri::No;
         capabilities.max_context_tokens = self.card.context_length.clone();
+        // Only an observed exchange establishes an output ceiling; the
+        // catalogue publishes none, so an unchecked model stays Unknown and
+        // satisfies no tool requirement (spec 6.6).
+        capabilities.max_output_tokens = self.card.max_output_tokens.clone();
         capabilities.supports_structured_output = self.supports_structured_output;
         capabilities.can_cancel = Tri::Yes;
         capabilities.privacy_class = match self.card.privacy.as_ref().map(|p| p.posture) {

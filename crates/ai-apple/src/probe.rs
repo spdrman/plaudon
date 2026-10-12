@@ -456,6 +456,12 @@ pub fn text_model_capabilities(
                 caps.max_context_tokens = probe
                     .max_context_tokens
                     .map_or(Known::Unknown, Known::Known);
+                // Nor an output ceiling: `probe_foundation_model` has no
+                // field for one, and a probe cannot invent what the platform
+                // does not state. The only thing that establishes an output
+                // budget for this engine is a capability check that really
+                // generated within a declared one, which is recorded as an
+                // observed exchange and read back by the caller.
                 caps.max_output_tokens = Known::Unknown;
                 if let Some(version) = &probe.model_version {
                     caps.model = caps.model.clone().with_version(version.clone());
