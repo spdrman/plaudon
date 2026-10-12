@@ -3,8 +3,10 @@
 Numbers **0001-0012** are reserved by spec §21 and their meanings are fixed
 there; do not reuse them. Later ranges are allocated per work stream so two
 authors never mint the same number: 0013-0019 security and privacy, 0020-0029
-desktop shell, 0030-0039 job engine, 0040+ unallocated — claim a range in this
-file before using it.
+desktop shell, 0030-0039 job engine, 0040-0049 AI adapters, 0050-0059 sources
+and ingestion, 0060-0069 direct-device import, 0400-0499 transcript tools and
+automation, everything else unallocated — claim a range in this file before
+using it.
 
 Every record states context, the decision, the alternatives that were rejected
 and why, and the consequences we accept.
