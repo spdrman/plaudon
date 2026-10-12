@@ -110,6 +110,12 @@ fn the_spike_lists_an_empty_library_imports_a_file_and_shows_the_result() {
     ));
     assert_eq!(harness.state().state().status, "0 recording(s)");
 
+    // The committed baseline, compared only where the renderer is fixed (see
+    // docs/EGUI_TESTING.md §4). The empty library is the deterministic frame:
+    // after an import the activity log carries freshly minted job and recording
+    // identifiers, which can never be byte-identical between runs.
+    visual::assert_snapshot(&mut harness, "spike-empty-library");
+
     // 2. The vendored divider is a real splitter to a screen reader.
     let splitter = a11y::nodes(&harness)
         .into_iter()
@@ -155,10 +161,6 @@ fn the_spike_lists_an_empty_library_imports_a_file_and_shows_the_result() {
         !a11y::has_label(&harness, "No recordings yet. Import audio to get started."),
         "the empty state is still showing after an import"
     );
-
-    // 5. The committed baseline, compared only where the renderer is fixed.
-    //    See docs/EGUI_TESTING.md §4.
-    visual::assert_snapshot(&mut harness, "spike-library-after-import");
 }
 
 #[test]
