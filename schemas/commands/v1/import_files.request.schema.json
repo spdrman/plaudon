@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/import_files.request.schema.json",
+  "title": "import_files.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "paths",
+    "duplicate_policy"
+  ],
+  "properties": {
+    "paths": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "duplicate_policy": {
+      "type": "string",
+      "enum": [
+        "ask",
+        "import_anyway",
+        "open_existing",
+        "skip"
+      ]
+    }
+  }
+}

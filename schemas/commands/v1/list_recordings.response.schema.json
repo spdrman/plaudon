@@ -1,0 +1,177 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/list_recordings.response.schema.json",
+  "title": "list_recordings.response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "items",
+    "next_cursor",
+    "total"
+  ],
+  "properties": {
+    "items": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/recording_summary"
+      }
+    },
+    "next_cursor": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "total": {
+      "type": "integer",
+      "minimum": 0
+    }
+  },
+  "$defs": {
+    "error_envelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "message",
+        "retryable",
+        "diagnostic_id"
+      ],
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "retryable": {
+          "type": "boolean"
+        },
+        "action": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "diagnostic_id": {
+          "type": "string"
+        }
+      }
+    },
+    "recording_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "recording_id",
+        "title",
+        "recorded_at",
+        "imported_at",
+        "duration_ms",
+        "source",
+        "import_status",
+        "transcription_status",
+        "processing_engine",
+        "last_error",
+        "tags",
+        "byte_length",
+        "sha256"
+      ],
+      "properties": {
+        "recording_id": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "recorded_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "imported_at": {
+          "type": "string"
+        },
+        "duration_ms": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "source_kind",
+            "label"
+          ],
+          "properties": {
+            "source_kind": {
+              "type": "string",
+              "enum": [
+                "manual_import",
+                "plaud_cloud",
+                "plaud_device",
+                "watched_folder"
+              ]
+            },
+            "label": {
+              "type": "string"
+            }
+          }
+        },
+        "import_status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "importing",
+            "imported",
+            "failed"
+          ]
+        },
+        "transcription_status": {
+          "type": "string",
+          "enum": [
+            "none",
+            "queued",
+            "running",
+            "completed",
+            "failed",
+            "stale"
+          ]
+        },
+        "processing_engine": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "last_error": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/error_envelope"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "byte_length": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    }
+  }
+}

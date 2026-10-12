@@ -1305,6 +1305,9 @@ pub(crate) mod testing {
 
     use tempfile::TempDir;
 
+    use plaudon_notifications::testing::RecordingNotifier;
+    use plaudon_notifications::{Dispatcher, NotificationSettings as CrateSettings, OsPermission};
+
     use super::LocalBackend;
     use crate::events::RecordingEventSink;
     use crate::secrets::InMemorySecretStore;
@@ -1318,6 +1321,7 @@ pub(crate) mod testing {
         pub backend: LocalBackend,
         pub sink: Arc<RecordingEventSink>,
         pub secrets: Arc<InMemorySecretStore>,
+        pub notifier: Arc<RecordingNotifier>,
         pub dir: TempDir,
         pub imports: TempDir,
     }
@@ -1332,13 +1336,30 @@ pub(crate) mod testing {
     }
 
     pub(crate) async fn backend_fixture() -> Fixture {
+        fixture_with_notifier(RecordingNotifier::with_permission(OsPermission::NotRequested))
+            .await
+    }
+
+    /// A fixture whose notifications go to `notifier`.
+    ///
+    /// The dispatcher uses a short timeout so a hanging backend is contained
+    /// inside the test rather than inside the five-second production budget.
+    pub(crate) async fn fixture_with_notifier(notifier: Arc<RecordingNotifier>) -> Fixture {
         let dir = tempfile::tempdir().unwrap();
         let imports = tempfile::tempdir().unwrap();
         let sink = Arc::new(RecordingEventSink::new());
         let secrets = Arc::new(InMemorySecretStore::new());
+        let dispatcher = Arc::new(
+            Dispatcher::new(
+                Arc::clone(&notifier) as Arc<dyn plaudon_notifications::Notifier>,
+                CrateSettings::uniform(false),
+            )
+            .with_timeout(std::time::Duration::from_millis(100)),
+        );
         let backend = LocalBackend::open(
             dir.path(),
             sink.clone(),
+            dispatcher,
             secrets.clone(),
             vec![imports.path().to_path_buf()],
         )
@@ -1348,6 +1369,7 @@ pub(crate) mod testing {
             backend,
             sink,
             secrets,
+            notifier,
             dir,
             imports,
         }
@@ -1813,6 +1835,10 @@ mod tests {
         let backend = LocalBackend::open(
             dir.path(),
             Arc::clone(&sink) as Arc<dyn EventSink>,
+            Arc::new(plaudon_notifications::Dispatcher::new(
+                plaudon_notifications::testing::RecordingNotifier::granted(),
+                plaudon_notifications::NotificationSettings::uniform(false),
+            )),
             Arc::new(crate::secrets::InMemorySecretStore::new()),
             vec![imports.path().to_path_buf()],
         )

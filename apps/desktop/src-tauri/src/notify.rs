@@ -21,14 +21,15 @@ use async_trait::async_trait;
 use plaudon_domain::time::Timestamp;
 use plaudon_notifications::privacy::{self, NotificationContext};
 use plaudon_notifications::{
-    DeliveryOutcome, NotificationRequest, NotificationSettings as CrateSettings, Notifier,
-    OsPermission,
+    DeliveryOutcome, NotificationRequest, NotificationSettings as CrateSettings,
+    NotificationTarget, Notifier, OsPermission,
 };
 use sqlx::SqlitePool;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 
-use crate::dto::{NotificationCategory, NotificationSettings, OsNotificationPermission};
+use crate::dto::{EventKind, NotificationCategory, NotificationSettings, OsNotificationPermission};
+use crate::events::{EventDraft, EventPublisher};
 
 /// Delivers notifications for committed activity entries.
 #[derive(Debug, Clone)]

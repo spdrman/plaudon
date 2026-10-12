@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/retry_job.request.schema.json",
+  "title": "retry_job.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "job_id",
+    "cost_acknowledged"
+  ],
+  "properties": {
+    "job_id": {
+      "type": "string"
+    },
+    "cost_acknowledged": {
+      "type": "boolean"
+    }
+  }
+}

@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/complete_onboarding.request.schema.json",
+  "title": "complete_onboarding.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "default_stt_engine_id",
+    "default_text_engine_id",
+    "local_only_mode",
+    "notifications"
+  ],
+  "properties": {
+    "default_stt_engine_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "default_text_engine_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "local_only_mode": {
+      "type": "boolean"
+    },
+    "notifications": {
+      "$ref": "#/$defs/notification_settings"
+    }
+  },
+  "$defs": {
+    "notification_settings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "categories"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "categories": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "import_finished",
+            "transcription_finished",
+            "requires_attention",
+            "cloud_budget_exceeded"
+          ],
+          "properties": {
+            "import_finished": {
+              "type": "boolean"
+            },
+            "transcription_finished": {
+              "type": "boolean"
+            },
+            "requires_attention": {
+              "type": "boolean"
+            },
+            "cloud_budget_exceeded": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -5,6 +5,12 @@
 //! calls it.
 
 use std::sync::Arc;
+use std::time::Duration;
+
+use plaudon_notifications::testing::RecordingNotifier;
+use plaudon_notifications::{
+    Dispatcher, NotificationSettings as CrateSettings, Notifier, OsPermission,
+};
 
 use plaudon_desktop::commands::{import, jobs, library, settings, transcript};
 use plaudon_desktop::dto::{
@@ -24,6 +30,7 @@ use plaudon_domain::transcript::AlignmentOrigin;
 struct Harness {
     ports: AppPorts,
     sink: Arc<RecordingEventSink>,
+    notifier: Arc<RecordingNotifier>,
     _library: tempfile::TempDir,
     sources: tempfile::TempDir,
     exports: tempfile::TempDir,
@@ -31,14 +38,26 @@ struct Harness {
 
 impl Harness {
     async fn new() -> Self {
+        Self::with_notifier(RecordingNotifier::granted()).await
+    }
+
+    async fn with_notifier(notifier: Arc<RecordingNotifier>) -> Self {
         let library = tempfile::tempdir().expect("tempdir");
         let sources = tempfile::tempdir().expect("tempdir");
         let exports = tempfile::tempdir().expect("tempdir");
         let sink = Arc::new(RecordingEventSink::new());
         let secrets = Arc::new(InMemorySecretStore::new());
+        let dispatcher = Arc::new(
+            Dispatcher::new(
+                Arc::clone(&notifier) as Arc<dyn Notifier>,
+                CrateSettings::uniform(false),
+            )
+            .with_timeout(Duration::from_millis(100)),
+        );
         let ports = build_ports(
             library.path(),
             Arc::clone(&sink) as Arc<dyn EventSink>,
+            dispatcher,
             Arc::clone(&secrets) as Arc<dyn SecretStore>,
             vec![sources.path().to_path_buf()],
         )
@@ -47,6 +66,7 @@ impl Harness {
         Self {
             ports,
             sink,
+            notifier,
             _library: library,
             sources,
             exports,
