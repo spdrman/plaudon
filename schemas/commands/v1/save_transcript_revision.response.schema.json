@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/save_transcript_revision.response.schema.json",
+  "title": "save_transcript_revision.response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "revision_id",
+    "stale_output_ids"
+  ],
+  "properties": {
+    "revision_id": {
+      "type": "string"
+    },
+    "stale_output_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

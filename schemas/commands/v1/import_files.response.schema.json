@@ -1,0 +1,148 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/import_files.response.schema.json",
+  "title": "import_files.response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "results"
+  ],
+  "properties": {
+    "results": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/import_outcome"
+      }
+    }
+  },
+  "$defs": {
+    "error_envelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "message",
+        "retryable",
+        "diagnostic_id"
+      ],
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "retryable": {
+          "type": "boolean"
+        },
+        "action": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "diagnostic_id": {
+          "type": "string"
+        }
+      }
+    },
+    "import_outcome": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "outcome",
+            "path",
+            "job_id"
+          ],
+          "properties": {
+            "outcome": {
+              "const": "accepted"
+            },
+            "path": {
+              "type": "string"
+            },
+            "job_id": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "outcome",
+            "path",
+            "sha256",
+            "existing_recording_id",
+            "existing_title"
+          ],
+          "properties": {
+            "outcome": {
+              "const": "duplicate"
+            },
+            "path": {
+              "type": "string"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "existing_recording_id": {
+              "type": "string"
+            },
+            "existing_title": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "outcome",
+            "path",
+            "sha256",
+            "existing_recording_id"
+          ],
+          "properties": {
+            "outcome": {
+              "const": "skipped"
+            },
+            "path": {
+              "type": "string"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "existing_recording_id": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "outcome",
+            "path",
+            "error"
+          ],
+          "properties": {
+            "outcome": {
+              "const": "rejected"
+            },
+            "path": {
+              "type": "string"
+            },
+            "error": {
+              "$ref": "#/$defs/error_envelope"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

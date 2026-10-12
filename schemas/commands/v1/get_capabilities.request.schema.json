@@ -1,0 +1,9 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/get_capabilities.request.schema.json",
+  "title": "get_capabilities.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [],
+  "properties": {}
+}

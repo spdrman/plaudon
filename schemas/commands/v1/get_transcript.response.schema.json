@@ -1,0 +1,216 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/get_transcript.response.schema.json",
+  "title": "get_transcript.response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "revision",
+    "segments",
+    "next_cursor",
+    "total_segments"
+  ],
+  "properties": {
+    "revision": {
+      "$ref": "#/$defs/transcript_revision_ref"
+    },
+    "segments": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/transcript_segment"
+      }
+    },
+    "next_cursor": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "total_segments": {
+      "type": "integer",
+      "minimum": 0
+    }
+  },
+  "$defs": {
+    "transcript_annotation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "reason",
+        "segment_index",
+        "start_ms",
+        "end_ms"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "low_confidence",
+            "possible_hallucination",
+            "inaudible",
+            "edited"
+          ]
+        },
+        "reason": {
+          "type": "string"
+        },
+        "segment_index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "start_ms": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "end_ms": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        }
+      }
+    },
+    "transcript_revision_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "revision_id",
+        "kind",
+        "created_at",
+        "engine_id",
+        "model_id",
+        "alignment_origin",
+        "segment_count",
+        "superseded"
+      ],
+      "properties": {
+        "revision_id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "machine",
+            "human"
+          ]
+        },
+        "created_at": {
+          "type": "string"
+        },
+        "engine_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "model_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "alignment_origin": {
+          "type": "string",
+          "enum": [
+            "native",
+            "derived",
+            "none"
+          ]
+        },
+        "segment_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "superseded": {
+          "type": "boolean"
+        }
+      }
+    },
+    "transcript_segment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "index",
+        "text",
+        "start_ms",
+        "end_ms",
+        "alignment_origin",
+        "confidence",
+        "speaker_label",
+        "annotations"
+      ],
+      "properties": {
+        "index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "text": {
+          "type": "string"
+        },
+        "start_ms": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "end_ms": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "alignment_origin": {
+          "type": "string",
+          "enum": [
+            "native",
+            "derived",
+            "none"
+          ]
+        },
+        "confidence": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "engine_id",
+                "value"
+              ],
+              "properties": {
+                "engine_id": {
+                  "type": "string"
+                },
+                "value": {
+                  "type": "number"
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "speaker_label": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "annotations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/transcript_annotation"
+          }
+        }
+      }
+    }
+  }
+}

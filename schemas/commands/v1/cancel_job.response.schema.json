@@ -1,0 +1,183 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/cancel_job.response.schema.json",
+  "title": "cancel_job.response",
+  "$ref": "#/$defs/job_summary",
+  "$defs": {
+    "error_envelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "message",
+        "retryable",
+        "diagnostic_id"
+      ],
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "retryable": {
+          "type": "boolean"
+        },
+        "action": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "diagnostic_id": {
+          "type": "string"
+        }
+      }
+    },
+    "job_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "job_id",
+        "kind",
+        "state",
+        "stage",
+        "progress",
+        "created_at",
+        "updated_at",
+        "started_at",
+        "finished_at",
+        "recording_id",
+        "label",
+        "error",
+        "cost_acknowledgement_required",
+        "provider_request_id",
+        "output_link"
+      ],
+      "properties": {
+        "job_id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "import",
+            "transcribe",
+            "summarize",
+            "export",
+            "model_install",
+            "source_sync"
+          ]
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "queued",
+            "preflight",
+            "waiting_for_user",
+            "waiting_for_network",
+            "waiting_for_model",
+            "waiting_for_source",
+            "waiting_for_authorization",
+            "running_local",
+            "cloud_ready",
+            "cloud_sending",
+            "cloud_outcome_unknown",
+            "verifying",
+            "committing",
+            "cancelling",
+            "completed",
+            "failed_retryable",
+            "failed_terminal",
+            "cancelled"
+          ]
+        },
+        "stage": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "progress": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "created_at": {
+          "type": "string"
+        },
+        "updated_at": {
+          "type": "string"
+        },
+        "started_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "finished_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "recording_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "label": {
+          "type": "string"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/error_envelope"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cost_acknowledgement_required": {
+          "type": "boolean"
+        },
+        "provider_request_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "output_link": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "kind",
+                "id"
+              ],
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "recording",
+                    "export"
+                  ]
+                },
+                "id": {
+                  "type": "string"
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

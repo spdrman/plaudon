@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/list_jobs.request.schema.json",
+  "title": "list_jobs.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "cursor",
+    "limit",
+    "states",
+    "kinds"
+  ],
+  "properties": {
+    "cursor": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "limit": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1000
+    },
+    "states": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "queued",
+          "preflight",
+          "waiting_for_user",
+          "waiting_for_network",
+          "waiting_for_model",
+          "waiting_for_source",
+          "waiting_for_authorization",
+          "running_local",
+          "cloud_ready",
+          "cloud_sending",
+          "cloud_outcome_unknown",
+          "verifying",
+          "committing",
+          "cancelling",
+          "completed",
+          "failed_retryable",
+          "failed_terminal",
+          "cancelled"
+        ]
+      }
+    },
+    "kinds": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "import",
+          "transcribe",
+          "summarize",
+          "export",
+          "model_install",
+          "source_sync"
+        ]
+      }
+    }
+  }
+}

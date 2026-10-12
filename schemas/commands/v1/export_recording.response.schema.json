@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/export_recording.response.schema.json",
+  "title": "export_recording.response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "job_id"
+  ],
+  "properties": {
+    "job_id": {
+      "type": "string"
+    }
+  }
+}
