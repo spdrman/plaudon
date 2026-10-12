@@ -700,9 +700,28 @@
       "control": "Speaker embeddings get their own egress payload class, VoiceBiometric, which OutboundPolicy::authorize refuses in every network mode for every subsystem with no consent scope that could permit it; the local-only egress watch is extended to the enrol-and-match flow, and diagnostics redaction treats profile names like transcript text and embedding bytes as unloggable",
       "owner": "crates/security/src/outbound.rs",
       "epic": "D",
-      "verification": [],
-      "status": "planned",
-      "notes": "Planned by docs/specs/VOICE_PROFILES_SPEC.md (VP-110 to VP-113) and ADR-0080. The feature is local-only in and out of Local-only Mode; unlike TranscriptText and AudioBytes, the new payload class is unconsentable by construction, so a future coding mistake that requests the egress is refused structurally rather than by review. The P1.4 change added the voice_embedding shape to the section 6.3A response scanner (crates/security/src/response.rs), so a serialized result carrying an embedding-named field is already refused; the payload class, egress watch and diagnostics redaction remain to be built."
+      "verification": [
+        "a_voice_biometric_payload_is_refused_in_every_mode_for_every_subsystem",
+        "the_most_permissive_grant_still_refuses_a_voice_embedding",
+        "no_consent_content_type_exists_for_the_biometric_class",
+        "every_policy_snapshot_states_that_voice_data_is_always_refused",
+        "a_voice_biometric_denial_carries_labels_and_no_biometric_content",
+        "a_voice_biometric_attempt_is_refused_in_both_modes",
+        "the_voice_biometric_refusal_names_its_own_reason_and_allows_nothing",
+        "enrol_and_match_separates_the_speakers_and_writes_only_locally",
+        "local_only_mode_initiates_no_app_traffic",
+        "a_real_enrol_and_match_authorizes_no_outbound_request_with_local_only_mode_on",
+        "a_real_enrol_and_match_authorizes_no_outbound_request_with_local_only_mode_off",
+        "voice_enrolment_and_speaker_matching_authorize_no_outbound_request_with_local_only_mode_on",
+        "voice_enrolment_and_speaker_matching_authorize_no_outbound_request_with_local_only_mode_off",
+        "an_embedding_cannot_be_logged_in_any_shape_it_takes",
+        "a_registered_display_name_is_scrubbed_from_every_text_path",
+        "a_registered_name_never_reaches_the_log_file",
+        "redaction_payloads_match_the_allowlist_and_leak_nothing",
+        "embedding_blob_corpus_holds_its_invariants"
+      ],
+      "status": "implemented",
+      "notes": "P2.2. PayloadClass::VoiceBiometric is refused by OutboundPolicy::decide before the network mode, the grant, the subsystem, the purpose or the destination are considered, so the dedicated DenyReason::VoiceBiometricNeverEgresses is the answer in Local-only Mode and with the network permitted alike, and TryFrom<PayloadClass> for ContentType has no arm for it, so no consent grant can name it. Every effective-policy snapshot carries the always_refused statement in both modes. The egress-evidence suite gained the voice-profile-match scenario, which offers a biometric payload at the OpenRouter HTTPS, telemetry and cloud-CLI seams under both a local-only and a deliberately permissive policy and records six refusals. The watch over the one HTTP seam (LocalBackend::with_cloud_transport) sees zero attempts across a real enrolment and a real speaker-match job — scripted embedder, sealed exemplar on disk, suggestion row read back — with Local-only Mode on and off, and the same watch does catch the catalogue refresh once a key is stored (the_watch_catches_the_catalogue_refresh_once_a_key_is_stored), so the zero is falsifiable; the plaudon-egui watch repeats the claim over the shipped command surface. Diagnostics gained the embedding shapes (named field, long numeric vector, long opaque blob) and a process-wide display-name registry fed from the roster, so a name, a vector and a sealed blob are all scrubbed from the log sink, the crash hook and the notification reducer. Honest limits: the gate governs app-initiated traffic from this process only, the watch speaks for the transport seam rather than for a hypothetical component that opened its own socket, redaction cannot recognise a name it was never told about, and the shape-based blob and vector patterns are redaction-only, not scanner findings."
     },
     {
       "id": "TM-045",

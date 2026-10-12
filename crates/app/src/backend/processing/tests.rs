@@ -887,6 +887,18 @@ const VOICE_SEGMENT_MS: u64 = 6_000;
 
 impl VoicePipeline {
     async fn open() -> Self {
+        Self::open_over(None).await
+    }
+
+    /// The same pipeline with `watch` in place of the HTTPS transport, so a
+    /// test can say what the whole flow attempted to send.
+    async fn watched(watch: &EgressWatch) -> Self {
+        Self::open_over(Some(watch.transport())).await
+    }
+
+    async fn open_over(
+        transport: Option<Arc<dyn plaudon_ai_openrouter::transport::AsyncHttpTransport>>,
+    ) -> Self {
         use plaudon_ai_diarization::SpeakerTurn;
         use plaudon_app_core::voice_profiles::embedder::ScriptedEmbedder;
 
@@ -897,23 +909,25 @@ impl VoicePipeline {
             SpeakerTurn::new("S1", 0, 12_000),
             SpeakerTurn::new("S2", 12_000, 24_000),
         ]));
-        let backend = Arc::new(
-            fixture
-                .backend
-                .clone()
-                .with_stt_engines(vec![ScriptedStt::new(&["one", "two", "three", "four"])
-                    .with_segment_ms(VOICE_SEGMENT_MS)
-                    .shared()])
-                .with_text_model(ScriptedTextModel::new(json!({})).shared())
-                .with_voice_engines(
-                    diarizer as Arc<dyn plaudon_ai_diarization::contract::DiarizationProvider>,
-                    Arc::clone(&embedder)
-                        as Arc<dyn plaudon_app_core::voice_profiles::embedder::SpeakerEmbedder>,
-                )
-                .with_voice_secrets(
-                    Arc::clone(&secrets) as Arc<dyn plaudon_security::secrets::SecretStore>
-                ),
-        );
+        let mut backend = fixture
+            .backend
+            .clone()
+            .with_stt_engines(vec![ScriptedStt::new(&["one", "two", "three", "four"])
+                .with_segment_ms(VOICE_SEGMENT_MS)
+                .shared()])
+            .with_text_model(ScriptedTextModel::new(json!({})).shared())
+            .with_voice_engines(
+                diarizer as Arc<dyn plaudon_ai_diarization::contract::DiarizationProvider>,
+                Arc::clone(&embedder)
+                    as Arc<dyn plaudon_app_core::voice_profiles::embedder::SpeakerEmbedder>,
+            )
+            .with_voice_secrets(
+                Arc::clone(&secrets) as Arc<dyn plaudon_security::secrets::SecretStore>
+            );
+        if let Some(transport) = transport {
+            backend = backend.with_cloud_transport(transport);
+        }
+        let backend = Arc::new(backend);
         let pool = ProcessingHandle::start(&backend, Some(1));
         Self {
             inner: Pipeline {
@@ -2057,6 +2071,275 @@ async fn forgetting_everyone_keeps_the_roster_and_turns_the_feature_off() {
             .len(),
         1
     );
+
+    pipeline.stop().await;
+}
+
+/* ------------- the biometric tier reaches no network (VP-110, VP-111) */
+
+/// One attempted outbound request, reduced to what a test log may keep.
+///
+/// §15.4 forbids a credential or user content in a log line, so the URL is cut
+/// down to its path — a signed query parameter is a credential — and no header
+/// and no body is read, not even to count bytes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct OutboundAttempt {
+    /// `GET` or `POST`, from the egress gate's own vocabulary.
+    method: &'static str,
+    /// Request path, without the query string.
+    path: String,
+}
+
+/// The transport the backend is given instead of the HTTPS one.
+///
+/// Every attempt is recorded and then refused with
+/// [`TransportFailure::ConnectFailed`], the one failure whose
+/// `bytes_transmitted` is false: the double claims nothing left the machine,
+/// because nothing did.
+#[derive(Debug, Clone, Default)]
+struct EgressWatch {
+    attempts: Arc<std::sync::Mutex<Vec<OutboundAttempt>>>,
+}
+
+impl EgressWatch {
+    fn new() -> Self {
+        Self::default()
+    }
+
+    /// The same watch, as the backend wants it.
+    fn transport(&self) -> Arc<dyn plaudon_ai_openrouter::transport::AsyncHttpTransport> {
+        Arc::new(self.clone())
+    }
+
+    fn attempts(&self) -> Vec<OutboundAttempt> {
+        self.attempts.lock().expect("the egress log").clone()
+    }
+}
+
+#[async_trait::async_trait]
+impl plaudon_ai_openrouter::transport::AsyncHttpTransport for EgressWatch {
+    async fn send(
+        &self,
+        request: plaudon_security::outbound::http::GatedRequest,
+    ) -> Result<
+        plaudon_security::outbound::http::HttpResponse,
+        plaudon_ai_openrouter::transport::TransportFailure,
+    > {
+        self.attempts
+            .lock()
+            .expect("the egress log")
+            .push(OutboundAttempt {
+                method: request.method().as_str(),
+                path: path_of(request.url()),
+            });
+        Err(
+            plaudon_ai_openrouter::transport::TransportFailure::ConnectFailed {
+                detail: "the egress watch never completes a request".to_owned(),
+            },
+        )
+    }
+}
+
+/// The path of `url`, with the query string and fragment dropped.
+fn path_of(url: &str) -> String {
+    let after_scheme = url.split_once("://").map_or(url, |(_, rest)| rest);
+    let path = after_scheme.find('/').map_or("/", |at| &after_scheme[at..]);
+    path.split(['?', '#']).next().unwrap_or("/").to_owned()
+}
+
+/// Enrol a voice and match a speaker for real, and hand back everything the
+/// watch saw.
+///
+/// Every stage below is the production one: the scripted STT commits a real
+/// revision, the fake diarization provider's turns are reconciled against it,
+/// the enrolment cuts clean speech and seals a real embedding through
+/// [`plaudon_app_core::voice_profiles::EmbeddingCipher`], and the match job the
+/// job engine claims runs the §10 pipeline and writes a suggestion row. The
+/// embedder's call count is asserted, so the zero at the end is a zero for work
+/// that actually computed a voiceprint.
+///
+/// `local_only` is the §4.3 mode, set through the settings port before anything
+/// runs. VP-111 is a claim about both settings of it:
+/// `PayloadClass::VoiceBiometric` is refused by
+/// [`plaudon_security::outbound`] in every network mode and no consent grant
+/// can name it, so turning the mode off must not buy a voiceprint a way out.
+async fn enrol_and_match_under_the_watch(local_only: bool) -> Vec<OutboundAttempt> {
+    use crate::ports::{PeoplePort, SettingsPort, VoiceProfilesPort};
+
+    let watch = EgressWatch::new();
+    let pipeline = VoicePipeline::watched(&watch).await;
+    let backend = Arc::clone(&pipeline.inner.backend);
+
+    let mode = backend
+        .set_local_only_mode(local_only)
+        .await
+        .expect("the mode is stored");
+    assert_eq!(
+        mode.enabled, local_only,
+        "the mode the command reports back is the mode"
+    );
+
+    // The gate, then the diarization run an enrolment cuts its speech from:
+    // before anybody is enrolled a match job is refused, so the run comes from
+    // the pipeline's non-biometric half (VP-024).
+    let first = pipeline.transcribed("enrol.wav").await;
+    backend
+        .set_voice_profiles_enabled(
+            true,
+            Some(plaudon_app_core::voice_profiles::ACTIVATION_DISCLOSURE.version),
+        )
+        .await
+        .expect("the gate opens");
+    assert_eq!(pipeline.diarize_only(first).await, JobState::Completed);
+
+    let priya = backend
+        .create_person(&plaudon_persistence::people::PersonDraft::named("Priya"))
+        .await
+        .expect("a roster entry");
+    let enrolled = backend
+        .enroll_person_voice(&crate::ports::EnrolmentRequest {
+            person_id: priya.person_id,
+            recording_id: first,
+            cluster_key: "S1".to_owned(),
+            attestation: Some(
+                crate::commands::voice_profiles::attestation(&consent_dto())
+                    .expect("a valid attestation"),
+            ),
+        })
+        .await
+        .expect("an enrolment from a cluster with 12 s of clean speech");
+    assert_eq!(enrolled.exemplars, 1);
+    assert!(enrolled.speech_ms >= plaudon_app_core::voice_profiles::ENROL_SPEECH_MS);
+    let embeds_after_enrolment = pipeline.embedder.call_count();
+    assert!(
+        embeds_after_enrolment > 0,
+        "the enrolment stored an exemplar without embedding any audio"
+    );
+
+    // A second recording, matched for real: the job engine claims it, the
+    // executor runs the §10 pipeline and the suggestion is written.
+    let second = pipeline.transcribed("match.wav").await;
+    assert_eq!(pipeline.match_now(second).await, JobState::Completed);
+    assert!(
+        pipeline.embedder.call_count() > embeds_after_enrolment,
+        "the match job produced no embedding, so nothing was really matched"
+    );
+    let queue = backend
+        .list_speaker_suggestions(Some(second), 50)
+        .await
+        .expect("the panel reads");
+    let suggestion = queue
+        .suggestions
+        .iter()
+        .find(|row| row.person.person_id == priya.person_id)
+        .unwrap_or_else(|| {
+            panic!("the match wrote no suggestion for the enrolled person: {queue:?}")
+        });
+    assert_eq!(suggestion.state, "pending", "a job assigns nothing");
+    assert!(
+        suggestion.band == "suggest" || suggestion.band == "weak",
+        "unexpected band {:?}",
+        suggestion.band
+    );
+
+    // What the library now holds is biometric data, which is the thing VP-111
+    // is about: the zero below is a zero with a voiceprint on disk.
+    let settings = backend
+        .voice_profile_settings()
+        .await
+        .expect("the settings block reads");
+    assert_eq!(settings.enrolled_people, 1);
+    assert_eq!(settings.exemplars, 1);
+    assert!(settings.pending_suggestions >= 1);
+
+    pipeline.stop().await;
+    watch.attempts()
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_real_enrol_and_match_authorizes_no_outbound_request_with_local_only_mode_on() {
+    let attempts = enrol_and_match_under_the_watch(true).await;
+    assert!(
+        attempts.is_empty(),
+        "the biometric tier authorized {} outbound request(s) under local-only mode: {attempts:?}",
+        attempts.len()
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_real_enrol_and_match_authorizes_no_outbound_request_with_local_only_mode_off() {
+    // The same flow, the same watch, the same zero — and that is the claim.
+    // Local-only Mode is the user's network switch; a voiceprint's refusal is
+    // not conditional on it (`crates/security/src/outbound.rs`:
+    // `PayloadClass::never_egressable`).
+    let attempts = enrol_and_match_under_the_watch(false).await;
+    assert!(
+        attempts.is_empty(),
+        "the biometric tier authorized {} outbound request(s) with local-only mode off: \
+         {attempts:?}",
+        attempts.len()
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_watch_catches_the_catalogue_refresh_once_a_key_is_stored() {
+    // The negative control: a watch that cannot fail proves nothing. The one
+    // flow in this build that reaches the transport without a verified model is
+    // the catalogue refresh `list_models` performs once Local-only Mode is off
+    // *and* a key is stored. Without this test the two zeros above could just
+    // as easily mean the transport was never installed.
+    use crate::ports::{CloudPort, SettingsPort};
+    use crate::secrets::SecretStore;
+
+    let watch = EgressWatch::new();
+    let pipeline = VoicePipeline::watched(&watch).await;
+    let backend = Arc::clone(&pipeline.inner.backend);
+    backend
+        .set_local_only_mode(false)
+        .await
+        .expect("the mode is stored");
+
+    let query = crate::validate::ValidatedListModels {
+        stage: Stage::Transcribe,
+        engine: None,
+    };
+    let before = backend
+        .list_models(query.clone())
+        .await
+        .expect("the picker answers without a key");
+    assert_eq!(before.degraded_reason.as_deref(), Some("no_key"));
+    assert!(
+        watch.attempts().is_empty(),
+        "nothing should be attempted before a key exists: {:?}",
+        watch.attempts()
+    );
+
+    pipeline
+        .inner
+        .fixture
+        .secrets
+        .set_openrouter_key(
+            &crate::secrets::SecretValue::new("sk-or-v1-0000000000000000000000000000".to_owned())
+                .expect("a key-shaped value"),
+        )
+        .expect("the in-memory store takes the key");
+
+    let after = backend
+        .list_models(query)
+        .await
+        .expect("the picker answers with a key");
+    let attempts = watch.attempts();
+    assert_eq!(
+        attempts.len(),
+        1,
+        "the catalogue refresh must reach the transport exactly once: {attempts:?}"
+    );
+    assert_eq!(attempts[0].method, "GET");
+    assert_eq!(attempts[0].path, "/api/v1/models");
+    // The watch refused the connection, so the catalogue degrades rather than
+    // inventing entries, and it says which way it degraded.
+    assert_eq!(after.degraded_reason.as_deref(), Some("offline"));
+    assert_eq!(after.catalog_source, "pinned_allowlist");
 
     pipeline.stop().await;
 }

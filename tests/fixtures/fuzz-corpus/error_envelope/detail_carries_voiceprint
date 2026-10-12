@@ -1,0 +1,1 @@
+{"code": "INTERNAL_ERROR", "message": "Enrolment failed.", "retryable": true, "diagnostic_id": "0190f2c0-1b2a-7c3d-8e4f-5a6b7c8d9e0f", "action": "OPEN_DIAGNOSTICS", "detail": "voiceprint=917bc916828f23399a4e62c9229abe2563013f502dc95eb004990115d2454a00"}

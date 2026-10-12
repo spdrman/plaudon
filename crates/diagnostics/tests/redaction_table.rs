@@ -146,6 +146,44 @@ const CASES: &[Case] = &[
         secret: "MHcCAQEEIBmL7Q2nnrs",
         marker: "<redacted:private_key>",
     },
+    // VP-112: voice-biometric shapes. An embedding is not a credential, but a
+    // log line may not carry one either.
+    Case {
+        name: "embedding_named_field_with_float_vector",
+        input: r#"{"person_id":"018f3b3a","embedding":[0.0123,-0.9421,0.3310,0.0078]}"#,
+        secret: "0.9421",
+        marker: "<redacted:voice_embedding>",
+    },
+    Case {
+        name: "speaker_embedding_field_with_base64_value",
+        input: r#"speaker_embedding="AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=" dim=192"#,
+        secret: "AAECAwQFBgcICQoLDA0ODxAR",
+        marker: "<redacted:voice_embedding>",
+    },
+    Case {
+        name: "voiceprint_in_a_debug_struct",
+        input: "Exemplar { voiceprint: [0.11, 0.42, -0.08], speech_ms: 4200 }",
+        secret: "0.42",
+        marker: "<redacted:voice_embedding>",
+    },
+    Case {
+        name: "embedding_cipher_field",
+        input: "sealed exemplar embedding_cipher=5f3a9c1b8e2d4a6f0c7b1e9d3a5c7f20 nonce ok",
+        secret: "5f3a9c1b8e2d4a6f0c7b1e9d3a5c7f20",
+        marker: "<redacted:voice_embedding>",
+    },
+    Case {
+        name: "unnamed_float_vector_long_enough_to_be_an_embedding",
+        input: "window scores [0.11,0.42,-0.08,0.77,0.21,0.04,0.65,0.33,0.19,0.02,0.88,0.45,0.27,0.61,0.09,0.53,0.38] done",
+        secret: "0.42",
+        marker: "<redacted:float_vector>",
+    },
+    Case {
+        name: "opaque_blob_long_enough_to_be_a_sealed_exemplar",
+        input: "restore payload T2hEh1xqZ3Wq9sQp4mLzC7vXnB0yRtGfUiOpAsDfGhJkLzXcVbNmQwErTyUiOpAsDfGhJkLzXcVbNmQwErTyUiOpAsDfGhJkL1z2x3c4v5b6n7m8q9w0e1r2t3y4u5i6o7p8a9s0d1f2g3h4j5k6l7z8x9c0v1b2n3m4 end",
+        secret: "T2hEh1xqZ3Wq9sQp4mLzC7vXnB0y",
+        marker: "<redacted:binary_blob>",
+    },
 ];
 
 #[test]

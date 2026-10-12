@@ -118,11 +118,15 @@ fn local_only_denies_every_request_in_the_cross_product() {
             .authorize(request)
             .err()
             .unwrap_or_else(|| panic!("local-only allowed {request:?}"));
-        assert_eq!(
-            denied.reason,
-            DenyReason::LocalOnlyMode,
-            "wrong reason for {request:?}"
-        );
+        // A biometric payload is refused ahead of the mode check and reports
+        // its own reason, because `LocalOnlyMode` would imply that turning the
+        // mode off would permit it (VP-110).
+        let expected = if request.payload.never_egressable() {
+            DenyReason::VoiceBiometricNeverEgresses
+        } else {
+            DenyReason::LocalOnlyMode
+        };
+        assert_eq!(denied.reason, expected, "wrong reason for {request:?}");
     }
 
     let records = policy.observer().records();
@@ -131,6 +135,159 @@ fn local_only_denies_every_request_in_the_cross_product() {
         records.iter().all(|r| !r.allowed),
         "an allow was recorded in local-only mode"
     );
+}
+
+/// VP-110, TM-044: the whole decision table, in **both** modes, with a
+/// biometric payload. Nothing may be allowed, and the reason may not depend on
+/// the mode, the grant, the subsystem, the purpose or the destination.
+#[test]
+fn a_voice_biometric_payload_is_refused_in_every_mode_for_every_subsystem() {
+    let policies = [
+        OutboundPolicy::local_only(),
+        OutboundPolicy::network_permitted(permissive_grant()),
+    ];
+    let mut checked = 0usize;
+
+    for policy in &policies {
+        for subsystem in Subsystem::ALL {
+            for purpose in EgressPurpose::ALL {
+                for destination in destinations() {
+                    let request = EgressRequest::new(
+                        subsystem,
+                        destination,
+                        purpose,
+                        PayloadClass::VoiceBiometric,
+                    );
+                    let denied = policy.authorize(&request).err().unwrap_or_else(|| {
+                        panic!("a voice embedding was authorized for {request:?}")
+                    });
+                    assert_eq!(
+                        denied.reason,
+                        DenyReason::VoiceBiometricNeverEgresses,
+                        "wrong reason for {request:?} in {:?}",
+                        policy.mode()
+                    );
+                    assert_eq!(denied.subsystem, subsystem);
+                    checked += 1;
+                }
+            }
+        }
+    }
+
+    assert_eq!(
+        checked,
+        2 * Subsystem::ALL.len() * EgressPurpose::ALL.len() * destinations().len()
+    );
+    for policy in &policies {
+        assert!(
+            policy.observer().records().iter().all(|r| !r.allowed),
+            "an allow was recorded for a biometric payload"
+        );
+    }
+}
+
+/// The refusal is not reachable through a permissive grant either: the most
+/// open grant this build can express still refuses it, and the matching
+/// non-biometric request through the same policy is allowed, so the test is
+/// about the payload class and nothing else.
+#[test]
+fn the_most_permissive_grant_still_refuses_a_voice_embedding() {
+    let policy = OutboundPolicy::network_permitted(permissive_grant());
+    let destination = Destination::url("https://openrouter.ai/api/v1/chat/completions").unwrap();
+
+    let allowed = EgressRequest::new(
+        Subsystem::OpenRouter,
+        destination.clone(),
+        EgressPurpose::InferenceDispatch,
+        PayloadClass::TranscriptText,
+    );
+    assert!(
+        policy.authorize(&allowed).is_ok(),
+        "the control request must be allowed, or this test proves nothing"
+    );
+
+    let biometric = EgressRequest::new(
+        Subsystem::OpenRouter,
+        destination,
+        EgressPurpose::InferenceDispatch,
+        PayloadClass::VoiceBiometric,
+    );
+    let denied = policy.authorize(&biometric).unwrap_err();
+    assert_eq!(denied.reason, DenyReason::VoiceBiometricNeverEgresses);
+    assert_eq!(denied.user_action, None, "there is no action that lifts it");
+
+    let parts = denied.envelope_parts();
+    assert_eq!(parts.code.as_str(), "EGRESS_DENIED");
+    assert!(!parts.retryable);
+    let message = parts.message.to_lowercase();
+    assert!(
+        message.contains("stays on this computer"),
+        "the user-facing sentence must say where the data stays: {}",
+        parts.message
+    );
+    assert!(
+        !message.contains("local-only mode"),
+        "the sentence must not imply a mode change would permit it: {}",
+        parts.message
+    );
+}
+
+/// VP-110: unconsentable by construction. A consent grant is built from a
+/// [`ContentType`], and the biometric class has none, so there is no grant a
+/// UI could construct that names it.
+#[test]
+fn no_consent_content_type_exists_for_the_biometric_class() {
+    use crate::consent::ContentType;
+
+    let error = ContentType::try_from(PayloadClass::VoiceBiometric)
+        .expect_err("a biometric payload must have no consent content type");
+    assert_eq!(error.payload, PayloadClass::VoiceBiometric);
+
+    for content in ContentType::ALL {
+        assert_ne!(
+            PayloadClass::from(content),
+            PayloadClass::VoiceBiometric,
+            "{content} maps onto the unconsentable class"
+        );
+    }
+
+    assert!(PayloadClass::VoiceBiometric.never_egressable());
+    assert!(PayloadClass::VoiceBiometric.is_user_content());
+    for payload in PayloadClass::ALL {
+        assert_eq!(
+            payload.never_egressable(),
+            payload == PayloadClass::VoiceBiometric,
+            "{} disagrees with the single unconsentable class",
+            payload.label()
+        );
+    }
+}
+
+/// The snapshot the UI renders says so in both modes, and says it the same way.
+#[test]
+fn every_policy_snapshot_states_that_voice_data_is_always_refused() {
+    for policy in [
+        OutboundPolicy::local_only(),
+        OutboundPolicy::network_permitted(permissive_grant()),
+    ] {
+        let described = policy.describe();
+        assert_eq!(described.always_refused.len(), ALWAYS_REFUSED.len());
+        let entry = described
+            .always_refused
+            .iter()
+            .find(|e| e.payload == PayloadClass::VoiceBiometric)
+            .expect("the biometric class must be listed in every mode");
+        assert_eq!(entry.reason, DenyReason::VoiceBiometricNeverEgresses);
+        assert_eq!(
+            entry.explanation,
+            DenyReason::VoiceBiometricNeverEgresses.explanation()
+        );
+
+        let json = serde_json::to_string(&described).unwrap();
+        assert!(json.contains("voice_biometric"), "{json}");
+        let back: EffectiveNetworkPolicy = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.always_refused, described.always_refused);
+    }
 }
 
 /// Every decision, allow or deny, must be observable for the D2.3 evidence trace.

@@ -1,0 +1,10 @@
+Design note, VP-112.
+
+A speaker embedding never leaves this process. The enrolment pipeline builds
+one embedding for every exemplar, seals it under the profile key, and writes
+only the sealed form to the store. Diagnostics may record that an embedding
+was computed, how long the computation took and whether it was accepted, but
+never what it contained.
+
+Reviewers should be able to follow this argument end to end without ever
+reading a vector, so nothing in this note is allowed to look like one.

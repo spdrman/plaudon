@@ -39,18 +39,21 @@ use plaudon_ai_openrouter::transport::{AsyncHttpTransport, TransportFailure};
 use plaudon_app::cloud_presentation::{degraded_reason_label, ProcessingStage, LOCAL_ONLY_REFUSAL};
 use plaudon_app::command::{AppCommand, AppResponse};
 use plaudon_app::dto::{
-    Capabilities, DuplicatePolicy, EngineInventoryEntry, EngineStage, ImportFilesRequest,
-    ImportOutcome, JobKind, JobState, ListJobsRequest, ListModelsRequest, ListModelsResponse,
-    ListRecordingsRequest, LocalOnlyModeResponse, ModelCard, ModelPreferenceScope, RecordingFilter,
-    RecordingPage, RecordingSort, RecordingSortField, SetLocalOnlyModeRequest,
-    SetModelPreferenceRequest, SetOpenRouterKeyRequest, SortDirection, StartProcessingRequest,
-    StartProcessingResponse,
+    AddVoiceExemplarRequest, Capabilities, CreatePersonRequest, DuplicatePolicy, EmptyRequest,
+    EngineInventoryEntry, EngineStage, EnrollPersonVoiceRequest, EnrolmentConsentDto,
+    ImportFilesRequest, ImportOutcome, JobKind, JobState, ListJobsRequest, ListModelsRequest,
+    ListModelsResponse, ListPeopleRequest, ListRecordingsRequest, ListSpeakerSuggestionsRequest,
+    ListSpeakerSuggestionsResponse, LocalOnlyModeResponse, ModelCard, ModelPreferenceScope,
+    PersonDto, RecordingFilter, RecordingPage, RecordingSort, RecordingSortField,
+    SetLocalOnlyModeRequest, SetModelPreferenceRequest, SetOpenRouterKeyRequest,
+    SetVoiceProfilesEnabledRequest, SortDirection, StartProcessingRequest, StartProcessingResponse,
+    StartSpeakerMatchingRequest, StartSpeakerMatchingResponse, VoiceProfileSettingsDto,
 };
 use plaudon_app::runtime::AppEngine;
 use plaudon_app::shell_state::ShellStateStore;
 use plaudon_app::testing_engines::{ScriptedStt, ScriptedTextModel, SCRIPTED_STT_ENGINE};
 use plaudon_domain::error::{AppErrorCode, ErrorEnvelope};
-use plaudon_domain::ids::RecordingId;
+use plaudon_domain::ids::{PersonId, RecordingId};
 use plaudon_egui::shell_app::PlaudonShell;
 use plaudon_security::outbound::http::{GatedRequest, HttpResponse};
 use plaudon_ui::shell::{HostHooks, Route};
@@ -324,6 +327,140 @@ fn local_engines(capabilities: &Capabilities, stage: EngineStage) -> Vec<EngineI
         .filter(|engine| engine.stage == stage && !engine.requires_network)
         .cloned()
         .collect()
+}
+
+/* ---------------------------------------------------------- the voice tier */
+
+/// The Settings → Privacy block: the toggle, the gate and the counts (VP-090).
+fn voice_settings(app: &PlaudonShell) -> VoiceProfileSettingsDto {
+    match call(app, AppCommand::GetVoiceProfileSettings(EmptyRequest {})) {
+        AppResponse::GetVoiceProfileSettings(settings) => settings,
+        other => panic!("get_voice_profile_settings answered {}", other.command()),
+    }
+}
+
+/// Turn biometric matching on by accepting `accepted`, or off.
+fn set_voice_profiles_enabled(
+    app: &PlaudonShell,
+    enabled: bool,
+    accepted: Option<&str>,
+) -> Result<VoiceProfileSettingsDto, ErrorEnvelope> {
+    match try_call(
+        app,
+        AppCommand::SetVoiceProfilesEnabled(SetVoiceProfilesEnabledRequest {
+            enabled,
+            accept_disclosure_version: accepted.map(str::to_owned),
+        }),
+    ) {
+        Ok(AppResponse::SetVoiceProfilesEnabled(settings)) => Ok(settings),
+        Ok(other) => panic!("set_voice_profiles_enabled answered {}", other.command()),
+        Err(error) => Err(error),
+    }
+}
+
+/// A name-only roster entry, which is the ungated tier (VP-011).
+fn create_person(app: &PlaudonShell, display_name: &str) -> PersonDto {
+    match call(
+        app,
+        AppCommand::CreatePerson(CreatePersonRequest {
+            display_name: display_name.to_owned(),
+            aliases: Vec::new(),
+            email: None,
+            organisation: None,
+        }),
+    ) {
+        AppResponse::CreatePerson(response) => response.person,
+        other => panic!("create_person answered {}", other.command()),
+    }
+}
+
+/// The roster entry of `person_id`, as the People list reports it.
+fn roster_entry(app: &PlaudonShell, person_id: PersonId) -> PersonDto {
+    let people = match call(app, AppCommand::ListPeople(ListPeopleRequest::default())) {
+        AppResponse::ListPeople(response) => response.people,
+        other => panic!("list_people answered {}", other.command()),
+    };
+    people
+        .into_iter()
+        .find(|person| person.person_id == person_id)
+        .expect("the person the roster was just given")
+}
+
+/// The per-enrolment attestation the enrolment sheet collects (VP-120 level 3).
+fn attestation(disclosure_version: &str) -> EnrolmentConsentDto {
+    EnrolmentConsentDto {
+        disclosure_version: disclosure_version.to_owned(),
+        person_attested: true,
+        retention_months: None,
+        consent_note: Some("verbal agreement, stand-up of 2026-03-02".to_owned()),
+    }
+}
+
+fn enroll_person_voice(
+    app: &PlaudonShell,
+    person_id: PersonId,
+    recording_id: RecordingId,
+    cluster_key: &str,
+    consent: EnrolmentConsentDto,
+) -> Result<AppResponse, ErrorEnvelope> {
+    try_call(
+        app,
+        AppCommand::EnrollPersonVoice(EnrollPersonVoiceRequest {
+            person_id: person_id.to_string(),
+            recording_id: recording_id.to_string(),
+            cluster_key: cluster_key.to_owned(),
+            consent,
+        }),
+    )
+}
+
+fn add_voice_exemplar(
+    app: &PlaudonShell,
+    person_id: PersonId,
+    recording_id: RecordingId,
+    cluster_key: &str,
+) -> Result<AppResponse, ErrorEnvelope> {
+    try_call(
+        app,
+        AppCommand::AddVoiceExemplar(AddVoiceExemplarRequest {
+            person_id: person_id.to_string(),
+            recording_id: recording_id.to_string(),
+            cluster_key: cluster_key.to_owned(),
+        }),
+    )
+}
+
+/// Queue the §10 match job for one recording (VP-007).
+fn start_speaker_matching(
+    app: &PlaudonShell,
+    recording_id: RecordingId,
+) -> StartSpeakerMatchingResponse {
+    match call(
+        app,
+        AppCommand::StartSpeakerMatching(StartSpeakerMatchingRequest {
+            recording_ids: vec![recording_id.to_string()],
+        }),
+    ) {
+        AppResponse::StartSpeakerMatching(response) => response,
+        other => panic!("start_speaker_matching answered {}", other.command()),
+    }
+}
+
+/// One recording's suggestion panel, or the global review queue.
+fn speaker_suggestions(
+    app: &PlaudonShell,
+    recording_id: Option<RecordingId>,
+) -> ListSpeakerSuggestionsResponse {
+    match call(
+        app,
+        AppCommand::ListSpeakerSuggestions(ListSpeakerSuggestionsRequest {
+            recording_id: recording_id.map(|id| id.to_string()),
+            limit: None,
+        }),
+    ) {
+        AppResponse::ListSpeakerSuggestions(response) => response,
+        other => panic!("list_speaker_suggestions answered {}", other.command()),
+    }
 }
 
 /* --------------------------------------------------------------- UI driving */
@@ -774,4 +911,234 @@ fn catalogue_head(catalogue: &ListModelsResponse) -> ModelCard {
         .first()
         .expect("the pinned allowlist is never empty")
         .clone()
+}
+
+/* ----------------------------------------- the voice tier (VP-110..VP-113) */
+
+/// Drive the biometric tier as far as this build takes it, and hand back
+/// everything the watch saw.
+///
+/// The flow is the one a user walks: accept the activation disclosure, add a
+/// roster person, enrol their voice from a cluster of the recording that was
+/// just imported and transcribed, extend the enrolment, queue speaker
+/// matching for that recording and read the review queue back. Every step is
+/// the shipped command, through the shell's own dispatcher, with the real
+/// local transcription committed first so the match job would have a revision
+/// to reconcile against.
+///
+/// **Where it stops, and why that is not a hedge.** This build ships no
+/// speaker-embedding model, so the two enrolment commands refuse with
+/// [`AppErrorCode::ModelUnavailable`] *after* the consent gate has already
+/// authorised them (`crates/app/src/backend/voice_profiles.rs`:
+/// `authorise` then `enrolment_service`), and matching refuses with
+/// [`AppErrorCode::CapabilityUnverified`] because nobody is enrolled. Neither
+/// refusal can be lifted from here:
+///
+/// * the seam that substitutes the scripted embedder and the fake diarizer is
+///   `LocalBackend::with_voice_engines`, which is on the backend and not on
+///   [`plaudon_app::runtime::EngineConfig`] — and `AppEngine::start` is what
+///   builds the backend, so a shell test has no way to reach it;
+/// * even with an embedder installed, an enrolment reads its speech from the
+///   recording's latest diarization run, and the only thing in the build that
+///   writes one is a `JobKind::SpeakerMatch` job — which `enqueue_speaker_match`
+///   refuses to queue until somebody is enrolled. The application crate's own
+///   suite breaks that circle with `LocalBackend::enqueue_stage`, which is
+///   `pub(crate)`.
+///
+/// So what is asserted below is what actually ran: the gate really opened, the
+/// roster entry really exists, the refusals are the ones the application
+/// returned, and nothing biometric was stored. `embedder_available` is
+/// asserted to be false rather than assumed, so the day this build ships the
+/// ONNX tier these tests fail and have to be carried the rest of the way to a
+/// stored voiceprint and a suggestion.
+///
+/// The zero at the end means something because
+/// [`the_watch_catches_the_catalogue_refresh_once_the_key_is_stored`] proves
+/// the same watch, installed the same way, does record a request that reaches
+/// the transport.
+fn drive_the_voice_tier(local_only: bool) -> Vec<Attempt> {
+    let dir = tempfile::tempdir().expect("temporary library");
+    let inbox = dir.path().join("imports");
+    std::fs::create_dir_all(&inbox).expect("the import folder");
+    let fixture = inbox.join("standup.wav");
+    write_wav(&fixture);
+
+    let watch = EgressWatch::new();
+    let store = ShellStateStore::new(dir.path());
+    let app = watched_app(
+        dir.path(),
+        support::hooks_picking(store, vec![fixture]),
+        &watch,
+    );
+    let mut harness = support::harness(app);
+
+    // 1. The mode, set explicitly either way: VP-111 is a claim about both,
+    //    so neither test may rest on the default.
+    let mode = set_local_only(harness.state(), local_only);
+    assert_eq!(
+        mode.enabled, local_only,
+        "the mode the command reports back is the mode"
+    );
+
+    // 2. A recording with a committed transcript, because a match job
+    //    reconciles clusters against a revision — the local pipeline runs for
+    //    real here, on the scripted engine this test installed.
+    let recording_id = import_through_the_ui(&mut harness);
+    prefer_model(
+        harness.state(),
+        ProcessingStage::Transcribe,
+        SCRIPTED_STT_ENGINE,
+        "scripted-small",
+    )
+    .expect("a local engine may be preferred in either mode");
+    start_processing(harness.state(), recording_id, ProcessingStage::Transcribe)
+        .expect("a local transcribe is accepted in either mode");
+    run_until_settled(&mut harness, recording_id, JobKind::Transcribe);
+    assert_eq!(
+        jobs_of(harness.state(), recording_id, JobKind::Transcribe),
+        vec![JobState::Completed],
+        "the voice tier is driven over a recording that really has a transcript"
+    );
+
+    // 3. The feature is off until the user turns it on (VP-003), and this
+    //    build has no embedding model to turn on.
+    let off = voice_settings(harness.state());
+    assert!(!off.enabled, "biometric matching is off by default");
+    assert_eq!(off.consent.state, "off");
+    assert_eq!(off.enrolled_people, 0);
+    assert!(
+        !off.embedder_available,
+        "this build is supposed to have no speaker-embedding model; with one installed the \
+         enrolment and match legs below become reachable and this test must drive them to a \
+         stored exemplar and a suggestion instead of to a refusal"
+    );
+
+    // 4. Turning it on *is* passing the activation gate (VP-120, VP-121): an
+    //    enable with no acceptance is refused rather than recorded.
+    let unaccepted = set_voice_profiles_enabled(harness.state(), true, None)
+        .expect_err("the feature cannot be armed without accepting the disclosure");
+    assert_eq!(unaccepted.code, AppErrorCode::InvalidArgument);
+    let armed = set_voice_profiles_enabled(
+        harness.state(),
+        true,
+        Some(off.consent.required_version.as_str()),
+    )
+    .expect("accepting the current disclosure arms the feature");
+    assert!(armed.enabled);
+    assert_eq!(armed.consent.state, "active");
+    assert_eq!(
+        armed.consent.accepted_version.as_deref(),
+        Some(off.consent.required_version.as_str())
+    );
+
+    // 5. A roster person, which is the ungated tier: a typed name, no gate,
+    //    no key, no embedder (VP-011).
+    let person = create_person(harness.state(), "Priya Raman");
+    assert!(
+        person.voice.is_none(),
+        "a new roster entry is name-only: {:?}",
+        person.voice
+    );
+
+    // 6. Enrolment and a second exemplar. The gate is open, so these are
+    //    refused by the missing model and nothing else; the cluster key is
+    //    never looked up, because `enrolment_service` refuses first.
+    let refused = enroll_person_voice(
+        harness.state(),
+        person.person_id,
+        recording_id,
+        "S1",
+        attestation(&armed.consent.required_version),
+    )
+    .expect_err("this build has no speaker-embedding model, so nobody can be enrolled");
+    assert_eq!(refused.code, AppErrorCode::ModelUnavailable);
+    let refused = add_voice_exemplar(harness.state(), person.person_id, recording_id, "S1")
+        .expect_err("an exemplar needs the same model");
+    assert_eq!(refused.code, AppErrorCode::ModelUnavailable);
+
+    // Nothing biometric was written on the way to those refusals, and the
+    // roster entry is untouched beside them.
+    let after = voice_settings(harness.state());
+    assert_eq!(
+        (after.enrolled_people, after.exemplars),
+        (0, 0),
+        "a refused enrolment stores nothing"
+    );
+    assert_eq!(after.roster_people, 1, "the name-only entry survives");
+    assert!(
+        roster_entry(harness.state(), person.person_id)
+            .voice
+            .is_none(),
+        "a refused enrolment leaves a name-only person"
+    );
+
+    // 7. Speaker matching over an explicit selection (VP-007). The command
+    //    answers rather than failing, and says which recording it skipped.
+    let queued = start_speaker_matching(harness.state(), recording_id);
+    assert!(
+        queued.jobs.is_empty(),
+        "nobody is enrolled, so there is nothing to match: {queued:?}"
+    );
+    assert_eq!(queued.refusals.len(), 1, "{queued:?}");
+    assert_eq!(queued.refusals[0].recording_id, recording_id);
+    assert_eq!(
+        queued.refusals[0].reason,
+        AppErrorCode::CapabilityUnverified.canonical_message(),
+        "the refusal a user reads is the code's own sentence, never a name or a score"
+    );
+    assert!(
+        jobs_of(harness.state(), recording_id, JobKind::SpeakerMatch).is_empty(),
+        "a refused request queues no job"
+    );
+
+    // 8. The review queue, per recording and library-wide, is empty because
+    //    nothing ran — read back through the command the panel uses.
+    let panel = speaker_suggestions(harness.state(), Some(recording_id));
+    assert!(panel.suggestions.is_empty(), "{panel:?}");
+    assert_eq!(panel.pending_count, 0);
+    let queue = speaker_suggestions(harness.state(), None);
+    assert!(queue.suggestions.is_empty(), "{queue:?}");
+    assert_eq!(queue.pending_count, 0);
+
+    // 9. Paint a few more frames so every panel that was going to ask for
+    //    something has asked, then close the window the way the binary does.
+    harness.run_steps(8);
+    harness.state_mut().shutdown();
+    watch.attempts()
+}
+
+/// Voice enrolment and speaker matching, with Local-only Mode **on**
+/// (VP-110, VP-111).
+///
+/// What [`drive_the_voice_tier`] drives, what it proves and exactly where this
+/// build stops are documented on that function.
+#[test]
+fn voice_enrolment_and_speaker_matching_authorize_no_outbound_request_with_local_only_mode_on() {
+    let attempts = drive_the_voice_tier(true);
+    assert!(
+        attempts.is_empty(),
+        "the voice tier authorized {} outbound request(s) under local-only mode: {attempts:?}",
+        attempts.len()
+    );
+}
+
+/// Voice enrolment and speaker matching, with Local-only Mode **off**
+/// (VP-110, VP-111).
+///
+/// The same flow, the same watch, the same zero — and that is the point.
+/// Voice recognition data is `PayloadClass::VoiceBiometric`, which
+/// `plaudon_security::outbound` refuses in every network mode and for which no
+/// consent grant can be written, so turning Local-only Mode off cannot buy a
+/// voiceprint a way out. With the mode off the watch is live and armed —
+/// [`the_watch_catches_the_catalogue_refresh_once_the_key_is_stored`] runs in
+/// exactly this state and records a request — and no key is ever stored here,
+/// so nothing else in the shell has a reason to reach the transport either.
+#[test]
+fn voice_enrolment_and_speaker_matching_authorize_no_outbound_request_with_local_only_mode_off() {
+    let attempts = drive_the_voice_tier(false);
+    assert!(
+        attempts.is_empty(),
+        "the voice tier authorized {} outbound request(s) with local-only mode off: {attempts:?}",
+        attempts.len()
+    );
 }
