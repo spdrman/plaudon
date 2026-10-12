@@ -3,8 +3,8 @@
 Numbers **0001-0012** are reserved by spec §21 and their meanings are fixed
 there; do not reuse them. Later ranges are allocated per work stream so two
 authors never mint the same number: 0013-0019 security and privacy, 0020-0029
-desktop shell, 0030-0039 job engine, 0040+ unallocated — claim a range in this
-file before using it.
+desktop shell, 0030-0039 job engine, 0040-0049 direct-device import, 0050+
+unallocated — claim a range in this file before using it.
 
 Every record states context, the decision, the alternatives that were rejected
 and why, and the consequences we accept.
@@ -38,3 +38,7 @@ and why, and the consequences we accept.
 ## Job engine (0030-0039)
 
 - [ADR-0030: Job engine durability, idempotency and crash recovery](0030-job-engine-durability.md) — Accepted, 2026-10-11 (spec §14)
+
+## Direct-device import (0040-0049)
+
+- [ADR-0040: A device transfer is a replayable wire script, and a derivative is never an original](ADR-0040-a-device-transfer-is-a-replayable-wire-script.md) — Accepted, 2026-10-11 (spec §7.7, §7.9, §17.3A, §18.2A, §18.3A, App. B.3, App. B.4, App. B.6)

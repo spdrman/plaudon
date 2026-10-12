@@ -3375,14 +3375,19 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "jsonschema",
+ "parking_lot",
  "plaudon-ai-contracts",
  "plaudon-ai-whisper",
  "plaudon-app-core",
  "plaudon-audio",
  "plaudon-domain",
  "plaudon-persistence",
+ "plaudon-plaud-ble",
+ "plaudon-plaud-protocol",
  "plaudon-plaud-usb",
  "plaudon-recording-sources",
+ "plaudon-security",
+ "plaudon-source-plaud-device",
  "proptest",
  "serde",
  "serde_json",
@@ -3457,6 +3462,7 @@ dependencies = [
 name = "plaudon-plaud-ble"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "btleplug",
  "futures",
  "plaudon-domain",
@@ -3465,8 +3471,10 @@ dependencies = [
  "proptest",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror 2.0.21",
  "tokio",
+ "tokio-util",
  "uuid",
 ]
 
@@ -3559,6 +3567,7 @@ version = "0.1.0"
 dependencies = [
  "jsonschema",
  "plaudon-domain",
+ "plaudon-plaud-ble",
  "plaudon-plaud-protocol",
  "plaudon-recording-sources",
  "plaudon-security",
