@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/set_export_defaults.request.schema.json",
+  "title": "set_export_defaults.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "defaults"
+  ],
+  "properties": {
+    "defaults": {
+      "$ref": "#/$defs/export_defaults"
+    }
+  },
+  "$defs": {
+    "export_defaults": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "format",
+        "destination_directory",
+        "include_speaker_labels",
+        "include_timestamps"
+      ],
+      "properties": {
+        "format": {
+          "type": "string",
+          "enum": [
+            "txt",
+            "markdown",
+            "json",
+            "srt",
+            "vtt"
+          ]
+        },
+        "destination_directory": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "include_speaker_labels": {
+          "type": "boolean"
+        },
+        "include_timestamps": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

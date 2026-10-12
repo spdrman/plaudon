@@ -61,7 +61,9 @@ plaudon-ui-testkit = { path = "crates/ui-testkit" }
 plaudon-craft-ui = { path = "third_party/craft-ui" }
 plaudon-transcript-doc = { path = "crates/transcript-doc" }
 plaudon-ui = { path = "crates/ui" }
+plaudon-platform = { path = "crates/platform" }
 
+arboard = { version = "3", default-features = false }
 argon2 = { version = "0.6", features = ["kdf"] }
 async-trait = "0.1"
 base64 = "0.22"
@@ -93,6 +95,7 @@ sha2 = "0.10"
 sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "sqlite", "macros"] }
 symphonia = { version = "0.5", default-features = false }
 tempfile = "3"
+tray-icon = { version = "0.25", default-features = false }
 thiserror = "2"
 time = { version = "0.3", features = ["formatting", "parsing", "macros"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs", "io-util", "process", "sync", "time"] }

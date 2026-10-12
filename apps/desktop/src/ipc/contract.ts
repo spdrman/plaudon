@@ -144,6 +144,141 @@ export interface Preferences {
   appearance: "system" | "light" | "dark";
   contrast: "standard" | "high";
   notifications: NotificationSettings;
+  /** Defaults the export surfaces start from (EPIC O task O2.4). */
+  export_defaults: ExportDefaults;
+}
+
+/** Defaults the export surfaces start from; configured in Settings only. */
+export interface ExportDefaults {
+  format: ExportFormat;
+  destination_directory: string | null;
+  include_speaker_labels: boolean;
+  include_timestamps: boolean;
+}
+
+/* ------------------------------------------------- EPIC O task O2.4 types */
+
+/** Keyboard overrides: command id to chord, `null` meaning deliberately unbound. */
+export interface ShortcutBindings {
+  overrides: Record<string, string | null>;
+}
+
+/** One entry of the shell's command registry, as the shortcut editor needs it. */
+export interface ShortcutSpec {
+  id: string;
+  label: string;
+  group: string;
+  default_chord: string | null;
+  rebindable: boolean;
+}
+
+/** Disk taken by the model root. */
+export interface ModelDiskUsage {
+  installed_bytes: number;
+  staging_bytes: number;
+}
+
+/** One model present on this machine. */
+export interface LocalModel {
+  model_id: string;
+  display_name: string;
+  engine: string;
+  version: string;
+  size_bytes: number;
+  licence_spdx_id: string;
+  origin: "pack" | "download";
+  keep_offline: boolean;
+}
+
+/** `list_local_models` response. */
+export interface ListLocalModelsResponse {
+  models: LocalModel[];
+  disk: ModelDiskUsage;
+  model_root: string;
+  available_disk_bytes: number | null;
+  total_ram_bytes: number | null;
+  source_note: string;
+}
+
+/** Licence facts shown before a model install. */
+export interface ModelLicenceDisclosure {
+  spdx_id: string;
+  name: string;
+  redistributable: boolean;
+  redistribution_note: string;
+  text_file: string;
+}
+
+/** Disk and memory cost of a model, as the gate presents it. */
+export interface ModelFootprintDisclosure {
+  size_bytes: number;
+  required_bytes: number;
+  min_ram_bytes: number;
+  recommended_ram_bytes: number;
+  notes: string;
+}
+
+/** The licence-and-footprint gate for one model. */
+export interface ModelInstallGate {
+  model_id: string;
+  display_name: string;
+  licence: ModelLicenceDisclosure;
+  footprint: ModelFootprintDisclosure;
+  below_recommended_memory: boolean;
+}
+
+/** One model a pack offers. */
+export interface ModelOffer {
+  gate: ModelInstallGate;
+  already_installed: boolean;
+  languages: string[];
+  engine: string;
+  version: string;
+}
+
+/** `inspect_model_pack` response: a dry run that installs nothing. */
+export interface InspectModelPackResponse {
+  pack_path: string;
+  artifact_digest: string;
+  schema_version: number;
+  offers: ModelOffer[];
+  available_disk_bytes: number | null;
+  total_ram_bytes: number | null;
+}
+
+/** `install_model_from_pack` response. */
+export interface InstallModelResponse {
+  model: LocalModel;
+  transferred_bytes: number;
+  disk: ModelDiskUsage;
+}
+
+/** `remove_local_model` response. */
+export interface RemoveLocalModelResponse {
+  bytes_freed: number;
+  disk: ModelDiskUsage;
+}
+
+/** `verify_local_model` response. */
+export interface VerifyLocalModelResponse {
+  model_id: string;
+  intact: boolean;
+  observed_bytes: number;
+  expected_bytes: number;
+  detail: string;
+}
+
+/** What the installation root says, without any network request. */
+export type UpdateReadiness =
+  | { readiness: "ready"; installed_version: string }
+  | { readiness: "not_installed_by_updater"; detail: string };
+
+/** `get_update_status` response (task N2.2). */
+export interface UpdateStatus {
+  readiness: UpdateReadiness;
+  checks_suppressed: boolean;
+  manifest_endpoint: string;
+  signing_key_id: string;
 }
 
 /** Observed state of an OS permission; `unsupported` means the OS has no such concept. */
@@ -1590,6 +1725,35 @@ export interface CommandMap {
   list_outputs: { req: ListOutputsRequest; res: ListOutputsResponse };
   review_claim: { req: ReviewClaimRequest; res: ReviewClaimResponse };
   regenerate_output: { req: RegenerateOutputRequest; res: RegenerateOutputResponse };
+  set_appearance: {
+    req: { appearance: Preferences["appearance"]; contrast: Preferences["contrast"] };
+    res: Preferences;
+  };
+  set_engine_preferences: {
+    req: { default_stt_engine_id: string | null; default_text_engine_id: string | null };
+    res: Preferences;
+  };
+  set_export_defaults: { req: { defaults: ExportDefaults }; res: Preferences };
+  get_shortcuts: { req: Record<string, never>; res: ShortcutBindings };
+  set_shortcuts: {
+    req: { bindings: ShortcutBindings; specs: ShortcutSpec[] };
+    res: ShortcutBindings;
+  };
+  list_local_models: { req: Record<string, never>; res: ListLocalModelsResponse };
+  inspect_model_pack: { req: { pack_path: string }; res: InspectModelPackResponse };
+  install_model_from_pack: {
+    req: {
+      pack_path: string;
+      model_id: string;
+      licence_accepted_spdx_id: string;
+      footprint_acknowledged: boolean;
+      keep_offline?: boolean;
+    };
+    res: InstallModelResponse;
+  };
+  remove_local_model: { req: { model_id: string; confirmed: boolean }; res: RemoveLocalModelResponse };
+  verify_local_model: { req: { model_id: string }; res: VerifyLocalModelResponse };
+  get_update_status: { req: Record<string, never>; res: UpdateStatus };
 }
 
 export type CommandName = keyof CommandMap;
@@ -1683,6 +1847,26 @@ export const EPIC_I_COMMANDS: readonly CommandName[] = [
   "regenerate_output",
 ];
 
+/**
+ * EPIC O task O2.4: settings commands the egui shell added. They are not
+ * reachable from this React frontend, which is being replaced; they are listed
+ * so the Rust command surface and this contract stay in step until it is
+ * deleted.
+ */
+export const EPIC_O_COMMANDS: readonly CommandName[] = [
+  "set_appearance",
+  "set_engine_preferences",
+  "set_export_defaults",
+  "get_shortcuts",
+  "set_shortcuts",
+  "list_local_models",
+  "inspect_model_pack",
+  "install_model_from_pack",
+  "remove_local_model",
+  "verify_local_model",
+  "get_update_status",
+];
+
 export const ALL_COMMANDS: readonly CommandName[] = [
   ...SPEC_COMMANDS,
   ...ADR_0020_COMMANDS,
@@ -1692,6 +1876,7 @@ export const ALL_COMMANDS: readonly CommandName[] = [
   ...DEVICE_COMMANDS,
   ...EPIC_J_COMMANDS,
   ...EPIC_I_COMMANDS,
+  ...EPIC_O_COMMANDS,
 ];
 
 /* ----------------------------------------------------------------- events */
@@ -1709,6 +1894,7 @@ export const EVENT_KINDS = [
   "transcript.completed",
   "tool.completed",
   "model.availability_changed",
+  "model.install_progress",
   "consent.required",
   "source.auth_required",
   "source.sync_finished",

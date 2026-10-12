@@ -36,4 +36,5 @@ tracing = { workspace = true }
 egui = { workspace = true, features = ["default_fonts"] }
 egui_kittest = { workspace = true }
 plaudon-ui-testkit = { workspace = true }
+serde_json = { workspace = true }
 tempfile = { workspace = true }

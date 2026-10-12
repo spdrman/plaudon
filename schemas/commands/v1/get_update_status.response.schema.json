@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/get_update_status.response.schema.json",
+  "title": "get_update_status.response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "readiness",
+    "checks_suppressed",
+    "manifest_endpoint",
+    "signing_key_id"
+  ],
+  "properties": {
+    "readiness": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "readiness",
+            "installed_version"
+          ],
+          "properties": {
+            "readiness": {
+              "const": "ready"
+            },
+            "installed_version": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "readiness",
+            "detail"
+          ],
+          "properties": {
+            "readiness": {
+              "const": "not_installed_by_updater"
+            },
+            "detail": {
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
+    "checks_suppressed": {
+      "type": "boolean"
+    },
+    "manifest_endpoint": {
+      "type": "string"
+    },
+    "signing_key_id": {
+      "type": "string"
+    }
+  }
+}

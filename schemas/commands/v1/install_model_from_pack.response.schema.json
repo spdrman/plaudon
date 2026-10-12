@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/install_model_from_pack.response.schema.json",
+  "title": "install_model_from_pack.response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "model",
+    "transferred_bytes",
+    "disk"
+  ],
+  "properties": {
+    "model": {
+      "$ref": "#/$defs/local_model"
+    },
+    "transferred_bytes": {
+      "type": "integer"
+    },
+    "disk": {
+      "$ref": "#/$defs/disk"
+    }
+  },
+  "$defs": {
+    "local_model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "model_id",
+        "display_name",
+        "engine",
+        "version",
+        "size_bytes",
+        "licence_spdx_id",
+        "origin",
+        "keep_offline"
+      ],
+      "properties": {
+        "model_id": {
+          "type": "string"
+        },
+        "display_name": {
+          "type": "string"
+        },
+        "engine": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "size_bytes": {
+          "type": "integer"
+        },
+        "licence_spdx_id": {
+          "type": "string"
+        },
+        "origin": {
+          "type": "string",
+          "enum": [
+            "pack",
+            "download"
+          ]
+        },
+        "keep_offline": {
+          "type": "boolean"
+        }
+      }
+    },
+    "disk": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "installed_bytes",
+        "staging_bytes"
+      ],
+      "properties": {
+        "installed_bytes": {
+          "type": "integer"
+        },
+        "staging_bytes": {
+          "type": "integer"
+        }
+      }
+    }
+  }
+}

@@ -27,6 +27,7 @@
         "transcript.completed",
         "tool.completed",
         "model.availability_changed",
+        "model.install_progress",
         "consent.required",
         "source.auth_required",
         "source.sync_finished",

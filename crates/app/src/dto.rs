@@ -146,6 +146,12 @@ pub struct Preferences {
     pub contrast: Contrast,
     /// Notification preferences.
     pub notifications: NotificationSettings,
+    /// Defaults the export surfaces start from.
+    ///
+    /// Defaulted on load so a preferences record written before EPIC O still
+    /// deserializes instead of resetting every other setting.
+    #[serde(default)]
+    pub export_defaults: ExportDefaults,
 }
 
 /// Host operating system.
@@ -2800,6 +2806,9 @@ pub enum EventKind {
     /// The set of available models changed.
     #[serde(rename = "model.availability_changed")]
     ModelAvailabilityChanged,
+    /// Bytes of a local model install arrived (matrix row A13).
+    #[serde(rename = "model.install_progress")]
+    ModelInstallProgress,
     /// An operation needs consent.
     #[serde(rename = "consent.required")]
     ConsentRequired,
@@ -2851,6 +2860,7 @@ impl EventKind {
         Self::TranscriptCompleted,
         Self::ToolCompleted,
         Self::ModelAvailabilityChanged,
+        Self::ModelInstallProgress,
         Self::ConsentRequired,
         Self::SourceAuthRequired,
         Self::SourceSyncFinished,
@@ -2876,6 +2886,7 @@ impl EventKind {
             Self::TranscriptCompleted => "transcript.completed",
             Self::ToolCompleted => "tool.completed",
             Self::ModelAvailabilityChanged => "model.availability_changed",
+            Self::ModelInstallProgress => "model.install_progress",
             Self::ConsentRequired => "consent.required",
             Self::SourceAuthRequired => "source.auth_required",
             Self::SourceSyncFinished => "source.sync_finished",
@@ -3135,6 +3146,247 @@ pub struct RegenerateOutputResponse {
     pub job_id: JobId,
 }
 
+/* ------------------------------------------- settings additions (O2.4) */
+
+/// `set_appearance` request (matrix row C1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SetAppearanceRequest {
+    /// Requested appearance.
+    pub appearance: Appearance,
+    /// Requested contrast.
+    pub contrast: Contrast,
+}
+
+/// `set_engine_preferences` request.
+///
+/// Both fields are explicit: `None` clears the preference, which is how a
+/// user goes back to letting the application choose.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SetEnginePreferencesRequest {
+    /// Preferred speech-to-text engine.
+    pub default_stt_engine_id: Option<String>,
+    /// Preferred text engine, used for summarization.
+    pub default_text_engine_id: Option<String>,
+}
+
+/// Defaults the export surfaces start from.
+///
+/// Stored in [`Preferences`] so the setting is configured in exactly one
+/// place; the export menu seeds its format and destination from it rather
+/// than hard-coding plain text.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExportDefaults {
+    /// Format the export menu opens on.
+    pub format: ExportFormat,
+    /// Folder the save dialog opens in, when the user chose one.
+    pub destination_directory: Option<String>,
+    /// Whether speaker labels are written by default.
+    pub include_speaker_labels: bool,
+    /// Whether timestamps are written by default.
+    pub include_timestamps: bool,
+}
+
+impl Default for ExportDefaults {
+    fn default() -> Self {
+        Self {
+            format: ExportFormat::Markdown,
+            destination_directory: None,
+            include_speaker_labels: true,
+            include_timestamps: true,
+        }
+    }
+}
+
+/// `set_export_defaults` request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SetExportDefaultsRequest {
+    /// The defaults to store.
+    pub defaults: ExportDefaults,
+}
+
+/// `set_shortcuts` request (matrix row C9).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SetShortcutsRequest {
+    /// The overrides to store. Validated against `specs` before anything is
+    /// written, so a conflicting map is refused rather than half-applied.
+    pub bindings: crate::shortcuts::ShortcutBindings,
+    /// The command registry the overrides are validated against. The shell
+    /// owns the registry, so it travels with the request instead of being
+    /// guessed at here.
+    pub specs: Vec<crate::shortcuts::ShortcutSpec>,
+}
+
+/* ------------------------------------------------- local models (A13) */
+
+/// How a locally installed model got here.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ModelOriginDto {
+    /// Installed from a redistributable offline pack.
+    Pack,
+    /// Downloaded from a networked source.
+    Download,
+}
+
+/// One model present on this machine.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LocalModelDto {
+    /// Model identity.
+    pub model_id: String,
+    /// Name shown in the manager.
+    pub display_name: String,
+    /// Engine that loads these weights.
+    pub engine: String,
+    /// Weight version.
+    pub version: String,
+    /// Size of the installed files.
+    pub size_bytes: u64,
+    /// SPDX identifier of the licence the weights ship under.
+    pub licence_spdx_id: String,
+    /// Where it came from.
+    pub origin: ModelOriginDto,
+    /// Whether it is marked "keep downloaded for offline use".
+    pub keep_offline: bool,
+}
+
+/// Disk taken by the model root.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ModelDiskUsageDto {
+    /// Bytes of installed weights.
+    pub installed_bytes: u64,
+    /// Bytes left behind in staging by an interrupted transfer.
+    pub staging_bytes: u64,
+}
+
+/// `list_local_models` response.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ListLocalModelsResponse {
+    /// Models installed right now.
+    pub models: Vec<LocalModelDto>,
+    /// Disk the model root occupies.
+    pub disk: ModelDiskUsageDto,
+    /// Absolute path of the model root, shown as a storage fact.
+    pub model_root: String,
+    /// Bytes free on the volume holding the model root, when it could be
+    /// measured.
+    pub available_disk_bytes: Option<u64>,
+    /// Physical memory this machine reports, when it could be measured.
+    pub total_ram_bytes: Option<u64>,
+    /// Where models come from in this build, stated so the absence of a
+    /// download button is explained rather than mysterious.
+    pub source_note: String,
+}
+
+/// `inspect_model_pack` request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InspectModelPackRequest {
+    /// Pack directory chosen through the OS folder picker.
+    pub pack_path: String,
+}
+
+/// One model offered by a pack, with everything the approval gate needs.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ModelOfferDto {
+    /// The licence and footprint gate.
+    pub gate: crate::settings_presentation::ModelInstallGate,
+    /// Whether this machine already has it.
+    pub already_installed: bool,
+    /// Languages the model states it covers. Empty means "not stated", which
+    /// the view shows as unknown rather than as "all".
+    pub languages: Vec<String>,
+    /// Engine that loads these weights.
+    pub engine: String,
+    /// Weight version.
+    pub version: String,
+}
+
+/// `inspect_model_pack` response: a dry run that installs nothing.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InspectModelPackResponse {
+    /// Pack that was inspected.
+    pub pack_path: String,
+    /// Digest of the pack manifest, so two inspections can be compared.
+    pub artifact_digest: String,
+    /// Pack schema version.
+    pub schema_version: u32,
+    /// Models the pack offers.
+    pub offers: Vec<ModelOfferDto>,
+    /// Bytes free on the volume holding the model root, when measurable.
+    pub available_disk_bytes: Option<u64>,
+    /// Physical memory this machine reports, when measurable.
+    pub total_ram_bytes: Option<u64>,
+}
+
+/// `install_model_from_pack` request.
+///
+/// The approval flags are not decoration: the command refuses without them,
+/// so an install cannot happen because a view forgot to show the disclosure.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InstallModelFromPackRequest {
+    /// Pack directory the model comes from.
+    pub pack_path: String,
+    /// Model to install.
+    pub model_id: String,
+    /// The user accepted the model's licence, named by its SPDX identifier.
+    pub licence_accepted_spdx_id: String,
+    /// The user acknowledged the disk and memory footprint.
+    pub footprint_acknowledged: bool,
+    /// Mark the model "keep downloaded for offline use".
+    #[serde(default)]
+    pub keep_offline: bool,
+}
+
+/// `install_model_from_pack` response.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InstallModelResponse {
+    /// The installed model.
+    pub model: LocalModelDto,
+    /// Bytes written by this attempt.
+    pub transferred_bytes: u64,
+    /// Disk the model root now occupies.
+    pub disk: ModelDiskUsageDto,
+}
+
+/// `remove_local_model` request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoveLocalModelRequest {
+    /// Model to delete.
+    pub model_id: String,
+    /// Explicit confirmation; without it nothing is deleted.
+    pub confirmed: bool,
+}
+
+/// `remove_local_model` response.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoveLocalModelResponse {
+    /// Bytes freed.
+    pub bytes_freed: u64,
+    /// Disk the model root now occupies.
+    pub disk: ModelDiskUsageDto,
+}
+
+/// `verify_local_model` request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VerifyLocalModelRequest {
+    /// Model to re-hash.
+    pub model_id: String,
+}
+
+/// `verify_local_model` response.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VerifyLocalModelResponse {
+    /// Model that was checked.
+    pub model_id: String,
+    /// Whether the bytes on disk still match the recorded digest and size.
+    pub intact: bool,
+    /// Observed size.
+    pub observed_bytes: u64,
+    /// Recorded size.
+    pub expected_bytes: u64,
+    /// What was found, in the user's terms.
+    pub detail: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3184,8 +3436,9 @@ mod tests {
             assert_eq!(json, format!("\"{}\"", kind.as_str()));
         }
         // The twelve §15.3 names this build emits, the ADR-0020 activation
-        // event and the six §15.3 `device.*` names.
-        assert_eq!(EventKind::ALL.len(), 19);
+        // event, the six §15.3 `device.*` names and `model.install_progress`,
+        // which EPIC O task O2.4 added for the local-model installer.
+        assert_eq!(EventKind::ALL.len(), 20);
         for name in [
             "device.discovered",
             "device.connected",

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/inspect_model_pack.request.schema.json",
+  "title": "inspect_model_pack.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "pack_path"
+  ],
+  "properties": {
+    "pack_path": {
+      "type": "string"
+    }
+  }
+}
