@@ -56,6 +56,7 @@ pub mod checks {
     use std::sync::LazyLock;
 
     use plaudon_audio::opus::{OpusPacketDecoder, OpusStreamParams, MAX_FRAME_SAMPLES_PER_CHANNEL};
+    use plaudon_diagnostics::patterns::MIN_BLOB_CHARS;
     use plaudon_diagnostics::redact::MAX_SCAN_BYTES;
     use plaudon_diagnostics::Redactor;
     use plaudon_domain::error::{AppErrorCode, ErrorEnvelope, Redactor as DomainRedactor};
@@ -69,7 +70,7 @@ pub mod checks {
     };
     use plaudon_security::outbound::subprocess::{ArgError, CliArg, MAX_ARG_LEN};
     use plaudon_security::outbound::Destination;
-    use plaudon_security::response::{assert_no_secret_in_response, secret_shape_of};
+    use plaudon_security::response::{assert_no_secret_in_response, secret_shape_of, SecretShape};
 
     /// Upper bound on the input we feed a parser. Corpus files are far smaller;
     /// this only stops a pathological libFuzzer input from making the *harness*
@@ -1474,6 +1475,419 @@ pub mod checks {
             );
         }
     }
+
+    // ---------------------------------------------------------------------
+    // fuzz_embedding_blob
+    // ---------------------------------------------------------------------
+
+    /// Field-name spellings the `voice_embedding` pattern keys on.
+    ///
+    /// An independent transcription of the alternation inside
+    /// `plaudon_diagnostics::patterns`' VP-112 pattern: if the two ever
+    /// disagree, the disagreement has to be argued for here rather than
+    /// happening silently.
+    pub const EMBEDDING_FIELD_SPELLINGS: &[&str] = &[
+        "embedding",
+        "embeddings",
+        "voiceprint",
+        "speaker_vector",
+        "exemplar_vector",
+        "centroid_vector",
+        "exemplar_cipher",
+    ];
+
+    /// Key names `plaudon_security::response` treats as embedding-bearing,
+    /// matched exactly or as a `_`-suffixed form. The production list is
+    /// private; this is the independent oracle for it.
+    pub const EMBEDDING_KEY_NAMES: &[&str] = &[
+        "embedding",
+        "embeddings",
+        "embedding_cipher",
+        "embedding_nonce",
+        "voiceprint",
+        "voiceprints",
+        "speaker_vector",
+        "exemplar_vector",
+        "centroid_vector",
+    ];
+
+    /// Shortest bracketed numeric list treated as a speaker embedding.
+    pub const MIN_VECTOR_COMPONENTS: usize = 16;
+
+    /// Shortest value a named embedding field must carry before the field is
+    /// data rather than prose ("the embedding: approach" is a sentence).
+    pub const MIN_EMBEDDING_VALUE_CHARS: usize = 16;
+
+    /// Whether `key` names a field whose value is (or wraps) an embedding.
+    #[must_use]
+    pub fn is_embedding_key(key: &str) -> bool {
+        let lowered = key.to_ascii_lowercase();
+        EMBEDDING_KEY_NAMES
+            .iter()
+            .any(|name| lowered == *name || lowered.ends_with(&format!("_{name}")))
+    }
+
+    /// The prefix of `text` the redactor actually scans. An independent
+    /// reimplementation of `redact`'s private `truncate_at_boundary`:
+    /// everything past this point is dropped and replaced by a
+    /// `<truncated:…>` notice, so it can carry nothing out.
+    fn scanned_head(text: &str) -> &str {
+        if text.len() <= MAX_SCAN_BYTES {
+            return text;
+        }
+        let mut end = MAX_SCAN_BYTES;
+        while !text.is_char_boundary(end) {
+            end -= 1;
+        }
+        &text[..end]
+    }
+
+    const fn is_blob_char(b: u8) -> bool {
+        b.is_ascii_alphanumeric() || matches!(b, b'+' | b'/' | b'_' | b'-')
+    }
+
+    const fn is_name_char(b: u8) -> bool {
+        b.is_ascii_alphanumeric() || matches!(b, b'_' | b'.' | b'-')
+    }
+
+    const fn is_value_char(b: u8) -> bool {
+        b.is_ascii_alphanumeric() || matches!(b, b'+' | b'/' | b'=' | b'_' | b'.' | b'-')
+    }
+
+    fn skip_ws(bytes: &[u8], from: usize) -> usize {
+        let mut index = from;
+        while matches!(bytes.get(index), Some(b) if b.is_ascii_whitespace()) {
+            index += 1;
+        }
+        index
+    }
+
+    /// Offset and length of the first continuous run of at least
+    /// [`MIN_BLOB_CHARS`] opaque token characters — a sealed exemplar, a
+    /// base64 frame, a long hex digest — or `None`.
+    ///
+    /// Markers need no exemption: `<redacted:…>` and `<truncated:…>` are built
+    /// from short words separated by `<`, `:` and `>`, none of which is a blob
+    /// character, so a marker cannot itself form a run this long. A violation
+    /// is therefore always real payload.
+    #[must_use]
+    pub fn first_blob_run(text: &str) -> Option<(usize, usize)> {
+        let bytes = text.as_bytes();
+        let mut index = 0usize;
+        while index < bytes.len() {
+            if !is_blob_char(bytes[index]) {
+                index += 1;
+                continue;
+            }
+            let start = index;
+            while index < bytes.len() && is_blob_char(bytes[index]) {
+                index += 1;
+            }
+            if index - start >= MIN_BLOB_CHARS {
+                return Some((start, index - start));
+            }
+        }
+        None
+    }
+
+    /// End offset of a number in exactly the grammar the `float_vector`
+    /// pattern accepts (`-?\d+(\.\d+)?([eE][+-]?\d+)?`), or `None`.
+    ///
+    /// Deliberately no broader than the pattern — ASCII digits only, no
+    /// leading `+`, no bare `1.` — because this oracle's job is to fail the
+    /// build when a vector *survives*. Erring narrow costs a missed report;
+    /// erring wide would invent crashes the redactor is not answerable for.
+    fn number_end(bytes: &[u8], from: usize) -> Option<usize> {
+        let mut index = from;
+        if bytes.get(index) == Some(&b'-') {
+            index += 1;
+        }
+        let digits = index;
+        while matches!(bytes.get(index), Some(b) if b.is_ascii_digit()) {
+            index += 1;
+        }
+        if index == digits {
+            return None;
+        }
+        if bytes.get(index) == Some(&b'.') {
+            let mut frac = index + 1;
+            while matches!(bytes.get(frac), Some(b) if b.is_ascii_digit()) {
+                frac += 1;
+            }
+            if frac > index + 1 {
+                index = frac;
+            }
+        }
+        if matches!(bytes.get(index), Some(b'e' | b'E')) {
+            let mut exp = index + 1;
+            if matches!(bytes.get(exp), Some(b'+' | b'-')) {
+                exp += 1;
+            }
+            let start = exp;
+            while matches!(bytes.get(exp), Some(b) if b.is_ascii_digit()) {
+                exp += 1;
+            }
+            if exp > start {
+                index = exp;
+            }
+        }
+        Some(index)
+    }
+
+    /// Number of components in the `,`-separated numeric list starting at
+    /// `from`, counted no further than [`MIN_VECTOR_COMPONENTS`] so a single
+    /// enormous list cannot make the oracle the slow part.
+    fn vector_components_at(bytes: &[u8], from: usize) -> usize {
+        let mut index = from;
+        let mut count = 0usize;
+        loop {
+            index = skip_ws(bytes, index);
+            let Some(after) = number_end(bytes, index) else {
+                return count;
+            };
+            index = after;
+            count += 1;
+            if count >= MIN_VECTOR_COMPONENTS {
+                return count;
+            }
+            index = skip_ws(bytes, index);
+            if bytes.get(index) != Some(&b',') {
+                return count;
+            }
+            index += 1;
+        }
+    }
+
+    /// Offset of the first bracketed list of at least
+    /// [`MIN_VECTOR_COMPONENTS`] numbers — a plain-text speaker embedding —
+    /// or `None`. The closing `]` is not required: a vector cut off by a line
+    /// width or a buffer edge is still an embedding.
+    #[must_use]
+    pub fn first_float_vector(text: &str) -> Option<usize> {
+        let bytes = text.as_bytes();
+        (0..bytes.len()).find(|&open| {
+            bytes[open] == b'[' && vector_components_at(bytes, open + 1) >= MIN_VECTOR_COMPONENTS
+        })
+    }
+
+    /// Offset just past a `"?\s*[:=]\s*"?` separator starting at `from`.
+    fn separator_end(bytes: &[u8], from: usize) -> Option<usize> {
+        let mut index = from;
+        if bytes.get(index) == Some(&b'"') {
+            index += 1;
+        }
+        index = skip_ws(bytes, index);
+        if !matches!(bytes.get(index), Some(b':' | b'=')) {
+            return None;
+        }
+        index = skip_ws(bytes, index + 1);
+        if bytes.get(index) == Some(&b'"') {
+            index += 1;
+        }
+        Some(index)
+    }
+
+    /// Whether the value at `from` is data rather than prose: a bracketed
+    /// list, or a run of at least [`MIN_EMBEDDING_VALUE_CHARS`] token
+    /// characters. A marker starts with `<`, which is neither.
+    fn value_is_data_shaped(bytes: &[u8], from: usize) -> bool {
+        if bytes.get(from) == Some(&b'[') {
+            return true;
+        }
+        let mut index = from;
+        while matches!(bytes.get(index), Some(b) if is_value_char(*b)) {
+            index += 1;
+        }
+        index - from >= MIN_EMBEDDING_VALUE_CHARS
+    }
+
+    /// Offset of the first embedding-named field still carrying a value, or
+    /// `None`.
+    ///
+    /// A candidate whose name run is preceded by a word character is skipped:
+    /// the pattern anchors on `\b`, so `éembedding=…` genuinely does not match
+    /// it, and claiming a hit there would report a crash the redactor cannot
+    /// be held to.
+    #[must_use]
+    pub fn first_embedding_field(text: &str) -> Option<usize> {
+        let lowered = text.to_ascii_lowercase();
+        let bytes = lowered.as_bytes();
+        let mut index = 0usize;
+        while index < bytes.len() {
+            if !is_name_char(bytes[index]) {
+                index += 1;
+                continue;
+            }
+            let start = index;
+            while index < bytes.len() && is_name_char(bytes[index]) {
+                index += 1;
+            }
+            let name = &lowered[start..index];
+            if !EMBEDDING_FIELD_SPELLINGS.iter().any(|s| name.contains(s)) {
+                continue;
+            }
+            if lowered[..start]
+                .chars()
+                .next_back()
+                .is_some_and(|c| c.is_alphanumeric() || c == '_')
+            {
+                continue;
+            }
+            if let Some(value) = separator_end(bytes, index) {
+                if value_is_data_shaped(bytes, value) {
+                    return Some(start);
+                }
+            }
+        }
+        None
+    }
+
+    /// Whether any object in `value` carries an embedding-named key with a
+    /// non-null value. Walks the document independently of the response
+    /// guard, so the two have to agree about what is in it.
+    fn carries_embedding_key(value: &serde_json::Value) -> bool {
+        match value {
+            serde_json::Value::Object(map) => map.iter().any(|(name, item)| {
+                (!item.is_null() && is_embedding_key(name)) || carries_embedding_key(item)
+            }),
+            serde_json::Value::Array(items) => items.iter().any(carries_embedding_key),
+            _ => false,
+        }
+    }
+
+    /// VOICE_PROFILES_SPEC VP-112 and VP-185, threat-model TM-044, spec §6.3A
+    /// and §15.4.
+    ///
+    /// The whole input is one record on its way to a sink: a log line, a crash
+    /// payload, a notification body, a command result. VP-112 states the rule
+    /// in one sentence — a speaker embedding never leaves this process — so
+    /// whatever shape the bytes arrive in, the redacted form may not still
+    /// carry one, and a response document may not carry one at all.
+    ///
+    /// Invariants:
+    /// * `Redactor::redact` never panics and is a fixed point on its own
+    ///   output, for records inside the scan budget (over it, the appended
+    ///   `<truncated:…>` notice legitimately changes the output each pass);
+    /// * the redacted output contains no continuous run of [`MIN_BLOB_CHARS`]
+    ///   token characters, no bracketed list of [`MIN_VECTOR_COMPONENTS`]
+    ///   numbers and no embedding-named field still holding a data-shaped
+    ///   value — re-detected from scratch by the oracles above, never by
+    ///   looking for markers;
+    /// * redaction *fired* when the scanned prefix held one of those shapes,
+    ///   so "nothing survived" can never be satisfied by doing nothing;
+    /// * allocation stays bounded by the input;
+    /// * §6.3A: `assert_no_secret_in_response` refuses every document that
+    ///   carries an embedding-named key with a non-null value, refuses a value
+    ///   placed under such a key with [`SecretShape::VoiceEmbedding`] whatever
+    ///   the value is, and still accepts an explicit `null`.
+    ///
+    /// Honest scope: the refusal direction is the only one asserted over fuzz
+    /// data. A document carrying no embedding may still be refused for another
+    /// shape (a bearer token, a device token), which is correct and is
+    /// `check_redactor`'s business, not this target's.
+    pub fn check_embedding_blob(data: &[u8]) {
+        let input_len = data.len();
+        let text = lossy(data);
+        let redactor = Redactor::new();
+
+        alloc_meter::start();
+        let once = redactor.redact(&text).into_owned();
+        alloc_meter::stop();
+        assert_allocation_bounded("embedding_blob", input_len);
+
+        let surviving_blob = first_blob_run(&once);
+        assert!(
+            surviving_blob.is_none(),
+            "an opaque run survived redaction (offset, length) = {surviving_blob:?}, \
+             threshold {MIN_BLOB_CHARS}"
+        );
+        let surviving_vector = first_float_vector(&once);
+        assert!(
+            surviving_vector.is_none(),
+            "a numeric vector of at least {MIN_VECTOR_COMPONENTS} components survived \
+             redaction at byte {surviving_vector:?}"
+        );
+        let surviving_field = first_embedding_field(&once);
+        assert!(
+            surviving_field.is_none(),
+            "an embedding-named field kept a data-shaped value through redaction, \
+             at byte {surviving_field:?}"
+        );
+
+        if text.len() <= MAX_SCAN_BYTES {
+            let twice = redactor.redact(&once).into_owned();
+            assert_eq!(
+                twice, once,
+                "redaction did not reach a fixed point in one pass"
+            );
+        }
+
+        // Non-vacuity: if the bytes the redactor actually scanned held one of
+        // the shapes, something must have been replaced. Every marker this
+        // crate emits starts with `<redacted:`.
+        let head = scanned_head(&text);
+        if first_blob_run(head).is_some()
+            || first_float_vector(head).is_some()
+            || first_embedding_field(head).is_some()
+        {
+            assert!(
+                once.contains("<redacted:"),
+                "an embedding-shaped span was inside the scan budget but nothing was redacted"
+            );
+        }
+
+        // §6.3A. The key rule is applied before the value is walked, so the
+        // verdict for a value under an embedding-named key does not depend on
+        // the value — which is exactly what VP-112 needs: no encoding of an
+        // embedding can be smuggled out under its own name.
+        for key in EMBEDDING_KEY_NAMES.iter().copied().chain([
+            "voice_embedding",
+            "speaker_embedding",
+            "profile_voiceprint",
+        ]) {
+            let mut map = serde_json::Map::new();
+            map.insert(key.to_owned(), serde_json::Value::String(text.clone()));
+            let error = assert_no_secret_in_response(&serde_json::Value::Object(map))
+                .expect_err("a value under an embedding-named key must be refused");
+            assert_eq!(
+                error.shape,
+                SecretShape::VoiceEmbedding,
+                "key {key} was refused for the wrong reason"
+            );
+            assert_eq!(error.pointer, format!("/{key}"));
+        }
+
+        // The rule is not "refuse everything": the absence of an embedding is
+        // not an embedding.
+        let mut absent = serde_json::Map::new();
+        absent.insert("embedding".to_owned(), serde_json::Value::Null);
+        assert!(
+            assert_no_secret_in_response(&serde_json::Value::Object(absent)).is_ok(),
+            "an explicit null embedding was refused"
+        );
+
+        alloc_meter::start();
+        let parsed = serde_json::from_str::<serde_json::Value>(&text);
+        alloc_meter::stop();
+        assert_allocation_bounded("embedding_blob json", input_len);
+
+        if let Ok(value) = parsed {
+            if carries_embedding_key(&value) {
+                assert!(
+                    assert_no_secret_in_response(&value).is_err(),
+                    "a document carrying an embedding-named key was allowed out (§6.3A)"
+                );
+            }
+            if !value.is_null() {
+                let mut wrapper = serde_json::Map::new();
+                wrapper.insert("embedding".to_owned(), value);
+                let error = assert_no_secret_in_response(&serde_json::Value::Object(wrapper))
+                    .expect_err("a non-null value under `embedding` must be refused");
+                assert_eq!(error.shape, SecretShape::VoiceEmbedding);
+                assert_eq!(error.pointer, "/embedding");
+            }
+        }
+    }
 }
 
 // =========================================================================
@@ -1643,6 +2057,7 @@ mod replay {
             "error_envelope",
             "domain_redactor",
             "opus_packet",
+            "embedding_blob",
         ] {
             let dir = corpus_dir(target);
             assert!(dir.is_dir(), "missing corpus directory {}", dir.display());
@@ -1727,6 +2142,29 @@ mod replay {
     fn redactor_corpus_holds_its_invariants() {
         let n = replay("redactor", checks::check_redactor);
         assert!(n >= 20, "redactor corpus shrank to {n} entries");
+    }
+
+    /// VOICE_PROFILES_SPEC VP-112 / VP-185: nothing the redactor is handed
+    /// comes out still carrying a speaker embedding, and the §6.3A response
+    /// guard refuses an embedding-bearing document.
+    #[test]
+    fn embedding_blob_corpus_holds_its_invariants() {
+        let n = replay("embedding_blob", checks::check_embedding_blob);
+        assert!(n >= 17, "embedding_blob corpus shrank to {n} entries");
+
+        // The rule has a limit, and the limit is part of the contract: a note
+        // that only *discusses* embeddings is not an embedding and must come
+        // through a sink byte for byte. Without this, "nothing survived" could
+        // be satisfied by a redactor that ate every record.
+        let prose = std::fs::read_to_string(
+            corpus_dir("embedding_blob").join("benign_prose_mentions_embeddings"),
+        )
+        .expect("the benign corpus entry must be readable UTF-8");
+        assert_eq!(
+            plaudon_diagnostics::Redactor::new().redact(&prose),
+            prose,
+            "prose about embeddings was redacted"
+        );
     }
 
     #[test]

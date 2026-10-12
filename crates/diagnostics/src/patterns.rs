@@ -28,6 +28,22 @@ pub enum SplitTolerance {
     Splittable,
 }
 
+/// Whether a shape is also a *finding* when it appears in a committed file.
+///
+/// Every pattern is redacted out of a log line. Not every pattern means
+/// "a secret is in this file": the VP-112 catch-alls match any long opaque
+/// run of bytes or any long numeric vector, which is the right rule for a
+/// record on its way to a log and the wrong one for a device fixture full of
+/// base64 audio frames. Those shapes are [`ScanScope::RedactionOnly`]; the
+/// scanner reports the rest.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScanScope {
+    /// Redacted from text **and** reported by `plaudon-secret-scan`.
+    RedactAndScan,
+    /// Redacted from text only.
+    RedactionOnly,
+}
+
 /// A rendered replacement: the pattern name that produced it and the marker
 /// text that replaces the matched span.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -64,6 +80,9 @@ pub struct Pattern {
     render: fn(&Captures<'_>) -> Option<Rendered>,
     split: SplitTolerance,
     extra_names: &'static [&'static str],
+    /// Whether a match in a committed file is a scanner finding as well as
+    /// something the sink redacts.
+    scan: ScanScope,
 }
 
 impl fmt::Debug for Pattern {
@@ -111,6 +130,12 @@ impl Pattern {
         (self.render)(caps)
     }
 
+    /// Whether the scanner reports this shape, or only the redactor acts on it.
+    #[must_use]
+    pub const fn scan_scope(&self) -> ScanScope {
+        self.scan
+    }
+
     /// All names this pattern can report, including [`Pattern::name`].
     pub fn names(&self) -> impl Iterator<Item = &'static str> + '_ {
         std::iter::once(self.name).chain(self.extra_names.iter().copied())
@@ -131,10 +156,17 @@ pub const BEARER: &str = "bearer_token";
 pub const JWT: &str = "jwt";
 pub const CREDENTIAL_PARAM: &str = "credential_param";
 pub const DEVICE_TOKEN: &str = "device_token_hex";
+pub const VOICE_EMBEDDING: &str = "voice_embedding";
+pub const BINARY_BLOB: &str = "binary_blob";
+pub const FLOAT_VECTOR: &str = "float_vector";
 
 /// Name reported for a value registered through
 /// [`Redactor::register_secret`](crate::redact::Redactor::register_secret).
 pub const REGISTERED: &str = "registered_secret";
+
+/// Name reported for a display name registered through
+/// [`register_profile_name`](crate::redact::register_profile_name).
+pub const PROFILE_NAME: &str = "profile_name";
 
 /// Every marker this crate can emit. A test asserts the renderers stay inside
 /// this vocabulary so downstream log parsing has a closed set.
@@ -148,6 +180,10 @@ pub const MARKER_PREFIXES: &[&str] = &[
     "<redacted:jwt>",
     "<redacted:credential>",
     "<redacted:device_token>",
+    "<redacted:voice_embedding>",
+    "<redacted:binary_blob>",
+    "<redacted:float_vector>",
+    "<redacted:profile_name>",
     "<redacted:registered>",
 ];
 
@@ -264,6 +300,17 @@ fn render_url(caps: &Captures<'_>) -> Option<Rendered> {
 /// Characters that may not appear inside a URL token in a log line.
 const URL_BODY: &str = r#"[^\s"'<>\\^`{}|]+"#;
 
+/// Shortest continuous base64/hex run treated as an opaque blob (VP-112).
+///
+/// Chosen well below any embedding this product can produce and well above the
+/// identifiers a log line legitimately carries. The smallest speaker embedding
+/// in the supported model tier is 128 float32 components — 512 bytes, 684
+/// base64 characters — and its sealed form is longer still, while a UUID (36),
+/// a ULID (26), a SHA-256 hex digest (64) and a rotated log file name all stay
+/// far below 160. A run this long in a log line is opaque payload whatever it
+/// is, so destroying it costs nothing a reader of the log could have used.
+pub const MIN_BLOB_CHARS: usize = 160;
+
 /// One flat, ordered table. It is long by nature and splitting it would hide
 /// the ordering, which is part of the semantics.
 #[allow(clippy::too_many_lines)]
@@ -283,6 +330,7 @@ fn build() -> Vec<Pattern> {
         render: |_| Some(Rendered::new(PRIVATE_KEY, "<redacted:private_key>")),
         split: SplitTolerance::Contiguous,
         extra_names: &[],
+        scan: ScanScope::RedactAndScan,
     });
 
     patterns.push(Pattern {
@@ -293,6 +341,7 @@ fn build() -> Vec<Pattern> {
         render: render_url,
         split: SplitTolerance::Contiguous,
         extra_names: &[URL_USERINFO],
+        scan: ScanScope::RedactAndScan,
     });
 
     patterns.push(Pattern {
@@ -303,6 +352,7 @@ fn build() -> Vec<Pattern> {
         render: |_| Some(Rendered::new(OPENROUTER_KEY, "<redacted:openrouter_key>")),
         split: SplitTolerance::Splittable,
         extra_names: &[],
+        scan: ScanScope::RedactAndScan,
     });
 
     patterns.push(Pattern {
@@ -313,6 +363,7 @@ fn build() -> Vec<Pattern> {
         render: |_| Some(Rendered::new(API_KEY, "<redacted:api_key>")),
         split: SplitTolerance::Splittable,
         extra_names: &[],
+        scan: ScanScope::RedactAndScan,
     });
 
     patterns.push(Pattern {
@@ -331,6 +382,7 @@ fn build() -> Vec<Pattern> {
         },
         split: SplitTolerance::Contiguous,
         extra_names: &[],
+        scan: ScanScope::RedactAndScan,
     });
 
     patterns.push(Pattern {
@@ -344,6 +396,7 @@ fn build() -> Vec<Pattern> {
         },
         split: SplitTolerance::Contiguous,
         extra_names: &[],
+        scan: ScanScope::RedactAndScan,
     });
 
     patterns.push(Pattern {
@@ -356,6 +409,7 @@ fn build() -> Vec<Pattern> {
         render: |_| Some(Rendered::new(JWT, "<redacted:jwt>")),
         split: SplitTolerance::Splittable,
         extra_names: &[],
+        scan: ScanScope::RedactAndScan,
     });
 
     patterns.push(Pattern {
@@ -372,6 +426,41 @@ fn build() -> Vec<Pattern> {
         },
         split: SplitTolerance::Contiguous,
         extra_names: &[],
+        scan: ScanScope::RedactAndScan,
+    });
+
+    // ----------------------------------------------------------------- VP-112
+    //
+    // Voice-biometric shapes. A speaker embedding is not a credential, but
+    // §15.4 and VOICE_PROFILES_SPEC VP-112 put it under the same rule: an
+    // embedding may not appear in a log line, a crash report or a notification.
+    // Three shapes cover the forms one can take in formatted text — a named
+    // field, a long opaque run of bytes, and a long numeric vector.
+
+    patterns.push(Pattern {
+        name: VOICE_EMBEDDING,
+        description: "field named like a speaker embedding, with its value",
+        // The value has to look like data, not like prose: a bracketed vector,
+        // or a run of at least sixteen token characters. "scripted embeddings:
+        // speaker direction" in a sentence is not a leaked embedding, and a
+        // redactor that ate it would make every design note unreadable.
+        regex: regex(concat!(
+            r#"(?i)\b([a-z0-9_.\-]*(?:embedding|embeddings|voiceprint|speaker_vector"#,
+            r#"|exemplar_vector|centroid_vector|exemplar_cipher)[a-z0-9_.\-]*)"#,
+            r#"("?\s*[:=]\s*"?)(\[[^\]\n]*\]?|[A-Za-z0-9+/=_.\-]{16,})"#,
+        )),
+        compact: None,
+        render: |caps| {
+            let name = caps.get(1).map_or("", |m| m.as_str());
+            let sep = caps.get(2).map_or("", |m| m.as_str());
+            Some(Rendered::new(
+                VOICE_EMBEDDING,
+                format!("{name}{sep}<redacted:voice_embedding>"),
+            ))
+        },
+        split: SplitTolerance::Contiguous,
+        extra_names: &[],
+        scan: ScanScope::RedactAndScan,
     });
 
     patterns.push(Pattern {
@@ -382,6 +471,34 @@ fn build() -> Vec<Pattern> {
         render: |_| Some(Rendered::new(DEVICE_TOKEN, "<redacted:device_token>")),
         split: SplitTolerance::Splittable,
         extra_names: &[],
+        scan: ScanScope::RedactAndScan,
+    });
+
+    patterns.push(Pattern {
+        name: FLOAT_VECTOR,
+        description: "numeric vector long enough to be a speaker embedding",
+        regex: regex(concat!(
+            r"\[\s*-?\d+(?:\.\d+)?(?:[eE][+\-]?\d+)?",
+            r"(?:\s*,\s*-?\d+(?:\.\d+)?(?:[eE][+\-]?\d+)?){15,}\s*,?\s*\]?",
+        )),
+        compact: None,
+        render: |_| Some(Rendered::new(FLOAT_VECTOR, "<redacted:float_vector>")),
+        split: SplitTolerance::Contiguous,
+        extra_names: &[],
+        scan: ScanScope::RedactionOnly,
+    });
+
+    patterns.push(Pattern {
+        name: BINARY_BLOB,
+        description: "opaque base64/hex run long enough to carry an embedding",
+        regex: regex(&format!(
+            r"(?:[A-Za-z0-9+/_\-]{{{MIN_BLOB_CHARS},}}={{0,2}})"
+        )),
+        compact: None,
+        render: |_| Some(Rendered::new(BINARY_BLOB, "<redacted:binary_blob>")),
+        split: SplitTolerance::Contiguous,
+        extra_names: &[],
+        scan: ScanScope::RedactionOnly,
     });
 
     patterns

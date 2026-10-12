@@ -77,6 +77,18 @@ fn normalise_name(name: &str) -> String {
         .to_lowercase()
 }
 
+/// Teach the diagnostics redactor a name from the roster (VP-112).
+///
+/// Failure is deliberately silent and deliberately harmless. The registry is
+/// bounded: a name shorter than two characters, longer than the byte cap, or
+/// arriving after the cap is reached is simply not registered, and the
+/// consequence is that *that* name is not scrubbed if some code path prints
+/// it. Reporting the failure is not an option — the error would have to carry
+/// the name to be useful, which is the thing being protected.
+fn register_name_for_redaction(name: &str) {
+    let _ = plaudon_diagnostics::register_profile_name(name);
+}
+
 /// One speaker row as the wire describes it.
 pub(crate) fn speaker_dto(row: &StoredSpeaker) -> SpeakerDto {
     SpeakerDto {
@@ -118,7 +130,18 @@ impl LocalBackend {
     }
 
     /// One roster entry with the counts the People screen shows (VP-091).
+    ///
+    /// Every roster row that reaches a caller is built here, which makes this
+    /// the one place that can teach the diagnostics redactor which names exist
+    /// (VP-112). A display name has no shape a pattern could recognise, so
+    /// without this call a careless log line, panic message or notification
+    /// would print it verbatim.
     pub(crate) async fn person_dto(&self, person: &StoredPerson) -> Result<PersonDto, AppError> {
+        register_name_for_redaction(&person.display_name);
+        for alias in &person.aliases {
+            register_name_for_redaction(alias);
+        }
+
         let people = self.people();
         let voices = self.voices();
         let recordings = people
