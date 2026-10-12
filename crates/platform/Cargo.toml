@@ -1,0 +1,32 @@
+[package]
+name = "plaudon-platform"
+description = "Native desktop integration for the Plaudon shell: file dialogs, clipboard, OS theme, opener, notification port, tray model, file associations, drop classification and deep-link activation. No user-interface dependency."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "plaudon_platform"
+
+[lints]
+workspace = true
+
+# No `egui`, `eframe` or `plaudon-ui` dependency may ever appear below: this
+# crate is the host-integration layer, and the view layer talks to it through
+# the ports defined here (EPIC O rows C10, C11, J14, J15).
+[dependencies]
+plaudon-app = { workspace = true }
+plaudon-domain = { workspace = true }
+plaudon-notifications = { workspace = true }
+arboard = { workspace = true }
+async-trait = { workspace = true }
+rfd = { workspace = true, features = ["xdg-portal"] }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+url = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+tokio = { workspace = true }

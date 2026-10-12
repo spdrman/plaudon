@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/verify_local_model.request.schema.json",
+  "title": "verify_local_model.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "model_id"
+  ],
+  "properties": {
+    "model_id": {
+      "type": "string"
+    }
+  }
+}

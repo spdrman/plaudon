@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/set_engine_preferences.request.schema.json",
+  "title": "set_engine_preferences.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "default_stt_engine_id",
+    "default_text_engine_id"
+  ],
+  "properties": {
+    "default_stt_engine_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "default_text_engine_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  }
+}

@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/list_local_models.response.schema.json",
+  "title": "list_local_models.response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "models",
+    "disk",
+    "model_root",
+    "available_disk_bytes",
+    "total_ram_bytes",
+    "source_note"
+  ],
+  "properties": {
+    "models": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/local_model"
+      }
+    },
+    "disk": {
+      "$ref": "#/$defs/disk"
+    },
+    "model_root": {
+      "type": "string"
+    },
+    "available_disk_bytes": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "total_ram_bytes": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "source_note": {
+      "type": "string"
+    }
+  },
+  "$defs": {
+    "local_model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "model_id",
+        "display_name",
+        "engine",
+        "version",
+        "size_bytes",
+        "licence_spdx_id",
+        "origin",
+        "keep_offline"
+      ],
+      "properties": {
+        "model_id": {
+          "type": "string"
+        },
+        "display_name": {
+          "type": "string"
+        },
+        "engine": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "size_bytes": {
+          "type": "integer"
+        },
+        "licence_spdx_id": {
+          "type": "string"
+        },
+        "origin": {
+          "type": "string",
+          "enum": [
+            "pack",
+            "download"
+          ]
+        },
+        "keep_offline": {
+          "type": "boolean"
+        }
+      }
+    },
+    "disk": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "installed_bytes",
+        "staging_bytes"
+      ],
+      "properties": {
+        "installed_bytes": {
+          "type": "integer"
+        },
+        "staging_bytes": {
+          "type": "integer"
+        }
+      }
+    }
+  }
+}

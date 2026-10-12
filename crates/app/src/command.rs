@@ -49,14 +49,22 @@ use crate::dto::{
     RegenerateOutputResponse, RenameSpeakerRequest, ResetSpeakerRequest, RestoreArchiveRequest,
     RestoreArchiveResponse, RetryJobRequest, ReviewClaimRequest, ReviewClaimResponse,
     RevokeCloudConsentRequest, SaveTranscriptRevisionRequest, SaveTranscriptRevisionResponse,
-    SearchLibraryRequest, SearchLibraryResponse, SetCloudBudgetRequest, SetLocalOnlyModeRequest,
+    SearchLibraryRequest, SearchLibraryResponse, SetAppearanceRequest, SetCloudBudgetRequest,
+    SetEnginePreferencesRequest, SetExportDefaultsRequest, SetLocalOnlyModeRequest,
     SetModelPreferenceRequest, SetModelPreferenceResponse, SetNotificationSettingsRequest,
-    SetOpenRouterKeyRequest, SourceAddFolderRequest, SourceAddFolderResponse,
+    SetOpenRouterKeyRequest, SetShortcutsRequest, SourceAddFolderRequest, SourceAddFolderResponse,
     SourceReconcileRequest, SourceReconcileResponse, SourceSyncRequest, SourceSyncResponse,
     SpeakerOperationResponse, StartProcessingRequest, StartProcessingResponse, StatusResponse,
     TranscriptPage, VerifyModelRequest, VerifyModelResponse,
 };
+use crate::dto::{
+    InspectModelPackRequest, InspectModelPackResponse, InstallModelFromPackRequest,
+    InstallModelResponse, ListLocalModelsResponse, RemoveLocalModelRequest,
+    RemoveLocalModelResponse, VerifyLocalModelRequest, VerifyLocalModelResponse,
+};
 use crate::event::{AppEvent, EventSender};
+use crate::settings_presentation::UpdateStatus;
+use crate::shortcuts::ShortcutBindings;
 use crate::AppPorts;
 
 /// Generates the command surface from one table.
@@ -202,10 +210,21 @@ command_surface! {
         "list_outputs" => ListOutputs: outputs::list_outputs(ListOutputsRequest) -> ListOutputsResponse,
         "review_claim" => ReviewClaim: outputs::review_claim(ReviewClaimRequest) -> ReviewClaimResponse,
         "regenerate_output" => RegenerateOutput: outputs::regenerate_output(RegenerateOutputRequest) -> RegenerateOutputResponse,
+        "set_appearance" => SetAppearance: settings::set_appearance(SetAppearanceRequest) -> Preferences,
+        "set_engine_preferences" => SetEnginePreferences: settings::set_engine_preferences(SetEnginePreferencesRequest) -> Preferences,
+        "set_export_defaults" => SetExportDefaults: settings::set_export_defaults(SetExportDefaultsRequest) -> Preferences,
+        "set_shortcuts" => SetShortcuts: settings::set_shortcuts(SetShortcutsRequest) -> ShortcutBindings,
+        "inspect_model_pack" => InspectModelPack: models::inspect_model_pack(InspectModelPackRequest) -> InspectModelPackResponse,
+        "install_model_from_pack" => InstallModelFromPack: models::install_model_from_pack(InstallModelFromPackRequest) -> InstallModelResponse,
+        "remove_local_model" => RemoveLocalModel: models::remove_local_model(RemoveLocalModelRequest) -> RemoveLocalModelResponse,
+        "verify_local_model" => VerifyLocalModel: models::verify_local_model(VerifyLocalModelRequest) -> VerifyLocalModelResponse,
     }
     without_request {
         "get_capabilities" => GetCapabilities: settings::get_capabilities() -> Capabilities,
         "remove_openrouter_key" => RemoveOpenRouterKey: settings::remove_openrouter_key() -> StatusResponse,
+        "get_shortcuts" => GetShortcuts: settings::get_shortcuts() -> ShortcutBindings,
+        "list_local_models" => ListLocalModels: models::list_local_models() -> ListLocalModelsResponse,
+        "get_update_status" => GetUpdateStatus: update::get_update_status() -> UpdateStatus,
         "plaud_probe" => PlaudProbe: sources::plaud_probe() -> PlaudConnectorSnapshot,
         "plaud_disconnect" => PlaudDisconnect: sources::plaud_disconnect() -> PlaudDisconnectResponse,
     }
@@ -363,13 +382,35 @@ mod tests {
             COMMAND_NAMES.len(),
             "the Tauri allowlist listed the archive commands twice; this surface must not"
         );
-        assert_eq!(COMMAND_NAMES.len(), 54);
+        // 54 published by the Tauri shell, plus the eleven EPIC O task O2.4
+        // added for settings the React frontend never had.
+        assert_eq!(COMMAND_NAMES.len(), 65);
     }
+
+    /// Commands the egui settings screen added (EPIC O task O2.4).
+    ///
+    /// They are deliberately absent from the Tauri allowlist: the React shell
+    /// cannot call them, and widening its IPC surface for a frontend that is
+    /// being deleted would be the wrong direction.
+    const EGUI_ONLY_COMMANDS: &[&str] = &[
+        "set_appearance",
+        "set_engine_preferences",
+        "set_export_defaults",
+        "get_shortcuts",
+        "set_shortcuts",
+        "list_local_models",
+        "inspect_model_pack",
+        "install_model_from_pack",
+        "remove_local_model",
+        "verify_local_model",
+        "get_update_status",
+    ];
 
     #[test]
     fn the_surface_matches_the_tauri_allowlist_exactly() {
         // The shell's allowlist is the §15.2 table with the six archive
-        // commands duplicated; compared as sets, the two must agree.
+        // commands duplicated; compared as sets, the two must agree once the
+        // egui-only additions are set aside.
         const TAURI_ALLOWLIST: &[&str] = &[
             "get_capabilities",
             "list_recordings",
@@ -434,7 +475,20 @@ mod tests {
         ];
         let published: BTreeSet<&str> = COMMAND_NAMES.iter().copied().collect();
         let allowlisted: BTreeSet<&str> = TAURI_ALLOWLIST.iter().copied().collect();
-        assert_eq!(published, allowlisted);
+        let egui_only: BTreeSet<&str> = EGUI_ONLY_COMMANDS.iter().copied().collect();
+        assert_eq!(
+            &published - &egui_only,
+            allowlisted,
+            "a command was added or removed without reviewing the Tauri allowlist"
+        );
+        assert!(
+            egui_only.is_subset(&published),
+            "an egui-only command was listed here but never published"
+        );
+        assert!(
+            allowlisted.is_disjoint(&egui_only),
+            "an egui-only command must not be reachable over Tauri IPC"
+        );
     }
 
     #[test]

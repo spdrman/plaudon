@@ -27,6 +27,9 @@
 
 pub mod shell_app;
 
+pub mod desktop;
+pub mod tray;
+
 use std::fmt;
 use std::path::PathBuf;
 use std::sync::Arc;
