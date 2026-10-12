@@ -11,6 +11,7 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
+plaudon-ai-contracts = { workspace = true }
 hex = { workspace = true }
 plaudon-domain = { workspace = true }
 serde = { workspace = true }

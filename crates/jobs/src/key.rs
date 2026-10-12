@@ -30,6 +30,28 @@ impl JobKeyDigest {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+
+    /// Rebuild a digest from a persisted lowercase hex string.
+    pub fn from_hex(raw: impl Into<String>) -> Result<Self, InvalidJobKeyDigest> {
+        let raw = raw.into();
+        if raw.len() == 64
+            && raw
+                .bytes()
+                .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
+        {
+            Ok(Self(raw))
+        } else {
+            Err(InvalidJobKeyDigest { value: raw })
+        }
+    }
+}
+
+/// A persisted job key digest that is not 64 lowercase hex characters.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("`{value}` is not a canonical job key digest")]
+pub struct InvalidJobKeyDigest {
+    /// The rejected value.
+    pub value: String,
 }
 
 impl fmt::Display for JobKeyDigest {
@@ -315,7 +337,7 @@ impl JobKey {
     }
 
     /// The reprocess token, if any.
-    pub fn reprocess_token(&self) -> Option<&ReprocessToken> {
+    pub fn reprocess_nonce(&self) -> Option<&ReprocessToken> {
         match self {
             JobKey::Import(k) => k.reprocess.as_ref(),
             JobKey::Processing(k) => k.reprocess.as_ref(),
@@ -334,7 +356,10 @@ impl JobKey {
                 enc.opt("content_sha256", k.content_sha256.as_deref());
                 enc.opt(
                     "reprocess",
-                    k.reprocess.as_ref().map(|t| t.as_uuid().to_string()).as_deref(),
+                    k.reprocess
+                        .as_ref()
+                        .map(|t| t.as_uuid().to_string())
+                        .as_deref(),
                 );
                 enc.finish()
             }
@@ -357,7 +382,10 @@ impl JobKey {
                 );
                 enc.opt(
                     "reprocess",
-                    k.reprocess.as_ref().map(|t| t.as_uuid().to_string()).as_deref(),
+                    k.reprocess
+                        .as_ref()
+                        .map(|t| t.as_uuid().to_string())
+                        .as_deref(),
                 );
                 enc.finish()
             }
@@ -586,6 +614,6 @@ mod tests {
         let text = JobKey::Processing(processing()).canonical_text();
         assert!(!text.contains('\u{1f}'));
         assert!(!text.contains('\u{1e}'));
-        assert!(text.contains("stage=9;transcribe"));
+        assert!(text.contains("stage=10=transcribe;"), "{text}");
     }
 }

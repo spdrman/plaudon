@@ -81,11 +81,17 @@ pub enum JobError {
 
     #[error("corrupt persisted job record: {0}")]
     CorruptRecord(String),
+
+    #[error("schema migration failed: {0}")]
+    Migration(String),
+
+    #[error("import journal recovery failed: {0}")]
+    Journal(String),
 }
 
 /// Why a cloud dispatch was refused before any bytes left the machine.
 /// Every variant is fail-closed (§16.3, §10.5).
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum DispatchRefusal {
     #[error("no consent grant covers this destination")]
     NoConsentGrant,
@@ -130,6 +136,7 @@ impl JobError {
             | JobError::Cancelled(_)
             | JobError::CorruptRecord(_)
             | JobError::UnknownResourceClass { .. }
+            | JobError::Migration(_)
             | JobError::Encoding { .. } => false,
             JobError::CheckpointNotFound { .. }
             | JobError::DigestMismatch { .. }
@@ -137,51 +144,68 @@ impl JobError {
             | JobError::InsufficientResources { .. }
             | JobError::WriterClosed
             | JobError::Storage { .. }
+            | JobError::Journal(_)
             | JobError::Io { .. } => true,
         }
     }
 
-    /// Stable code from the shared closed set (§15.4).
+    /// Stable code from the shared closed set (§15.4). There is exactly one
+    /// user-facing taxonomy; the engine owns no codes of its own.
     pub fn code(&self) -> AppErrorCode {
         match self {
-            JobError::Transition(_) => AppErrorCode::InvalidState,
-            JobError::JobNotFound(_) => AppErrorCode::NotFound,
-            JobError::CheckpointNotFound { .. } => AppErrorCode::NotFound,
+            JobError::Transition(inner) => match inner {
+                JobTransitionError::RequiresCostAcknowledgement => {
+                    AppErrorCode::CostAcknowledgementRequired
+                }
+                JobTransitionError::RequiresUserAction { .. } => AppErrorCode::ConfirmationRequired,
+                JobTransitionError::RequiresVerifiedConsent => AppErrorCode::ConsentRequired,
+                JobTransitionError::StateConflict { .. }
+                | JobTransitionError::AlreadyTerminal { .. } => AppErrorCode::Conflict,
+                JobTransitionError::IllegalEdge { .. }
+                | JobTransitionError::MissingCommittedOutput => AppErrorCode::InternalError,
+            },
+            JobError::UnknownResourceClass { .. } => AppErrorCode::InvalidArgument,
+            JobError::JobNotFound(_) | JobError::CheckpointNotFound { .. } => {
+                AppErrorCode::RecordNotFound
+            }
             JobError::CheckpointAlreadyCommitted { .. }
-            | JobError::CheckpointNotPrepared { .. } => AppErrorCode::InvalidState,
-            JobError::DigestMismatch { .. } => AppErrorCode::IntegrityFailed,
-            JobError::MissingAsset(_) => AppErrorCode::NotFound,
-            JobError::UnknownResourceClass { .. } => AppErrorCode::InvalidState,
-            JobError::InsufficientResources { .. } => AppErrorCode::ResourceUnavailable,
-            JobError::Cancelled(_) => AppErrorCode::Cancelled,
-            JobError::DispatchRefused(_) => AppErrorCode::ConsentRequired,
-            JobError::WriterClosed | JobError::Storage { .. } => AppErrorCode::StorageFailure,
-            JobError::Io { .. } => AppErrorCode::StorageFailure,
-            JobError::CorruptRecord(_) => AppErrorCode::IntegrityFailed,
+            | JobError::CheckpointNotPrepared { .. } => AppErrorCode::Conflict,
+            JobError::DigestMismatch { .. } | JobError::CorruptRecord(_) => {
+                AppErrorCode::IntegrityFailed
+            }
+            JobError::MissingAsset(_) => AppErrorCode::ModelUnavailable,
+            JobError::InsufficientResources { .. } => AppErrorCode::StorageFull,
+            JobError::Cancelled(_) => AppErrorCode::Canceled,
+            JobError::DispatchRefused(refusal) => match refusal {
+                DispatchRefusal::NoConsentGrant
+                | DispatchRefusal::ConsentRevoked
+                | DispatchRefusal::ConsentExpired
+                | DispatchRefusal::DestinationChanged => AppErrorCode::ConsentRequired,
+                DispatchRefusal::PrivacyRequirementUnmet => AppErrorCode::PolicyUnresolved,
+                DispatchRefusal::OutcomeUnknown => AppErrorCode::OutcomeUnknown,
+            },
+            JobError::WriterClosed | JobError::Storage { .. } | JobError::Io { .. } => {
+                AppErrorCode::StorageUnavailable
+            }
+            JobError::Encoding { .. } => AppErrorCode::InternalError,
+            JobError::Migration(_) => AppErrorCode::MigrationFailed,
+            JobError::Journal(_) => AppErrorCode::StorageUnavailable,
         }
     }
 
-    /// The corrective action a user can take.
-    pub fn action(&self) -> ErrorAction {
-        match self {
-            JobError::DispatchRefused(_) => ErrorAction::GrantConsent,
-            JobError::InsufficientResources { .. } => ErrorAction::FreeResources,
-            JobError::MissingAsset(_) => ErrorAction::InstallModel,
-            JobError::Cancelled(_) => ErrorAction::None,
-            other if other.is_retryable() => ErrorAction::Retry,
-            _ => ErrorAction::ContactSupport,
-        }
+    /// The corrective affordance, taken from the shared code table so the
+    /// engine cannot disagree with the rest of the application.
+    pub fn action(&self) -> Option<ErrorAction> {
+        self.code().action()
     }
 }
 
 impl From<JobError> for AppError {
-    /// Maps engine errors onto the shared taxonomy. The message is the
-    /// `Display` form of the engine error, which by construction contains no
+    /// Maps engine errors onto the shared taxonomy. The `Display` form is kept
+    /// only as redacted diagnostic detail; by construction it contains no
     /// secret, no signed URL and no raw vendor payload.
     fn from(error: JobError) -> AppError {
         AppError::new(error.code(), error.to_string())
-            .with_retryable(error.is_retryable())
-            .with_action(error.action())
     }
 }
 
@@ -211,15 +235,16 @@ pub fn retry_class(state: JobState) -> RetryClass {
         | JobState::CloudSending
         | JobState::Verifying
         | JobState::Committing
-        | JobState::Cancelling => RetryClass::AutomaticRetry,
-        JobState::FailedRetryable => RetryClass::AutomaticRetry,
+        | JobState::Cancelling
+        | JobState::FailedRetryable => RetryClass::AutomaticRetry,
         JobState::WaitingForNetwork | JobState::WaitingForModel | JobState::WaitingForSource => {
             RetryClass::ResumeWhenAvailable
         }
-        JobState::WaitingForUser | JobState::WaitingForAuthorization => {
-            RetryClass::UserRetryWithAcknowledgement
-        }
-        JobState::CloudOutcomeUnknown => RetryClass::UserRetryWithAcknowledgement,
+        // All three need a deliberate human action; the cloud case because
+        // the request may already have been billed.
+        JobState::WaitingForUser
+        | JobState::WaitingForAuthorization
+        | JobState::CloudOutcomeUnknown => RetryClass::UserRetryWithAcknowledgement,
         JobState::Completed | JobState::FailedTerminal | JobState::Cancelled => {
             RetryClass::Terminal
         }
@@ -251,18 +276,47 @@ mod tests {
     }
 
     #[test]
-    fn dispatch_refusals_are_never_retryable() {
-        for refusal in [
-            DispatchRefusal::NoConsentGrant,
-            DispatchRefusal::ConsentRevoked,
-            DispatchRefusal::ConsentExpired,
-            DispatchRefusal::DestinationChanged,
-            DispatchRefusal::PrivacyRequirementUnmet,
-            DispatchRefusal::OutcomeUnknown,
-        ] {
+    fn dispatch_refusals_are_never_retryable_and_never_auto_billed_again() {
+        let expected = [
+            (
+                DispatchRefusal::NoConsentGrant,
+                AppErrorCode::ConsentRequired,
+            ),
+            (
+                DispatchRefusal::ConsentRevoked,
+                AppErrorCode::ConsentRequired,
+            ),
+            (
+                DispatchRefusal::ConsentExpired,
+                AppErrorCode::ConsentRequired,
+            ),
+            (
+                DispatchRefusal::DestinationChanged,
+                AppErrorCode::ConsentRequired,
+            ),
+            (
+                DispatchRefusal::PrivacyRequirementUnmet,
+                AppErrorCode::PolicyUnresolved,
+            ),
+            (
+                DispatchRefusal::OutcomeUnknown,
+                AppErrorCode::OutcomeUnknown,
+            ),
+        ];
+        for (refusal, code) in expected {
             let err = JobError::DispatchRefused(refusal);
-            assert!(!err.is_retryable());
-            assert_eq!(err.code(), AppErrorCode::ConsentRequired);
+            assert!(!err.is_retryable(), "{refusal:?}");
+            assert_eq!(err.code(), code, "{refusal:?}");
+            // The shared taxonomy must agree that none of these is a safe
+            // automatic retry.
+            assert!(!code.is_retryable(), "{code} must not be auto-retryable");
         }
+    }
+
+    #[test]
+    fn mapping_to_app_error_keeps_the_shared_taxonomy() {
+        let err = JobError::Cancelled(plaudon_domain::ids::JobId::new());
+        let app: plaudon_domain::error::AppError = err.into();
+        assert_eq!(app.code(), AppErrorCode::Canceled);
     }
 }

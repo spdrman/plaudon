@@ -1,6 +1,6 @@
 [package]
 name = "plaudon-ai-whisper"
-description = "whisper.cpp adapter: runtime backend probe and model manifest verification."
+description = "whisper.cpp speech-to-text adapter with runtime backend selection, resource preflight and cooperative cancellation."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -11,3 +11,34 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
+plaudon-ai-contracts = { workspace = true }
+plaudon-app-core = { workspace = true }
+plaudon-audio = { workspace = true }
+plaudon-domain = { workspace = true }
+async-trait = { workspace = true }
+fs4 = { workspace = true }
+serde = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+whisper-rs = { workspace = true }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+# Metal is compiled in on macOS so the runtime probe has something to select.
+# It is never required: `BackendProbe` falls back to CPU when the device or
+# the shader library is unavailable (spec 12, F2.5).
+whisper-rs = { workspace = true, features = ["metal"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+# Vulkan is the portable Windows GPU runtime: it covers NVIDIA, AMD and Intel
+# without three separate vendor SDKs. Absence of a loader is a probe failure,
+# not a build failure.
+whisper-rs = { workspace = true, features = ["vulkan"] }
+
+[dev-dependencies]
+plaudon-audio = { workspace = true }
+proptest = { workspace = true }
+serde_json = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true }

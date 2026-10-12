@@ -39,6 +39,11 @@ impl Migration {
 }
 
 /// Every migration this build knows, in application order.
+///
+/// Version ranges are allocated per EPIC so two branches cannot renumber each
+/// other, and because [`MigrationRunner`] refuses a version below the applied
+/// head: 0001-0099 EPIC B (core), 0100-0199 EPIC C (job engine), 0200-0299
+/// EPIC F (audio/STT), 0300-0399 the desktop shell, 0400-0499 EPIC K (source reconciliation).
 pub const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 1,
@@ -50,10 +55,29 @@ pub const MIGRATIONS: &[Migration] = &[
         name: "core",
         sql: include_str!("../migrations/0002_core.sql"),
     },
+    // Owned by EPIC C (job engine). Versions 100-199 are reserved for it.
     Migration {
-        version: 3,
+        version: 100,
+        name: "job_engine",
+        sql: include_str!("../migrations/0100_job_engine.sql"),
+    },
+    // 200+ is EPIC F's range (task F2.4).
+    Migration {
+        version: 200,
+        name: "transcript_provenance",
+        sql: include_str!("../migrations/0200_transcript_provenance.sql"),
+    },
+    // Desktop shell display metadata. Owned by apps/desktop/src-tauri.
+    Migration {
+        version: 300,
+        name: "desktop_shell",
+        sql: include_str!("../migrations/0300_desktop_shell.sql"),
+    },
+    // 400+ is EPIC K's range: source reconciliation and watched folders.
+    Migration {
+        version: 400,
         name: "source_reconciliation",
-        sql: include_str!("../migrations/0003_source_reconciliation.sql"),
+        sql: include_str!("../migrations/0400_source_reconciliation.sql"),
     },
 ];
 
@@ -308,7 +332,8 @@ mod tests {
         let runner = MigrationRunner::new();
         let report = runner.run(&db).await.unwrap();
 
-        assert_eq!(report.applied, vec![1, 2]);
+        let expected: Vec<i64> = MIGRATIONS.iter().map(|m| m.version).collect();
+        assert_eq!(report.applied, expected);
         assert_eq!(
             report.backup_path, None,
             "a fresh library has nothing to back up"
@@ -345,7 +370,8 @@ mod tests {
 
         let full = MigrationRunner::new();
         let report = full.run(&db).await.unwrap();
-        assert_eq!(report.applied, vec![2]);
+        let expected: Vec<i64> = MIGRATIONS.iter().skip(1).map(|m| m.version).collect();
+        assert_eq!(report.applied, expected);
         let backup = report.backup_path.expect("an upgrade must back up first");
         assert!(
             backup.exists(),

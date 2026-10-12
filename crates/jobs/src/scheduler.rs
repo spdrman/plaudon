@@ -60,7 +60,10 @@ impl ResourceClass {
 
     /// Parse a persisted name.
     pub fn parse(raw: &str) -> Option<ResourceClass> {
-        ResourceClass::ALL.iter().copied().find(|c| c.as_str() == raw)
+        ResourceClass::ALL
+            .iter()
+            .copied()
+            .find(|c| c.as_str() == raw)
     }
 
     /// `true` for classes that constitute a "heavy local model workload"
@@ -114,6 +117,7 @@ impl SchedulerLimits {
     }
 }
 
+#[derive(Debug)]
 struct ClassState {
     semaphore: Arc<Semaphore>,
     limit: u32,
@@ -123,6 +127,7 @@ struct ClassState {
 
 /// An admitted slot. Holding it is the right to run; dropping it releases the
 /// slot. The permit is owned so a worker can move it across await points.
+#[derive(Debug)]
 pub struct Admission {
     class: ResourceClass,
     _permit: OwnedSemaphorePermit,
@@ -143,7 +148,7 @@ impl Drop for Admission {
 }
 
 /// Bounded per-class scheduler.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ResourceScheduler {
     classes: Arc<BTreeMap<ResourceClass, Arc<ClassState>>>,
     limits: SchedulerLimits,
@@ -180,16 +185,14 @@ impl ResourceScheduler {
     pub fn high_water_mark(&self, class: ResourceClass) -> u32 {
         self.classes
             .get(&class)
-            .map(|s| s.high_water.load(Ordering::SeqCst))
-            .unwrap_or(0)
+            .map_or(0, |s| s.high_water.load(Ordering::SeqCst))
     }
 
     /// Currently admitted count for `class`.
     pub fn in_flight(&self, class: ResourceClass) -> u32 {
         self.classes
             .get(&class)
-            .map(|s| s.in_flight.load(Ordering::SeqCst))
-            .unwrap_or(0)
+            .map_or(0, |s| s.in_flight.load(Ordering::SeqCst))
     }
 
     /// Wait for a slot in `class`, honouring cancellation while queued.
@@ -221,7 +224,7 @@ impl ResourceScheduler {
 
         let permit = tokio::select! {
             biased;
-            _ = cancel.cancelled() => return Err(JobError::Cancelled(job)),
+            () = cancel.cancelled() => return Err(JobError::Cancelled(job)),
             permit = Arc::clone(&state.semaphore).acquire_owned() => {
                 permit.map_err(|_| JobError::UnknownResourceClass {
                     class: class.as_str().to_string(),
@@ -301,10 +304,7 @@ pub enum PreflightDecision {
     Admit,
     /// Park the job in `state` with `reason` until the condition clears.
     /// Parking is visible and resumable; it is never a failure (§14.4).
-    Park {
-        state: JobState,
-        reason: WaitReason,
-    },
+    Park { state: JobState, reason: WaitReason },
 }
 
 /// Why a job is parked. Persisted on `job_engine_state.wait_reason` and shown
@@ -372,17 +372,19 @@ impl WaitReason {
     /// The persisted wait state this reason parks a job in.
     pub const fn wait_state(self) -> JobState {
         match self {
-            WaitReason::InsufficientDisk | WaitReason::InsufficientMemory => {
-                JobState::WaitingForUser
-            }
             WaitReason::ModelAssetMissing => JobState::WaitingForModel,
             WaitReason::SourceUnavailable => JobState::WaitingForSource,
-            WaitReason::PowerSaver | WaitReason::SystemSuspend => JobState::WaitingForUser,
             WaitReason::NetworkUnavailable => JobState::WaitingForNetwork,
             WaitReason::KeychainLocked | WaitReason::ConsentRequired => {
                 JobState::WaitingForAuthorization
             }
-            WaitReason::UserDecisionRequired => JobState::WaitingForUser,
+            // Everything else needs a human: not enough disk or memory, a
+            // deferred heavy workload, a suspend, or an explicit decision.
+            WaitReason::InsufficientDisk
+            | WaitReason::InsufficientMemory
+            | WaitReason::PowerSaver
+            | WaitReason::SystemSuspend
+            | WaitReason::UserDecisionRequired => JobState::WaitingForUser,
         }
     }
 }
@@ -495,7 +497,8 @@ mod tests {
 
     #[tokio::test]
     async fn cancellation_is_honoured_while_queued() {
-        let scheduler = ResourceScheduler::new(SchedulerLimits::default().with(ResourceClass::Cpu, 1));
+        let scheduler =
+            ResourceScheduler::new(SchedulerLimits::default().with(ResourceClass::Cpu, 1));
         let job = plaudon_domain::ids::JobId::new();
         let held = scheduler.try_admit(ResourceClass::Cpu).expect("slot");
 

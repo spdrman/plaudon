@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "crates/*",
+    "apps/desktop/src-tauri",
     "tests/integration",
     "tests/chaos",
     "tests/egress/monitor",
@@ -45,6 +46,7 @@ plaudon-automation = { path = "crates/automation" }
 plaudon-diagnostics = { path = "crates/diagnostics" }
 
 async-trait = "0.1"
+fs4 = "1"
 hex = "0.4"
 jsonschema = { version = "0.26", default-features = false }
 libc = "0.2"
@@ -60,6 +62,7 @@ serde_json = "1"
 serde_norway = "0.9"
 sha2 = "0.10"
 sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "sqlite", "macros"] }
+symphonia = { version = "0.5", default-features = false }
 tempfile = "3"
 thiserror = "2"
 time = { version = "0.3", features = ["formatting", "parsing", "macros"] }
@@ -71,6 +74,7 @@ url = "2"
 uuid = { version = "1", features = ["v4", "v7", "serde"] }
 walkdir = "2"
 zeroize = { version = "1", features = ["derive"] }
+whisper-rs = { version = "0.16", default-features = false }
 
 [workspace.lints.rust]
 unsafe_code = "warn"
@@ -85,3 +89,18 @@ module_name_repetitions = "allow"
 must_use_candidate = "allow"
 missing_errors_doc = "allow"
 missing_panics_doc = "allow"
+# Numeric conversions in DSP and byte-accounting code are deliberate and
+# bounds-checked at the point of use; the pedantic cast lints fire on every
+# one of them and drown the signal.
+cast_precision_loss = "allow"
+cast_possible_truncation = "allow"
+cast_sign_loss = "allow"
+cast_possible_wrap = "allow"
+# Audio code legitimately has `decoded`/`decoder`, `resampled`/`resampler`.
+similar_names = "allow"
+# Decode and selection loops read better as one function than as a chain of
+# single-use helpers.
+too_many_lines = "allow"
+items_after_statements = "allow"
+match_same_arms = "allow"
+unnecessary_debug_formatting = "allow"

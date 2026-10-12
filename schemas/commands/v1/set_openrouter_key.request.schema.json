@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/set_openrouter_key.request.schema.json",
+  "title": "set_openrouter_key.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "key"
+  ],
+  "properties": {
+    "key": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

@@ -3,3 +3,12 @@ node_modules/
 *.part
 .DS_Store
 native/apple-bridge/build/
+
+# Local STT model fixtures are seeded by scripts/fetch-stt-fixtures.sh
+tests/fixtures/stt/models/
+
+# Desktop UI build and test output
+apps/desktop/dist/
+apps/desktop/src-tauri/gen/
+apps/desktop/test-results/
+apps/desktop/playwright-report/

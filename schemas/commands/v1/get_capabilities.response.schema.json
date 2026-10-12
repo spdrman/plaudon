@@ -1,0 +1,300 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/get_capabilities.response.schema.json",
+  "title": "get_capabilities.response",
+  "$ref": "#/$defs/capabilities",
+  "$defs": {
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "os",
+        "hardware",
+        "engines",
+        "storage",
+        "integrations",
+        "permissions",
+        "preferences",
+        "openrouter_key_present"
+      ],
+      "properties": {
+        "os": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "platform",
+            "version"
+          ],
+          "properties": {
+            "platform": {
+              "type": "string",
+              "enum": [
+                "macos",
+                "windows",
+                "linux"
+              ]
+            },
+            "version": {
+              "type": "string"
+            }
+          }
+        },
+        "hardware": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "arch",
+            "logical_cores",
+            "total_memory_bytes"
+          ],
+          "properties": {
+            "arch": {
+              "type": "string"
+            },
+            "logical_cores": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "total_memory_bytes": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "engines": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/engine_inventory_entry"
+          }
+        },
+        "storage": {
+          "$ref": "#/$defs/storage_capability"
+        },
+        "integrations": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "enum": [
+              "unknown",
+              "experimental",
+              "supported",
+              "unsupported"
+            ]
+          }
+        },
+        "permissions": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "enum": [
+              "granted",
+              "denied",
+              "not_requested"
+            ]
+          }
+        },
+        "preferences": {
+          "$ref": "#/$defs/preferences"
+        },
+        "openrouter_key_present": {
+          "type": "boolean"
+        }
+      }
+    },
+    "engine_inventory_entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "engine_id",
+        "display_name",
+        "stage",
+        "status",
+        "unavailable_reason",
+        "installed_models",
+        "download_bytes_required",
+        "requires_network"
+      ],
+      "properties": {
+        "engine_id": {
+          "type": "string"
+        },
+        "display_name": {
+          "type": "string"
+        },
+        "stage": {
+          "type": "string",
+          "enum": [
+            "stt",
+            "text"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "unknown",
+            "experimental",
+            "supported",
+            "unsupported"
+          ]
+        },
+        "unavailable_reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "installed_models": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/installed_model"
+          }
+        },
+        "download_bytes_required": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "requires_network": {
+          "type": "boolean"
+        }
+      }
+    },
+    "installed_model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "model_id",
+        "display_name",
+        "size_bytes",
+        "installed"
+      ],
+      "properties": {
+        "model_id": {
+          "type": "string"
+        },
+        "display_name": {
+          "type": "string"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "installed": {
+          "type": "boolean"
+        }
+      }
+    },
+    "notification_settings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "categories"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "categories": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "import_finished",
+            "transcription_finished",
+            "requires_attention",
+            "cloud_budget_exceeded"
+          ],
+          "properties": {
+            "import_finished": {
+              "type": "boolean"
+            },
+            "transcription_finished": {
+              "type": "boolean"
+            },
+            "requires_attention": {
+              "type": "boolean"
+            },
+            "cloud_budget_exceeded": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    "preferences": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "onboarding_completed",
+        "local_only_mode",
+        "default_stt_engine_id",
+        "default_text_engine_id",
+        "appearance",
+        "contrast",
+        "notifications"
+      ],
+      "properties": {
+        "onboarding_completed": {
+          "type": "boolean"
+        },
+        "local_only_mode": {
+          "type": "boolean"
+        },
+        "default_stt_engine_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "default_text_engine_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "appearance": {
+          "type": "string",
+          "enum": [
+            "system",
+            "light",
+            "dark"
+          ]
+        },
+        "contrast": {
+          "type": "string",
+          "enum": [
+            "standard",
+            "high"
+          ]
+        },
+        "notifications": {
+          "$ref": "#/$defs/notification_settings"
+        }
+      }
+    },
+    "storage_capability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "library_path",
+        "free_bytes",
+        "total_bytes"
+      ],
+      "properties": {
+        "library_path": {
+          "type": "string"
+        },
+        "free_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "total_bytes": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  }
+}

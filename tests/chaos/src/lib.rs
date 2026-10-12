@@ -7,6 +7,8 @@
 //! knows the tests exist: the steps are separate public methods and the test
 //! simply stops calling them.
 
+pub mod job_engine;
+
 /// Cargo package name of this crate, used by the workspace layout conformance test.
 pub const PACKAGE_NAME: &str = "plaudon-chaos-tests";
 

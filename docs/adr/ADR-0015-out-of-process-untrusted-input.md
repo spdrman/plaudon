@@ -1,5 +1,9 @@
 # ADR-0015: Untrusted media decoding and model inference run out of process
 
+- **Status:** Accepted
+- **Date:** 2026-10-11
+- **Spec:** SPEC v1.3 (see "Spec references")
+
 ## Status
 
 Accepted — 2026-10-11. Implemented in `crates/security/src/sandbox/**`
@@ -70,19 +74,19 @@ application and never an import that is marked complete without verified bytes
   services. That is a different boundary with a different owner, and the
   threat model says so rather than implying our sandbox covers it.
 
-## Alternatives considered
+## Rejected alternatives
 
-* **Decode in-process behind `catch_unwind` and careful bounds checks.**
+- **Decode in-process behind `catch_unwind` and careful bounds checks.**
   Rejected: `catch_unwind` does not contain memory corruption in C code, and a
   segfault takes the whole application down mid-import.
-* **Pure-Rust decoders only (e.g. symphonia everywhere).** Attractive, and
+- **Pure-Rust decoders only (e.g. symphonia everywhere).** Attractive, and
   preferred where format support allows, but it does not cover the formats and
   runtimes we actually need (vendor `.ASR`, whisper.cpp), so it cannot be the
   isolation strategy. Memory-safe code still needs the resource caps.
-* **WebAssembly sandboxing of codecs.** Interesting for a future iteration;
+- **WebAssembly sandboxing of codecs.** Interesting for a future iteration;
   rejected for V1 because of the toolchain burden for the native inference
   runtimes and the performance cost on long recordings.
-* **A single long-lived helper daemon for all jobs.** Rejected: it makes one
+- **A single long-lived helper daemon for all jobs.** Rejected: it makes one
   hostile file's corruption persist across jobs and it drifts toward the
   always-running privileged component §6.2 rules out. One process per unit of
   work keeps failures isolated.
