@@ -216,7 +216,10 @@ async fn study_artifacts_become_outputs_with_one_evidence_row_per_citation() {
         &revision,
     )
     .expect("validated");
-    assert!(validation.rejected.is_empty());
+    assert_eq!(
+        validation.rejected,
+        [] as [plaudon_ai_tools::study::RejectedItem; 0]
+    );
 
     let stored = StudyOutputWriter::new(fixture.db.clone())
         .persist(
@@ -279,7 +282,7 @@ async fn an_empty_artifact_set_writes_nothing() {
         )
         .await
         .expect("persist");
-    assert!(stored.output_ids.is_empty());
+    assert_eq!(stored.output_ids, [] as [plaudon_domain::ids::OutputId; 0]);
     assert_eq!(stored.evidence_rows, 0);
 
     let count: i64 = sqlx::query_scalar("SELECT count(*) FROM ai_outputs")
@@ -431,10 +434,9 @@ async fn a_question_the_recording_cannot_answer_is_recorded_without_a_run() {
     assert_eq!(answered.tool_run_id, None);
 
     let repository = ToolRepository::new(fixture.db.clone());
-    assert!(repository
-        .runs_for(fixture.recording_id)
-        .await
-        .unwrap()
-        .is_empty());
+    assert_eq!(
+        repository.runs_for(fixture.recording_id).await.unwrap(),
+        [] as [plaudon_persistence::tools::StoredToolRun; 0]
+    );
     fixture.db.close().await;
 }

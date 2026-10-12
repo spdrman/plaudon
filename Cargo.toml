@@ -51,6 +51,7 @@ plaudon-automation = { path = "crates/automation" }
 plaudon-diagnostics = { path = "crates/diagnostics" }
 plaudon-eval = { path = "crates/eval" }
 plaudon-updater = { path = "crates/updater" }
+plaudon-extraction-eval = { path = "crates/extraction-eval" }
 plaudon-release-tools = { path = "crates/release-tools" }
 
 argon2 = { version = "0.6", features = ["kdf"] }

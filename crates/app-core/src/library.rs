@@ -17,6 +17,7 @@ use plaudon_persistence::transcript::{StoredRevision, StoredSegment, TranscriptR
 use plaudon_persistence::{Database, PersistenceError, PersistenceResult};
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
+use std::fmt::Write as _;
 
 /// One row of the library listing.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -140,7 +141,7 @@ impl TranscriptExport {
                 let mut line = String::new();
                 if timed {
                     if let Some(start) = segment.start_ms {
-                        line.push_str(&format!("[{}] ", format_timestamp(start)));
+                        let _ = write!(line, "[{}] ", format_timestamp(start));
                     }
                 }
                 if let Some(speaker) = &segment.speaker {
@@ -149,7 +150,7 @@ impl TranscriptExport {
                     } else {
                         "inferred cluster"
                     };
-                    line.push_str(&format!("{} ({qualifier}): ", speaker.label));
+                    let _ = write!(line, "{} ({qualifier}): ", speaker.label);
                 }
                 line.push_str(&segment.text);
                 line

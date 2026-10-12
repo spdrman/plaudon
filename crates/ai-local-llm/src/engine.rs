@@ -110,7 +110,7 @@ impl ProcessInferenceBackend {
 
 #[async_trait]
 impl LocalInferenceBackend for ProcessInferenceBackend {
-    fn backend_name(&self) -> &str {
+    fn backend_name(&self) -> &'static str {
         "process"
     }
 
@@ -305,7 +305,7 @@ impl TextModel for LocalTextModel {
             .await?;
 
         let body = parse_body(&raw).ok_or(TextModelError::SchemaValidationFailed)?;
-        let repair_attempts = u8::from(raw.trim() != body.to_string());
+        let repair_attempts = u8::from(raw.trim() != body);
         Ok(StructuredResponse {
             body,
             repair_attempts,
@@ -341,7 +341,7 @@ mod tests {
 
     #[async_trait]
     impl LocalInferenceBackend for ScriptedBackend {
-        fn backend_name(&self) -> &str {
+        fn backend_name(&self) -> &'static str {
             "scripted"
         }
         async fn generate(

@@ -98,11 +98,7 @@ impl SpeakerTurn {
         } else {
             end_ms
         };
-        if end > start {
-            end - start
-        } else {
-            0
-        }
+        end.saturating_sub(start)
     }
 }
 

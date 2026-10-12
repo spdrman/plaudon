@@ -46,6 +46,7 @@ and why, and the consequences we accept.
 
 - [ADR-0040: Apple bridge envelopes, and a load floor far below the feature floor](ADR-0040-apple-bridge-envelopes-and-a-low-load-floor.md) — Accepted, 2026-10-11 (spec §6.6, §11.2, §11.3, §11.6, §12)
 - [ADR-0041: An anchor proves traceability, not truth](ADR-0041-an-anchor-proves-traceability-not-truth.md) — Accepted, 2026-10-11 (spec §9.1, §9.5, §9.6, §9.6A, §17.3)
+- [ADR-0042: Grounded output surface — three commands for actions, decisions and review](ADR-0042-grounded-output-surface.md) — Accepted, 2026-10-11 (spec §9.2, §9.6A, §17.3)
 
 ## Sources and ingestion (0050-0059)
 

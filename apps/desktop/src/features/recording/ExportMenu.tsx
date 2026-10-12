@@ -39,14 +39,13 @@ export function ExportMenu({
 
   const handleTranscriptExport = async (format: ExportFormat) => {
     if (!currentRevisionId) return;
-    
+
     const captionFormats = ["srt", "vtt"];
     if (captionFormats.includes(format) && alignmentOrigin === "none") {
       pushToast({
-        id: `export-${Date.now()}`,
         tone: "warning",
         title: "Captions unavailable",
-        message: "This transcript has no real timestamps; we do not invent seek times.",
+        body: "This transcript has no real timestamps; we do not invent seek times.",
       });
       return;
     }
@@ -68,10 +67,9 @@ export function ExportMenu({
         destination,
       });
       pushToast({
-        id: `export-${Date.now()}`,
         tone: "success",
         title: "Export started",
-        message: `Job ${response.job_id} queued.`,
+        body: `Job ${response.job_id} queued.`,
       });
       setExportDialogOpen(false);
     } catch (err) {

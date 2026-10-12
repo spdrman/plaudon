@@ -55,7 +55,7 @@ impl ReferenceTurn {
 }
 
 /// Options for one scoring run.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct DerOptions {
     /// Milliseconds excluded on each side of a reference boundary, to absorb
     /// annotation imprecision. Zero by default: a collar flatters a system,
@@ -65,15 +65,6 @@ pub struct DerOptions {
     /// Excluding them is common in published numbers and always overstates
     /// quality, so it is opt-in and recorded in the report.
     pub skip_overlap_regions: bool,
-}
-
-impl Default for DerOptions {
-    fn default() -> Self {
-        Self {
-            collar_ms: 0,
-            skip_overlap_regions: false,
-        }
-    }
 }
 
 /// A DER measurement with the sample sizes behind it.

@@ -37,7 +37,7 @@ pub async fn search_library(
         .collect();
 
     let next_cursor = if results_dto.len() == page_limit as usize {
-        Some(PageCursor::at(cursor.offset() + page_limit as u64).encode())
+        Some(PageCursor::at(cursor.offset() + u64::from(page_limit)).encode())
     } else {
         None
     };

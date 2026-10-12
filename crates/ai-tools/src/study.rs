@@ -214,8 +214,7 @@ fn check_anchors(
     if verified.is_empty() {
         let first = rejected
             .first()
-            .map(|(_, reason)| *reason)
-            .unwrap_or(AnchorRejection::ExcerptMismatch);
+            .map_or(AnchorRejection::ExcerptMismatch, |(_, reason)| *reason);
         return Err(RejectionReason::AllAnchorsRejected { first });
     }
     Ok(verified)

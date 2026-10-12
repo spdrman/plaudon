@@ -87,12 +87,18 @@
   flex: 1;
 }
 
+/*
+ * The main column stacks player, revision switcher, transcript and the stage
+ * re-run panel. Together they can exceed the viewport, so the column scrolls
+ * instead of letting its children overlap each other.
+ */
 .recording__main {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
   min-height: 0;
   min-width: 0;
+  overflow-y: auto;
 }
 
 .recording__pane {
@@ -236,7 +242,9 @@
   flex-direction: column;
   gap: var(--space-3);
   min-height: 0;
-  flex: 1;
+  /* Grows into spare space but never shrinks below the scroller's own
+     minimum, which would push its rows over the panel that follows. */
+  flex: 1 0 auto;
 }
 
 .transcript__toolbar {

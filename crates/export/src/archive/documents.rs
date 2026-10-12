@@ -277,6 +277,8 @@ pub struct TranscriptRow {
     pub engine_backend: Option<String>,
     /// Canonical engine parameters, when recorded.
     pub engine_params_json: Option<String>,
+    /// Vendor that produced an imported transcript, when one did.
+    pub source_vendor: Option<String>,
 }
 
 /// `transcripts/<revision id>.json`.
@@ -436,10 +438,18 @@ pub struct SourceDocument {
 pub struct ToolDocument {
     /// Document schema version.
     pub schema_version: String,
-    /// Tool identity.
+    /// Tool identity (`transcript_tools.tool_id`).
     pub id: String,
     /// Tool version.
-    pub version: String,
+    pub version: i64,
+    /// Digest over the canonical definition.
+    pub definition_sha256: String,
+    /// `builtin` or `user`.
+    pub origin: String,
+    /// Whether the tool is an opt-in extra.
+    pub optional: i64,
+    /// Creation instant, in epoch milliseconds.
+    pub created_at: i64,
     /// Display name.
     pub display_name: String,
     /// Tool kind.

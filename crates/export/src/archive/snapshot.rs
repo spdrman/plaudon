@@ -227,7 +227,7 @@ impl LibrarySnapshot {
         let rows = sqlx::query(
             "SELECT id, parent_id, origin, input_sha256, engine, model_id, model_version, locale,
                     alignment_origin, status, normalization_profile, chunking_strategy,
-                    duration_ms, created_at, engine_backend, engine_params_json
+                    duration_ms, created_at, engine_backend, engine_params_json, source_vendor
              FROM transcript_revisions WHERE recording_id = ?1 ORDER BY created_at, id",
         )
         .bind(recording_id)
@@ -257,6 +257,7 @@ impl LibrarySnapshot {
                 created_at: row.get("created_at"),
                 engine_backend: row.get("engine_backend"),
                 engine_params_json: row.get("engine_params_json"),
+                source_vendor: row.get("source_vendor"),
             };
 
             let segment_rows = sqlx::query(
@@ -467,8 +468,9 @@ impl LibrarySnapshot {
             return Ok(Vec::new());
         }
         let rows = sqlx::query(
-            "SELECT id, version, display_name, kind, prompt_version, output_schema_version
-             FROM transcript_tools ORDER BY id, version",
+            "SELECT tool_id, version, display_name, kind, prompt_version, output_schema_version,
+                    definition_sha256, origin, optional, created_at
+             FROM transcript_tools ORDER BY tool_id, version",
         )
         .fetch_all(self.db.pool())
         .await
@@ -477,8 +479,12 @@ impl LibrarySnapshot {
             .iter()
             .map(|row| ToolDocument {
                 schema_version: TOOL_SCHEMA.to_owned(),
-                id: row.get("id"),
+                id: row.get("tool_id"),
                 version: row.get("version"),
+                definition_sha256: row.get("definition_sha256"),
+                origin: row.get("origin"),
+                optional: row.get("optional"),
+                created_at: row.get("created_at"),
                 display_name: row.get("display_name"),
                 kind: row.get("kind"),
                 prompt_version: row.get("prompt_version"),

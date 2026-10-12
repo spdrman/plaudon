@@ -264,9 +264,9 @@ fn gather_hardware() -> String {
             .map(|bytes| format!("{} GB", bytes / (1024 * 1024 * 1024)));
 
         match (brand, memsize) {
-            (Some(cpu), Some(mem)) => format!("{} {} {}", arch, cpu, mem),
-            (Some(cpu), None) => format!("{} {}", arch, cpu),
-            (None, Some(mem)) => format!("{} {}", arch, mem),
+            (Some(cpu), Some(mem)) => format!("{arch} {cpu} {mem}"),
+            (Some(cpu), None) => format!("{arch} {cpu}"),
+            (None, Some(mem)) => format!("{arch} {mem}"),
             (None, None) => arch.to_string(),
         }
     }
@@ -289,7 +289,7 @@ fn gather_os_build() -> String {
             .and_then(|o| String::from_utf8(o.stdout).ok())
             .map(|s| s.trim().to_string())
         {
-            return format!("{} {}", os, build);
+            return format!("{os} {build}");
         }
     }
 
@@ -315,8 +315,7 @@ fn gather_toolchain() -> String {
         .output()
         .ok()
         .and_then(|o| String::from_utf8(o.stdout).ok())
-        .map(|s| s.trim().to_string())
-        .unwrap_or_else(|| "unknown".to_string())
+        .map_or_else(|| "unknown".to_string(), |s| s.trim().to_string())
 }
 
 fn gather_commit() -> String {
@@ -325,8 +324,7 @@ fn gather_commit() -> String {
         .output()
         .ok()
         .and_then(|o| String::from_utf8(o.stdout).ok())
-        .map(|s| s.trim().to_string())
-        .unwrap_or_else(|| "unknown".to_string())
+        .map_or_else(|| "unknown".to_string(), |s| s.trim().to_string())
 }
 
 /// An opt-in tool-quality fixture.
@@ -436,12 +434,12 @@ fn main() -> ExitCode {
     // Load all fixtures
     let fixture_paths: Vec<PathBuf> = match std::fs::read_dir(&args.fixtures) {
         Ok(entries) => entries
-            .filter_map(|e| e.ok())
+            .filter_map(std::result::Result::ok)
             .map(|e| e.path())
-            .filter(|p| p.extension().map_or(false, |ext| ext == "json"))
+            .filter(|p| p.extension().is_some_and(|ext| ext == "json"))
             .collect(),
         Err(e) => {
-            eprintln!("Failed to read fixture directory: {}", e);
+            eprintln!("Failed to read fixture directory: {e}");
             return ExitCode::FAILURE;
         }
     };
@@ -468,7 +466,7 @@ fn main() -> ExitCode {
                 }
             }
             Err(e) => {
-                eprintln!("{}", e);
+                eprintln!("{e}");
                 return ExitCode::FAILURE;
             }
         }
@@ -491,7 +489,7 @@ fn main() -> ExitCode {
     // Create parent directories if needed
     if let Some(parent) = args.out.parent() {
         if let Err(e) = std::fs::create_dir_all(parent) {
-            eprintln!("Failed to create output directory: {}", e);
+            eprintln!("Failed to create output directory: {e}");
             return ExitCode::FAILURE;
         }
     }
@@ -500,13 +498,13 @@ fn main() -> ExitCode {
     let json = match serde_json::to_string_pretty(&report) {
         Ok(j) => j,
         Err(e) => {
-            eprintln!("Failed to serialize report: {}", e);
+            eprintln!("Failed to serialize report: {e}");
             return ExitCode::FAILURE;
         }
     };
 
     if let Err(e) = std::fs::write(&args.out, json) {
-        eprintln!("Failed to write output file: {}", e);
+        eprintln!("Failed to write output file: {e}");
         return ExitCode::FAILURE;
     }
 

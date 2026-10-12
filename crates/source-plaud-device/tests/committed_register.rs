@@ -166,6 +166,10 @@ fn no_rust_or_typescript_source_hardcodes_a_compatibility_label() {
     let allowed_suffixes = [
         "crates/source-plaud-device/src/register.rs",
         "crates/source-plaud-device/tests/committed_register.rs",
+        // The public matrix generator reads the register and maps its machine
+        // status onto the spec 1.6 vocabulary; it is register-derived, exactly
+        // like `register.rs`, not a hand-written claim.
+        "crates/release-tools/src/compat.rs",
         "compatibility.yaml",
         "schemas/compatibility-register.v1.schema.json",
     ];

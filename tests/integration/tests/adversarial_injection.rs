@@ -443,7 +443,10 @@ async fn a_fabricated_or_absent_anchor_never_becomes_source_linked() {
             "a fabricated anchor must never be source-linked"
         );
     }
-    assert!(outcome.verified_claims().is_empty());
+    assert_eq!(
+        outcome.verified_claims(),
+        [] as [&plaudon_domain::claim::Claim; 0]
+    );
 
     let mut anchorless = empty_extraction();
     anchorless["decisions"] = serde_json::json!([{

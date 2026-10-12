@@ -10,6 +10,7 @@ import { activationTargetOf } from "../ipc/contract";
 import { COMPACT_LAYOUT_WIDTH, MIN_DESKTOP_WIDTH } from "../design/tokens";
 import { OnboardingFlow } from "../features/onboarding/OnboardingFlow";
 import { LibraryScreen } from "../features/library/LibraryScreen";
+import { RecordingDetailScreen } from "../features/recording/RecordingDetailScreen";
 import { SearchScreen } from "../features/search/SearchScreen";
 import { InboxScreen } from "../features/library/InboxScreen";
 import { JobsScreen } from "../features/jobs/JobsScreen";

@@ -118,7 +118,7 @@ async fn a_term_is_found_across_two_recordings_with_revision_and_segment_identit
     assert!(ids.contains(&second));
     for hit in &hits {
         assert!(hit.excerpt.to_lowercase().contains("rollback"));
-        assert!(!hit.recording_title.is_empty());
+        assert_ne!(hit.recording_title, "");
     }
     db.close().await;
 }
@@ -185,11 +185,13 @@ async fn a_tombstoned_recording_never_appears_in_results() {
         .await
         .expect("tombstone");
 
-    assert!(search
-        .search("rollback", SearchPage::default())
-        .await
-        .unwrap()
-        .is_empty());
+    assert_eq!(
+        search
+            .search("rollback", SearchPage::default())
+            .await
+            .unwrap(),
+        [] as [plaudon_app_core::SearchResult; 0]
+    );
     db.close().await;
 }
 
@@ -247,16 +249,20 @@ async fn the_index_follows_new_revisions_and_deletions() {
 
     let removed = transcripts.delete_revisions_for(id).await.expect("delete");
     assert!(removed > 0);
-    assert!(search
-        .search("kittens", SearchPage::default())
-        .await
-        .unwrap()
-        .is_empty());
-    assert!(search
-        .search("puppies", SearchPage::default())
-        .await
-        .unwrap()
-        .is_empty());
+    assert_eq!(
+        search
+            .search("kittens", SearchPage::default())
+            .await
+            .unwrap(),
+        [] as [plaudon_app_core::SearchResult; 0]
+    );
+    assert_eq!(
+        search
+            .search("puppies", SearchPage::default())
+            .await
+            .unwrap(),
+        [] as [plaudon_app_core::SearchResult; 0]
+    );
     db.close().await;
 }
 
@@ -279,11 +285,13 @@ async fn a_rebuild_restores_an_index_damaged_out_of_band() {
         .execute(db.pool())
         .await
         .unwrap();
-    assert!(search
-        .search("rollback", SearchPage::default())
-        .await
-        .unwrap()
-        .is_empty());
+    assert_eq!(
+        search
+            .search("rollback", SearchPage::default())
+            .await
+            .unwrap(),
+        [] as [plaudon_app_core::SearchResult; 0]
+    );
 
     let rebuilt = search.rebuild_index().await.unwrap();
     assert_eq!(rebuilt, 2);
@@ -342,11 +350,10 @@ async fn an_empty_query_returns_nothing_without_touching_the_database() {
     assert_eq!(to_match_expression("   "), None);
     let (_dir, db) = open().await;
     let search = LibrarySearch::new(db.clone());
-    assert!(search
-        .search("!!!", SearchPage::default())
-        .await
-        .unwrap()
-        .is_empty());
+    assert_eq!(
+        search.search("!!!", SearchPage::default()).await.unwrap(),
+        [] as [plaudon_app_core::SearchResult; 0]
+    );
     db.close().await;
 }
 

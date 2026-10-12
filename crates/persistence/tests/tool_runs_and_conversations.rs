@@ -61,7 +61,7 @@ async fn fixture() -> Fixture {
                     words: Vec::new(),
                 }],
                 duration_ms: Some(1_000),
-                engine_params: Default::default(),
+                engine_params: std::collections::BTreeMap::default(),
                 chunking_strategy: Default::default(),
                 normalization_profile: None,
                 annotations: Vec::new(),

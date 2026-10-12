@@ -28,7 +28,14 @@ const SECRET: &str = "credential or vault handle (spec 13.6 excludes secrets)";
 const TRANSIENT: &str = "transient job/queue/event state (spec 13.6 excludes transient jobs)";
 const LOCAL: &str = "machine-local state that must not travel to another install";
 const DERIVED: &str = "re-derived on the target library during restore";
+const LABELLING: &str =
+    "speaker review history; the archive carries the current label, not its edits";
 const BILLING: &str = "provider dispatch and billing record, not user content";
+const PIPELINE: &str =
+    "provenance of the generating run; the archive carries the output body, not the run";
+const CONVERSATION: &str =
+    "per-install tool conversation history; the archive carries outputs, not the chat";
+const SEARCH_INDEX: &str = "full-text index shadow table, rebuilt from the restored transcripts";
 
 #[allow(clippy::too_many_lines)]
 fn decisions() -> Vec<(&'static str, Vec<(&'static str, Decision)>)> {
@@ -131,6 +138,8 @@ fn decisions() -> Vec<(&'static str, Vec<(&'static str, Decision)>)> {
                 ("remote_version", Carried("records/<id>.json")),
                 ("remote_state", Carried("records/<id>.json")),
                 ("tombstone_reason", Carried("records/<id>.json")),
+                ("acquisition_complete", Carried("records/<id>.json")),
+                ("observed_content_sha256", Carried("records/<id>.json")),
                 ("created_at", Carried("records/<id>.json")),
             ],
         ),
@@ -150,6 +159,7 @@ fn decisions() -> Vec<(&'static str, Vec<(&'static str, Decision)>)> {
                 ("status", Carried("transcripts/<id>.json")),
                 ("normalization_profile", Carried("transcripts/<id>.json")),
                 ("chunking_strategy", Carried("transcripts/<id>.json")),
+                ("source_vendor", Carried("transcripts/<id>.json")),
                 ("duration_ms", Carried("transcripts/<id>.json")),
                 ("created_at", Carried("transcripts/<id>.json")),
                 ("engine_backend", Carried("transcripts/<id>.json")),
@@ -211,11 +221,28 @@ fn decisions() -> Vec<(&'static str, Vec<(&'static str, Decision)>)> {
                 ("name", Carried("annotations/<id>.json")),
                 ("provenance", Carried("annotations/<id>.json")),
                 ("user_confirmed", Carried("annotations/<id>.json")),
+                ("cluster_key", Excluded(DERIVED)),
+                ("original_label", Excluded(LABELLING)),
+                ("renamed_at", Excluded(LABELLING)),
+                ("confirmed_at", Excluded(LABELLING)),
             ],
         ),
         (
             "ai_outputs",
             vec![
+                ("template_id", Excluded(PIPELINE)),
+                ("pipeline_version", Excluded(PIPELINE)),
+                ("coverage_state", Excluded(PIPELINE)),
+                ("coverage_json", Excluded(PIPELINE)),
+                ("stale_at", Excluded(PIPELINE)),
+                ("stale_reason", Excluded(PIPELINE)),
+                ("superseded_by", Excluded(PIPELINE)),
+                ("input_sha256", Excluded(PIPELINE)),
+                ("output_sha256", Excluded(PIPELINE)),
+                ("grounding_json", Excluded(PIPELINE)),
+                ("rejected_json", Excluded(PIPELINE)),
+                ("directives_json", Excluded(PIPELINE)),
+                ("compatibility_mode", Excluded(PIPELINE)),
                 ("id", Carried("outputs/<id>.json")),
                 ("recording_id", Carried("outputs/<id>.json")),
                 ("output_type", Carried("outputs/<id>.json")),
@@ -668,6 +695,323 @@ fn decisions() -> Vec<(&'static str, Vec<(&'static str, Decision)>)> {
                 ("notes", Excluded(LOCAL)),
             ],
         ),
+        (
+            "automation_bridge_state",
+            vec![
+                ("singleton", Excluded(LOCAL)),
+                ("enabled", Excluded(LOCAL)),
+                ("owner_user_key", Excluded(LOCAL)),
+                ("enabled_at", Excluded(LOCAL)),
+                ("updated_at", Excluded(LOCAL)),
+            ],
+        ),
+        (
+            "conversation_messages",
+            vec![
+                ("id", Excluded(CONVERSATION)),
+                ("conversation_id", Excluded(CONVERSATION)),
+                ("seq_index", Excluded(CONVERSATION)),
+                ("role", Excluded(CONVERSATION)),
+                ("text", Excluded(CONVERSATION)),
+                ("source_anchors_json", Excluded(CONVERSATION)),
+                ("outcome", Excluded(CONVERSATION)),
+                ("tool_run_id", Excluded(CONVERSATION)),
+                ("created_at", Excluded(CONVERSATION)),
+            ],
+        ),
+        (
+            "device_firmware_observations",
+            vec![
+                ("id", Excluded(LOCAL)),
+                ("device_id", Excluded(LOCAL)),
+                ("firmware_fingerprint", Excluded(LOCAL)),
+                ("observed_at", Excluded(LOCAL)),
+                ("source", Excluded(LOCAL)),
+                ("capability_profile", Excluded(LOCAL)),
+                ("auth_mode", Excluded(LOCAL)),
+            ],
+        ),
+        (
+            "device_transfer_checkpoints",
+            vec![
+                ("transfer_id", Excluded(LOCAL)),
+                ("device_recording_id", Excluded(LOCAL)),
+                ("chunk_offset", Excluded(LOCAL)),
+                ("verified_bytes", Excluded(LOCAL)),
+                ("source_size_hint", Excluded(LOCAL)),
+                ("staged_prefix_sha256", Excluded(LOCAL)),
+                ("resume_capability", Excluded(LOCAL)),
+                ("updated_at", Excluded(LOCAL)),
+            ],
+        ),
+        (
+            "diarization_runs",
+            vec![
+                ("id", Excluded(DERIVED)),
+                ("recording_id", Excluded(DERIVED)),
+                ("media_asset_id", Excluded(DERIVED)),
+                ("provider_id", Excluded(DERIVED)),
+                ("provider_version", Excluded(DERIVED)),
+                ("privacy_class", Excluded(DERIVED)),
+                ("status", Excluded(DERIVED)),
+                ("input_sha256", Excluded(DERIVED)),
+                ("detected_cluster_count", Excluded(DERIVED)),
+                ("created_at", Excluded(DERIVED)),
+                ("finished_at", Excluded(DERIVED)),
+            ],
+        ),
+        (
+            "model_capability_records",
+            vec![
+                ("model_id", Excluded(LOCAL)),
+                ("task", Excluded(LOCAL)),
+                ("request_family", Excluded(LOCAL)),
+                ("evidence", Excluded(LOCAL)),
+                ("fixture_id", Excluded(LOCAL)),
+                ("validated_at", Excluded(LOCAL)),
+                ("record_json", Excluded(LOCAL)),
+                ("updated_at", Excluded(LOCAL)),
+            ],
+        ),
+        (
+            "model_task_defaults",
+            vec![
+                ("stage", Excluded(LOCAL)),
+                ("engine", Excluded(LOCAL)),
+                ("model_id", Excluded(LOCAL)),
+                ("updated_at", Excluded(LOCAL)),
+            ],
+        ),
+        (
+            "output_dependencies",
+            vec![
+                ("output_id", Excluded(DERIVED)),
+                ("transcript_revision_id", Excluded(DERIVED)),
+                ("input_sha256", Excluded(DERIVED)),
+            ],
+        ),
+        (
+            "pipeline_stage_runs",
+            vec![
+                ("id", Excluded(BILLING)),
+                ("output_id", Excluded(BILLING)),
+                ("sequence", Excluded(BILLING)),
+                ("stage", Excluded(BILLING)),
+                ("stage_version", Excluded(BILLING)),
+                ("pipeline_version", Excluded(BILLING)),
+                ("transcript_revision_id", Excluded(BILLING)),
+                ("input_sha256", Excluded(BILLING)),
+                ("output_sha256", Excluded(BILLING)),
+                ("engine", Excluded(BILLING)),
+                ("model_id", Excluded(BILLING)),
+                ("model_version", Excluded(BILLING)),
+                ("compatibility_mode", Excluded(BILLING)),
+                ("repair_attempts", Excluded(BILLING)),
+                ("prompt_version", Excluded(BILLING)),
+                ("prompt_envelope_version", Excluded(BILLING)),
+                ("template_id", Excluded(BILLING)),
+                ("template_version", Excluded(BILLING)),
+                ("schema_version", Excluded(BILLING)),
+                ("segment_first", Excluded(BILLING)),
+                ("segment_last", Excluded(BILLING)),
+                ("chunk_index", Excluded(BILLING)),
+                ("section_response_json", Excluded(BILLING)),
+                ("reused_from", Excluded(BILLING)),
+                ("started_at", Excluded(BILLING)),
+                ("ended_at", Excluded(BILLING)),
+            ],
+        ),
+        (
+            "recording_conversations",
+            vec![
+                ("id", Excluded(CONVERSATION)),
+                ("recording_id", Excluded(CONVERSATION)),
+                ("transcript_revision_id", Excluded(CONVERSATION)),
+                ("created_at", Excluded(CONVERSATION)),
+            ],
+        ),
+        (
+            "recording_model_overrides",
+            vec![
+                ("recording_id", Excluded(LOCAL)),
+                ("stage", Excluded(LOCAL)),
+                ("engine", Excluded(LOCAL)),
+                ("model_id", Excluded(LOCAL)),
+                ("updated_at", Excluded(LOCAL)),
+            ],
+        ),
+        (
+            "route_privacy_policies",
+            vec![
+                ("model_id", Excluded(LOCAL)),
+                ("downstream_provider", Excluded(LOCAL)),
+                ("content_type", Excluded(LOCAL)),
+                ("posture", Excluded(LOCAL)),
+                ("retention_days", Excluded(LOCAL)),
+                ("source_note", Excluded(LOCAL)),
+                ("recorded_at", Excluded(LOCAL)),
+            ],
+        ),
+        (
+            "segment_speaker_assignments",
+            vec![
+                ("transcript_revision_id", Excluded(DERIVED)),
+                ("seq_index", Excluded(DERIVED)),
+                ("diarization_run_id", Excluded(DERIVED)),
+                ("assignment", Excluded(DERIVED)),
+                ("cluster_key", Excluded(DERIVED)),
+                ("overlapping_keys_json", Excluded(DERIVED)),
+                ("covered_ms", Excluded(DERIVED)),
+            ],
+        ),
+        (
+            "source_export_artifacts",
+            vec![
+                ("id", Excluded(LOCAL)),
+                ("source_item_id", Excluded(LOCAL)),
+                ("artifact_kind", Excluded(LOCAL)),
+                ("source_vendor", Excluded(LOCAL)),
+                ("content_sha256", Excluded(LOCAL)),
+                ("byte_length", Excluded(LOCAL)),
+                ("original_filename", Excluded(LOCAL)),
+                ("imported_at", Excluded(LOCAL)),
+                ("import_mode", Excluded(LOCAL)),
+                ("created_at", Excluded(LOCAL)),
+            ],
+        ),
+        (
+            "speaker_turns",
+            vec![
+                ("id", Excluded(DERIVED)),
+                ("diarization_run_id", Excluded(DERIVED)),
+                ("seq_index", Excluded(DERIVED)),
+                ("cluster_key", Excluded(DERIVED)),
+                ("start_ms", Excluded(DERIVED)),
+                ("end_ms", Excluded(DERIVED)),
+                ("confidence", Excluded(DERIVED)),
+                ("confidence_scale", Excluded(DERIVED)),
+            ],
+        ),
+        (
+            "tool_runs",
+            vec![
+                ("id", Excluded(BILLING)),
+                ("recording_id", Excluded(BILLING)),
+                ("transcript_revision_id", Excluded(BILLING)),
+                ("tool_id", Excluded(BILLING)),
+                ("tool_version", Excluded(BILLING)),
+                ("engine", Excluded(BILLING)),
+                ("model_id", Excluded(BILLING)),
+                ("model_version", Excluded(BILLING)),
+                ("request_family", Excluded(BILLING)),
+                ("prompt_version", Excluded(BILLING)),
+                ("schema_version", Excluded(BILLING)),
+                ("input_sha256", Excluded(BILLING)),
+                ("output_sha256", Excluded(BILLING)),
+                ("status", Excluded(BILLING)),
+                ("consent_id", Excluded(BILLING)),
+                ("consent_policy_json", Excluded(BILLING)),
+                ("estimated_cost", Excluded(BILLING)),
+                ("actual_cost", Excluded(BILLING)),
+                ("currency", Excluded(BILLING)),
+                ("cost_confidence", Excluded(BILLING)),
+                ("output_id", Excluded(BILLING)),
+                ("created_at", Excluded(BILLING)),
+                ("finished_at", Excluded(BILLING)),
+            ],
+        ),
+        (
+            "transcript_search",
+            vec![
+                ("text", Excluded(SEARCH_INDEX)),
+                ("segment_id", Excluded(SEARCH_INDEX)),
+                ("transcript_revision_id", Excluded(SEARCH_INDEX)),
+                ("recording_id", Excluded(SEARCH_INDEX)),
+                ("seq_index", Excluded(SEARCH_INDEX)),
+            ],
+        ),
+        (
+            "transcript_search_config",
+            vec![("k", Excluded(SEARCH_INDEX)), ("v", Excluded(SEARCH_INDEX))],
+        ),
+        (
+            "transcript_search_content",
+            vec![
+                ("id", Excluded(SEARCH_INDEX)),
+                ("c0", Excluded(SEARCH_INDEX)),
+                ("c1", Excluded(SEARCH_INDEX)),
+                ("c2", Excluded(SEARCH_INDEX)),
+                ("c3", Excluded(SEARCH_INDEX)),
+                ("c4", Excluded(SEARCH_INDEX)),
+            ],
+        ),
+        (
+            "transcript_search_data",
+            vec![
+                ("id", Excluded(SEARCH_INDEX)),
+                ("block", Excluded(SEARCH_INDEX)),
+            ],
+        ),
+        (
+            "transcript_search_docsize",
+            vec![
+                ("id", Excluded(SEARCH_INDEX)),
+                ("sz", Excluded(SEARCH_INDEX)),
+            ],
+        ),
+        (
+            "transcript_search_idx",
+            vec![
+                ("segid", Excluded(SEARCH_INDEX)),
+                ("term", Excluded(SEARCH_INDEX)),
+                ("pgno", Excluded(SEARCH_INDEX)),
+            ],
+        ),
+        (
+            "transcript_tools",
+            vec![
+                ("tool_id", Carried("tools/<id>.json")),
+                ("version", Carried("tools/<id>.json")),
+                ("display_name", Carried("tools/<id>.json")),
+                ("kind", Carried("tools/<id>.json")),
+                ("prompt_version", Carried("tools/<id>.json")),
+                ("output_schema_version", Carried("tools/<id>.json")),
+                ("definition_sha256", Carried("tools/<id>.json")),
+                ("origin", Carried("tools/<id>.json")),
+                ("optional", Carried("tools/<id>.json")),
+                ("created_at", Carried("tools/<id>.json")),
+            ],
+        ),
+        (
+            "watched_folder_items",
+            vec![
+                ("id", Excluded(LOCAL)),
+                ("folder_id", Excluded(LOCAL)),
+                ("origin_path", Excluded(LOCAL)),
+                ("stable_file_id", Excluded(LOCAL)),
+                ("size_bytes", Excluded(LOCAL)),
+                ("mtime_ms", Excluded(LOCAL)),
+                ("content_sha256", Excluded(LOCAL)),
+                ("state", Excluded(LOCAL)),
+                ("source_item_id", Excluded(LOCAL)),
+                ("first_seen_at", Excluded(LOCAL)),
+                ("last_checked_at", Excluded(LOCAL)),
+                ("unavailable_since", Excluded(LOCAL)),
+            ],
+        ),
+        (
+            "watched_folders",
+            vec![
+                ("id", Excluded(LOCAL)),
+                ("root_path", Excluded(LOCAL)),
+                ("recursive", Excluded(LOCAL)),
+                ("rule", Excluded(LOCAL)),
+                ("quiescence_ms", Excluded(LOCAL)),
+                ("status", Excluded(LOCAL)),
+                ("last_inventory_at", Excluded(LOCAL)),
+                ("created_at", Excluded(LOCAL)),
+            ],
+        ),
     ]
 }
 
@@ -758,7 +1102,8 @@ fn the_carried_documents_are_exactly_the_spec_namespaces() {
             "annotations",
             "transcripts",
             "outputs",
-            "sources"
+            "sources",
+            "tools"
         ])
     );
 }

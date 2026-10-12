@@ -133,6 +133,10 @@ jobs:
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
       - name: UI smoke, keyboard and WCAG suite
+        # The runner is a disposable container, which is where this suite is
+        # allowed to run; workstations go through scripts/e2e-remote.sh.
+        env:
+          PLAUDON_E2E_ALLOW_LOCAL: "1"
         run: npx playwright test --reporter=line
       - uses: actions/upload-artifact@v4
         if: failure()

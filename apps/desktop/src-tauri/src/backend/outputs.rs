@@ -133,7 +133,7 @@ fn extract_fields(claim: &Claim, body: &JsonValue) -> Result<ItemFields, AppErro
                 .and_then(|v| v.as_array())
                 .map(|arr| {
                     arr.iter()
-                        .filter_map(|v| v.as_str().map(|s| s.to_owned()))
+                        .filter_map(|v| v.as_str().map(std::borrow::ToOwned::to_owned))
                         .collect()
                 })
                 .unwrap_or_default();
@@ -261,11 +261,11 @@ fn extract_fields(claim: &Claim, body: &JsonValue) -> Result<ItemFields, AppErro
                 .to_owned();
             let first_segment = item
                 .get("first_segment")
-                .and_then(|v| v.as_u64())
+                .and_then(serde_json::Value::as_u64)
                 .unwrap_or(0) as u32;
             let last_segment = item
                 .get("last_segment")
-                .and_then(|v| v.as_u64())
+                .and_then(serde_json::Value::as_u64)
                 .unwrap_or(0) as u32;
             Ok(ItemFields::Topic {
                 heading,

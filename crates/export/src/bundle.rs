@@ -798,8 +798,12 @@ impl BundleLoader {
                 .map_err(|_| ExportError::IntegrityFailed)?;
             let body_json: String = row.get("body_json");
             let evidence_rows = sqlx::query(
-                "SELECT item_path, cited_revision_id, seq_index, quote, verification_status
-                 FROM output_evidence WHERE output_id = ?1 ORDER BY item_path, claim_id, position",
+                "SELECT e.item_path AS item_path, e.cited_revision_id AS cited_revision_id,
+                        e.seq_index AS seq_index, e.quote AS quote, c.state AS verification_status
+                 FROM output_evidence e
+                 JOIN output_claims c ON c.id = e.claim_id
+                 WHERE e.output_id = ?1
+                 ORDER BY e.item_path, e.claim_id, e.position",
             )
             .bind(&output_id)
             .fetch_all(self.db.pool())

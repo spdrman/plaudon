@@ -318,7 +318,12 @@ async fn a_multi_segment_recording_is_summarized_stored_and_anchored_to_real_tex
                 .take((verified.char_end - verified.char_start) as usize)
                 .collect();
             assert_eq!(verified.matched_text, expected);
-            assert_eq!(verified.seek_ms, segment.start.map(|s| s.get()));
+            assert_eq!(
+                verified.seek_ms,
+                segment
+                    .start
+                    .map(plaudon_domain::timerange::SourceTimeMs::get)
+            );
         }
     }
     assert_eq!(outcome.grounding.verified_anchors, 5);
@@ -330,7 +335,10 @@ async fn a_multi_segment_recording_is_summarized_stored_and_anchored_to_real_tex
         .claims
         .iter()
         .any(|claim| claim.review_required() && claim.text.contains("safety")));
-    assert!(outcome.verified_claims().is_empty());
+    assert_eq!(
+        outcome.verified_claims(),
+        [] as [&plaudon_domain::claim::Claim; 0]
+    );
     assert_eq!(outcome.status(), OutputStatus::NeedsReview);
 
     // Persisting the run keeps every stage's provenance.
@@ -355,7 +363,7 @@ async fn a_multi_segment_recording_is_summarized_stored_and_anchored_to_real_tex
 
     let claims = repo.claims_for(outcome.output_id).await.expect("claims");
     assert_eq!(claims.len(), 5);
-    assert!(claims.iter().all(|claim| claim.is_grounded()));
+    assert!(claims.iter().all(plaudon_domain::claim::Claim::is_grounded));
     assert!(claims
         .iter()
         .all(|claim| claim.state() == ClaimState::SourceLinked));
@@ -428,15 +436,16 @@ async fn a_transcript_edit_marks_the_output_stale_and_targets_regeneration() {
     assert_eq!(preserved_decision.state(), ClaimState::HumanConfirmed);
 
     // Marking twice does not overwrite the first marking.
-    assert!(repo
-        .mark_stale(
+    assert_eq!(
+        repo.mark_stale(
             &[base.id],
             "transcript_replaced",
             Timestamp::from_millis(9_000)
         )
         .await
-        .unwrap()
-        .is_empty());
+        .unwrap(),
+        [] as [plaudon_domain::ids::OutputId; 0]
+    );
 
     // Targeted regeneration: the stored section covers the whole transcript,
     // and segment 4 changed, so that section must be recomputed.
@@ -597,7 +606,10 @@ async fn an_untouched_section_is_reused_when_only_a_later_section_changes() {
         .filter(|stage| stage.stage == StageKind::SectionSummary && stage.reused_from.is_some())
         .count();
     assert_eq!(reused_stages, reused);
-    assert!(second.stages.iter().all(|stage| stage.is_complete()));
+    assert!(second
+        .stages
+        .iter()
+        .all(plaudon_app_core::StageProvenance::is_complete));
 }
 
 #[tokio::test]

@@ -42,6 +42,7 @@ export const DESTINATION_LABELS: Record<Destination, string> = {
 export function destinationOf(route: Route): Destination {
   switch (route.name) {
     case "library":
+    case "library.recording":
     case "library.search":
       return "library";
     case "inbox":
@@ -108,6 +109,7 @@ export function parseRoute(hash: string): Route {
     case "library":
       if (tail === "search") return { name: "library.search" };
       return tail ? { name: "library.recording", recordingId: tail } : { name: "library" };
+    case "inbox":
       return { name: "inbox" };
     case "jobs":
       return tail ? { name: "jobs.job", jobId: tail } : { name: "jobs" };

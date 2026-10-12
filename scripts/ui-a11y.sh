@@ -4,4 +4,4 @@
 set -euo pipefail
 cd "$(dirname "$0")/../apps/desktop"
 npm run test -- --run src/features src/app
-npx playwright test --reporter=line
+"$(dirname "$0")/e2e-remote.sh" playwright --reporter=line

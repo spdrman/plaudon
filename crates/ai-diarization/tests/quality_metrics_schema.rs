@@ -111,7 +111,7 @@ fn every_fixture_is_reported_with_its_own_sample_sizes() {
     for fixture in fixtures {
         assert!(fixture["report"]["total_reference_ms"].as_u64().unwrap() > 0);
         assert!(fixture["report"]["scored_frames"].as_u64().unwrap() > 0);
-        assert!(!fixture["provenance"].as_str().unwrap().is_empty());
+        assert_ne!(fixture["provenance"].as_str().unwrap(), "");
     }
 
     // At least one fixture must actually contain simultaneous speech, or the

@@ -224,11 +224,10 @@ async fn an_inference_stage_without_provenance_is_refused_before_any_write() {
         repo.save(&stored).await,
         Err(PersistenceError::Invalid(_))
     ));
-    assert!(repo
-        .headers_for(fixture.recording_id)
-        .await
-        .unwrap()
-        .is_empty());
+    assert_eq!(
+        repo.headers_for(fixture.recording_id).await.unwrap(),
+        [] as [plaudon_persistence::intelligence::OutputHeader; 0]
+    );
 }
 
 #[tokio::test]
@@ -406,20 +405,22 @@ async fn marking_an_unrelated_revision_marks_nothing() {
         Vec::new(),
     );
     repo.save(&stored).await.expect("save");
-    assert!(repo
-        .mark_stale(
+    assert_eq!(
+        repo.mark_stale(
             &[TranscriptRevisionId::new()],
             "transcript_edited",
             Timestamp::from_millis(1)
         )
         .await
-        .unwrap()
-        .is_empty());
-    assert!(repo
-        .mark_stale(&[], "x", Timestamp::from_millis(1))
-        .await
-        .unwrap()
-        .is_empty());
+        .unwrap(),
+        [] as [plaudon_domain::ids::OutputId; 0]
+    );
+    assert_eq!(
+        repo.mark_stale(&[], "x", Timestamp::from_millis(1))
+            .await
+            .unwrap(),
+        [] as [plaudon_domain::ids::OutputId; 0]
+    );
 }
 
 #[tokio::test]

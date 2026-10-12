@@ -12,6 +12,8 @@
 //!    instruction, and that no tool, URL or command found inside it may be
 //!    acted on. V1 has no tool execution at all, so this is defence in depth.
 
+use std::fmt::Write as _;
+
 use serde::{Deserialize, Serialize};
 
 /// Opening fence for untrusted transcript content.
@@ -98,7 +100,7 @@ pub fn build_grounded_prompt(
     text.push_str(FENCE_OPEN);
     text.push('\n');
     for passage in &sanitized {
-        text.push_str(&format!("[{}] {}\n", passage.seq_index, passage.text));
+        let _ = writeln!(text, "[{}] {}", passage.seq_index, passage.text);
     }
     text.push_str(FENCE_CLOSE);
     text.push('\n');

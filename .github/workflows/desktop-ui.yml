@@ -48,6 +48,10 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: End-to-end and keyboard/WCAG suite
+        # The runner is a disposable container, which is where this suite is
+        # allowed to run; workstations go through scripts/e2e-remote.sh.
+        env:
+          PLAUDON_E2E_ALLOW_LOCAL: "1"
         run: npx playwright test --reporter=line
 
       - name: Upload Playwright report on failure

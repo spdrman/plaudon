@@ -571,8 +571,9 @@ impl Restorer {
                      (id, recording_id, parent_id, origin, input_sha256, engine, model_id,
                       model_version, locale, alignment_origin, status, normalization_profile,
                       chunking_strategy, duration_ms, created_at, engine_backend,
-                      engine_params_json)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
+                      engine_params_json, source_vendor)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16,
+                         ?17, ?18)",
             )
             .bind(&revision.id)
             .bind(&document.recording_id)
@@ -595,6 +596,7 @@ impl Restorer {
             .bind(revision.created_at)
             .bind(revision.engine_backend.as_deref())
             .bind(revision.engine_params_json.as_deref())
+            .bind(revision.source_vendor.as_deref())
             .execute(&mut *tx)
             .await
             .map_err(PersistenceError::from)?
@@ -762,15 +764,20 @@ impl Restorer {
             for tool in &tools {
                 let affected = sqlx::query(
                     "INSERT OR IGNORE INTO transcript_tools
-                         (id, version, display_name, kind, prompt_version, output_schema_version)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                         (tool_id, version, display_name, kind, prompt_version,
+                          output_schema_version, definition_sha256, origin, optional, created_at)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
                 )
                 .bind(&tool.id)
-                .bind(&tool.version)
+                .bind(tool.version)
                 .bind(&tool.display_name)
                 .bind(&tool.kind)
                 .bind(&tool.prompt_version)
                 .bind(&tool.output_schema_version)
+                .bind(&tool.definition_sha256)
+                .bind(&tool.origin)
+                .bind(tool.optional)
+                .bind(tool.created_at)
                 .execute(&mut *tx)
                 .await
                 .map_err(PersistenceError::from)?

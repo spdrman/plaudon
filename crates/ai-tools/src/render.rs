@@ -5,6 +5,8 @@
 //! segment index they point at; a playback time is only ever printed when the
 //! revision's alignment origin permits one (spec 8.6A).
 
+use std::fmt::Write as _;
+
 use plaudon_domain::transcript::TranscriptRevision;
 
 use crate::anchor::{verify_anchor, AnchorVerification, SourceAnchor};
@@ -40,10 +42,11 @@ pub fn format_timestamp(ms: u64) -> String {
 pub fn render_study_markdown(artifacts: &StudyArtifacts, revision: &TranscriptRevision) -> String {
     let mut out = String::new();
     out.push_str("# Study materials\n\n");
-    out.push_str(&format!(
-        "Template: `{}` · Transcript revision: `{}`\n\n",
+    let _ = writeln!(
+        out,
+        "Template: `{}` · Transcript revision: `{}`\n",
         artifacts.template_version, revision.id
-    ));
+    );
     out.push_str(
         "These materials are generated from the recording and cite the transcript segments \
          they came from. They are an assistive draft, not an authoritative record.\n\n",
@@ -52,13 +55,14 @@ pub fn render_study_markdown(artifacts: &StudyArtifacts, revision: &TranscriptRe
     if !artifacts.flashcards.is_empty() {
         out.push_str("## Flashcards\n\n");
         for (index, card) in artifacts.flashcards.iter().enumerate() {
-            out.push_str(&format!(
-                "{}. **{}**\n   - {}\n   - Source: {}\n",
+            let _ = writeln!(
+                out,
+                "{}. **{}**\n   - {}\n   - Source: {}",
                 index + 1,
                 card.front,
                 card.back,
                 render_citations(&card.anchors, revision)
-            ));
+            );
         }
         out.push('\n');
     }
@@ -66,19 +70,20 @@ pub fn render_study_markdown(artifacts: &StudyArtifacts, revision: &TranscriptRe
     if !artifacts.quiz.is_empty() {
         out.push_str("## Quiz\n\n");
         for (index, item) in artifacts.quiz.iter().enumerate() {
-            out.push_str(&format!("{}. {}\n", index + 1, item.question));
+            let _ = writeln!(out, "{}. {}", index + 1, item.question);
             for distractor in &item.distractors {
-                out.push_str(&format!("   - {distractor}\n"));
+                let _ = writeln!(out, "   - {distractor}");
             }
         }
         out.push_str("\n### Answer key\n\n");
         for (index, item) in artifacts.quiz.iter().enumerate() {
-            out.push_str(&format!(
-                "{}. {} — Source: {}\n",
+            let _ = writeln!(
+                out,
+                "{}. {} — Source: {}",
                 index + 1,
                 item.answer,
                 render_citations(&item.anchors, revision)
-            ));
+            );
         }
         out.push('\n');
     }
@@ -86,12 +91,13 @@ pub fn render_study_markdown(artifacts: &StudyArtifacts, revision: &TranscriptRe
     if !artifacts.definitions.is_empty() {
         out.push_str("## Definitions\n\n");
         for definition in &artifacts.definitions {
-            out.push_str(&format!(
-                "- **{}** — {} {}\n",
+            let _ = writeln!(
+                out,
+                "- **{}** — {} {}",
                 definition.term,
                 definition.definition,
                 render_citations(&definition.anchors, revision)
-            ));
+            );
         }
         out.push('\n');
     }

@@ -241,7 +241,7 @@ mod tests {
         let (_dir, db) = open().await;
         let policy = PolicyReader::new(db.clone()).load(1_000).await.unwrap();
         assert!(!policy.local_only_mode);
-        assert!(policy.active_consent_ids.is_empty());
+        assert_eq!(policy.active_consent_ids, [] as [std::string::String; 0]);
         db.close().await;
     }
 
@@ -250,7 +250,7 @@ mod tests {
         let (_dir, db) = open().await;
         grant(&db, "grant-1", Some(500)).await;
         let policy = PolicyReader::new(db.clone()).load(1_000).await.unwrap();
-        assert!(policy.active_consent_ids.is_empty());
+        assert_eq!(policy.active_consent_ids, [] as [std::string::String; 0]);
         assert_eq!(
             policy.authorize(Destination::Cloud),
             Err(PolicyRefusal::ConsentRequired)

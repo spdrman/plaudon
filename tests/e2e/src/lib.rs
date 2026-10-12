@@ -361,8 +361,8 @@ impl LocalStt {
                     MachineSegment::timed(&segment.text, segment.start_ms, segment.end_ms)
                 })
                 .collect(),
-            engine_id: transcript.engine_id.clone().into(),
-            model_id: transcript.model_id.clone().into(),
+            engine_id: transcript.engine_id.clone(),
+            model_id: transcript.model_id.clone(),
             alignment_origin: transcript.alignment_origin,
         }
     }

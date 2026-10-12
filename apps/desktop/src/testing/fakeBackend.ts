@@ -16,10 +16,12 @@ import type {
   ActivityEntry,
   ActivityPage,
   Capabilities,
+  ClaimDto,
   CloudBudget,
   CommandName,
   ConsentSummary,
   CostValue,
+  CoverageDto,
   ErrorEnvelope,
   EventKind,
   ImportOutcome,
@@ -28,6 +30,7 @@ import type {
   ModelCard,
   MoneyAmount,
   NotificationSettings,
+  OutputDto,
   PlaudConnectorSnapshot,
   PlaudImportOutcome,
   PlaudListResponse,
@@ -36,6 +39,12 @@ import type {
   RecordingDetail,
   RecordingPage,
   RecordingSummary,
+  RegenerateOutputResponse,
+  ReviewClaimResponse,
+  SearchLibraryResponse,
+  SearchResult,
+  Speaker,
+  SpeakerOperationResponse,
   TranscriptPage,
   TranscriptRevisionRef,
   TranscriptSegment,
@@ -353,11 +362,15 @@ export class FakeBackend implements Transport {
     (kind, partial) => this.emit(kind, partial),
     (code, message, extra) => envelope(code, message, extra),
   );
+  /** Grounded outputs (`list_outputs`, EPIC I); seeded by tests. */
+  groundedOutputs: OutputDto[] = [];
 
   #seq = 0;
   #handlers = new Map<EventKind, Set<(e: UiEvent) => void>>();
   #capabilities: Capabilities;
   #idCounter = 0;
+  /** Speaker register per recording, derived from the transcript on first read. */
+  #speakerRegister = new Map<string, Speaker[]>();
 
   #nextId(prefix: string): string {
     this.#idCounter += 1;
@@ -537,6 +550,60 @@ export class FakeBackend implements Transport {
       ...entry,
     };
     this.activity.unshift(full);
+    return full;
+  }
+
+  /**
+   * Seeds a grounded output (§8.6) against the recording's current revision.
+   * A claim is `SourceLinked` only when it carries a verified anchor; anything
+   * else stays `Unverified` and asks for review, exactly as the pipeline does.
+   */
+  addGroundedOutput(output: {
+    recording_id: string;
+    output_type?: string;
+    template_id?: string;
+    template_version?: string;
+    pipeline_version?: string;
+    status?: string;
+    coverage?: CoverageDto;
+    claims?: Array<Partial<ClaimDto> & Pick<ClaimDto, "text">>;
+  }): OutputDto {
+    const rec = this.#requireRecording(output.recording_id);
+    if (!rec.current_revision_id) {
+      throw envelope("INVALID_ARGUMENT", "That recording has no transcript to ground an output in.");
+    }
+    const outputId = this.#nextId("out");
+    const claims: ClaimDto[] = (output.claims ?? []).map((claim, index) => {
+      const anchors = claim.anchors ?? [];
+      const grounded = anchors.some((anchor) => anchor.verified);
+      return {
+        claim_id: claim.claim_id ?? `${outputId}-claim-${index + 1}`,
+        item_path: claim.item_path ?? `/claims/${index}`,
+        text: claim.text,
+        state: claim.state ?? (grounded ? "SourceLinked" : "Unverified"),
+        review_required: claim.review_required ?? !grounded,
+        review_reasons: claim.review_reasons ?? (grounded ? [] : ["no_verified_anchor"]),
+        entailment: claim.entailment ?? (grounded ? "entailed" : "unsupported"),
+        category: claim.category ?? "summary_statement",
+        fields: claim.fields ?? { kind: "summary_statement" },
+        anchors,
+      };
+    });
+    const full: OutputDto = {
+      output_id: outputId,
+      recording_id: rec.recording_id,
+      transcript_revision_id: rec.current_revision_id,
+      output_type: output.output_type ?? "consolidated_summary",
+      template_id: output.template_id ?? "meeting.default",
+      template_version: output.template_version ?? "1",
+      pipeline_version: output.pipeline_version ?? "summarize@1",
+      status: output.status ?? "complete",
+      coverage: output.coverage ?? { state: "complete", chunks: null },
+      stale: null,
+      created_at: this.#stamp(),
+      claims,
+    };
+    this.groundedOutputs.push(full);
     return full;
   }
 
@@ -873,6 +940,22 @@ export class FakeBackend implements Transport {
       case "device_disconnect":
       case "device_sync_policy":
         return this.devices.invoke(command, request);
+      case "search_library":
+        return this.#searchLibrary(request);
+      case "list_speakers":
+        return { speakers: this.#speakersFor(String(request.recording_id)) };
+      case "rename_speaker":
+        return this.#renameSpeaker(request);
+      case "confirm_speaker":
+        return this.#confirmSpeaker(request);
+      case "reset_speaker":
+        return this.#resetSpeaker(request);
+      case "list_outputs":
+        return this.#listOutputs(request);
+      case "review_claim":
+        return this.#reviewClaim(request);
+      case "regenerate_output":
+        return this.#regenerateOutput(request);
       default: {
         const never: never = command;
         throw envelope("INTERNAL_ERROR", `No such command: ${String(never)}`);
@@ -993,8 +1076,188 @@ export class FakeBackend implements Transport {
     rec.outputs = rec.outputs.map((o) =>
       o.source_revision_id === revisionId ? o : { ...o, stale: true },
     );
+    // §8.6B: a grounded output is stale as soon as the transcript it cites moves.
+    const staleGrounded = this.groundedOutputs.filter(
+      (o) => o.recording_id === rec.recording_id && o.transcript_revision_id !== revisionId,
+    );
+    for (const output of staleGrounded) {
+      output.stale ??= { stale_at: this.#stamp(), reason: "transcript_edited" };
+    }
     this.emit("transcript.completed", { recording_id: rec.recording_id });
-    return { revision_id: revisionId, stale_output_ids: stale.map((o) => o.output_id) };
+    return {
+      revision_id: revisionId,
+      stale_output_ids: [
+        ...stale.map((o) => o.output_id),
+        ...staleGrounded.map((o) => o.output_id),
+      ],
+    };
+  }
+
+  /* --------------------------------------- search, speakers and outputs */
+
+  #searchLibrary(request: Record<string, any>): SearchLibraryResponse {
+    const query = String(request.query ?? "").trim();
+    if (query.length === 0) {
+      throw envelope("INVALID_ARGUMENT", "Enter something to search for.");
+    }
+    const needle = query.toLowerCase();
+    const hits: SearchResult[] = [];
+    for (const rec of this.recordings) {
+      const revisionId = rec.current_revision_id;
+      if (!revisionId) continue;
+      const revision = rec.revisions.find((v) => v.revision_id === revisionId);
+      if (!revision) continue;
+      for (const segment of rec.segments.get(revisionId) ?? []) {
+        if (!segment.text.toLowerCase().includes(needle)) continue;
+        hits.push({
+          recording_id: rec.recording_id,
+          recording_title: rec.title,
+          transcript_revision_id: revisionId,
+          seq_index: segment.index,
+          excerpt: excerptAround(segment.text, needle),
+          // §8.6A: a seek time exists only where the revision carries alignment.
+          seek_ms: revision.alignment_origin === "none" ? null : segment.start_ms,
+          alignment_origin: revision.alignment_origin,
+        });
+      }
+    }
+    const offset = request.cursor == null ? 0 : Number(request.cursor);
+    const limit = Number(request.limit ?? 20);
+    const next = offset + limit < hits.length ? String(offset + limit) : null;
+    return { results: hits.slice(offset, offset + limit), next_cursor: next };
+  }
+
+  /**
+   * The speaker register is derived from the diarized transcript the first
+   * time it is read, then owned by the register so renames survive.
+   */
+  #speakersFor(recordingId: string): Speaker[] {
+    const rec = this.#requireRecording(recordingId);
+    const existing = this.#speakerRegister.get(recordingId);
+    if (existing) return existing;
+    const labels: string[] = [];
+    for (const segments of rec.segments.values()) {
+      for (const segment of segments) {
+        if (segment.speaker_label && !labels.includes(segment.speaker_label)) {
+          labels.push(segment.speaker_label);
+        }
+      }
+    }
+    const speakers: Speaker[] = labels.map((label, index) => ({
+      speaker_id: `${recordingId}-spk-${index + 1}`,
+      recording_id: recordingId,
+      label,
+      confirmed: false,
+      original_label: label,
+      renamed_at: null,
+      confirmed_at: null,
+    }));
+    this.#speakerRegister.set(recordingId, speakers);
+    return speakers;
+  }
+
+  #requireSpeaker(recordingId: string, speakerId: string): Speaker {
+    const speaker = this.#speakersFor(recordingId).find((s) => s.speaker_id === speakerId);
+    if (!speaker) {
+      throw envelope("RECORD_NOT_FOUND", "That speaker is not part of this recording.");
+    }
+    return speaker;
+  }
+
+  /** Keeps the transcript in step with the register, as the Rust side does. */
+  #relabelSegments(recordingId: string, from: string, to: string): void {
+    const rec = this.#requireRecording(recordingId);
+    for (const [revisionId, segments] of rec.segments) {
+      rec.segments.set(
+        revisionId,
+        segments.map((segment) =>
+          segment.speaker_label === from ? { ...segment, speaker_label: to } : segment,
+        ),
+      );
+    }
+  }
+
+  #renameSpeaker(request: Record<string, any>): SpeakerOperationResponse {
+    const name = String(request.name ?? "").trim();
+    if (name.length === 0) {
+      throw envelope("INVALID_ARGUMENT", "A speaker name cannot be empty.");
+    }
+    const recordingId = String(request.recording_id);
+    const speaker = this.#requireSpeaker(recordingId, String(request.speaker_id));
+    const previous = speaker.label;
+    speaker.label = name;
+    speaker.renamed_at = this.#stamp();
+    this.#relabelSegments(recordingId, previous, name);
+    this.emit("library.changed", { recording_id: recordingId });
+    return { speaker: { ...speaker } };
+  }
+
+  #confirmSpeaker(request: Record<string, any>): SpeakerOperationResponse {
+    const speaker = this.#requireSpeaker(
+      String(request.recording_id),
+      String(request.speaker_id),
+    );
+    speaker.confirmed = true;
+    speaker.confirmed_at = this.#stamp();
+    return { speaker: { ...speaker } };
+  }
+
+  #resetSpeaker(request: Record<string, any>): SpeakerOperationResponse {
+    const recordingId = String(request.recording_id);
+    const speaker = this.#requireSpeaker(recordingId, String(request.speaker_id));
+    const previous = speaker.label;
+    speaker.label = speaker.original_label;
+    speaker.confirmed = false;
+    speaker.renamed_at = null;
+    speaker.confirmed_at = null;
+    this.#relabelSegments(recordingId, previous, speaker.original_label);
+    this.emit("library.changed", { recording_id: recordingId });
+    return { speaker: { ...speaker } };
+  }
+
+  #listOutputs(request: Record<string, any>): { outputs: OutputDto[] } {
+    const rec = this.#requireRecording(String(request.recording_id));
+    return {
+      outputs: this.groundedOutputs.filter((o) => o.recording_id === rec.recording_id),
+    };
+  }
+
+  #requireOutput(outputId: string): OutputDto {
+    const output = this.groundedOutputs.find((o) => o.output_id === outputId);
+    if (!output) throw envelope("RECORD_NOT_FOUND", "That output no longer exists.");
+    return output;
+  }
+
+  #reviewClaim(request: Record<string, any>): ReviewClaimResponse {
+    const output = this.#requireOutput(String(request.output_id));
+    const claim = output.claims.find((c) => c.claim_id === request.claim_id);
+    if (!claim) throw envelope("RECORD_NOT_FOUND", "That claim is not part of this output.");
+    if (request.accepted === true) {
+      claim.state = "HumanConfirmed";
+      claim.review_required = false;
+    } else {
+      // A rejection does not ground the claim; it stays flagged for the user.
+      claim.state = "Unverified";
+      claim.review_required = true;
+    }
+    return { state: claim.state };
+  }
+
+  #regenerateOutput(request: Record<string, any>): RegenerateOutputResponse {
+    const output = this.#requireOutput(String(request.output_id));
+    if (output.claims.some((c) => c.state === "HumanConfirmed") && request.acknowledged !== true) {
+      throw envelope(
+        "CONFIRMATION_REQUIRED",
+        "Regenerating discards the claims you confirmed; confirm to continue.",
+      );
+    }
+    const job = this.addJob({
+      kind: "summarize",
+      state: "queued",
+      label: `Regenerate ${output.output_type}`,
+      recording_id: output.recording_id,
+    });
+    return { job_id: job.job_id };
   }
 
   #import(request: Record<string, any>): ImportOutcome[] {
@@ -1549,6 +1812,15 @@ function sortValue(rec: FakeRecording, field: string): string | number {
     default:
       return rec.recorded_at ?? rec.imported_at;
   }
+}
+
+/** A one-line excerpt centred on the match, as the SQLite FTS snippet is. */
+function excerptAround(text: string, needle: string, radius = 48): string {
+  const at = text.toLowerCase().indexOf(needle);
+  if (at < 0) return text;
+  const start = Math.max(0, at - radius);
+  const end = Math.min(text.length, at + needle.length + radius);
+  return `${start > 0 ? "…" : ""}${text.slice(start, end)}${end < text.length ? "…" : ""}`;
 }
 
 function buildSegments(count: number, alignment: "native" | "derived" | "none"): TranscriptSegment[] {

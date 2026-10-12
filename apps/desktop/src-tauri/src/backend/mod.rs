@@ -1400,7 +1400,11 @@ impl SpeakersPort for LocalBackend {
         .bind(&speaker.name)
         .bind("inferred")
         .bind(false)
-        .bind(speaker.renamed_at.map(|t| t.to_rfc3339()))
+        .bind(
+            speaker
+                .renamed_at
+                .map(plaudon_domain::time::Timestamp::to_rfc3339),
+        )
         .bind(speaker.id.to_string())
         .bind(recording_id.to_string())
         .execute(self.pool())
@@ -1427,7 +1431,11 @@ impl SpeakersPort for LocalBackend {
         )
         .bind("user_confirmed")
         .bind(true)
-        .bind(speaker.confirmed_at.map(|t| t.to_rfc3339()))
+        .bind(
+            speaker
+                .confirmed_at
+                .map(plaudon_domain::time::Timestamp::to_rfc3339),
+        )
         .bind(speaker.id.to_string())
         .bind(recording_id.to_string())
         .execute(self.pool())

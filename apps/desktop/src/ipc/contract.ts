@@ -1587,6 +1587,9 @@ export interface CommandMap {
   device_import: { req: DeviceImportRequest; res: DeviceImport };
   device_disconnect: { req: DeviceDisconnectRequest; res: DeviceDisconnect };
   device_sync_policy: { req: DeviceSyncPolicyRequest; res: DeviceSyncPolicy };
+  list_outputs: { req: ListOutputsRequest; res: ListOutputsResponse };
+  review_claim: { req: ReviewClaimRequest; res: ReviewClaimResponse };
+  regenerate_output: { req: RegenerateOutputRequest; res: RegenerateOutputResponse };
 }
 
 export type CommandName = keyof CommandMap;
@@ -1673,6 +1676,13 @@ export const EPIC_J_COMMANDS: readonly CommandName[] = [
   "restore_portable_archive",
 ];
 
+/** EPIC I: generated outputs and claim review. */
+export const EPIC_I_COMMANDS: readonly CommandName[] = [
+  "list_outputs",
+  "review_claim",
+  "regenerate_output",
+];
+
 export const ALL_COMMANDS: readonly CommandName[] = [
   ...SPEC_COMMANDS,
   ...ADR_0020_COMMANDS,
@@ -1681,6 +1691,7 @@ export const ALL_COMMANDS: readonly CommandName[] = [
   ...CLOUD_ADDED_COMMANDS,
   ...DEVICE_COMMANDS,
   ...EPIC_J_COMMANDS,
+  ...EPIC_I_COMMANDS,
 ];
 
 /* ----------------------------------------------------------------- events */

@@ -141,7 +141,7 @@ pub enum ReconcileError {
 
 fn presence_threshold(segment_duration_ms: u64) -> u64 {
     let fractional = (segment_duration_ms as f64 * PRESENCE_FRACTION) as u64;
-    fractional.min(PRESENCE_FLOOR_MS).max(1)
+    fractional.clamp(1, PRESENCE_FLOOR_MS)
 }
 
 /// Map diarization turns onto the segments of a revision.

@@ -50,10 +50,11 @@ export function SearchScreen({ onNavigate }: SearchScreenProps) {
       )}
 
       {submitted && !loading && !error && data && data.results.length === 0 && (
-        <EmptyState title="No results">
-          <p>No results found for &ldquo;{query}&rdquo;</p>
-          <Button onClick={() => setSubmitted(false)}>Clear search</Button>
-        </EmptyState>
+        <EmptyState
+          title="No results"
+          body={`No results found for \u201c${query}\u201d`}
+          actions={<Button onClick={() => setSubmitted(false)}>Clear search</Button>}
+        />
       )}
       {submitted && !loading && !error && data && data.results.length > 0 && (
         <SearchResults results={data.results} onNavigate={onNavigate} onSeek={handleSeek} />
