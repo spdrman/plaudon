@@ -3370,6 +3370,21 @@ name = "plaudon-export"
 version = "0.1.0"
 
 [[package]]
+name = "plaudon-hardware-tests"
+version = "0.1.0"
+dependencies = [
+ "jsonschema",
+ "plaudon-plaud-protocol",
+ "plaudon-source-plaud-device",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.21",
+ "time",
+ "uuid",
+]
+
+[[package]]
 name = "plaudon-integration-tests"
 version = "0.1.0"
 dependencies = [
