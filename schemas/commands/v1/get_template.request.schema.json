@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/get_template.request.schema.json",
+  "title": "get_template.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["template_id", "version"],
+  "properties": {
+    "template_id": {
+      "type": "string"
+    },
+    "version": {
+      "type": ["string", "null"]
+    }
+  }
+}

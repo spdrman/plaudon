@@ -58,6 +58,15 @@ use crate::dto::{
     TranscriptPage, VerifyModelRequest, VerifyModelResponse,
 };
 use crate::dto::{
+    AskRecordingRequest, AskRecordingResponse, CreateTemplateCopyRequest,
+    GenerateStudyArtifactsRequest, GenerateStudyArtifactsResponse, GetTemplateRequest,
+    ListConversationsRequest, ListConversationsResponse, ListStudyArtifactsRequest,
+    ListStudyArtifactsResponse, ListTemplateVersionsRequest, ListTemplateVersionsResponse,
+    ListTemplatesResponse, ListToolRunsRequest, ListToolRunsResponse, ListTranscriptToolsRequest,
+    ListTranscriptToolsResponse, SaveTemplateRequest, SaveTemplateResponse, TemplateDocumentDto,
+    ValidateTemplateRequest, ValidateTemplateResponse,
+};
+use crate::dto::{
     InspectModelPackRequest, InspectModelPackResponse, InstallModelFromPackRequest,
     InstallModelResponse, ListLocalModelsResponse, RemoveLocalModelRequest,
     RemoveLocalModelResponse, VerifyLocalModelRequest, VerifyLocalModelResponse,
@@ -218,6 +227,17 @@ command_surface! {
         "install_model_from_pack" => InstallModelFromPack: models::install_model_from_pack(InstallModelFromPackRequest) -> InstallModelResponse,
         "remove_local_model" => RemoveLocalModel: models::remove_local_model(RemoveLocalModelRequest) -> RemoveLocalModelResponse,
         "verify_local_model" => VerifyLocalModel: models::verify_local_model(VerifyLocalModelRequest) -> VerifyLocalModelResponse,
+        "list_transcript_tools" => ListTranscriptTools: tools::list_transcript_tools(ListTranscriptToolsRequest) -> ListTranscriptToolsResponse,
+        "ask_recording" => AskRecording: tools::ask_recording(AskRecordingRequest) -> AskRecordingResponse,
+        "list_conversations" => ListConversations: tools::list_conversations(ListConversationsRequest) -> ListConversationsResponse,
+        "generate_study_artifacts" => GenerateStudyArtifacts: tools::generate_study_artifacts(GenerateStudyArtifactsRequest) -> GenerateStudyArtifactsResponse,
+        "list_study_artifacts" => ListStudyArtifacts: tools::list_study_artifacts(ListStudyArtifactsRequest) -> ListStudyArtifactsResponse,
+        "list_tool_runs" => ListToolRuns: tools::list_tool_runs(ListToolRunsRequest) -> ListToolRunsResponse,
+        "get_template" => GetTemplate: templates::get_template(GetTemplateRequest) -> TemplateDocumentDto,
+        "create_template_copy" => CreateTemplateCopy: templates::create_template_copy(CreateTemplateCopyRequest) -> TemplateDocumentDto,
+        "save_template" => SaveTemplate: templates::save_template(SaveTemplateRequest) -> SaveTemplateResponse,
+        "validate_template" => ValidateTemplate: templates::validate_template(ValidateTemplateRequest) -> ValidateTemplateResponse,
+        "list_template_versions" => ListTemplateVersions: templates::list_template_versions(ListTemplateVersionsRequest) -> ListTemplateVersionsResponse,
     }
     without_request {
         "get_capabilities" => GetCapabilities: settings::get_capabilities() -> Capabilities,
@@ -227,6 +247,7 @@ command_surface! {
         "get_update_status" => GetUpdateStatus: update::get_update_status() -> UpdateStatus,
         "plaud_probe" => PlaudProbe: sources::plaud_probe() -> PlaudConnectorSnapshot,
         "plaud_disconnect" => PlaudDisconnect: sources::plaud_disconnect() -> PlaudDisconnectResponse,
+        "list_templates" => ListTemplates: templates::list_templates() -> ListTemplatesResponse,
     }
 }
 
@@ -383,11 +404,12 @@ mod tests {
             "the Tauri allowlist listed the archive commands twice; this surface must not"
         );
         // 54 published by the Tauri shell, plus the eleven EPIC O task O2.4
-        // added for settings the React frontend never had.
-        assert_eq!(COMMAND_NAMES.len(), 65);
+        // added for settings the React frontend never had, plus the twelve
+        // task O2.6 added for transcript tools and templates.
+        assert_eq!(COMMAND_NAMES.len(), 77);
     }
 
-    /// Commands the egui settings screen added (EPIC O task O2.4).
+    /// Commands the egui screens added (EPIC O tasks O2.4 and O2.6).
     ///
     /// They are deliberately absent from the Tauri allowlist: the React shell
     /// cannot call them, and widening its IPC surface for a frontend that is
@@ -403,6 +425,18 @@ mod tests {
         "install_model_from_pack",
         "remove_local_model",
         "verify_local_model",
+        "list_transcript_tools",
+        "ask_recording",
+        "list_conversations",
+        "generate_study_artifacts",
+        "list_study_artifacts",
+        "list_tool_runs",
+        "list_templates",
+        "get_template",
+        "create_template_copy",
+        "save_template",
+        "validate_template",
+        "list_template_versions",
         "get_update_status",
     ];
 

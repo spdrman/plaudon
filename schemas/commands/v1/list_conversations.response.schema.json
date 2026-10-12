@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/list_conversations.response.schema.json",
+  "title": "list_conversations.response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "conversations"
+  ],
+  "properties": {
+    "conversations": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/conversation"}
+    }
+  },
+  "$defs": {
+    "conversation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "conversation_id",
+        "recording_id",
+        "transcript_revision_id",
+        "revision_is_current",
+        "created_at",
+        "turns"
+      ],
+      "properties": {
+        "conversation_id": {"type": "string"},
+        "recording_id": {"type": "string"},
+        "transcript_revision_id": {"type": "string"},
+        "revision_is_current": {"type": "boolean"},
+        "created_at": {"type": "string"},
+        "turns": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/turn"}
+        }
+      }
+    },
+    "turn": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "message_id",
+        "seq_index",
+        "role",
+        "text",
+        "outcome",
+        "anchors",
+        "tool_run_id",
+        "created_at"
+      ],
+      "properties": {
+        "message_id": {"type": "string"},
+        "seq_index": {"type": "integer", "minimum": 0},
+        "role": {
+          "type": "string",
+          "enum": ["user", "assistant"]
+        },
+        "text": {"type": "string"},
+        "outcome": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "answered",
+                "insufficient_evidence",
+                "not_supported_by_recording"
+              ]
+            },
+            {"type": "null"}
+          ]
+        },
+        "anchors": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/anchor"}
+        },
+        "tool_run_id": {
+          "anyOf": [
+            {"type": "string"},
+            {"type": "null"}
+          ]
+        },
+        "created_at": {"type": "string"}
+      }
+    },
+    "anchor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "seq_index",
+        "char_start",
+        "char_end",
+        "excerpt",
+        "verified",
+        "alignment_origin"
+      ],
+      "properties": {
+        "seq_index": {"type": "integer", "minimum": 0},
+        "char_start": {"type": "integer", "minimum": 0},
+        "char_end": {"type": "integer", "minimum": 0},
+        "excerpt": {"type": "string"},
+        "verified": {"type": "boolean"},
+        "rejection_code": {
+          "anyOf": [
+            {"type": "string"},
+            {"type": "null"}
+          ]
+        },
+        "matched_text": {
+          "anyOf": [
+            {"type": "string"},
+            {"type": "null"}
+          ]
+        },
+        "alignment_origin": {
+          "type": "string",
+          "enum": ["none", "native", "derived"]
+        },
+        "seek_ms": {
+          "anyOf": [
+            {"type": "integer", "minimum": 0},
+            {"type": "null"}
+          ]
+        }
+      }
+    }
+  }
+}

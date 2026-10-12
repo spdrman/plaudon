@@ -1,5 +1,4 @@
-//! Interaction tests for the summarization panel, the model picker and the
-//! templates placeholder.
+//! Interaction tests for the summarization panel and the model picker.
 
 mod ai_fixtures;
 
@@ -10,9 +9,7 @@ use plaudon_app::cloud_presentation::ProcessingStage;
 use plaudon_app::command::AppCommand;
 use plaudon_app::dto::ListModelsResponse;
 use plaudon_domain::transcript::AlignmentOrigin;
-use plaudon_ui::ai::{
-    AiIntent, AiOutput, ModelPicker, RecordingContext, SummarizationPanel, TemplatesPlaceholder,
-};
+use plaudon_ui::ai::{AiIntent, AiOutput, ModelPicker, RecordingContext, SummarizationPanel};
 
 /// A window tall enough that no control of a panel is clipped; these tests
 /// take no pixel snapshot, so the snapshot policy is unaffected.
@@ -121,10 +118,12 @@ fn the_template_of_the_existing_output_is_shown_and_no_picker_is_invented() {
     assert!(text.contains("Template version: 1.2.0"), "{text}");
     assert!(text.contains("Pipeline version: 3"), "{text}");
     assert!(
-        text.contains("No command publishes the template catalogue")
-            || text.contains("no command publishes the template catalogue")
-            || text.contains("Templates are fixed in this build"),
-        "{text}"
+        text.contains("Starting a stage does not select a template"),
+        "the panel must say why it offers no choice: {text}"
+    );
+    assert!(
+        text.contains("managed on the Templates screen"),
+        "the panel must say where templates are managed: {text}"
     );
 }
 
@@ -298,21 +297,4 @@ fn an_unknown_price_is_stated_as_unknown_and_never_as_zero() {
         "{text}"
     );
     assert!(!text.contains("USD 0.000000"), "{text}");
-}
-
-/* -------------------------------------------------------------- templates */
-
-#[test]
-fn the_templates_placeholder_says_exactly_what_is_missing() {
-    let mut harness = plaudon_ui_testkit::builder().build_ui_state(
-        |ui, app: &mut TemplatesPlaceholder| app.ui(ui),
-        TemplatesPlaceholder,
-    );
-    harness.run();
-    let text = announced(&harness);
-    assert!(text.contains("Templates are fixed in this build"), "{text}");
-    assert!(
-        text.contains("a command that lists templates"),
-        "the placeholder must name the missing prerequisite: {text}"
-    );
 }

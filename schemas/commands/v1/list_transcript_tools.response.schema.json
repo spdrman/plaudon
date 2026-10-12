@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/list_transcript_tools.response.schema.json",
+  "title": "list_transcript_tools.response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "tools",
+    "text_model"
+  ],
+  "properties": {
+    "tools": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/transcript_tool"}
+    },
+    "text_model": {
+      "anyOf": [
+        {"$ref": "#/$defs/text_route"},
+        {"type": "null"}
+      ]
+    }
+  },
+  "$defs": {
+    "transcript_tool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tool_id",
+        "version",
+        "kind",
+        "display_name",
+        "instruction",
+        "prompt_version",
+        "output_schema_version",
+        "origin",
+        "optional",
+        "offerable",
+        "unavailable_reason"
+      ],
+      "properties": {
+        "tool_id": {"type": "string"},
+        "version": {"type": "integer", "minimum": 1},
+        "kind": {"type": "string"},
+        "display_name": {"type": "string"},
+        "instruction": {"type": "string"},
+        "prompt_version": {"type": "string"},
+        "output_schema_version": {"type": "string"},
+        "origin": {
+          "type": "string",
+          "enum": ["built_in", "user_edit"]
+        },
+        "optional": {"type": "boolean"},
+        "offerable": {"type": "boolean"},
+        "unavailable_reason": {
+          "anyOf": [
+            {"type": "string"},
+            {"type": "null"}
+          ]
+        }
+      }
+    },
+    "text_route": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "engine",
+        "model_id",
+        "is_cloud",
+        "available",
+        "unavailable_reason"
+      ],
+      "properties": {
+        "engine": {"type": "string"},
+        "model_id": {
+          "anyOf": [
+            {"type": "string"},
+            {"type": "null"}
+          ]
+        },
+        "is_cloud": {"type": "boolean"},
+        "available": {"type": "boolean"},
+        "unavailable_reason": {
+          "anyOf": [
+            {"type": "string"},
+            {"type": "null"}
+          ]
+        }
+      }
+    }
+  }
+}
