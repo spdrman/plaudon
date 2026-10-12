@@ -1,0 +1,54 @@
+craft-libs
+Copyright (c) 2026 ArtCraft Team and the craft-libs contributors.
+Licensed under the MIT License or the Apache License, Version 2.0, at your option
+(LICENSE-MIT, LICENSE-APACHE).
+
+Third-party material
+
+This product bundles third-party material under its own licenses, listed below. The per-file
+list (author, source, license) is in ATTRIBUTION.md.
+
+None: every bundled asset is original to craft-libs.
+
+Source provenance
+
+The SVG icon preparation in crates/ui is adapted from:
+- PhotoCraft, crates/ui-egui/src/icons.rs, revision e7a83ca342cdff568254f85f442b9cc8afb08066.
+  https://github.com/storytold/photocraft
+  Copyright (c) 2026 ArtCraft Team and the PhotoCraft contributors.
+- VectorCraft, crates/ui-egui/src/icons.rs, revision 825d4fdb8b527c597855d273fb4bcc1971855b6a.
+  https://github.com/storytold/vectorcraft
+  Copyright (c) 2026 ArtCraft Team and the VectorCraft contributors.
+The icon-button interaction/style boundary is adapted from PhotoCraft (above) and:
+- PdfCraft, crates/ui-egui/src/icons.rs, revision f626db25cca2c89f8fa3f7e30d22bf59faea65ec.
+  https://github.com/storytold/pdfcraft
+  Copyright (c) 2026 ArtCraft Team and the PdfCraft contributors.
+The tab fitting in crates/ui/src/tabs is adapted from PhotoCraft's tab_strip.rs (above).
+Tab interaction adapters also use VectorCraft's dock.rs and floating.rs (above).
+The pane sizing and resize boundaries in crates/ui/src/layout draw on:
+- FilmCraft, crates/ui-egui/src/dock.rs, revision 7b6c134472287db4367fca80bcb498240ba36567.
+  https://github.com/storytold/filmcraft
+  Copyright (c) 2026 ArtCraft Team and the FilmCraft contributors.
+- EffectCraft, crates/ui-egui/src/dock.rs, revision 2a460986ee7a4b32656a3d434849693904b486bc.
+  https://github.com/storytold/effectcraft
+  Copyright (c) 2026 ArtCraft Team and the EffectCraft contributors.
+The widget-state styling in crates/ui/src/theme is adapted from VectorCraft (above),
+crates/ui-egui/src/theme.rs, and:
+- DesignCraft, crates/ui-egui/src/theme.rs, revision 66c7ce7e96ec286a091878cc2541ee8369aa79d6.
+  https://github.com/storytold/designcraft
+  Copyright (c) 2026 ArtCraft Team and the DesignCraft contributors.
+The transactional panel model and drop-zone semantics in crates/ui/src/docking draw on the
+FilmCraft/EffectCraft split, tab and accordion layouts and VectorCraft floating groups listed
+above. The generic transaction validation, optional renderer and workspace-location helpers
+are implemented here without dependencies on application engines or native window helpers.
+All sources listed above are licensed MIT OR Apache-2.0. No icon artwork is copied here.
+
+The PDF spooler in crates/print is extracted from:
+- PdfCraft, crates/print/src/spool.rs, windows_print.ps1 and spooler tests,
+  revision 33c14e07cfd742a82bf03baa6b103c01008fa68c.
+  https://github.com/storytold/pdfcraft
+  Copyright (c) 2026 ArtCraft Team and the PdfCraft contributors.
+  Licensed MIT OR Apache-2.0. PDF composition and application code are not copied.
+
+The Windows printer duplex-capability query and parser additionally draw on PdfCraft,
+crates/print/src/spool.rs, revision fb97ce958dfe92b6762ce40615c7836551710139 (PR #1154), under the same licenses above.

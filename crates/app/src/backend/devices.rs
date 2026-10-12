@@ -75,7 +75,7 @@ use crate::secrets::SecretValue;
 
 /// The committed compatibility register: the only source of compatibility
 /// strings this module shows (spec §2.5B).
-const COMPATIBILITY_YAML: &str = include_str!("../../../../../compatibility.yaml");
+const COMPATIBILITY_YAML: &str = include_str!("../../../../compatibility.yaml");
 
 /// `app_preferences` key holding the peripheral identifiers whose user opted in
 /// to read-only sync when nearby. Identifiers only; no credential material.

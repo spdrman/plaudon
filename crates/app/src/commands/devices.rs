@@ -504,11 +504,11 @@ mod tests {
             "device_sync_policy",
         ];
         for name in expected {
-            assert!(super::super::COMMAND_ALLOWLIST.contains(&name), "{name}");
+            assert!(crate::command::COMMAND_NAMES.contains(&name), "{name}");
         }
         // No write-class device command exists: nothing deletes, clears,
         // controls recording, writes settings or acknowledges a sync.
-        for name in super::super::COMMAND_ALLOWLIST {
+        for name in crate::command::COMMAND_NAMES {
             if name.starts_with("device_") {
                 assert!(expected.contains(name), "{name} is not a spec command");
                 for banned in [
@@ -523,7 +523,10 @@ mod tests {
 
     #[test]
     fn the_published_typescript_contract_names_every_device_command_and_event() {
-        let contract = include_str!("../../../src/ipc/contract.ts");
+        // The TypeScript wire contract is the parity oracle until the React
+        // frontend is deleted at cutover (EPIC O, O2.5); this assertion goes
+        // with it.
+        let contract = include_str!("../../../../apps/desktop/src/ipc/contract.ts");
         for name in [
             "list_nearby_devices",
             "device_probe",
@@ -555,7 +558,7 @@ mod tests {
 
     fn schema_path(name: &str) -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../../schemas/commands/v1")
+            .join("../../schemas/commands/v1")
             .join(format!("{name}.schema.json"))
     }
 
