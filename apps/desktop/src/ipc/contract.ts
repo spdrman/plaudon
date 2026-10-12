@@ -155,6 +155,11 @@ export interface Capabilities {
   permissions: Record<string, OsPermissionState>;
   preferences: Preferences;
   openrouter_key_present: boolean;
+  /**
+   * Cloud consent grants on record (§4.4 #6, §16.3). Revoked grants stay in
+   * the list with `revoked_at` set so settings can show what was withdrawn.
+   */
+  cloud_consents: ConsentSummary[];
 }
 
 /* --------------------------------------------------------------- recording */
@@ -361,6 +366,11 @@ export interface JobSummary {
   provider_request_id: string | null;
   /** Link target for the produced output, resolved by the UI router. */
   output_link: { kind: "recording" | "export"; id: string } | null;
+  /**
+   * §10.4: cost carried by the job. Local jobs are always `unknown`; an
+   * estimate is never promoted to a finalized amount by the UI.
+   */
+  cost: CostValue;
 }
 
 export interface ListJobsRequest {
@@ -497,6 +507,287 @@ export interface StatusResponse {
   ok: true;
 }
 
+/* ------------------------------------------------- cloud (OpenRouter BYOK) */
+
+/**
+ * Exact decimal money. `amount` is a plain decimal string so no rounding is
+ * introduced between Rust and the UI; it is never parsed into a float for
+ * display arithmetic.
+ */
+export interface MoneyAmount {
+  amount: string;
+  /** ISO-4217, uppercase. */
+  currency: string;
+}
+
+/** §10.4: an estimate is never shown or stored as an actual amount. */
+export type CostConfidence = "unknown" | "estimated" | "finalized";
+
+export interface CostValue {
+  confidence: CostConfidence;
+  /** `null` exactly when `confidence` is `unknown`; never substituted with 0. */
+  amount: MoneyAmount | null;
+}
+
+/** §8.6: which OpenRouter request contract a model actually implements. */
+export type RequestFamily = "multipart_stt" | "audio_chat" | "unsupported" | "unknown";
+
+/** §8.6A / §10.2: `verified` means our capability smoke test passed. */
+export type Verification = "verified" | "not_verified";
+
+export type TriState = "yes" | "no" | "unknown";
+
+export type RetentionPosture =
+  | "zero_retention"
+  | "limited_retention"
+  | "provider_default"
+  | "unknown";
+
+/** §9.1 pipeline stages a model preference or a re-run can target. */
+export const PROCESSING_STAGES = [
+  "transcribe",
+  "diarize",
+  "normalize",
+  "section_summary",
+  "consolidated_summary",
+  "structured_extraction",
+  "citation_verification",
+  "tool_run",
+] as const;
+export type ProcessingStage = (typeof PROCESSING_STAGES)[number];
+
+export interface ModelPricing {
+  basis: "none" | "per_audio_second" | "per_token" | "per_request" | "other";
+  /** Unit text taken from provider metadata; never invented by the UI. */
+  unit_label: string;
+  /** `null` means the price is unknown. It is never rendered as 0. */
+  amount_per_unit: MoneyAmount | null;
+}
+
+export interface ModelPrivacy {
+  /** The relay the request passes through, e.g. `openrouter`. */
+  relay: string;
+  /** `null` means the downstream provider was not disclosed; never guessed. */
+  downstream_provider: string | null;
+  retention: RetentionPosture;
+  /** Only meaningful for `limited_retention`. */
+  retention_days: number | null;
+  zero_retention_available: boolean;
+}
+
+/** Stable machine reason a model is not verified (§8.6A); `null` when verified. */
+export type VerificationReason =
+  | "not_in_allowlist"
+  | "no_observed_exchange"
+  | "catalog_only"
+  | "privacy_route_unresolved"
+  | "no_request_builder"
+  | "user_supplied_custom_id";
+
+export interface ModelCard {
+  model_id: string;
+  display_name: string;
+  engine: string;
+  request_family: RequestFamily;
+  verification: Verification;
+  verification_reason: VerificationReason | null;
+  /** Evidence backing `verified`. */
+  fixture_id: string | null;
+  /** RFC3339 instant the evidence was produced. */
+  validated_at: string | null;
+  features: {
+    segments: TriState;
+    word_timestamps: TriState;
+    diarization: TriState;
+    language_detection: TriState;
+  };
+  /** `null` means the locale coverage is unknown, not "none". */
+  locales: string[] | null;
+  max_input_bytes: number | null;
+  max_duration_ms: number | null;
+  pricing: ModelPricing;
+  privacy: ModelPrivacy;
+  /** True only when the model may actually be dispatched to right now. */
+  selectable: boolean;
+}
+
+export interface ListModelsRequest {
+  stage: ProcessingStage;
+  /** `null` lists every engine that can serve the stage. */
+  engine: string | null;
+}
+
+export interface ListModelsResponse {
+  models: ModelCard[];
+  /** §10.1: discovery failure degrades to the pinned allowlist, never to empty. */
+  catalog_source: "live" | "pinned_allowlist";
+  catalog_fetched_at: string | null;
+  degraded_reason: "offline" | "local_only_mode" | "no_key" | "catalog_error" | null;
+  /** Per-task default for `stage`. */
+  default_model_id: string | null;
+}
+
+export type DispatchState =
+  | "not_sent"
+  | "sending"
+  | "accepted_by_provider"
+  | "outcome_unknown"
+  | "completed"
+  | "failed_before_send";
+
+export interface UsageTotals {
+  finalized: MoneyAmount | null;
+  estimated: MoneyAmount | null;
+  /** Attempts with no derivable cost; never folded into a 0 amount. */
+  unknown_count: number;
+}
+
+export interface UsageByModel extends UsageTotals {
+  model_id: string;
+  attempts: number;
+}
+
+/** §10.7 inference attempt ledger entry, without any payload or secret. */
+export interface UsageAttempt {
+  attempt_id: string;
+  job_id: string;
+  model_id: string;
+  request_family: RequestFamily;
+  dispatch_state: DispatchState;
+  cost: CostValue;
+  provider_request_id: string | null;
+  created_at: string;
+  responded_at: string | null;
+  possibly_billed: boolean;
+}
+
+export interface CloudBudget {
+  per_job_limit: MoneyAmount | null;
+  monthly_limit: MoneyAmount | null;
+  /** Finalized plus estimated spend for the current month. */
+  month_to_date: CostValue;
+  /** True when a limit is locally calculable and therefore enforceable here. */
+  blocks_dispatch: boolean;
+  /** §10.4: fixed text; local budgets cannot prevent upstream charges. */
+  enforcement_note: string;
+}
+
+export interface GetUsageRequest {
+  /** RFC3339, inclusive. */
+  from: string;
+  /** RFC3339, exclusive. */
+  to: string;
+}
+
+export interface GetUsageResponse {
+  from: string;
+  to: string;
+  totals: UsageTotals;
+  by_model: UsageByModel[];
+  attempts: UsageAttempt[];
+  budget: CloudBudget;
+}
+
+export interface SetCloudBudgetRequest {
+  /** Decimal string; `null` clears the limit. */
+  per_job_limit: string | null;
+  monthly_limit: string | null;
+  /** Must be `USD` in V1. */
+  currency: string;
+}
+
+export type ConsentPurpose =
+  | "transcription"
+  | "summarization"
+  | "transcript_tool"
+  | "credential_validation";
+
+export type ConsentContentType = "audio_bytes" | "transcript_text" | "metadata_only";
+
+/** §4.4 #6: the three scopes offered before a cloud operation. */
+export type ConsentScopeKind = "ask_every_time" | "recording" | "model_policy";
+
+export interface ConsentScope {
+  kind: ConsentScopeKind;
+  /** Required for `recording`; `null` otherwise. */
+  recording_id: string | null;
+}
+
+export interface GrantCloudConsentRequest {
+  purpose: ConsentPurpose;
+  content_type: ConsentContentType;
+  scope: ConsentScope;
+  model_id: string;
+  downstream_provider: string | null;
+  require_zero_retention: boolean;
+  /** Version of the privacy statement the user agreed to (§4.4 #5). */
+  disclosure_version: string;
+}
+
+export interface GrantCloudConsentResponse {
+  consent_id: string;
+  scope_kind: string;
+  granted_at: string;
+  expires_at: string | null;
+}
+
+export interface ConsentSummary {
+  consent_id: string;
+  purpose: ConsentPurpose;
+  content_type: ConsentContentType;
+  scope_kind: ConsentScopeKind;
+  recording_id: string | null;
+  model_id: string;
+  downstream_provider: string | null;
+  required_retention: RetentionPosture | null;
+  disclosure_version: string;
+  granted_at: string;
+  expires_at: string | null;
+  revoked_at: string | null;
+}
+
+export interface ModelPreferenceScope {
+  kind: "default" | "recording";
+  recording_id: string | null;
+}
+
+export interface SetModelPreferenceRequest {
+  stage: ProcessingStage;
+  scope: ModelPreferenceScope;
+  engine: string;
+  /** `null` clears a recording override; it never clears the global default. */
+  model_id: string | null;
+}
+
+export interface SetModelPreferenceResponse {
+  stage: ProcessingStage;
+  scope_kind: "default" | "recording";
+  recording_id: string | null;
+  engine: string;
+  model_id: string | null;
+  /** The model that would run now for this stage/recording after precedence. */
+  effective_model: ModelCard | null;
+}
+
+export interface StartProcessingRequest {
+  recording_id: string;
+  stage: ProcessingStage;
+  /** One-shot override; §10.2 forbids it from changing stored preferences. */
+  model_override: { engine: string; model_id: string } | null;
+  /** Required when a prior attempt is `outcome_unknown` or a budget warning applies. */
+  cost_acknowledged: boolean;
+  /** Re-run only this stage even when a result already exists. */
+  rerun: boolean;
+}
+
+export interface StartProcessingResponse {
+  job_id: string;
+  estimated_cost: CostValue;
+  dispatch: "queued" | "consent_required" | "blocked";
+  /** Machine-independent explanation from Rust; `null` when `queued`. */
+  blocked_reason: string | null;
+}
+
 /* ------------------------------------------------------------ command map */
 
 export interface CommandMap {
@@ -522,6 +813,13 @@ export interface CommandMap {
   remove_openrouter_key: { req: Record<string, never>; res: StatusResponse };
   list_activity: { req: ListActivityRequest; res: ActivityPage };
   complete_onboarding: { req: CompleteOnboardingRequest; res: Preferences };
+  list_models: { req: ListModelsRequest; res: ListModelsResponse };
+  get_usage: { req: GetUsageRequest; res: GetUsageResponse };
+  set_cloud_budget: { req: SetCloudBudgetRequest; res: CloudBudget };
+  grant_cloud_consent: { req: GrantCloudConsentRequest; res: GrantCloudConsentResponse };
+  revoke_cloud_consent: { req: { consent_id: string }; res: StatusResponse };
+  set_model_preference: { req: SetModelPreferenceRequest; res: SetModelPreferenceResponse };
+  start_processing: { req: StartProcessingRequest; res: StartProcessingResponse };
 }
 
 export type CommandName = keyof CommandMap;
@@ -542,12 +840,31 @@ export const SPEC_COMMANDS: readonly CommandName[] = [
   "set_local_only_mode",
   "set_openrouter_key",
   "remove_openrouter_key",
+  "list_models",
+  "start_processing",
+  "grant_cloud_consent",
+  "revoke_cloud_consent",
+  "get_usage",
 ];
 
 /** Additions reviewed in ADR-0020 because §15.2 has no read path for them. */
 export const ADR_0020_COMMANDS: readonly CommandName[] = ["list_activity", "complete_onboarding"];
 
-export const ALL_COMMANDS: readonly CommandName[] = [...SPEC_COMMANDS, ...ADR_0020_COMMANDS];
+/**
+ * EPIC G additions: §15.2 lists no write path for the local spending budget or
+ * for the per-task default model, yet §10.2 and §10.4 require both to be set
+ * from the UI. They are named here so the drift test still covers them.
+ */
+export const CLOUD_PREFERENCE_COMMANDS: readonly CommandName[] = [
+  "set_cloud_budget",
+  "set_model_preference",
+];
+
+export const ALL_COMMANDS: readonly CommandName[] = [
+  ...SPEC_COMMANDS,
+  ...ADR_0020_COMMANDS,
+  ...CLOUD_PREFERENCE_COMMANDS,
+];
 
 /* ----------------------------------------------------------------- events */
 

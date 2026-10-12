@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/revoke_cloud_consent.request.schema.json",
+  "title": "revoke_cloud_consent.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "consent_id"
+  ],
+  "properties": {
+    "consent_id": {
+      "type": "string"
+    }
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/set_cloud_budget.request.schema.json",
+  "title": "set_cloud_budget.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "per_job_limit",
+    "monthly_limit",
+    "currency"
+  ],
+  "properties": {
+    "per_job_limit": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^\\d+(\\.\\d{1,6})?$"
+    },
+    "monthly_limit": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^\\d+(\\.\\d{1,6})?$"
+    },
+    "currency": {
+      "type": "string",
+      "pattern": "^[A-Z]{3}$"
+    }
+  }
+}

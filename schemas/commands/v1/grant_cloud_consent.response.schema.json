@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/grant_cloud_consent.response.schema.json",
+  "title": "grant_cloud_consent.response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "consent_id",
+    "scope_kind",
+    "granted_at",
+    "expires_at"
+  ],
+  "properties": {
+    "consent_id": {
+      "type": "string"
+    },
+    "scope_kind": {
+      "type": "string"
+    },
+    "granted_at": {
+      "type": "string"
+    },
+    "expires_at": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  }
+}

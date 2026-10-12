@@ -1,0 +1,296 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/set_model_preference.response.schema.json",
+  "title": "set_model_preference.response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "stage",
+    "scope_kind",
+    "recording_id",
+    "engine",
+    "model_id",
+    "effective_model"
+  ],
+  "properties": {
+    "stage": {
+      "type": "string",
+      "enum": [
+        "transcribe",
+        "diarize",
+        "normalize",
+        "section_summary",
+        "consolidated_summary",
+        "structured_extraction",
+        "citation_verification",
+        "tool_run"
+      ]
+    },
+    "scope_kind": {
+      "type": "string",
+      "enum": [
+        "default",
+        "recording"
+      ]
+    },
+    "recording_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "engine": {
+      "type": "string"
+    },
+    "model_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "effective_model": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/model_card"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "money_amount": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "amount",
+        "currency"
+      ],
+      "properties": {
+        "amount": {
+          "type": "string",
+          "pattern": "^-?\\d+(\\.\\d+)?$"
+        },
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Z]{3}$"
+        }
+      }
+    },
+    "tri_state": {
+      "type": "string",
+      "enum": [
+        "yes",
+        "no",
+        "unknown"
+      ]
+    },
+    "model_pricing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "basis",
+        "unit_label",
+        "amount_per_unit"
+      ],
+      "properties": {
+        "basis": {
+          "type": "string",
+          "enum": [
+            "none",
+            "per_audio_second",
+            "per_token",
+            "per_request",
+            "other"
+          ]
+        },
+        "unit_label": {
+          "type": "string"
+        },
+        "amount_per_unit": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/money_amount"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "model_privacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "relay",
+        "downstream_provider",
+        "retention",
+        "retention_days",
+        "zero_retention_available"
+      ],
+      "properties": {
+        "relay": {
+          "type": "string"
+        },
+        "downstream_provider": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "retention": {
+          "type": "string",
+          "enum": [
+            "zero_retention",
+            "limited_retention",
+            "provider_default",
+            "unknown"
+          ]
+        },
+        "retention_days": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "zero_retention_available": {
+          "type": "boolean"
+        }
+      }
+    },
+    "model_card": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "model_id",
+        "display_name",
+        "engine",
+        "request_family",
+        "verification",
+        "verification_reason",
+        "fixture_id",
+        "validated_at",
+        "features",
+        "locales",
+        "max_input_bytes",
+        "max_duration_ms",
+        "pricing",
+        "privacy",
+        "selectable"
+      ],
+      "properties": {
+        "model_id": {
+          "type": "string"
+        },
+        "display_name": {
+          "type": "string"
+        },
+        "engine": {
+          "type": "string"
+        },
+        "request_family": {
+          "type": "string",
+          "enum": [
+            "multipart_stt",
+            "audio_chat",
+            "unsupported",
+            "unknown"
+          ]
+        },
+        "verification": {
+          "type": "string",
+          "enum": [
+            "verified",
+            "not_verified"
+          ]
+        },
+        "verification_reason": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "not_in_allowlist",
+            "no_observed_exchange",
+            "catalog_only",
+            "privacy_route_unresolved",
+            "no_request_builder",
+            "user_supplied_custom_id",
+            null
+          ]
+        },
+        "fixture_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "validated_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "features": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "segments",
+            "word_timestamps",
+            "diarization",
+            "language_detection"
+          ],
+          "properties": {
+            "segments": {
+              "$ref": "#/$defs/tri_state"
+            },
+            "word_timestamps": {
+              "$ref": "#/$defs/tri_state"
+            },
+            "diarization": {
+              "$ref": "#/$defs/tri_state"
+            },
+            "language_detection": {
+              "$ref": "#/$defs/tri_state"
+            }
+          }
+        },
+        "locales": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "max_input_bytes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "max_duration_ms": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "pricing": {
+          "$ref": "#/$defs/model_pricing"
+        },
+        "privacy": {
+          "$ref": "#/$defs/model_privacy"
+        },
+        "selectable": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

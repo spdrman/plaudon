@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/set_model_preference.request.schema.json",
+  "title": "set_model_preference.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "stage",
+    "scope",
+    "engine",
+    "model_id"
+  ],
+  "properties": {
+    "stage": {
+      "type": "string",
+      "enum": [
+        "transcribe",
+        "diarize",
+        "normalize",
+        "section_summary",
+        "consolidated_summary",
+        "structured_extraction",
+        "citation_verification",
+        "tool_run"
+      ]
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "recording_id"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "default",
+            "recording"
+          ]
+        },
+        "recording_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "engine": {
+      "type": "string"
+    },
+    "model_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  }
+}

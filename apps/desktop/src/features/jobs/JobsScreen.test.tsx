@@ -318,3 +318,69 @@ describe("JobsScreen", () => {
     await expectNoAxeViolations();
   });
 });
+
+describe("job cost (§10.4)", () => {
+  it("marks an estimate as an estimate and never as a finalized amount", async () => {
+    const backend = new FakeBackend();
+    backend.addJob({
+      kind: "transcribe",
+      state: "cloud_sending",
+      label: "Estimated run",
+      cost: { confidence: "estimated", amount: { amount: "0.006000", currency: "USD" } },
+    });
+    renderWithApp(<JobsScreen focusJobId={null} onOpenTarget={noop} />, { backend });
+
+    const row = (await screen.findByText("Estimated run")).closest("li") as HTMLElement;
+    expect(within(row).getByText("Estimated USD 0.006000")).toBeInTheDocument();
+    expect(within(row).queryByText(/^Final/)).not.toBeInTheDocument();
+    // The confidence is carried in the markup, not only in colour.
+    expect(row.querySelector('[data-confidence="estimated"]')).not.toBeNull();
+  });
+
+  it("shows a finalized amount distinctly from an estimate", async () => {
+    const backend = new FakeBackend();
+    backend.addJob({
+      kind: "transcribe",
+      state: "completed",
+      label: "Finalized run",
+      cost: { confidence: "finalized", amount: { amount: "0.004212", currency: "USD" } },
+    });
+    renderWithApp(<JobsScreen focusJobId={null} onOpenTarget={noop} />, { backend });
+
+    const row = (await screen.findByText("Finalized run")).closest("li") as HTMLElement;
+    expect(within(row).getByText("Final USD 0.004212")).toBeInTheDocument();
+    expect(within(row).queryByText(/Estimated/)).not.toBeInTheDocument();
+    expect(row.querySelector('[data-confidence="finalized"]')).not.toBeNull();
+  });
+
+  it("renders an unknown cost as unknown and never as zero", async () => {
+    const backend = new FakeBackend();
+    backend.addJob({ kind: "import", state: "completed", label: "Local import" });
+    renderWithApp(<JobsScreen focusJobId={null} onOpenTarget={noop} />, { backend });
+
+    const row = (await screen.findByText("Local import")).closest("li") as HTMLElement;
+    expect(within(row).getByText("Cost unknown")).toBeInTheDocument();
+    expect(row.textContent).not.toMatch(/\$0\.00|USD 0\.000000/);
+  });
+
+  it("keeps the cost on record in the retry-may-charge-again dialog", async () => {
+    const backend = new FakeBackend();
+    backend.addJob({
+      kind: "transcribe",
+      state: "cloud_outcome_unknown",
+      label: "Uncertain run",
+      cost_acknowledgement_required: true,
+      cost: { confidence: "estimated", amount: { amount: "0.006000", currency: "USD" } },
+    });
+    const { user } = renderWithApp(<JobsScreen focusJobId={null} onOpenTarget={noop} />, {
+      backend,
+    });
+    await screen.findByText("Uncertain run");
+
+    await user.click(screen.getByRole("button", { name: "Retry" }));
+    const dialog = await screen.findByRole("dialog", { name: /This retry may be billed again/ });
+    expect(within(dialog).getByText(/Cost recorded for the earlier attempt/)).toBeInTheDocument();
+    expect(within(dialog).getByText("Estimated USD 0.006000")).toBeInTheDocument();
+    await expectNoAxeViolations();
+  });
+});

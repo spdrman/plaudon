@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/start_processing.response.schema.json",
+  "title": "start_processing.response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "job_id",
+    "estimated_cost",
+    "dispatch",
+    "blocked_reason"
+  ],
+  "properties": {
+    "job_id": {
+      "type": "string"
+    },
+    "estimated_cost": {
+      "$ref": "#/$defs/cost_value"
+    },
+    "dispatch": {
+      "type": "string",
+      "enum": [
+        "queued",
+        "consent_required",
+        "blocked"
+      ]
+    },
+    "blocked_reason": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "$defs": {
+    "money_amount": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "amount",
+        "currency"
+      ],
+      "properties": {
+        "amount": {
+          "type": "string",
+          "pattern": "^-?\\d+(\\.\\d+)?$"
+        },
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Z]{3}$"
+        }
+      }
+    },
+    "cost_value": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "confidence",
+        "amount"
+      ],
+      "properties": {
+        "confidence": {
+          "type": "string",
+          "enum": [
+            "unknown",
+            "estimated",
+            "finalized"
+          ]
+        },
+        "amount": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/money_amount"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

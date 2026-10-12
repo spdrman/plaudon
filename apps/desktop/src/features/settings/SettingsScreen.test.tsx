@@ -20,6 +20,8 @@ describe("SettingsScreen", () => {
       "Appearance",
       "Privacy & network",
       "AI key",
+      "Cloud spending",
+      "Cloud consent",
       "Notifications",
       "Storage",
       "Activity history",
@@ -44,5 +46,37 @@ describe("SettingsScreen", () => {
     const { user } = await setup();
     await user.click(screen.getByRole("button", { name: "Open activity history" }));
     await waitFor(() => expect(window.location.hash).toContain("settings/activity"));
+  });
+
+  it("exposes the cloud budget and consent controls, keyboard reachable", async () => {
+    const { user, backend } = await setup();
+    backend.addConsent({ model_id: "acme/scribe-2", scope_kind: "model_policy" });
+
+    const budget = screen.getByRole("region", { name: "Cloud spending" });
+    expect(within(budget).getByLabelText("Per-job limit (USD)")).toBeInTheDocument();
+    expect(within(budget).getByLabelText("Monthly limit (USD)")).toBeInTheDocument();
+    // §10.4: the enforcement note is rendered verbatim from the backend.
+    expect(
+      within(budget).getByText(
+        /Local budgets cannot prevent charges made elsewhere with the same key\./,
+      ),
+    ).toBeInTheDocument();
+
+    // Every control in the new sections is reachable with the keyboard alone.
+    const perJob = within(budget).getByLabelText("Per-job limit (USD)");
+    perJob.focus();
+    expect(perJob).toHaveFocus();
+    await user.tab();
+    expect(within(budget).getByLabelText("Monthly limit (USD)")).toHaveFocus();
+    await user.tab();
+    expect(within(budget).getByRole("button", { name: "Save budget" })).toHaveFocus();
+
+    expect(
+      within(screen.getByRole("region", { name: "Cloud consent" })).getByText(
+        "No cloud consent has been granted.",
+      ),
+    ).toBeInTheDocument();
+
+    await expectNoAxeViolations();
   });
 });

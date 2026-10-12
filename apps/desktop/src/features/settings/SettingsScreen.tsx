@@ -5,6 +5,8 @@ import { Button } from "../../components/Button";
 import { AppearanceSection } from "./AppearanceSection";
 import { PrivacySection } from "./PrivacySection";
 import { AiKeySection } from "./AiKeySection";
+import { CloudBudgetSection } from "./CloudBudgetSection";
+import { CloudConsentSection } from "./CloudConsentSection";
 import { NotificationSettingsSection } from "./NotificationSettingsSection";
 import { formatBytes } from "./bytes";
 
@@ -27,6 +29,14 @@ export function SettingsScreen() {
 
       <SettingsSection title="AI key">
         <AiKeySection />
+      </SettingsSection>
+
+      <SettingsSection title="Cloud spending">
+        <CloudBudgetSection />
+      </SettingsSection>
+
+      <SettingsSection title="Cloud consent">
+        <CloudConsentSection />
       </SettingsSection>
 
       <SettingsSection title="Notifications">

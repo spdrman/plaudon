@@ -15,7 +15,8 @@
         "integrations",
         "permissions",
         "preferences",
-        "openrouter_key_present"
+        "openrouter_key_present",
+        "cloud_consents"
       ],
       "properties": {
         "os": {
@@ -98,6 +99,12 @@
         },
         "openrouter_key_present": {
           "type": "boolean"
+        },
+        "cloud_consents": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/consent_summary"
+          }
         }
       }
     },
@@ -293,6 +300,100 @@
         "total_bytes": {
           "type": "integer",
           "minimum": 0
+        }
+      }
+    },
+    "consent_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "consent_id",
+        "purpose",
+        "content_type",
+        "scope_kind",
+        "recording_id",
+        "model_id",
+        "downstream_provider",
+        "required_retention",
+        "disclosure_version",
+        "granted_at",
+        "expires_at",
+        "revoked_at"
+      ],
+      "properties": {
+        "consent_id": {
+          "type": "string"
+        },
+        "purpose": {
+          "type": "string",
+          "enum": [
+            "transcription",
+            "summarization",
+            "transcript_tool",
+            "credential_validation"
+          ]
+        },
+        "content_type": {
+          "type": "string",
+          "enum": [
+            "audio_bytes",
+            "transcript_text",
+            "metadata_only"
+          ]
+        },
+        "scope_kind": {
+          "type": "string",
+          "enum": [
+            "ask_every_time",
+            "recording",
+            "model_policy"
+          ]
+        },
+        "recording_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "model_id": {
+          "type": "string"
+        },
+        "downstream_provider": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "required_retention": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "zero_retention",
+            "limited_retention",
+            "provider_default",
+            "unknown",
+            null
+          ]
+        },
+        "disclosure_version": {
+          "type": "string"
+        },
+        "granted_at": {
+          "type": "string"
+        },
+        "expires_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "revoked_at": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       }
     }
