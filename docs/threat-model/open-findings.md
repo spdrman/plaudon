@@ -83,3 +83,23 @@ rows in [`traceability.json`](traceability.json) carry named tests. The
 remaining High findings are controls whose subsystem has not shipped yet, so
 there is no reachable path to credential or content disclosure through them
 today. Each rating must be re-examined the moment its subsystem lands.
+
+## Closed fuzzing defects (D2.4)
+
+These are not matrix rows: the matrix tracks controls, and the controls below
+are already `implemented` with named tests. They are recorded here because the
+§24 evidence bundle should show that a control was *found broken* and that a
+committed corpus entry now stops the defect returning. All three were found by
+fuzzing, fixed, and are replayed on every pull request by
+`cargo test -p plaudon-security --test fuzz_corpus_replay` and under
+AddressSanitizer by `scripts/fuzz-ci.sh`.
+
+| # | Defect | Location | Fixed by | Regression corpus | Control it protects |
+|---|---|---|---|---|---|
+| C-1 | Frontend-reachable panic: `starts_with_ascii_case_insensitive` byte-indexed an untrusted `&str` (`value[..prefix.len()]`), so `reject_raw_path` panicked whenever byte 5 (`file:`) or 6 (`asset:`) fell inside a multi-byte character | `crates/security/src/tauri_guard/validate.rs` | Team-D.TauriLeastPrivilege — compares `as_bytes()` slices | `tests/fixtures/fuzz-corpus/cli_arg_render/invalid_utf8` and the `a⁦b⁩c` line of `tests/fixtures/hostile-paths/names.txt`, replayed by `cli_arg_render_corpus_holds_its_invariants` and `shared_hostile_names_are_safe_as_cli_arguments` | §16.2 "Unauthorized frontend file access", "Local automation escape" |
+| C-2 | Redaction was not idempotent: an emitted `<redacted:…>` marker was re-matched and `trim_trailing_punctuation` stripped its `>`, growing the record one byte per pass — and redaction composes across the logging layer, notification redaction and the crash hook | `crates/diagnostics/src/redact.rs` | Team-D.LogRedaction — markers are inert | `tests/fixtures/fuzz-corpus/redactor/secret_min_length_8`, `.../secret_too_short_7` | §1.5 "Secrets in application logs: 0" |
+| C-3 | A registered secret was invisible when it contained `%XX` or `\/`: only the decoded view was scanned, so a secret carrying a percent-escape never matched; a separator-stripped pass also used to swallow the rest of a JSON record | `crates/diagnostics/src/redact.rs` | Team-D.LogRedaction — the untouched record is scanned too whenever decoding changed anything | `tests/fixtures/fuzz-corpus/redactor/secret_contains_percent_escape`, `.../secret_contains_escaped_slash`, `.../secret_in_json_tail_survives` | §16.2 "Credential disclosure", "Signed URL leak"; §1.5 "Secrets in application logs: 0" |
+
+The one fuzzing defect that is **not** closed is F-043 above, whose regression
+test is committed and `#[ignore]`d until the upstream fix merges into this
+branch.
