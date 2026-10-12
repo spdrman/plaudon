@@ -1177,6 +1177,14 @@ pub struct CreateBackupRequest {
     /// Use the heavier Argon2id profile.
     #[serde(default)]
     pub sensitive_profile: bool,
+    /// Include the biometric voice tier (VP-078).
+    ///
+    /// Off by default. Honoured only for an encrypted archive: with no
+    /// password the backup is refused rather than quietly written without the
+    /// data the user asked for. The name-only roster travels either way
+    /// (VP-077).
+    #[serde(default)]
+    pub include_voice_profiles: bool,
 }
 
 /// `create_portable_backup` response.
@@ -1202,6 +1210,9 @@ pub struct CreateBackupResponse {
     pub manifest_schema_version: String,
     /// Settings that do not travel with the archive.
     pub nonportable_settings: Vec<String>,
+    /// Voice-profile entries the archive carries. Zero unless the user asked
+    /// for them and the archive is encrypted (VP-078).
+    pub voice_profiles_included: u64,
 }
 
 /// `inspect_restore_archive` request.

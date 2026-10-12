@@ -77,7 +77,12 @@ pub async fn create_portable_backup(
     let password = validate_password(request.password.as_deref())?;
     ports
         .archive
-        .create_portable_backup(destination, password, request.sensitive_profile)
+        .create_portable_backup(
+            destination,
+            password,
+            request.sensitive_profile,
+            request.include_voice_profiles,
+        )
         .await
 }
 

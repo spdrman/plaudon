@@ -40,7 +40,9 @@ fi
 
 echo "== [1/3] mandatory: stable corpus replay =="
 echo "   cargo test -p plaudon-security --test fuzz_corpus_replay"
-if cargo test -p plaudon-security --test fuzz_corpus_replay; then
+echo "   cargo test -p plaudon-export --test voiceprofile_corpus_replay"
+if cargo test -p plaudon-security --test fuzz_corpus_replay \
+   && cargo test -p plaudon-export --test voiceprofile_corpus_replay; then
   echo "   OK: every committed corpus entry satisfied its invariants."
 else
   echo "   FAIL: corpus replay failed." >&2
