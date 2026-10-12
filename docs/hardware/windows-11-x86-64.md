@@ -54,11 +54,61 @@ set PLAUDON_HARDWARE_TESTS=1
 set PLAUDON_HARDWARE_PROFILE=plaud_device_ble:note:legacy_static_token
 set PLAUDON_HARDWARE_OBSERVATIONS=%USERPROFILE%\plaud-run\observations.json
 set PLAUDON_HARDWARE_EVIDENCE_OUT=%USERPROFILE%\plaud-run\evidence.json
-cargo test -p plaudon-hardware-tests --test hardware -- --ignored --test-threads=1
+cargo test -p plaudon-hardware-tests --features radio --test hardware -- --ignored --test-threads=1
 ```
 
 Without the gate, `cargo test -p plaudon-hardware-tests` lists the hardware tests
 as `ignored`; with `-- --ignored` each prints `SKIPPED` and nothing is touched.
+
+## Driving the radio (`--features radio`)
+
+Built with `--features radio`, the suite drives the BLE radio itself for the
+checks software can determine, using the same `DeviceActor`, `RadioTransport`
+and `StagingAcquisition` the application uses. Without the feature the default
+build has no Bluetooth stack and only reads your observations file.
+
+| Check | How the run derives it |
+| --- | --- |
+| `discover_only` | a scan finds candidates while nothing has been connected or written |
+| `bluetooth_permission` | `failed` when the OS denies the scan; a pass also needs your attestation for the packaged app bundle |
+| `device_name_collision`, `two_devices_in_range` | from the candidates seen; with more than one in range the suite refuses to auto-select and needs `PLAUDON_HARDWARE_PERIPHERAL` |
+| `authorization_failure` | a random, well-formed credential is authenticated once and must be refused |
+| `encrypted_handshake_detected` | authentication after a good probe answered "encrypted mode required"; the legacy path is not retried |
+| `missing_secret` | a vault lookup for an unprovisioned identity fails closed and writes no frame |
+| `authorization_success` | the credential already provisioned in the OS vault for this device authenticates |
+| `non_destructive_scan_observed` | two back-to-back read-only listings compared by `NonDestructiveAudit` |
+| `listing_delta_before_after_phone_sync` | the listing before and after the phone sync you perform (below) |
+| `transfer_pull_*`, `transfer_verified`, `imported_bytes_verified`, `opus_decode_measurement` | real pulls streamed to a temporary staging file, re-hashed from disk, bitstream duration measured, Ogg Opus remux attempted |
+| `no_device_write_opcodes` | every frame the actor actually wrote |
+
+Notes:
+
+- **The credential must already be in the OS vault** for this device (provision
+  it with the application first). The suite only reads it; it never stores,
+  prints or records it. Without one, `authorization_success` is `skipped` and
+  nothing after it runs.
+- **`authorization_failure` sends one random credential to your device.** That
+  is the App. B.9 test; if the device counts failed attempts, expect one.
+- Pull length buckets are by measured duration: 15 s is 5-60 s, 5 min is
+  3-10 min, 30 min is 20-60 min, multi-hour is 2 h or more. A bucket with no
+  matching recording is `skipped`. `PLAUDON_HARDWARE_MAX_PULLS` (default 4) and
+  `PLAUDON_HARDWARE_MAX_PULL_BYTES` (default 512 MiB) bound the run. Staged
+  files live in a temporary directory and are deleted when the run ends.
+- `opus_decode_measurement` measures the bitstream; this build bundles no PCM
+  decoder and the detail says so.
+- **Phone sync hand-off.** Set `PLAUDON_HARDWARE_PHONE_SYNC_FLAG` to a path. After
+  the first listings the run prints `ACTION: ...` and waits (default 600 s,
+  `PLAUDON_HARDWARE_PHONE_SYNC_WAIT_SECS`) for you to sync the phone and create
+  that file, then lists again and records what changed. Without the variable the
+  check is `skipped`.
+- The radio is driven **once per process** and every hardware test reads the
+  same result, so run with `--features radio -- --ignored --test-threads=1`.
+- `PLAUDON_HARDWARE_SCAN_SECS` (default 8) sets the scan length.
+- Live results win: the observations file cannot supply or override a check
+  the run owns. The file still carries what software cannot know: whether the
+  packaged app was granted Bluetooth, sleep/wake, disconnects by link loss,
+  battery state, full disk, USB, process kill, timestamps against a trusted
+  source and the firewall (`network_denied_run`).
 
 ## The observations file
 
@@ -118,12 +168,14 @@ are archived with the record.
 
 - It reads your observations file and the committed `compatibility.yaml`, and
   writes one evidence JSON at the path you chose.
-- It never opens a radio, a USB volume or the vault itself, never sends a
-  device opcode, and never deletes, clears, controls or writes to the device.
-  The device-side procedure is read-only by construction: the opcode allowlist
-  has no write, delete, clear, settings, OTA or sync-acknowledge operation.
-- It never reads or stores a device secret. Device secrets stay in the OS
-  credential vault.
+- Without `--features radio` it opens no radio, USB volume or vault. With it,
+  it scans, connects to the one peripheral you selected, and sends only the
+  three allowlisted read-only opcodes (authenticate, list, request data). It
+  never deletes, clears, controls or writes to the device: the opcode type has
+  no write, delete, clear, settings, OTA or sync-acknowledge operation.
+- With `--features radio` it reads one device credential from the OS vault to
+  authenticate, holds it in memory only for that call, and never stores,
+  prints or records it. Device secrets stay in the OS credential vault.
 
 ## Privacy
 

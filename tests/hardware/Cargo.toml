@@ -11,15 +11,32 @@ publish = false
 [lints]
 workspace = true
 
+[features]
+# Drive a real BLE radio (macOS CoreBluetooth / Windows WinRT) instead of
+# reading only the operator's observations. Off by default so the suite builds
+# and skips on machines with no Bluetooth stack and never touches a radio in CI.
+radio = ["plaudon-plaud-ble/hardware-scan", "dep:btleplug", "dep:futures"]
+
 [dependencies]
+async-trait = { workspace = true }
+btleplug = { version = "0.11", optional = true }
+futures = { version = "0.3", optional = true }
+plaudon-plaud-ble = { workspace = true }
+plaudon-recording-sources = { workspace = true }
+plaudon-security = { workspace = true }
 plaudon-plaud-protocol = { workspace = true }
 plaudon-source-plaud-device = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+sha2 = { workspace = true }
+tempfile = { workspace = true }
 thiserror = { workspace = true }
 time = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
 uuid = { workspace = true }
 
 [dev-dependencies]
 jsonschema = { workspace = true }
-tempfile = { workspace = true }
+plaudon-plaud-ble = { workspace = true, features = ["test-support"] }
+plaudon-security = { workspace = true, features = ["test-support"] }

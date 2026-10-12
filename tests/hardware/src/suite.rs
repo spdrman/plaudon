@@ -35,6 +35,9 @@ pub enum SuiteError {
     /// The evidence could not be written.
     #[error(transparent)]
     Emit(#[from] emitter::EmitError),
+    /// A live run could not be set up or a cached run failed.
+    #[error("{0}")]
+    Run(String),
     /// The requested check is not in the catalogue.
     #[error("{0} is not a check of this suite")]
     UnknownCheck(String),
@@ -265,11 +268,66 @@ fn committed_register() -> Result<CompatibilityRegister, SuiteError> {
     CompatibilityRegister::from_yaml(&text).map_err(|error| SuiteError::Register(error.to_string()))
 }
 
-/// Build the record for an opted-in run from the process environment.
-pub fn record_for_run(config: &gate::RunConfig) -> Result<EvidenceRecord, SuiteError> {
+/// Derive what a run can determine itself and merge the operator's
+/// observations. Without the `radio` feature this is the operator's file.
+#[cfg(not(feature = "radio"))]
+#[allow(clippy::unnecessary_wraps)] // same signature as the radio build
+fn observe(
+    _profile: &ResolvedProfile,
+    operator: Observations,
+    _env: &dyn Env,
+) -> Result<Observations, SuiteError> {
+    Ok(operator)
+}
+
+/// Drive the real radio for BLE cells and merge the operator's observations.
+#[cfg(feature = "radio")]
+fn observe(
+    profile: &ResolvedProfile,
+    operator: Observations,
+    env: &dyn Env,
+) -> Result<Observations, SuiteError> {
+    use plaudon_security::secrets::os_store;
+
+    use crate::live::{self, LiveConfig, LiveSettings};
+    use crate::radio::RadioBackend;
+
+    if profile.cell.source_type != "plaud_device_ble" {
+        return Ok(operator);
+    }
+    let settings = LiveSettings::from_env(env);
+    let protocol = live::protocol_profile_for(&profile.cell)
+        .map_err(|error| SuiteError::Run(error.to_string()))?;
+    let route =
+        live::route_for(&profile.cell).map_err(|error| SuiteError::Run(error.to_string()))?;
+    let store = os_store();
+    let config = LiveConfig {
+        profile: protocol,
+        route,
+        store: store.as_ref(),
+        selection: settings.selection,
+        max_pulls: settings.max_pulls,
+        max_pull_bytes: settings.max_pull_bytes,
+        phone_sync: settings.phone_sync,
+    };
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .map_err(|error| SuiteError::Run(format!("cannot start the async runtime: {error}")))?;
+    let mut backend = RadioBackend::new(protocol, settings.scan);
+    let derived = runtime.block_on(live::drive(&mut backend, &config));
+    Ok(live::merge_operator(derived, &operator))
+}
+
+/// Build the record for an opted-in run.
+pub fn record_for_run(
+    config: &gate::RunConfig,
+    env: &dyn Env,
+) -> Result<EvidenceRecord, SuiteError> {
     let host = HostInfo::capture();
     let profile = profile::resolve(&config.profile, &host.os, &committed_register()?)?;
-    let observations = Observations::load(&config.observations)?;
+    let operator = Observations::load(&config.observations)?;
+    let observations = observe(&profile, operator, env)?;
     Ok(assemble(&Assembly {
         test_run_id: new_run_id(&host.os),
         recorded_at: today(),
@@ -278,6 +336,27 @@ pub fn record_for_run(config: &gate::RunConfig) -> Result<EvidenceRecord, SuiteE
         host: &host,
         observations: &observations,
     }))
+}
+
+type CachedRun = (gate::RunConfig, Result<EvidenceRecord, String>);
+
+/// One run per process: every hardware test reads the same record, so the
+/// radio is driven once rather than once per check.
+fn record_once(config: &gate::RunConfig, env: &dyn Env) -> Result<EvidenceRecord, SuiteError> {
+    static CACHE: std::sync::Mutex<Vec<CachedRun>> = std::sync::Mutex::new(Vec::new());
+    let mut cache = CACHE.lock().expect("run cache lock");
+    if let Some((_, cached)) = cache.iter().find(|(cached, _)| cached == config) {
+        return cached.clone().map_err(SuiteError::Run);
+    }
+    let fresh = record_for_run(config, env);
+    cache.push((
+        config.clone(),
+        fresh
+            .as_ref()
+            .map(Clone::clone)
+            .map_err(ToString::to_string),
+    ));
+    fresh
 }
 
 /// Execute one named check under the gate.
@@ -291,7 +370,7 @@ pub fn execute(id: &str, env: &dyn Env) -> Result<Execution, SuiteError> {
     match gate::evaluate(env)? {
         GateDecision::Skip(reason) => Ok(Execution::Skipped(reason)),
         GateDecision::Run(config) => {
-            let record = record_for_run(&config)?;
+            let record = record_once(&config, env)?;
             let found = record
                 .checks
                 .into_iter()
@@ -308,7 +387,7 @@ pub fn emit(env: &dyn Env) -> Result<Option<EvidenceRecord>, SuiteError> {
     match gate::evaluate(env)? {
         GateDecision::Skip(_) => Ok(None),
         GateDecision::Run(config) => {
-            let record = record_for_run(&config)?;
+            let record = record_once(&config, env)?;
             if let Some(path) = &config.evidence_out {
                 emitter::write_record(path, &record)?;
             }
