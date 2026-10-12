@@ -712,6 +712,22 @@ impl SourcesPort for LocalBackend {
         })
     }
 
+    async fn watched_folder_ids(&self) -> Result<Vec<String>, AppError> {
+        // `paused` is the one status that means "the user asked for this
+        // folder not to be swept". `unavailable` and `permission_denied` are
+        // facts about the disk at the time of the last pass — an unmounted
+        // volume, a folder the sandbox refused — and they clear themselves
+        // when the next pass succeeds, so a timer that skipped them would
+        // never find out that they had.
+        let rows = sqlx::query(
+            "SELECT id FROM watched_folders WHERE status <> 'paused' ORDER BY created_at, id",
+        )
+        .fetch_all(self.pool())
+        .await
+        .map_err(|err| storage_error("cannot list the watched folders", &err))?;
+        Ok(rows.iter().map(|row| row.get::<String, _>("id")).collect())
+    }
+
     async fn source_sync(
         &self,
         source_id: Uuid,

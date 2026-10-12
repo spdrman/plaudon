@@ -434,7 +434,16 @@ fn available_space(path: &Path) -> PersistenceResult<u64> {
             // legitimate relocation, and the copy itself still fails loudly.
             return Ok(u64::MAX);
         }
-        Ok(u64::from(stat.f_bavail).saturating_mul(stat.f_frsize))
+        // `statvfs::f_bavail` is `fsblkcnt_t`, which is 32-bit on macOS and
+        // 64-bit on Linux, so the widening cannot be written once: `u64::from`
+        // is required on one and a no-op clippy rejects on the other. Both
+        // arms produce the same `u64`, and `f_frsize` is `c_ulong` (64-bit on
+        // every target we build) on both.
+        #[cfg(target_os = "macos")]
+        let available = u64::from(stat.f_bavail);
+        #[cfg(not(target_os = "macos"))]
+        let available = stat.f_bavail;
+        Ok(available.saturating_mul(stat.f_frsize))
     }
     #[cfg(not(unix))]
     {

@@ -160,7 +160,10 @@ mod tests {
             sink.report(Progress::fraction(step as f32 / 100.0));
         }
         assert_eq!(sink.latest.load(Ordering::Relaxed), SCALE / 2);
-        assert!(moved(NOTHING, SCALE / 2), "the first value is always worth a row");
+        assert!(
+            moved(NOTHING, SCALE / 2),
+            "the first value is always worth a row"
+        );
         assert!(!moved(5_000, 5_050), "half a percent is not worth a row");
         assert!(moved(5_000, 5_200), "two percent is");
     }

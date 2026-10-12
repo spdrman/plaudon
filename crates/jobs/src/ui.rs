@@ -59,9 +59,10 @@ impl From<&EventRecord> for UiEvent {
 #[error("could not emit UI event: {0}")]
 pub struct SinkError(pub String);
 
-/// Transport that delivers a [`UiEvent`] to the frontend.
+/// Transport that delivers a [`UiEvent`] to the user interface.
 ///
-/// `plaudon-desktop` implements this with `app_handle.emit(kind, event)`.
+/// `plaudon_app::event::ChannelEventSink` implements this by pushing onto the
+/// bounded event channel the shell drains, then waking the render loop.
 /// Implementations must not block and must not return an error that the caller
 /// is expected to act on; a failed emit is logged and the committed state
 /// stands.

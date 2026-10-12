@@ -2,7 +2,6 @@
 resolver = "2"
 members = [
     "crates/*",
-    "apps/desktop/src-tauri",
     "apps/plaudon-egui",
     "third_party/craft-ui",
     "tests/integration",
@@ -24,6 +23,11 @@ edition = "2021"
 rust-version = "1.90"
 license = "Apache-2.0"
 repository = "https://github.com/spdrman/plaudon"
+# Nothing here is published to crates.io: the deliverables are the
+# `plaudon-egui` application bundle and the `plaudon` CLI binary. Saying so
+# explicitly also lets `cargo deny`'s `allow-wildcard-paths` apply to our own
+# path dependencies, which it refuses to do for a publishable crate.
+publish = false
 
 [workspace.dependencies]
 plaudon-domain = { path = "crates/domain" }

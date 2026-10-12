@@ -50,7 +50,7 @@ route is advertised as anything other than Experimental or Unavailable.
 | F-020 | TM-020 | High | `crates/source-plaud-cli/src/lib.rs` | K | §22.11 no remote delete cascade | Needs explicit tombstones and cloud trash/reappearance fixtures so a remote deletion can never erase local media. |
 | F-021 | TM-021 | Medium | `crates/automation/src/lib.rs` | M | §22.7 | The architecture already excludes a listener. Needs the typed user-local CLI surface plus boundary fuzzing when automation ships. |
 | F-022 | TM-022 | Medium | `crates/security/src/fsguard.rs` | D | §22.9 restore | Archive entry validation is implemented and fuzzed: traversal, absolute and device-namespace entries, case/NFC-folded duplicates, compression bombs, and a symlink planted after inspection are all refused without touching the filesystem. Remaining: manifest checksums and backup schema verification on the EPIC J restore path. |
-| F-023 | TM-023 | High | `apps/desktop` | N | §22.8 signed update workflow | Needs signed artifacts, a verified release manifest, a rollback path that does not weaken verification, and a tampered-update rejection test. |
+| F-023 | TM-023 | High | `apps/plaudon-egui` | N | §22.8 signed update workflow | Needs signed artifacts, a verified release manifest, a rollback path that does not weaken verification, and a tampered-update rejection test. The packaging scripts fail closed without a credential and report `not_verified` rather than claiming a signature, so nothing publishable exists today: no notarized macOS bundle and no Authenticode-signed Windows installer has been produced, because we hold no Apple or code-signing credentials. |
 | F-024 | TM-024 | Medium | `crates/security/src/outbound.rs` | D | §1.5 "Silent cloud upload: 0" | Opt-in is enforced at the gate and nothing in the repository sends telemetry. Needs the aggregate-only payload builder and instrumentation of all outbound requests before any telemetry ships. |
 | F-025 | TM-025 | Medium | `crates/ai-openrouter/src/lib.rs` | G | Cloud AI release | Needs user budgets, provider guardrails and uncertain-outcome safeguards (an unknown outcome is recorded as unknown, never silently retried). |
 | F-028 | TM-028 | Medium | `crates/security/src/outbound.rs` | D | §22.10 compatibility limitations published | The statement is enforced in the policy snapshot and in these documents. Missing: the Devices screen copy that repeats it at the moment of use (EPIC E / App. B.8). |
@@ -58,16 +58,26 @@ route is advertised as anything other than Experimental or Unavailable.
 | F-031 | TM-031 | Medium | `crates/security/src/consent.rs` | D | §22.3 consent | Route, destination, content type and retention posture are scope axes today and an unknown posture never satisfies a requirement. Remaining: a named test for re-prompting when only the disclosure version changes. |
 | F-035 | TM-035 | Medium | `crates/security/src/outbound/subprocess.rs` | D | §1.5 "Secrets in application logs: 0" | Environment, argv and SQLite are covered by named tests. Remaining: the crash-trace scan, which needs the diagnostics reporter. |
 | F-036 | TM-036 | Medium | `crates/security/src/secrets.rs` | D | §22.16 | Needs zeroizing buffers for transient secret material. The accompanying honesty statement (memory cannot be perfectly protected from privileged malware) is already published. |
-| F-039 | TM-039 | High | `apps/desktop` | E | §6.3A; §22.7 | The audit that rejects a weak CSP, a shell-execute permission and a remote UI origin exists (`crates/security/src/tauri_guard/audit.rs`). Remaining: the Tauri manifest for the desktop app, so that a real build is audited in CI. |
-| F-040 | TM-040 | High | `apps/desktop` | E | §22.3; §16.6 operational privacy | Needs the UI that distinguishes local from cloud processing per recording and shows `Cloud: not used` only when the route is genuinely cloud-independent. |
+| F-040 | TM-040 | High | `crates/ui/src/screens/devices/presentation.rs` | E | §22.3; §16.6 operational privacy | The device transfer screen derives its cloud sentence from the DTO's own `cloud_route`, in exactly one place, so no screen can print `Cloud: not used` on its own authority. Remaining: the same per-route labelling on the recording and job surfaces, so a user can tell local from cloud processing for a given recording. |
 | F-043 | TM-043 | High | `crates/domain/src/error.rs` | B | §22.8; §1.5 "Secrets in application logs: 0" | Found by D2.4 fuzzing. `plaudon_domain::error::Redactor` only matches a URL scheme at the *start* of a token, so a parenthesised, quoted, angle-bracketed or `url=`-prefixed URL is persisted verbatim with its signed query string; and `looks_like_opaque_secret` rejects any token containing `.`, `+` or `/`, so dotted JWTs and base64 credentials survive. Both run on untrusted vendor text in `AppError::from_unmapped_vendor` and `DiagnosticLog::record`. Regression test `domain_redactor_redacts_separator_bearing_credentials` is committed and `#[ignore]`d against this finding; Team-AB has a confirmed fix on `epic-a-spikes`. Closes when that merges here and the ignore is deleted. |
+
+**Retired, 2026-10-12.** F-039 — "production build ships devtools or a permissive
+content security policy" — is closed by the egui cutover (ADR-0024) rather than
+by a fix in the sense it was written. A Rust-only binary has no browser engine,
+no content security policy, no remotely hosted UI content and no capability
+manifest, so the audit that parsed them (and the `plaudon-tauri-audit` binary
+that ran it) was deleted with the shell. The property the finding protected —
+a published artifact must not be debuggable or carry an escape hatch out of the
+platform's runtime protections — is now the packaging entitlement and manifest
+audit, which is `implemented` with named tests in the matrix and therefore does
+not belong in this file. The id is retired, not reused.
 
 ## Summary by severity
 
 | Severity | Count | Ids |
 |---|---|---|
 | Critical | 0 | — |
-| High | 13 | F-003, F-004, F-005, F-006, F-011, F-013, F-015, F-018, F-020, F-023, F-039, F-040, F-043 |
+| High | 12 | F-003, F-004, F-005, F-006, F-011, F-013, F-015, F-018, F-020, F-023, F-040, F-043 |
 | Medium | 16 | F-001, F-002, F-008, F-010, F-012, F-017, F-019, F-021, F-022, F-024, F-025, F-028, F-029, F-031, F-035, F-036 |
 | Low | 0 | — |
 
@@ -96,7 +106,7 @@ AddressSanitizer by `scripts/fuzz-ci.sh`.
 
 | # | Defect | Location | Fixed by | Regression corpus | Control it protects |
 |---|---|---|---|---|---|
-| C-1 | Frontend-reachable panic: `starts_with_ascii_case_insensitive` byte-indexed an untrusted `&str` (`value[..prefix.len()]`), so `reject_raw_path` panicked whenever byte 5 (`file:`) or 6 (`asset:`) fell inside a multi-byte character | `crates/security/src/tauri_guard/validate.rs` | Team-D.TauriLeastPrivilege — compares `as_bytes()` slices | `tests/fixtures/fuzz-corpus/cli_arg_render/invalid_utf8` and the `a⁦b⁩c` line of `tests/fixtures/hostile-paths/names.txt`, replayed by `cli_arg_render_corpus_holds_its_invariants` and `shared_hostile_names_are_safe_as_cli_arguments` | §16.2 "Unauthorized frontend file access", "Local automation escape" |
+| C-1 | View-reachable panic: `starts_with_ascii_case_insensitive` byte-indexed an untrusted `&str` (`value[..prefix.len()]`), so `reject_raw_path` panicked whenever byte 5 (`file:`) or 6 (`asset:`) fell inside a multi-byte character | `crates/security/src/tauri_guard/validate.rs`, deleted with the Tauri shell at the egui cutover (ADR-0024); the boundary that validates a display or search field is now `crates/app/src/validate.rs` | Team-D.TauriLeastPrivilege — compares `as_bytes()` slices | `tests/fixtures/fuzz-corpus/cli_arg_render/invalid_utf8` and the `a⁦b⁩c` line of `tests/fixtures/hostile-paths/names.txt`, replayed by `cli_arg_render_corpus_holds_its_invariants` and `shared_hostile_names_are_safe_as_cli_arguments` | §16.2 "Unauthorized frontend file access", "Local automation escape" |
 | C-2 | Redaction was not idempotent: an emitted `<redacted:…>` marker was re-matched and `trim_trailing_punctuation` stripped its `>`, growing the record one byte per pass — and redaction composes across the logging layer, notification redaction and the crash hook | `crates/diagnostics/src/redact.rs` | Team-D.LogRedaction — markers are inert | `tests/fixtures/fuzz-corpus/redactor/secret_min_length_8`, `.../secret_too_short_7` | §1.5 "Secrets in application logs: 0" |
 | C-3 | A registered secret was invisible when it contained `%XX` or `\/`: only the decoded view was scanned, so a secret carrying a percent-escape never matched; a separator-stripped pass also used to swallow the rest of a JSON record | `crates/diagnostics/src/redact.rs` | Team-D.LogRedaction — the untouched record is scanned too whenever decoding changed anything | `tests/fixtures/fuzz-corpus/redactor/secret_contains_percent_escape`, `.../secret_contains_escaped_slash`, `.../secret_in_json_tail_survives` | §16.2 "Credential disclosure", "Signed URL leak"; §1.5 "Secrets in application logs: 0" |
 

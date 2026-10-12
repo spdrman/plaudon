@@ -141,7 +141,11 @@ async fn resolve_model(run: &RunContext, recording_id: RecordingId) -> Result<Ro
         }
         let model_id = capabilities.model.model_id.clone();
         let plan = backend
-            .authorize_dispatch(&recording_id.to_string(), &model_id, ContentType::TranscriptText)
+            .authorize_dispatch(
+                &recording_id.to_string(),
+                &model_id,
+                ContentType::TranscriptText,
+            )
             .await?;
         return Ok(Route {
             model,
@@ -220,7 +224,10 @@ async fn cloud_route(run: &RunContext, recording_id: RecordingId) -> Result<Rout
         )
     })?;
     let card = backend
-        .card_for(plaudon_ai_openrouter::allowlist::ModelTask::TextGeneration, model_id)
+        .card_for(
+            plaudon_ai_openrouter::allowlist::ModelTask::TextGeneration,
+            model_id,
+        )
         .await?;
     let capabilities = crate::backend::tools::cloud_capabilities(&card);
     if !capabilities.is_selectable() {
@@ -244,7 +251,11 @@ async fn cloud_route(run: &RunContext, recording_id: RecordingId) -> Result<Rout
         .check_budget(predicted.amount, run.flag("cost_acknowledged"))
         .await?;
     let plan = backend
-        .authorize_dispatch(&recording_id.to_string(), model_id, ContentType::TranscriptText)
+        .authorize_dispatch(
+            &recording_id.to_string(),
+            model_id,
+            ContentType::TranscriptText,
+        )
         .await?;
 
     let binding = JobBinding {
@@ -256,7 +267,11 @@ async fn cloud_route(run: &RunContext, recording_id: RecordingId) -> Result<Rout
     };
     let model = OpenRouterTextModel::new(card, backend.dispatcher(&plan), binding)
         .with_structured_output(capabilities.supports_structured_output)
-        .with_now_unix(plaudon_domain::time::Timestamp::now().as_millis().div_euclid(1000));
+        .with_now_unix(
+            plaudon_domain::time::Timestamp::now()
+                .as_millis()
+                .div_euclid(1000),
+        );
     Ok(Route {
         model: Arc::new(model) as Arc<dyn TextModel>,
         capabilities,

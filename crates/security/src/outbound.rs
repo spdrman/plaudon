@@ -681,7 +681,7 @@ pub fn default_allowed_hosts() -> Vec<String> {
 }
 
 /// A snapshot of the enforced policy, suitable for returning from the
-/// `set_local_only_mode` Tauri command and for rendering "why is this disabled".
+/// `set_local_only_mode` command and for rendering "why is this disabled".
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct EffectiveNetworkPolicy {
     pub mode: NetworkMode,

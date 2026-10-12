@@ -9,8 +9,8 @@
 //! Division of responsibility:
 //!
 //! * the **code** decides the user-visible message, retryability and affordance
-//!   — `plaudon_domain` owns all three, so wording stays consistent across the
-//!   app and the frontend's exhaustive `ERROR_CODES` union keeps working;
+//!   — `plaudon_domain` owns all three, so the wording a user sees is the same
+//!   wherever the error surfaces and the view layer never invents its own;
 //! * the **security explanation** (e.g. *which* deny reason fired) is carried as
 //!   `AppError::detail`, which §15.4 keeps out of the wire envelope and routes
 //!   to the redacted diagnostics log instead.
@@ -189,18 +189,6 @@ impl From<crate::sandbox::SandboxError> for AppError {
 
 impl From<crate::sandbox::SpecError> for AppError {
     fn from(error: crate::sandbox::SpecError) -> Self {
-        app_error_for(&error)
-    }
-}
-
-impl From<crate::tauri_guard::AuthorizationError> for AppError {
-    fn from(error: crate::tauri_guard::AuthorizationError) -> Self {
-        app_error_for(&error)
-    }
-}
-
-impl From<crate::tauri_guard::ArgumentError> for AppError {
-    fn from(error: crate::tauri_guard::ArgumentError) -> Self {
         app_error_for(&error)
     }
 }

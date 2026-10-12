@@ -2,6 +2,10 @@
 name = "plaudon-egress-monitor"
 version.workspace = true
 edition.workspace = true
+# Declared so `cargo deny check licenses` sees Apache-2.0 rather than an
+# unlicensed crate. A workspace member that is never published still appears
+# in the dependency graph the licence gate walks.
+license.workspace = true
 publish = false
 
 [lib]

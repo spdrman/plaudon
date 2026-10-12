@@ -6,6 +6,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+publish.workspace = true
 
 [lints]
 workspace = true
@@ -13,10 +14,6 @@ workspace = true
 [lib]
 name = "plaudon_security"
 path = "src/lib.rs"
-
-[[bin]]
-name = "plaudon-tauri-audit"
-path = "src/bin/tauri_audit.rs"
 
 # Real helper used by `tests/sandbox_integration.rs` to verify what the
 # process sandbox actually enforces (D2.5, §6.3A).

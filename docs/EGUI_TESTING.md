@@ -7,8 +7,10 @@ decide the snapshot strategy (`docs/EGUI_MIGRATION_PLAN.md` §7.2) before any sc
 ## 1. The rule
 
 All UI, end-to-end and visual tests use [`egui_kittest`](https://github.com/emilk/egui/tree/main/crates/egui_kittest).
-No new vitest or Playwright test may be written. The legacy suites stay as a parity oracle until the
-cutover and are then deleted with the React frontend.
+There is no other kind: the vitest and Playwright suites were deleted with the React frontend at the
+cutover (#209, `docs/adr/ADR-0024-delete-the-tauri-react-stack-at-the-egui-cutover.md`), so every
+test in this repository runs through `cargo test`. No node toolchain is installed, required or
+permitted.
 
 ## 2. The harness
 
@@ -24,7 +26,7 @@ Fixed by the builder, because a test that depends on the host is not a test:
 
 | Setting | Value | Why |
 | --- | --- | --- |
-| Window size | 1280×820 (`DEFAULT_SIZE`), 1000×820 (`COMPACT_SIZE`) | the sizes `tauri.conf.json` opened with and the compact breakpoint |
+| Window size | 1280×820 (`DEFAULT_SIZE`), 1000×820 (`COMPACT_SIZE`) | the size the window opens at, and the compact breakpoint |
 | `pixels_per_point` | 1.0 | a Retina workstation and a CI container must produce one image |
 | Theme | light | the dark and high-contrast themes get their own named cases |
 | Reported OS | `OperatingSystem::Mac` | shortcut rendering (`Cmd` vs `Ctrl`) must not depend on the runner |
@@ -69,9 +71,9 @@ conformance we have not checked (ADR-0023). The replacements, all in `plaudon_ui
 | --- | --- |
 | axe role/name violations | `a11y::nodes(&harness)` — every AccessKit node's role, label and value, asserted per screen — and `a11y::assert_every_control_is_named`, §3.1 |
 | `getByLabel`, `getByRole` | `harness.get_by_label(..)`, `query_all_by_role(..)` (kittest's own queries) |
-| Playwright "no interactive element is unreachable by keyboard" | `a11y::focus_order(&mut harness, max_stops)` — presses Tab, reports the labels reached, stops when the order cycles so a focus trap fails instead of hanging |
+| the legacy Playwright check "no interactive element is unreachable by keyboard" | `a11y::focus_order(&mut harness, max_stops)` — presses Tab, reports the labels reached, stops when the order cycles so a focus trap fails instead of hanging |
 | axe colour-contrast | token contrast unit tests over the 20 roles × 4 themes (O1.3) |
-| — (nothing automated can replace it) | the manual VoiceOver/Narrator scripts, run per phase: `scripts/ui-a11y-egui.md` for the egui shell, `docs/accessibility/manual-screen-reader-script.md` for the React build |
+| — (nothing automated can replace it) | the manual VoiceOver/Narrator script, run per phase: `docs/accessibility/manual-screen-reader-script.md`. It still states at its top that it has not been executed; no VoiceOver or Narrator run exists yet |
 
 Example, from `apps/plaudon-egui/tests/spike_kittest.rs`: the vendored divider must report
 `Role::Splitter` with the label "Resize the library pane", and the two toolbar actions and the

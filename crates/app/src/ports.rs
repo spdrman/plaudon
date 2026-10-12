@@ -331,6 +331,17 @@ pub trait SourcesPort: Send + Sync {
         request: SourceAddFolderRequest,
     ) -> Result<SourceAddFolderResponse, AppError>;
 
+    /// Every watched folder this library stores, in registration order.
+    ///
+    /// This is not a published command and deliberately does not become one:
+    /// it exists for [`crate::folder_pump::WatchedFolderPump`], which has to
+    /// know what to sweep on its timer and must still know it after a
+    /// restart, when nothing has called `source_add_folder` in this session.
+    /// Reading the list through the port rather than through a command keeps
+    /// the IPC surface the size it was while still letting the timer do its
+    /// job.
+    async fn watched_folder_ids(&self) -> Result<Vec<String>, AppError>;
+
     /// Run one sync of a source (`source_sync`).
     async fn source_sync(
         &self,

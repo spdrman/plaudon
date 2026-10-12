@@ -21,11 +21,11 @@
 //! |---|---|---|
 //! | [`SecretString`] | process memory, the OS vault | SQLite, backups, logs, argv, env, the UI |
 //! | [`SecretRef`] | SQLite, portable backups, logs | — |
-//! | [`SecretPresence`] | a Tauri response (§15.2 "status only") | — |
+//! | [`SecretPresence`] | a command response shown in the UI (§15.2 "status only") | — |
 //!
 //! §6.3A: "The UI will never receive raw bearer tokens […] or device secrets."
-//! [`SecretStore::status`] is the accessor the Tauri layer may surface, and it
-//! structurally cannot return secret material.
+//! [`SecretStore::status`] is the accessor a command handler may surface to the
+//! interface, and it structurally cannot return secret material.
 //!
 //! §7.7 / §16.4: "We will prohibit universal/global BLE tokens shared across
 //! devices." [`SecretScope::DeviceAuthorization`] carries a validated

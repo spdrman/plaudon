@@ -176,7 +176,9 @@ async fn an_imported_recording_is_transcribed_summarized_and_linked() {
     )
     .await;
     let recording_id = pipeline.import("standup.wav").await;
-    pipeline.prefer(Stage::Transcribe, SCRIPTED_STT_ENGINE).await;
+    pipeline
+        .prefer(Stage::Transcribe, SCRIPTED_STT_ENGINE)
+        .await;
 
     let job_id = pipeline.run_stage(recording_id, Stage::Transcribe).await;
     let settled = pipeline.settled(job_id).await;
@@ -212,8 +214,12 @@ async fn an_imported_recording_is_transcribed_summarized_and_linked() {
     );
 
     // The summary stage reads the committed revision and writes an output.
-    pipeline.prefer(Stage::StructuredExtraction, SCRIPTED_STT_ENGINE).await;
-    let summary_job = pipeline.run_stage(recording_id, Stage::StructuredExtraction).await;
+    pipeline
+        .prefer(Stage::StructuredExtraction, SCRIPTED_STT_ENGINE)
+        .await;
+    let summary_job = pipeline
+        .run_stage(recording_id, Stage::StructuredExtraction)
+        .await;
     let settled = pipeline.settled(summary_job).await;
     assert_eq!(
         settled.state,
@@ -240,13 +246,13 @@ async fn a_running_job_can_be_cancelled_and_commits_nothing() {
     )
     .await;
     let recording_id = pipeline.import("long.wav").await;
-    pipeline.prefer(Stage::Transcribe, SCRIPTED_STT_ENGINE).await;
+    pipeline
+        .prefer(Stage::Transcribe, SCRIPTED_STT_ENGINE)
+        .await;
     let job_id = pipeline.run_stage(recording_id, Stage::Transcribe).await;
 
     pipeline
-        .until(job_id, |summary| {
-            summary.state == JobState::RunningLocal
-        })
+        .until(job_id, |summary| summary.state == JobState::RunningLocal)
         .await;
     pipeline
         .backend
@@ -272,7 +278,9 @@ async fn an_engine_failure_is_retryable_and_the_retry_runs_again() {
     )
     .await;
     let recording_id = pipeline.import("quiet.wav").await;
-    pipeline.prefer(Stage::Transcribe, SCRIPTED_STT_ENGINE).await;
+    pipeline
+        .prefer(Stage::Transcribe, SCRIPTED_STT_ENGINE)
+        .await;
     let job_id = pipeline.run_stage(recording_id, Stage::Transcribe).await;
 
     let settled = pipeline.settled(job_id).await;
@@ -295,14 +303,11 @@ async fn an_engine_failure_is_retryable_and_the_retry_runs_again() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn a_kill_mid_job_leaves_a_retryable_job_and_no_output() {
     let fixture = backend_fixture().await;
-    let backend = Arc::new(
-        fixture
-            .backend
-            .clone()
-            .with_stt_engines(vec![ScriptedStt::new(&["a", "b", "c", "d", "e", "f"])
+    let backend = Arc::new(fixture.backend.clone().with_stt_engines(
+        vec![ScriptedStt::new(&["a", "b", "c", "d", "e", "f"])
                 .with_pace_ms(200)
-                .shared()]),
-    );
+                .shared()],
+    ));
     let pool = ProcessingHandle::start(Arc::clone(&backend), Some(1));
 
     let path = fixture.source_file("interrupted.wav", b"bytes of interrupted");
@@ -425,7 +430,9 @@ async fn the_same_stage_asked_for_twice_runs_once() {
     )
     .await;
     let recording_id = pipeline.import("twice.wav").await;
-    pipeline.prefer(Stage::Transcribe, SCRIPTED_STT_ENGINE).await;
+    pipeline
+        .prefer(Stage::Transcribe, SCRIPTED_STT_ENGINE)
+        .await;
 
     let first = pipeline.run_stage(recording_id, Stage::Transcribe).await;
     let second = pipeline.run_stage(recording_id, Stage::Transcribe).await;
@@ -464,15 +471,21 @@ async fn a_text_model_failure_fails_the_summary_without_an_output() {
     )
     .await;
     let recording_id = pipeline.import("summary.wav").await;
-    pipeline.prefer(Stage::Transcribe, SCRIPTED_STT_ENGINE).await;
-    pipeline.prefer(Stage::StructuredExtraction, SCRIPTED_STT_ENGINE).await;
+    pipeline
+        .prefer(Stage::Transcribe, SCRIPTED_STT_ENGINE)
+        .await;
+    pipeline
+        .prefer(Stage::StructuredExtraction, SCRIPTED_STT_ENGINE)
+        .await;
     let transcribe = pipeline.run_stage(recording_id, Stage::Transcribe).await;
     assert_eq!(
         pipeline.settled(transcribe).await.state,
         JobState::Completed
     );
 
-    let summarize = pipeline.run_stage(recording_id, Stage::StructuredExtraction).await;
+    let summarize = pipeline
+        .run_stage(recording_id, Stage::StructuredExtraction)
+        .await;
     let settled = pipeline.settled(summarize).await;
     assert!(
         matches!(
@@ -493,8 +506,8 @@ async fn a_text_model_failure_fails_the_summary_without_an_output() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn a_stage_request_round_trips_through_its_durable_snapshot() {
-    let pipeline = Pipeline::open(ScriptedStt::new(&["x"]), ScriptedTextModel::new(json!({})))
-        .await;
+    let pipeline =
+        Pipeline::open(ScriptedStt::new(&["x"]), ScriptedTextModel::new(json!({}))).await;
     let recording_id = pipeline.import("round.wav").await;
     let request = StageRequest {
         recording_id,
@@ -520,8 +533,9 @@ async fn a_stage_request_round_trips_through_its_durable_snapshot() {
         .get(job_id)
         .await
         .expect("the engine owns the row");
-    let rebuilt = StageRequest::from_config(JobKind::Transcribe, recording_id, &record.config_snapshot)
-        .expect("the snapshot describes the stage");
+    let rebuilt =
+        StageRequest::from_config(JobKind::Transcribe, recording_id, &record.config_snapshot)
+            .expect("the snapshot describes the stage");
     assert_eq!(rebuilt.engine, request.engine);
     assert_eq!(rebuilt.model_id, request.model_id);
     assert_eq!(rebuilt.audio_sha256, request.audio_sha256);
@@ -531,8 +545,8 @@ async fn a_stage_request_round_trips_through_its_durable_snapshot() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn a_cloud_stage_is_never_queued_without_a_key() {
-    let pipeline = Pipeline::open(ScriptedStt::new(&["x"]), ScriptedTextModel::new(json!({})))
-        .await;
+    let pipeline =
+        Pipeline::open(ScriptedStt::new(&["x"]), ScriptedTextModel::new(json!({}))).await;
     let recording_id = pipeline.import("cloud.wav").await;
     pipeline
         .backend
@@ -838,7 +852,10 @@ async fn a_real_whisper_model_transcribes_the_committed_clip() {
         .map(|segment| segment.text.trim())
         .collect::<Vec<_>>()
         .join(" ");
-    println!("whisper.cpp tiny.en: {elapsed:?} for {} segment(s)", page.segments.len());
+    println!(
+        "whisper.cpp tiny.en: {elapsed:?} for {} segment(s)",
+        page.segments.len()
+    );
     println!("transcript: {text}");
     assert!(
         text.to_lowercase().contains("ask not"),

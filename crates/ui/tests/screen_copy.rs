@@ -1,4 +1,4 @@
-//! The copy gate, ported from `apps/desktop/src/features/devices/copy.test.ts`.
+//! The copy gate, ported from the React shell's `devices/copy.test.ts`.
 //!
 //! App. B.9 and §4.2A.6: what a direct BLE source yields is the compressed
 //! on-device derivative. It is never described as an original recording, as

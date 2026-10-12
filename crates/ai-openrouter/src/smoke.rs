@@ -316,8 +316,7 @@ pub fn text_probe_schema() -> serde_json::Value {
 /// schema is not evidence that it did (spec 9.5).
 #[must_use]
 pub fn text_probe_body_is_valid(body: &serde_json::Value) -> bool {
-    jsonschema::validator_for(&text_probe_schema())
-        .is_ok_and(|validator| validator.is_valid(body))
+    jsonschema::validator_for(&text_probe_schema()).is_ok_and(|validator| validator.is_valid(body))
 }
 
 /// The pre-dispatch estimate of one text capability check.
@@ -672,8 +671,10 @@ mod tests {
         }
     }
 
-    fn check(transport: Arc<ScriptedTransport>, ledger: Arc<RecordingLedger>) -> TextCapabilityCheck
-    {
+    fn check(
+        transport: Arc<ScriptedTransport>,
+        ledger: Arc<RecordingLedger>,
+    ) -> TextCapabilityCheck {
         let authority = Authority::allowing();
         let dispatcher = CloudDispatcher::new(
             GatedHttpClientFactory::new(Arc::clone(&authority.policy)),
@@ -726,7 +727,9 @@ mod tests {
         assert!(!text_probe_body_is_valid(
             &serde_json::json!({ "ok": true, "items": 1, "extra": 2 })
         ));
-        assert!(!text_probe_body_is_valid(&serde_json::json!({ "ok": true })));
+        assert!(!text_probe_body_is_valid(
+            &serde_json::json!({ "ok": true })
+        ));
     }
 
     #[tokio::test]

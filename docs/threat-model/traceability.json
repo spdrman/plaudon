@@ -266,18 +266,19 @@
       "id": "TM-016",
       "spec": "16.2",
       "threat": "Unauthorized frontend file access",
-      "control": "Tauri capabilities + server-side path validation",
-      "owner": "crates/security/src/tauri_guard.rs",
+      "control": "A closed typed command surface with no generic shell, HTTP or filesystem command, plus server-side path validation",
+      "owner": "crates/app/src/validate.rs",
       "epic": "D",
       "verification": [
-        "the_manifest_covers_the_spec_table_and_documents_every_addition",
-        "authorize_rejects_an_unknown_command",
-        "authorize_rejects_an_allowlisted_command_from_the_wrong_window",
-        "raw_paths_are_refused_wherever_a_path_is_not_expected",
-        "a_frontend_supplied_path_string_cannot_become_an_approved_handle"
+        "every_published_command_name_appears_exactly_once",
+        "no_generic_shell_http_or_filesystem_command_is_published",
+        "rejected_paths_are_table_driven",
+        "a_symlink_that_escapes_the_root_is_rejected_and_one_that_stays_is_accepted",
+        "an_empty_approved_root_set_rejects_everything",
+        "a_hostile_path_is_rejected_without_touching_the_library"
       ],
       "status": "implemented",
-      "notes": "Both halves of the §16.2 control hold: an explicit command allowlist audited against the registered handler set with per-window authorization, and a server-side path core where a UI-supplied string can never become an approved handle and every accepted path resolves inside a permitted root."
+      "notes": "The threat wording is the SPEC §16.2 one and predates the egui cutover (ADR-0024); the user interface is now in process and there is no IPC boundary, so `frontend` means the view layer. Both halves of the control hold without a capability manifest: the published surface is generated from one table in crates/app/src/command.rs, so a command cannot be added to the dispatcher without appearing in COMMAND_NAMES, and no generic-execution name is representable; and every path-shaped argument goes through crates/app/src/validate.rs before a port sees it, where a view-supplied string can never become an approved handle and every accepted path resolves inside a permitted root."
     },
     {
       "id": "TM-017",
@@ -364,11 +365,11 @@
       "spec": "16.2",
       "threat": "Insecure auto-update",
       "control": "Signed artifacts; verified release manifest; rollback strategy",
-      "owner": "apps/desktop",
+      "owner": "apps/plaudon-egui",
       "epic": "N",
       "verification": [],
       "status": "planned",
-      "notes": "§16.5. The egress side is already closed: an update check is a distinct EgressPurpose that Local-only Mode refuses (TM-026). Signature verification and rollback policy are packaging work."
+      "notes": "§16.5. The egress side is already closed: an update check is a distinct EgressPurpose that Local-only Mode refuses (TM-026). Signature verification and rollback policy are packaging work, and they now belong to apps/plaudon-egui and its two packaging scripts (ADR-0024): no notarized macOS build and no Authenticode-signed Windows build exists yet, because we hold no credentials, and both scripts exit 3 rather than report a status they did not earn."
     },
     {
       "id": "TM-024",
@@ -608,28 +609,32 @@
     {
       "id": "TM-039",
       "spec": "16.5",
-      "threat": "Production build ships devtools or a permissive content security policy",
-      "control": "Devtools disabled in production, strict CSP, no remotely hosted UI content, shell plugin disabled",
-      "owner": "crates/security/src/tauri_guard/audit.rs",
+      "threat": "Production build ships a debuggable artifact or an escape hatch out of the platform's runtime protections",
+      "control": "The packaging scripts audit the artifact they produce: no hardened-runtime escape hatch, no debugger entitlement, exactly the five reviewed macOS privileges, an asInvoker Windows manifest, and a fail-closed exit without a signing credential",
+      "owner": "apps/plaudon-egui/tests/packaging.rs",
       "epic": "D",
       "verification": [
-        "a_weak_csp_missing_object_src_none_fails",
-        "a_shell_execute_permission_fails",
-        "remote_origins_are_detected_and_local_ipc_origins_are_not"
+        "the_entitlements_are_exactly_the_five_privileges_the_product_uses",
+        "no_hardened_runtime_escape_hatch_is_requested",
+        "the_application_manifest_asks_for_no_privilege",
+        "both_packaging_scripts_fail_closed_without_credentials"
       ],
-      "status": "open",
-      "notes": "§6.3A. The audit that rejects a weak CSP, a shell-execute permission and a remote UI origin exists and runs. Remaining gap: the apps/desktop Tauri manifest it must be run against does not exist yet (EPIC E), so no build is actually audited today."
+      "status": "implemented",
+      "notes": "§6.3A. Restated at the egui cutover (ADR-0024). The original wording was a webview one — devtools, a content security policy, remotely hosted UI content, the shell plugin — and none of those exist in a Rust-only binary: there is no browser engine, no CSP and no capability manifest, so the plaudon-tauri-audit binary and crates/security/src/tauri_guard/audit.rs were deleted rather than re-pointed. The property they protected is that a published artifact must not be inspectable or escalatable; in a native build that is an entitlement and manifest question. scripts/package-macos-egui.sh refuses to package a bundle whose entitlements request JIT, unsigned executable memory, a library-validation opt-out, dyld environment variables, a debugger, get-task-allow, camera or audio input, and audits the granted set again after signing with codesign -d --entitlements -; scripts/package-windows-egui.ps1 asserts the embedded manifest requests asInvoker with uiAccess=false and that the installer writes nothing to HKLM. The tests above assert the same inputs on both platforms."
     },
     {
       "id": "TM-040",
       "spec": "16.6",
       "threat": "Cloud processing is not visibly distinguishable from local processing",
       "control": "Per-route labelling in the UI (route and processing destination shown separately), `Cloud: not used` only when the route is genuinely cloud-independent",
-      "owner": "apps/desktop",
+      "owner": "crates/ui/src/screens/devices/presentation.rs",
       "epic": "E",
-      "verification": [],
-      "status": "planned",
-      "notes": "App. B.7/B.8. EffectiveNetworkPolicy already serializes the per-capability reasons the UI needs for this."
+      "verification": [
+        "the_cloud_sentence_is_derived_from_the_dto",
+        "the_cloud_sentence_exists_in_exactly_one_place_and_is_derived_from_the_dto"
+      ],
+      "status": "open",
+      "notes": "App. B.7/B.8. EffectiveNetworkPolicy already serializes the per-capability reasons the UI needs. The egui shell renders the sentence from the DTO's own cloud_route in exactly one place, so a screen cannot print `Cloud: not used` on its own authority. Remaining: the same per-route labelling on the recording and job surfaces, not only on the device transfer screen."
     },
     {
       "id": "TM-041",
@@ -649,7 +654,7 @@
       "id": "TM-042",
       "spec": "15.4",
       "threat": "Error envelope leaks a credential, signed URL, request body or transcript excerpt",
-      "control": "Every security error crosses into the application taxonomy through one mapping module onto the closed AppErrorCode set; the user-facing message is chosen by the domain code and the security layer's specific reason travels only in AppError::detail, which is never serialized to the frontend",
+      "control": "Every security error crosses into the application taxonomy through one mapping module onto the closed AppErrorCode set; the user-facing message is chosen by the domain code and the security layer's specific reason travels only in AppError::detail, which is never shown to the user and never carried into an event",
       "owner": "crates/security/src/domain_map.rs",
       "epic": "D",
       "verification": [

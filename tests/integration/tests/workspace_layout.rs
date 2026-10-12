@@ -46,7 +46,7 @@ const REQUIRED_CRATES: &[&str] = &[
 /// Every non-crate directory required by spec 6.4.
 const REQUIRED_DIRECTORIES: &[&str] = &[
     "native/apple-bridge",
-    "apps/desktop",
+    "apps/plaudon-egui",
     "schemas",
     "tests/fixtures",
     "tests/integration",
@@ -187,10 +187,16 @@ fn the_toolchain_is_pinned_with_fmt_and_clippy() {
 /// Dependencies the core must never acquire (spec 6.3(1)).
 ///
 /// The core may not depend on the UI shell, a vendor transport, a vendor AI
-/// gateway, an Apple bridge or an HTTP client.
+/// gateway, an Apple bridge or an HTTP client. `tauri` and `tauri-build` stay
+/// on the list after the EPIC O cutover (ADR-0024) removed the Tauri shell:
+/// the point of the list is that the core never acquires a shell dependency,
+/// and the shell it must not acquire now is `egui`/`eframe`/`plaudon-ui`.
 const FORBIDDEN_CORE_DEPENDENCIES: &[&str] = &[
     "tauri",
     "tauri-build",
+    "egui",
+    "eframe",
+    "plaudon-ui",
     "btleplug",
     "reqwest",
     "hyper",

@@ -206,8 +206,10 @@ async fn delivered_payloads_carry_a_routable_target_token() {
     );
 }
 
+/// The shape `set_notification_settings.request.schema.json` publishes, which
+/// the deleted TypeScript contract used to be the second copy of.
 #[tokio::test]
-async fn settings_serialise_to_the_typescript_wire_shape() {
+async fn settings_serialise_to_the_published_wire_shape() {
     let settings = NotificationSettings::uniform(false)
         .with_enabled(true)
         .with_category(NotificationCategory::RequiresAttention, true);

@@ -37,7 +37,7 @@ All three follow the existing one-request-struct / typed-response / §15.4-error
 
 ## Consequences
 
-- The desktop contract (`apps/desktop/src/ipc/contract.ts`), the versioned schemas under `schemas/commands/v1/`, and the allowlist in `apps/desktop/src-tauri/src/commands/mod.rs` enumerate 19 commands; drift fails CI.
+- The versioned schemas under `schemas/commands/v1/` and the generated command table in `crates/app/src/command.rs` enumerate the same 19 commands; drift fails CI. (The TypeScript contract and the `#[tauri::command]` allowlist that used to be the other two copies of this list were deleted at the EPIC O cutover, ADR-0024.)
 - A claim can reach `human_confirmed` **only** through `review_claim`; the database schema enforces that `state = 'human_confirmed'` requires non-null `reviewer` and `reviewed_at`, so a DTO that omits those fields cannot persist a confirmed claim.
 - The frontend never computes a seek position: when `seek_ms` is absent, no seek button is rendered and no time is invented. This preserves the §8.6A guarantee that a revision with no alignment never exposes a fabricated timeline.
 - Sentinel values (`"Unassigned"`, `"Not specified"`) are rendered in Rust and appear in the wire DTO, so the frontend cannot mistake a missing field for "none required" and the UI always shows the explicit sentinel.
