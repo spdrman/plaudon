@@ -313,6 +313,8 @@ async fn a_catalog_only_probe_cannot_verify_a_model() {
         pricing_unit: Known::Unknown,
         observed_on: "2026-10-11".to_owned(),
         audio_tokens_per_second: Known::Unknown,
+        structured_output: Tri::Unknown,
+        max_output_tokens: Known::Unknown,
         notes: String::new(),
     };
     cloud
@@ -363,6 +365,8 @@ async fn an_observed_probe_with_a_resolved_route_verifies_and_persists() {
         pricing_unit: Known::Unknown,
         observed_on: "2026-10-11".to_owned(),
         audio_tokens_per_second: Known::Unknown,
+        structured_output: Tri::Unknown,
+        max_output_tokens: Known::Unknown,
         notes: String::new(),
     };
     cloud

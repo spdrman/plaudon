@@ -316,9 +316,7 @@ async fn commit(
         .await?;
     attach_recording(backend, job_id, recording_id).await?;
 
-    let mut tx = backend
-        .pool()
-        .begin()
+    let mut tx = plaudon_persistence::begin_write(backend.pool())
         .await
         .map_err(|err| storage_error("cannot begin an import commit", &err))?;
     jobs::complete_in_tx(

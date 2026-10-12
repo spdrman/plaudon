@@ -48,7 +48,10 @@ pub use request::{
     AudioChatRequest, MultipartSttRequest, RequestBuildError, TextGenerationRequest,
 };
 pub use retry::{RetryDecision, RetryPolicy};
-pub use smoke::{CapabilitySmokeTest, SmokeTestOutcome};
+pub use smoke::{
+    CapabilitySmokeTest, SmokeTestOutcome, TextCapabilityCheck, TextCheckOutcome,
+    TEXT_PROBE_OUTPUT_TOKENS,
+};
 pub use transport::{AsyncHttpTransport, TransportFailure};
 
 /// The model catalog path (spec 10.1).

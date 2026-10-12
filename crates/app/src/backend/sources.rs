@@ -447,9 +447,7 @@ impl LocalBackend {
     }
 
     async fn close_pass_ok(&self, job: &PassJob) -> Result<(), AppError> {
-        let mut tx = self
-            .pool()
-            .begin()
+        let mut tx = plaudon_persistence::begin_write(self.pool())
             .await
             .map_err(|err| storage_error("cannot begin a source sync commit", &err))?;
         jobs::complete_in_tx(&mut tx, job.id, None).await?;
@@ -1228,9 +1226,7 @@ impl LocalBackend {
         title: &str,
         now: Timestamp,
     ) -> Result<String, AppError> {
-        let mut tx = self
-            .pool()
-            .begin()
+        let mut tx = plaudon_persistence::begin_write(self.pool())
             .await
             .map_err(|err| storage_error("cannot begin an import commit", &err))?;
         jobs::complete_in_tx(

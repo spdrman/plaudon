@@ -58,6 +58,8 @@ eframe = { workspace = true, features = ["x11", "wayland"] }
 # recording HTTPS transport. All four are already in the graph through
 # `plaudon-app`.
 async-trait = { workspace = true }
+# The scripted speech and text engines the processing tests run against.
+plaudon-app = { workspace = true, features = ["test-support"] }
 plaudon-ai-openrouter = { workspace = true }
 plaudon-plaud-ble = { workspace = true }
 plaudon-plaud-protocol = { workspace = true }
@@ -65,6 +67,7 @@ plaudon-security = { workspace = true }
 plaudon-transcript-doc = { workspace = true }
 plaudon-ui-testkit = { workspace = true }
 tempfile = { workspace = true }
+serde_json = { workspace = true }
 
 [lints]
 workspace = true

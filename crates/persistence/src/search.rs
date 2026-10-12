@@ -149,7 +149,7 @@ impl TranscriptSearchRepository {
     /// bypasses the triggers, and as a repair for an index damaged by an
     /// interrupted write.
     pub async fn rebuild(&self) -> PersistenceResult<u64> {
-        let mut tx = self.db.pool().begin().await?;
+        let mut tx = self.db.begin_write().await?;
         sqlx::query("DELETE FROM transcript_search")
             .execute(&mut *tx)
             .await?;

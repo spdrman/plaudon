@@ -324,7 +324,7 @@ impl MigrationRunner {
     }
 
     async fn apply_one(db: &Database, migration: &Migration) -> PersistenceResult<()> {
-        let mut tx = db.pool().begin().await?;
+        let mut tx = db.begin_write().await?;
         sqlx::raw_sql(migration.sql)
             .execute(&mut *tx)
             .await

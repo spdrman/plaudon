@@ -26,7 +26,7 @@ pub mod speakers;
 pub mod tools;
 pub mod transcript;
 
-pub use db::Database;
+pub use db::{begin_write, Database};
 pub use error::{PersistenceError, PersistenceResult};
 
 /// Cargo package name of this crate, used by the workspace layout conformance test.

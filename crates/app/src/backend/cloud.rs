@@ -65,13 +65,12 @@ use crate::backend::LocalBackend;
 use crate::dto::{
     CloudBudget, ConsentSummary, CostConfidence, CostValue, EventKind, GetUsageResponse,
     GrantCloudConsentResponse, JobKind, JobState, ListModelsResponse, ModelCard, ModelFeatures,
-    ModelPricing, ModelPrivacy, MoneyAmount, OutputLink, OutputLinkKind,
-    SetModelPreferenceResponse, StartProcessingResponse, TriState, UsageAttempt, UsageByModel,
-    UsageTotals, VerifyModelResponse,
+    ModelPricing, ModelPrivacy, MoneyAmount, SetModelPreferenceResponse, StartProcessingResponse,
+    TriState, UsageAttempt, UsageByModel, UsageTotals, VerifyModelResponse,
 };
 use crate::error::internal;
 use crate::events::EventDraft;
-use crate::ports::{CloudPort, MachineRevisionSpec, MachineSegment, SettingsPort, TranscriptPort};
+use crate::ports::{CloudPort, SettingsPort};
 use crate::secrets::SecretStore;
 use crate::validate::{
     ValidatedBudget, ValidatedConsent, ValidatedConsentScope, ValidatedListModels,
@@ -522,15 +521,19 @@ pub(super) struct DispatchPlan {
 }
 
 /// Media facts of the recording to transcribe.
+///
+/// Visible to the sibling backend modules because a local engine reads the
+/// same archived blob a cloud one uploads: the transcribe executor builds
+/// its `SttInput` from exactly these facts.
 #[derive(Debug, Clone)]
-struct MediaFacts {
-    path: std::path::PathBuf,
-    sha256: Sha256Digest,
-    byte_length: u64,
-    duration_ms: Option<u64>,
-    sample_rate_hz: u32,
-    channels: u16,
-    format: MediaFormat,
+pub(super) struct MediaFacts {
+    pub(super) path: std::path::PathBuf,
+    pub(super) sha256: Sha256Digest,
+    pub(super) byte_length: u64,
+    pub(super) duration_ms: Option<u64>,
+    pub(super) sample_rate_hz: u32,
+    pub(super) channels: u16,
+    pub(super) format: MediaFormat,
 }
 
 /// A cloud transcription that passed every pre-dispatch check.
@@ -763,7 +766,10 @@ impl LocalBackend {
         }
     }
 
-    async fn media_facts(&self, recording_id: RecordingId) -> Result<MediaFacts, AppError> {
+    pub(super) async fn media_facts(
+        &self,
+        recording_id: RecordingId,
+    ) -> Result<MediaFacts, AppError> {
         let row = sqlx::query(
             "SELECT a.relative_path AS relative_path, a.byte_length AS byte_length, \
                     a.sha256 AS sha256, a.codec AS codec, a.sample_rate AS sample_rate, \
@@ -847,8 +853,13 @@ impl LocalBackend {
         Ok(count > 0)
     }
 
-    /// Every check that must pass before a cloud transcription job exists.
-    async fn prepare_cloud_transcription(
+    /// Every check that must pass before a cloud transcription is sent.
+    ///
+    /// Run twice: once by `start_processing`, so a refusal leaves no job row
+    /// at all, and once by the executor at dispatch time, so a key removed, a
+    /// budget lowered or a consent revoked while the job waited still stops
+    /// it before a byte leaves.
+    pub(super) async fn prepare_cloud_transcription(
         &self,
         recording_id: RecordingId,
         model_id: &str,
@@ -905,48 +916,26 @@ impl LocalBackend {
         })
     }
 
-    async fn publish_job(&self, job_id: JobId) {
+    pub(super) async fn publish_job(&self, job_id: JobId) {
         if let Ok(summary) = jobs::load(self.pool(), job_id).await {
             jobs::publish_update(self.events(), &summary).await;
         }
     }
 
-    /// Run one prepared transcription in the background.
-    fn spawn_transcription(
+    /// Send one prepared transcription and return what came back.
+    ///
+    /// State, progress and the commit belong to the worker that called this
+    /// (`backend::processing`); the only thing that happens here is the
+    /// dispatch itself, which is the one step that must not be repeated
+    /// without a user's acknowledgement.
+    pub(super) async fn dispatch_cloud_transcription(
         &self,
-        job_id: JobId,
         recording_id: RecordingId,
-        prepared: PreparedTranscription,
-    ) {
-        let backend = self.clone();
-        tokio::spawn(async move {
-            if let Err(error) = backend
-                .execute_transcription(job_id, recording_id, prepared)
-                .await
-            {
-                backend.settle_failed_job(job_id, &error).await;
-            }
-        });
-    }
-
-    async fn execute_transcription(
-        &self,
-        job_id: JobId,
-        recording_id: RecordingId,
-        prepared: PreparedTranscription,
-    ) -> Result<(), AppError> {
-        jobs::transition(
-            self.pool(),
-            job_id,
-            JobState::CloudSending,
-            Some("sending"),
-            None,
-        )
-        .await?;
-        self.publish_job(job_id).await;
-
+        prepared: &PreparedTranscription,
+        ctx: &JobContext,
+    ) -> Result<TranscriptDraft, AppError> {
         let binding = JobBinding {
-            job_id: job_id.to_string(),
+            job_id: ctx.job_id.to_string(),
             recording_id: recording_id.to_string(),
             consent_id: prepared.plan.grant_id.clone(),
             privacy_snapshot: prepared.plan.resolution.snapshot(),
@@ -970,66 +959,16 @@ impl LocalBackend {
         input.duration_ms = media.duration_ms;
 
         let outcome = client
-            .transcribe_with_cost(input, JobContext::new(job_id))
+            .transcribe_with_cost(input, ctx.clone())
             .await
             .map_err(AppError::from)?;
-        self.commit_transcription(job_id, recording_id, &prepared.card, outcome.draft)
-            .await
-    }
-
-    async fn commit_transcription(
-        &self,
-        job_id: JobId,
-        recording_id: RecordingId,
-        card: &DomainCard,
-        draft: TranscriptDraft,
-    ) -> Result<(), AppError> {
-        let to_ms = |time: plaudon_ai_contracts::transcript::SourceTime| {
-            time.sample_offset.saturating_mul(1000) / u64::from(time.sample_rate_hz.max(1))
-        };
-        let segments = draft
-            .segments
-            .iter()
-            .map(|segment| MachineSegment {
-                text: segment.text.clone(),
-                start_ms: segment.start.map(to_ms),
-                end_ms: segment.end.map(to_ms),
-                confidence: None,
-                speaker_label: None,
-            })
-            .collect();
-        self.create_machine_revision(MachineRevisionSpec {
-            recording_id,
-            segments,
-            engine_id: OPENROUTER_ENGINE_ID.to_owned(),
-            model_id: card.model_id.clone(),
-            alignment_origin: draft.alignment_origin,
-        })
-        .await?;
-
-        let mut conn = self
-            .pool()
-            .acquire()
-            .await
-            .map_err(|err| storage_error("cannot complete the job", &err))?;
-        jobs::complete_in_tx(
-            &mut conn,
-            job_id,
-            Some(OutputLink {
-                kind: OutputLinkKind::Recording,
-                id: recording_id.to_string(),
-            }),
-        )
-        .await?;
-        drop(conn);
-        self.publish_job(job_id).await;
-        Ok(())
+        Ok(outcome.draft)
     }
 
     /// Record how a job ended when its dispatch did not succeed. An outcome
     /// that is unknown parks the job as possibly billed; it is never retried
     /// without an explicit cost acknowledgement.
-    async fn settle_failed_job(&self, job_id: JobId, error: &AppError) {
+    pub(super) async fn settle_failed_job(&self, job_id: JobId, error: &AppError) {
         let settled = if error.code() == AppErrorCode::OutcomeUnknown {
             self.park_outcome_unknown(job_id).await
         } else {
@@ -1062,42 +1001,6 @@ impl LocalBackend {
         Ok(())
     }
 
-    /// Re-check a failed or cancelled cloud transcription before `retry_job`
-    /// requeues it, so a refusal leaves the job exactly as it was.
-    pub(crate) async fn plan_cloud_retry(
-        &self,
-        job_id: JobId,
-        cost_acknowledged: bool,
-    ) -> Result<(RecordingId, PreparedTranscription), AppError> {
-        let config = jobs::config_snapshot(self.pool(), job_id).await?;
-        let text = |key: &str| config.get(key).and_then(serde_json::Value::as_str);
-        if text("engine") != Some(OPENROUTER_ENGINE_ID) {
-            return Err(AppError::new(
-                AppErrorCode::CapabilityUnverified,
-                "this build has no executor for local transcription jobs",
-            ));
-        }
-        let (Some(model_id), Some(recording)) = (text("model_id"), text("recording_id")) else {
-            return Err(internal("a cloud job has no model or recording"));
-        };
-        let recording_id: RecordingId = recording
-            .parse()
-            .map_err(|_| internal("stored recording id is not a uuid"))?;
-        let prepared = self
-            .prepare_cloud_transcription(recording_id, model_id, cost_acknowledged)
-            .await?;
-        Ok((recording_id, prepared))
-    }
-
-    /// Run a retry planned by [`Self::plan_cloud_retry`].
-    pub(crate) fn launch_cloud_retry(
-        &self,
-        job_id: JobId,
-        plan: (RecordingId, PreparedTranscription),
-    ) {
-        self.spawn_transcription(job_id, plan.0, plan.1);
-    }
-
     /// Mark attempts a crash left in flight as unknown and park their jobs
     /// as possibly billed (spec §14.3).
     pub(crate) async fn reconcile_cloud_attempts(&self) -> Result<usize, AppError> {
@@ -1122,29 +1025,34 @@ impl LocalBackend {
         Ok(moved.len())
     }
 
-    async fn queue_local_job(
+    /// Queue one stage for the worker pool, local or cloud.
+    ///
+    /// The job is keyed on the audio digest, the stage, the engine and the
+    /// model, so asking twice for work already pending reuses it instead of
+    /// running it twice (§14.2).
+    async fn queue_stage(
         &self,
         request: &ValidatedStartProcessing,
         choice: &ModelChoice,
+        estimated_cost: CostValue,
+        cloud: bool,
     ) -> Result<StartProcessingResponse, AppError> {
-        let job_id = jobs::create(
-            self.pool(),
-            &JobDraft {
-                kind: job_kind_for_stage(request.stage),
-                label: format!("Process ({})", request.stage.as_str()),
-                recording_id: Some(request.recording_id),
-                config_snapshot: json!({
-                    "engine": choice.engine,
-                    "model_id": choice.model_id,
-                    "stage": request.stage.as_str(),
-                }),
-            },
-        )
-        .await?;
-        self.publish_job(job_id).await;
+        let media = self.media_facts(request.recording_id).await?;
+        let stage = crate::backend::processing::StageRequest {
+            recording_id: request.recording_id,
+            kind: job_kind_for_stage(request.stage),
+            engine: choice.engine.clone(),
+            model_id: choice.model_id.clone(),
+            stage: request.stage.as_str().to_owned(),
+            label: format!("Process ({})", request.stage.as_str()),
+            audio_sha256: media.sha256.to_hex(),
+            cloud,
+            cost_acknowledged: request.cost_acknowledged,
+        };
+        let job_id = self.enqueue_stage(&stage).await?;
         Ok(StartProcessingResponse {
             job_id: job_id.to_string(),
-            estimated_cost: CostValue::unknown(),
+            estimated_cost,
             dispatch: "queued".to_owned(),
             blocked_reason: None,
         })
@@ -1419,7 +1327,9 @@ impl CloudPort for LocalBackend {
 
         // A local engine never touches the network from here.
         if !effective.choice.is_cloud() {
-            return self.queue_local_job(&request, &effective.choice).await;
+            return self
+                .queue_stage(&request, &effective.choice, CostValue::unknown(), false)
+                .await;
         }
         let model_id = effective.choice.model_id.clone().ok_or_else(|| {
             AppError::new(
@@ -1434,50 +1344,24 @@ impl CloudPort for LocalBackend {
             ));
         }
 
+        // Every pre-dispatch check runs *before* the job row exists, so a
+        // refusal leaves no job, no ledger row and nothing transmitted. The
+        // executor runs them again at dispatch time, because the answer can
+        // change while a job waits in the queue.
         let prepared = self
             .prepare_cloud_transcription(request.recording_id, &model_id, request.cost_acknowledged)
             .await?;
-        let job_id = jobs::create(
-            self.pool(),
-            &JobDraft {
-                kind: JobKind::Transcribe,
-                label: "Transcribe (cloud)".to_owned(),
-                recording_id: Some(request.recording_id),
-                config_snapshot: json!({
-                    "engine": OPENROUTER_ENGINE_ID,
-                    "model_id": model_id,
-                    "stage": request.stage.as_str(),
-                }),
-            },
-        )
-        .await?;
-        jobs::transition(
-            self.pool(),
-            job_id,
-            JobState::CloudReady,
-            Some("ready to send"),
-            None,
-        )
-        .await?;
         let estimated_cost = cost_value(prepared.estimate.amount);
-        self.spawn_transcription(job_id, request.recording_id, prepared);
-        Ok(StartProcessingResponse {
-            job_id: job_id.to_string(),
-            estimated_cost,
-            dispatch: "queued".to_owned(),
-            blocked_reason: None,
-        })
+        self.queue_stage(&request, &effective.choice, estimated_cost, true)
+            .await
     }
 
     async fn verify_model(
         &self,
         request: ValidatedVerifyModel,
     ) -> Result<VerifyModelResponse, AppError> {
-        if request.task != ModelTask::Transcription {
-            return Err(AppError::new(
-                AppErrorCode::CapabilityUnverified,
-                "this build has no capability check for text models",
-            ));
+        if request.task == ModelTask::TextGeneration {
+            return self.verify_text_model(request).await;
         }
         let card = self.card_for(request.task, &request.model_id).await?;
         let candidate = self

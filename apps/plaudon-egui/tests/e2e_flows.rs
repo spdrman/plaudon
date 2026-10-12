@@ -41,13 +41,15 @@ use plaudon_app::backend::devices::{
 };
 use plaudon_app::command::{AppCommand, AppResponse};
 use plaudon_app::dto::{
-    Appearance, GetRecordingRequest, JobKind, JobSummary, ListJobsRequest, ListOutputsRequest,
-    ListRecordingsRequest, RecordingDetail, RecordingFilter, RecordingSort, RecordingSortField,
-    RecordingSummary, SortDirection,
+    Appearance, CancelJobRequest, GetRecordingRequest, JobKind, JobState, JobSummary,
+    ListJobsRequest, ListOutputsRequest, ListRecordingsRequest, ModelPreferenceScope,
+    RecordingDetail, RecordingFilter, RecordingSort, RecordingSortField, RecordingSummary,
+    SetModelPreferenceRequest, SortDirection, StartProcessingRequest,
 };
 use plaudon_app::ports::{MachineRevisionSpec, MachineSegment};
 use plaudon_app::runtime::AppEngine;
 use plaudon_app::shell_state::ShellStateStore;
+use plaudon_app::testing_engines::{ScriptedStt, ScriptedTextModel, SCRIPTED_STT_ENGINE};
 use plaudon_audio_playback::time::Micros;
 use plaudon_audio_playback::FakeDevice;
 use plaudon_domain::error::{AppError, AppErrorCode};
@@ -905,5 +907,229 @@ fn every_destination_is_reachable_with_the_tab_key_alone() {
     assert!(
         order.iter().any(|stop| stop == "Import an audio file"),
         "the library's own corrective control is unreachable: {order:?}"
+    );
+}
+
+/* -------------------------------------------------------- real processing */
+
+/// A library whose speech and text engines are scripted, so the real
+/// processing pipeline runs with no model file and no network.
+///
+/// Everything above the engine contract is production code: the job engine
+/// opens the row, a worker claims it, the executor commits the revision and
+/// the output, and the shell learns about all of it through the ordinary
+/// event stream.
+fn scripted_engine(dir: &Path) -> AppEngine {
+    let config = support::config(dir)
+        .with_stt_engines(vec![ScriptedStt::new(&[
+            "We agreed to ship on Friday.",
+            "Dana owns the release notes.",
+        ])
+        .with_pace_ms(40)
+        .shared()])
+        .with_text_model(
+            ScriptedTextModel::new(serde_json::Value::Null)
+            .shared(),
+        );
+    AppEngine::start(config).expect("the engine starts over the library")
+}
+
+/// Import one file through the interface, over an engine the test built.
+fn imported_over(engine: AppEngine, hooks: HostHooks) -> App {
+    let (audio, _device) = support::fake_audio_out();
+    let app = support::app_over(engine, hooks, audio);
+    // Tall, for the same reason `imported_in` is: the recording detail is a
+    // fixed pane, so at the default height the transcript rows are laid out
+    // below the fold and never created.
+    let mut harness = plaudon_ui_testkit::builder()
+        .with_size(egui::vec2(plaudon_ui_testkit::DEFAULT_SIZE.x, 1_800.0))
+        .build_ui_state(|ui, app: &mut PlaudonShell| app.view(ui), app);
+    support::settle(&mut harness);
+    support::run_until_announced(&mut harness, "Import an audio file");
+    harness.get_by_label("Import an audio file").click();
+    support::run_until_frame(&mut harness, "the imported recording", |harness| {
+        recordings(harness.state()).len() == 1
+    });
+    harness
+}
+
+/// Point one stage at an engine, the way the model picker does.
+fn prefer_engine(app: &PlaudonShell, stage: &str, engine: &str) {
+    let answer = app
+        .engine()
+        .dispatcher()
+        .call_blocking(AppCommand::SetModelPreference(SetModelPreferenceRequest {
+            stage: stage.to_owned(),
+            scope: ModelPreferenceScope {
+                kind: "default".to_owned(),
+                recording_id: None,
+            },
+            engine: engine.to_owned(),
+            model_id: Some("scripted-small".to_owned()),
+        }));
+    assert!(
+        matches!(answer, Ok(AppResponse::SetModelPreference(_))),
+        "set_model_preference answered {answer:?}"
+    );
+}
+
+/// Ask for one stage, the way the stage panel's run control does.
+fn start_stage(app: &PlaudonShell, recording_id: RecordingId, stage: &str) -> String {
+    let answer = app
+        .engine()
+        .dispatcher()
+        .call_blocking(AppCommand::StartProcessing(StartProcessingRequest {
+            recording_id: recording_id.to_string(),
+            stage: stage.to_owned(),
+            model_override: None,
+            cost_acknowledged: false,
+            rerun: false,
+        }));
+    match answer {
+        Ok(AppResponse::StartProcessing(response)) => response.job_id,
+        other => panic!("start_processing answered {other:?}"),
+    }
+}
+
+/// The job the test started, as the application holds it.
+fn job(app: &PlaudonShell, job_id: &str) -> JobSummary {
+    jobs(app)
+        .into_iter()
+        .find(|job| job.job_id.to_string() == job_id)
+        .expect("the job exists")
+}
+
+#[test]
+fn a_queued_stage_runs_to_completion_and_its_transcript_and_summary_appear() {
+    let dir = tempfile::tempdir().expect("temporary library");
+    let media = dir.path().join("team-sync.wav");
+    write_wav(&media, 2);
+    let store = ShellStateStore::new(dir.path());
+    let (hooks, _) = hooks_with_dialogs(store, vec![media], None);
+    let engine = scripted_engine(dir.path());
+    // Local-only Mode is on: this whole flow is local work, and the test
+    // would rather fail than let a cloud route in by accident.
+    support::complete_onboarding(&engine, true);
+    let mut harness = imported_over(engine, hooks);
+    let row = recordings(harness.state()).remove(0);
+
+    prefer_engine(harness.state(), "transcribe", SCRIPTED_STT_ENGINE);
+    prefer_engine(
+        harness.state(),
+        "structured_extraction",
+        SCRIPTED_STT_ENGINE,
+    );
+    let job_id = start_stage(harness.state(), row.recording_id, "transcribe");
+
+    harness.state_mut().shell_mut().navigate(Route::Jobs);
+    support::run_until_announced(&mut harness, "Jobs");
+
+    // Queued → running: the state the worker reports, rendered with its own
+    // label and glyph rather than colour alone.
+    support::run_until_frame(&mut harness, "the job to start", |harness| {
+        !matches!(job(harness.state(), &job_id).state, JobState::Queued)
+    });
+    support::run_until_frame(&mut harness, "the running label", |harness| {
+        support::announces(harness, "Running locally") || job_is_done(harness.state(), &job_id)
+    });
+
+    // …and on to completed, with the output link the finished job carries.
+    support::run_until_frame(&mut harness, "the job to finish", |harness| {
+        job_is_done(harness.state(), &job_id)
+    });
+    let finished = job(harness.state(), &job_id);
+    assert_eq!(finished.state, JobState::Completed);
+    assert_eq!(
+        finished.output_link.as_ref().map(|link| link.id.clone()),
+        Some(row.recording_id.to_string()),
+        "a finished job says what to open"
+    );
+    support::run_until_announced(&mut harness, "Completed");
+
+    // The transcript the executor committed is the one the editor shows.
+    open_detail(&mut harness, row.recording_id);
+    support::run_until_announced(&mut harness, "Segment 1");
+    assert_eq!(
+        segment_text(&harness),
+        "We agreed to ship on Friday.",
+        "the editor opened on the revision the worker committed"
+    );
+
+    // And the summary stage, over the committed revision, produces an output
+    // the review tab can list.
+    let summary_job = start_stage(harness.state(), row.recording_id, "structured_extraction");
+    support::run_until_frame(&mut harness, "the summary to finish", |harness| {
+        job_is_done(harness.state(), &summary_job)
+    });
+    assert_eq!(job(harness.state(), &summary_job).state, JobState::Completed);
+    let answer = harness
+        .state()
+        .engine()
+        .dispatcher()
+        .call_blocking(AppCommand::ListOutputs(ListOutputsRequest {
+            recording_id: row.recording_id.to_string(),
+        }));
+    match answer {
+        Ok(AppResponse::ListOutputs(response)) => assert_eq!(
+            response.outputs.len(),
+            1,
+            "the summarize job committed exactly one output"
+        ),
+        other => panic!("list_outputs answered {other:?}"),
+    }
+}
+
+/// Whether the job reached a terminal state.
+fn job_is_done(app: &PlaudonShell, job_id: &str) -> bool {
+    job(app, job_id).state.is_terminal()
+}
+
+#[test]
+fn cancelling_a_running_stage_ends_it_and_commits_no_transcript() {
+    let dir = tempfile::tempdir().expect("temporary library");
+    let media = dir.path().join("long-call.wav");
+    write_wav(&media, 2);
+    let store = ShellStateStore::new(dir.path());
+    let (hooks, _) = hooks_with_dialogs(store, vec![media], None);
+    let config = support::config(dir.path()).with_stt_engines(vec![ScriptedStt::new(&[
+        "one", "two", "three", "four", "five", "six",
+    ])
+    .with_pace_ms(150)
+    .shared()]);
+    let engine = AppEngine::start(config).expect("the engine starts");
+    support::complete_onboarding(&engine, true);
+    let mut harness = imported_over(engine, hooks);
+    let row = recordings(harness.state()).remove(0);
+    prefer_engine(harness.state(), "transcribe", SCRIPTED_STT_ENGINE);
+    let job_id = start_stage(harness.state(), row.recording_id, "transcribe");
+
+    harness.state_mut().shell_mut().navigate(Route::Jobs);
+    support::run_until_frame(&mut harness, "the job to start", |harness| {
+        matches!(
+            job(harness.state(), &job_id).state,
+            JobState::RunningLocal | JobState::Cancelling
+        )
+    });
+
+    let answer = harness
+        .state()
+        .engine()
+        .dispatcher()
+        .call_blocking(AppCommand::CancelJob(CancelJobRequest {
+            job_id: job_id.clone(),
+        }));
+    assert!(
+        matches!(answer, Ok(AppResponse::CancelJob(_))),
+        "cancel_job answered {answer:?}"
+    );
+    support::run_until_frame(&mut harness, "the cancellation to finish", |harness| {
+        job_is_done(harness.state(), &job_id)
+    });
+    assert_eq!(job(harness.state(), &job_id).state, JobState::Cancelled);
+
+    let detail = detail(harness.state(), row.recording_id);
+    assert!(
+        detail.revisions.is_empty() && detail.current_revision_id.is_none(),
+        "a cancelled run committed a partial transcript"
     );
 }

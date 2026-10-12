@@ -6,9 +6,25 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions, SqliteSynchronous};
-use sqlx::{Row, SqlitePool};
+use sqlx::{Row, Sqlite, SqlitePool, Transaction};
 
 use crate::error::{PersistenceError, PersistenceResult};
+
+/// Begin a write transaction on `pool`.
+///
+/// Every transaction that will write **must** start here rather than at
+/// `pool.begin()`. `BEGIN` is deferred: it takes a read snapshot, and the
+/// first write statement then has to upgrade that snapshot to the write lock.
+/// SQLite refuses the upgrade with `SQLITE_BUSY` the instant any other
+/// connection committed since the snapshot was taken, and it does *not*
+/// consult the busy handler for that case, so `busy_timeout` cannot absorb
+/// it — the statement simply fails. `BEGIN IMMEDIATE` takes the write lock at
+/// the start, where the busy handler does apply, so concurrent writers queue
+/// up for `busy_timeout` instead of failing a transaction that had already
+/// read.
+pub async fn begin_write(pool: &SqlitePool) -> Result<Transaction<'static, Sqlite>, sqlx::Error> {
+    pool.begin_with("BEGIN IMMEDIATE").await
+}
 
 /// An open library database.
 #[derive(Debug, Clone)]
@@ -50,6 +66,11 @@ impl Database {
     #[must_use]
     pub fn pool(&self) -> &SqlitePool {
         &self.pool
+    }
+
+    /// Begin a write transaction (see [`begin_write`]).
+    pub async fn begin_write(&self) -> PersistenceResult<Transaction<'static, Sqlite>> {
+        Ok(begin_write(&self.pool).await?)
     }
 
     /// Path of the database file.

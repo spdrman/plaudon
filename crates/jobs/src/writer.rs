@@ -1,11 +1,16 @@
 //! Single-writer SQLite coordinator (SPEC v1.3 §6.3A, §13.1).
 //!
-//! Every mutating statement in the application funnels through one serialized
-//! writer task that owns the only write connection. Readers use a separate
-//! pool and run concurrently against WAL snapshots. Because exactly one
-//! connection ever holds the write lock and the writer task executes submitted
-//! work strictly one at a time, `SQLITE_BUSY` cannot arise from our own
-//! concurrency.
+//! Every mutating statement the job engine makes funnels through one
+//! serialized writer task that owns the only write connection it has. Readers
+//! use a separate pool and run concurrently against WAL snapshots.
+//!
+//! The engine is not alone on the file: the desktop application keeps its own
+//! pool over the same library, so the write lock *is* contended. Every
+//! transaction here therefore starts with `BEGIN IMMEDIATE`
+//! ([`plaudon_persistence::begin_write`]), which takes that lock up front
+//! where SQLite's busy handler applies. A plain `BEGIN` would read first and
+//! fail the later upgrade with `SQLITE_BUSY` — without consulting the busy
+//! handler — as soon as the other pool committed in between.
 //!
 //! The coordinator lives in `plaudon-jobs` rather than `plaudon-persistence`
 //! because the post-commit event dispatch it feeds (§14.5) is owned by the job
@@ -125,8 +130,13 @@ async fn run_transaction<T, F>(pool: SqlitePool, f: F) -> Result<T, JobError>
 where
     F: for<'a> FnOnce(&'a mut Transaction<'static, Sqlite>) -> BoxFut<'a, Result<T, JobError>>,
 {
-    let mut tx = pool
-        .begin()
+    // `BEGIN IMMEDIATE`, not `BEGIN`: the application's own pool writes the
+    // same library file, and a deferred transaction that reads before it
+    // writes cannot take the write lock afterwards — SQLite fails the upgrade
+    // with `SQLITE_BUSY` without consulting the busy handler as soon as
+    // anyone committed since the read snapshot. Taking the lock up front is
+    // what makes `busy_timeout` absorb the contention.
+    let mut tx = plaudon_persistence::begin_write(&pool)
         .await
         .map_err(|e| JobError::storage("begin transaction", e))?;
     match f(&mut tx).await {

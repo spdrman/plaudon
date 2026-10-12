@@ -131,7 +131,7 @@ impl SpeakerRepository {
         run: &DiarizationRunInsert,
         turns: &[SpeakerTurnInsert],
     ) -> PersistenceResult<()> {
-        let mut tx = self.db.pool().begin().await?;
+        let mut tx = self.db.begin_write().await?;
         sqlx::query(
             "INSERT INTO diarization_runs (id, recording_id, media_asset_id, provider_id,
                  provider_version, privacy_class, status, input_sha256, detected_cluster_count,
@@ -192,7 +192,7 @@ impl SpeakerRepository {
         cluster_order: &[String],
         assignments: &[AssignmentInsert],
     ) -> PersistenceResult<Vec<StoredSpeaker>> {
-        let mut tx = self.db.pool().begin().await?;
+        let mut tx = self.db.begin_write().await?;
 
         for (index, cluster_key) in cluster_order.iter().enumerate() {
             let label = format!("Speaker {}", index + 1);

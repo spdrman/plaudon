@@ -267,7 +267,7 @@ impl RecordingRepository {
 
     /// Insert a recording and its tags.
     pub async fn insert(&self, recording: &Recording) -> PersistenceResult<()> {
-        let mut tx = self.db.pool().begin().await?;
+        let mut tx = self.db.begin_write().await?;
         sqlx::query(
             "INSERT INTO recordings (id, title, captured_at, duration_ms, annotation, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
@@ -301,7 +301,7 @@ impl RecordingRepository {
         recording_id: RecordingId,
         candidate: &RecordingMedia,
     ) -> PersistenceResult<()> {
-        let mut tx = self.db.pool().begin().await?;
+        let mut tx = self.db.begin_write().await?;
         sqlx::query(
             "INSERT INTO recording_media (recording_id, media_asset_id, quality_class, obtained_at)
              VALUES (?1, ?2, ?3, ?4)",
@@ -431,7 +431,7 @@ impl RecordingRepository {
 
     /// Replace the user-editable fields of a recording.
     pub async fn update_user_fields(&self, recording: &Recording) -> PersistenceResult<()> {
-        let mut tx = self.db.pool().begin().await?;
+        let mut tx = self.db.begin_write().await?;
         sqlx::query("UPDATE recordings SET title = ?2, annotation = ?3 WHERE id = ?1")
             .bind(recording.id.to_string())
             .bind(&recording.title)
@@ -463,7 +463,7 @@ impl RecordingRepository {
         at: Timestamp,
         retention_until: Option<Timestamp>,
     ) -> PersistenceResult<()> {
-        let mut tx = self.db.pool().begin().await?;
+        let mut tx = self.db.begin_write().await?;
         sqlx::query("UPDATE recordings SET deleted_at = ?2 WHERE id = ?1")
             .bind(id.to_string())
             .bind(at.as_millis())
@@ -501,7 +501,7 @@ impl RecordingRepository {
     /// Spec 7.10: resurrection is a user decision. Nothing in a sync pass may
     /// call this; the only caller is the Reimport command.
     pub async fn clear_tombstone(&self, id: RecordingId) -> PersistenceResult<()> {
-        let mut tx = self.db.pool().begin().await?;
+        let mut tx = self.db.begin_write().await?;
         sqlx::query("UPDATE recordings SET deleted_at = NULL WHERE id = ?1")
             .bind(id.to_string())
             .execute(&mut *tx)
@@ -792,7 +792,7 @@ impl SourceRepository {
         at: Timestamp,
         retention_until: Option<Timestamp>,
     ) -> PersistenceResult<()> {
-        let mut tx = self.db.pool().begin().await?;
+        let mut tx = self.db.begin_write().await?;
         sqlx::query("UPDATE source_items SET tombstone_reason = ?2 WHERE id = ?1")
             .bind(id.to_string())
             .bind(reason)
@@ -830,7 +830,7 @@ impl SourceRepository {
     /// Spec 7.10: only an explicit user Reimport clears a tombstone. Nothing
     /// in a sync pass may call this, and it clears one entity, never a set.
     pub async fn clear_item_tombstone(&self, id: SourceItemId) -> PersistenceResult<()> {
-        let mut tx = self.db.pool().begin().await?;
+        let mut tx = self.db.begin_write().await?;
         sqlx::query("UPDATE source_items SET tombstone_reason = NULL WHERE id = ?1")
             .bind(id.to_string())
             .execute(&mut *tx)

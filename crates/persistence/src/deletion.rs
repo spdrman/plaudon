@@ -112,7 +112,7 @@ impl DeletionRepository {
         record: &DeletionRecord,
         blobs: &[PendingBlob],
     ) -> PersistenceResult<()> {
-        let mut tx = self.db.pool().begin().await?;
+        let mut tx = self.db.begin_write().await?;
         sqlx::query(
             "INSERT INTO deletion_records
                  (id, recording_id, reason, state, disclosure_json, created_at, completed_at)
@@ -323,7 +323,7 @@ impl DeletionRepository {
     /// This is the explicit user "reimport" action from spec 7.10. Nothing
     /// else may clear a suppression.
     pub async fn clear_suppressions(&self, deletion_id: &str) -> PersistenceResult<u64> {
-        let mut tx = self.db.pool().begin().await?;
+        let mut tx = self.db.begin_write().await?;
         let media = sqlx::query("DELETE FROM deletion_media_suppressions WHERE deletion_id = ?1")
             .bind(deletion_id)
             .execute(&mut *tx)
