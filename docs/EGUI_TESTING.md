@@ -167,4 +167,24 @@ PLAUDON_E2E_APT_PACKAGES=libdbus-1-dev scripts/e2e-remote.sh shell \
   'cargo test -p plaudon-ui --test library_perf -- --nocapture'
 ```
 
-BUDGET_PLACEHOLDER
+**Measured 2026-10-12 on MARS** (`rust:1-bookworm`, 8 CPUs, mesa/lavapipe software raster, `test`
+profile), with the library's own fixtures:
+
+| Rows | Mean frame cost |
+| --- | --- |
+| 100 | 4.930 ms |
+| 10,000 | 5.848 ms |
+
+**Budget: 10 ms per frame for 10,000 rows.** The measurement with headroom, enforced only where it
+was measured — `PLAUDON_PERF=1`, which `scripts/e2e-remote.sh` runs set:
+
+```sh
+PLAUDON_E2E_APT_PACKAGES=libdbus-1-dev scripts/e2e-remote.sh shell \
+  'PLAUDON_PERF=1 cargo test -p plaudon-ui --test library_perf -- --nocapture'
+```
+
+Raising the number is a decision, not a fix: a frame that grows past it means the table stopped
+being virtualized, which the two machine-independent assertions above are there to localise.
+
+The committed baselines `crates/ui/tests/visual/library_empty.png` and
+`crates/ui/tests/visual/library_100_rows.png` were produced in the same run.

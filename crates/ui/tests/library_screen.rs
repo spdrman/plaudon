@@ -163,11 +163,7 @@ fn an_empty_library_offers_import_and_connect_plaud() {
     harness.run();
     assert!(harness.state().intents.contains(&LibraryIntent::PickFiles));
 
-    assert_ne!(
-        visual::assert_snapshot(&mut harness, "library_empty"),
-        visual::Outcome::Compared,
-        "pixel comparison is MARS-only; this assertion documents the skip"
-    );
+    visual::assert_snapshot(&mut harness, "library_empty");
 }
 
 #[test]
