@@ -408,7 +408,8 @@ Source: `docs/licensing/third-party-register.md`, enforced by
    A memory-safety defect in the view layer now reaches the library directly. Mitigation is the
    closed command surface and `unsafe_code = "warn"`, not isolation.
 2. **The Windows leg is compiled, not run.** No Windows machine was available. The Windows
-   packaging script, the resource compilation, NSIS and the tray/menu behaviour are unverified on a
+   packaging script, the resource compilation, the installer build (NSIS at the time of this
+   report; a WiX `.msi` since O2.10) and the tray/menu behaviour are unverified on a
    real Windows host.
 3. **No screen-reader evidence.** §6.
 4. **The release artifact is not publishable.** No Developer ID, no notarytool credential, no

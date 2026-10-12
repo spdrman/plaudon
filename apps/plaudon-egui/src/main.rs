@@ -69,7 +69,7 @@ fn main() -> ExitCode {
     //
     // Windows is the whole mechanism here: the installer registers
     // `"%EXEPATH%" "%1"` for both the `.plaudon` extension and the
-    // `plaudon://` scheme (`packaging/windows/plaudon-egui.nsi`), so a
+    // `plaudon://` scheme (`packaging/windows/plaudon-egui.wxs`), so a
     // double-click or a link **starts a process** with the document or the
     // link as `argv[1]`. There is no single-instance handshake in this
     // build, and nothing in the lock file provides one, so a second launch

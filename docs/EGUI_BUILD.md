@@ -21,7 +21,7 @@ Companion documents: `docs/EGUI_MIGRATION_PLAN.md` (what is being built and why)
 | macOS | bundling, signing, the icon | Xcode Command Line Tools: `codesign`, `iconutil`, `sips`, `plutil`, `PlistBuddy` |
 | macOS | notarization (optional) | `xcrun notarytool store-credentials` once, then `PLAUDON_NOTARY_PROFILE` |
 | Windows | the executable's icon, version block and manifest | the Windows SDK resource compiler (`rc.exe`) or LLVM's `llvm-rc` on `PATH`, or `RC=<path>` |
-| Windows | the installer | NSIS 3 — `choco install nsis` — or `PLAUDON_NSIS=<path to makensis.exe>` |
+| Windows | the installer | the WiX toolset, pinned: `dotnet tool install --global wix --version 5.0.2` — or `PLAUDON_WIX=<path to wix.exe>` |
 | Windows | signing (optional) | `signtool.exe` from the Windows SDK plus a PFX in `PLAUDON_WINDOWS_CERT_PATH` |
 | Linux | building and running the shell | `libdbus-1-dev` (AccessKit's AT-SPI adapter and the secret-service keyring backend), `libasound2-dev` (cpal) |
 
@@ -126,8 +126,8 @@ PLAUDON_E2E_APT_PACKAGES=libdbus-1-dev scripts/e2e-remote.sh shell \
 `tests/packaging.rs` is the one suite that runs everywhere and asserts what neither packaging script
 can assert on the other platform: the bundle identifier equals
 `plaudon_app::runtime::APPLICATION_IDENTIFIER` (migration-plan risk R7), the entitlement set is
-exactly the five reviewed privileges, the NSIS `WriteRegStr` block is byte-equal to what
-`plaudon_platform::associations::windows_registry_script` generates, the uninstaller removes every
+exactly the five reviewed privileges, the WiX `RegistryValue` rows are byte-equal to what
+`plaudon_platform::associations::windows_registry_script` generates, the uninstall removes every
 key the installer writes, the `.ico` carries the sizes Explorer asks for, and both scripts fail
 closed without a credential.
 
@@ -234,7 +234,7 @@ launch.
 
 ---
 
-## 6. Package — Windows (x64 installer)
+## 6. Package — Windows (x64 `.msi`)
 
 ```powershell
 pwsh scripts/package-windows-egui.ps1                                 # dist/windows-egui/
@@ -242,31 +242,49 @@ pwsh scripts/package-windows-egui.ps1 -Evidence ci-artifacts/evidence
 pwsh scripts/package-windows-egui.ps1 -SkipBuild
 ```
 
-NSIS, not WiX: the installer stub ends up inside an artifact we hand to a user, and NSIS's
-zlib/libpng licence is compatible with the rest of this repository where the WiX Toolset's MS-RL is
-a reciprocal licence we do not want in the artifact path. `cargo-packager` was considered and
-rejected — it would put a generator between the repository and the installer definition, and the
-registry claim has to stay comparable with `plaudon_platform::associations`
-(`docs/licensing/third-party-register.md`, "Packaging and installer tooling").
+WiX v5, pinned: `dotnet tool install --global wix --version 5.0.2`, or `PLAUDON_WIX=<path to
+wix.exe>`. The script refuses a different version rather than building with whatever is installed.
 
-**What the installer does**, and nothing more (`apps/plaudon-egui/packaging/windows/plaudon-egui.nsi`):
+**WiX, not NSIS — and why that reverses the earlier decision.** Until O2.10 this was an NSIS
+`setup.exe`, chosen because NSIS's zlib/libpng licence is permissive and the WiX Toolset is MS-RL.
+That reasoning was sound for the artifact NSIS produces and wrong about the artifact WiX produces:
+the NSIS stub is *inside* the installer we hand to a user, so its licence is a redistribution
+question, whereas an `.msi` is a database interpreted by the operating system's own installer
+service and contains no WiX code at all. MS-RL applies to the toolset we build with, which we do
+not redistribute, exactly like the Windows SDK's `signtool`. What the `.msi` buys is the thing the
+release workflow needs: Windows' own install, upgrade, repair and uninstall path, a Programs and
+Features entry written by the system rather than by us, and `MajorUpgrade` instead of a hand-rolled
+"uninstall the old one first". `cargo-packager` is still rejected — it would put a generator
+between the repository and the installer definition, and the registry claim has to stay comparable
+with `plaudon_platform::associations` (`docs/licensing/third-party-register.md`, "Packaging and
+installer tooling"; the 2026-10-12 amendment to ADR-0024).
 
-* installs per user into `%LOCALAPPDATA%\Programs\Plaudon` with `RequestExecutionLevel user`; no
-  elevation, no service, no scheduled task, no `PATH` edit, no autostart, nothing under `HKLM`;
+**What the installer does**, and nothing more (`apps/plaudon-egui/packaging/windows/plaudon-egui.wxs`):
+
+* installs per user into `%LOCALAPPDATA%\Programs\Plaudon` with `Scope="perUser"`; no elevation, no
+  service, no scheduled task, no `PATH` edit, no autostart, nothing under `HKLM`, and no custom
+  action that runs code — the only two `CustomAction` rows are type 51 property assignments;
 * installs `plaudon-egui.exe`, the `plaudon` automation CLI and `plaudon.ico`, and writes a Start
-  Menu shortcut and a Programs-and-Features entry under `HKCU`;
+  Menu shortcut under `HKCU`; the Programs-and-Features entry is written by Windows Installer
+  itself, from the `ARP*` properties;
 * claims `.plaudon` through the `Plaudon.Archive` ProgID using `OpenWithProgids` (so Windows' own
   "choose a default app" flow stays in charge) and registers the `plaudon://` protocol handler,
   with the keys, values and data generated by
-  `plaudon_platform::associations::windows_registry_script` and `%EXEPATH%` resolved to
-  `$INSTDIR\plaudon-egui.exe`;
-* broadcasts `SHCNE_ASSOCCHANGED` so Explorer notices without a sign-out;
+  `plaudon_platform::associations::windows_registry_script` and `%EXEPATH%` resolved to the
+  formatted reference `[#PlaudonEgui]`, which is the installed executable's full path;
+* carries a fixed `UpgradeCode` and `MajorUpgrade`, so installing 0.2.0 over 0.1.0 replaces it;
 * on uninstall removes every key it wrote and **leaves `%APPDATA%\app.plaudon.desktop` alone** — the
   library outlives the application.
 
-**Order of operations.** The payload executables are Authenticode-signed *before* NSIS packs them,
-then the installer itself is signed. NSIS writes the uninstaller at install time, so it cannot be
-signed here; the report says so rather than glossing over it.
+Two NSIS behaviours did not survive the change, and are not papered over: the installer no longer
+broadcasts `SHCNE_ASSOCCHANGED` (that needs a custom action, which is executable code inside an
+installer), so Explorer picks the association up on its own refresh rather than immediately; and
+there is no directory page — `msiexec /i Plaudon-<version>-x64.msi INSTALLFOLDER="…"` is the
+override.
+
+**Order of operations.** The payload executables are Authenticode-signed *before* `wix build` packs
+them, then the `.msi` itself is signed. There is no generated uninstaller of ours to sign: Windows
+Installer performs the uninstall with its own code.
 
 | Environment | Signature | Exit |
 | --- | --- | --- |
@@ -276,28 +294,45 @@ signed here; the report says so rather than glossing over it.
 
 Before packing, the script asserts that the built executable carries its version resource and its
 embedded manifest (`reason=missing_binary` if the resource compiler was missing), that the manifest
-requests `asInvoker` with `uiAccess="false"`, and that the `.nsi` writes nothing to `HKLM`.
+requests `asInvoker` with `uiAccess="false"`, and that the `.wxs` writes nothing to `HKLM`. After
+packing it opens the built database through Windows Installer's own automation interface and
+asserts the same things about what was produced rather than about what was written: every `Registry`
+row is root 1 (`HKCU`), `ALLUSERS` is empty, and the summary information declares that elevation is
+not required.
 
-**Output.** `dist/windows-egui/Plaudon-<version>-x64-setup.exe` and
+**Output.** `dist/windows-egui/Plaudon-<version>-x64.msi` and
 `windows-signing-report.json` (installer, executable and CLI SHA-256, installer tool, install scope,
-library directory, associations, embedded version, signature status and detail,
+library directory, associations, embedded version, upgrade code, signature status and detail,
 `notarization_status: not_applicable`, privilege audit, host build, commit, `publishable`).
 
 **What a non-Windows machine can and cannot check.** `cargo check --target x86_64-pc-windows-msvc`
-(cargo-xwin, or the MARS container) type-checks the Windows build, and `makensis` runs on Linux and
-macOS, so the installer definition can be compiled — with a placeholder payload — to prove it is
-valid NSIS:
+(cargo-xwin, or the MARS container) type-checks the Windows build, and `wix build` compiles and
+links the installer definition anywhere .NET runs, so the `.wxs` can be checked without Windows —
+but only up to the point where WiX writes the database, because that is done through Windows' own
+`msi.dll`. Compiling to the linked intermediate is what a Linux container can prove:
 
 ```sh
-stage=$(mktemp -d); : > "$stage/plaudon-egui.exe"; : > "$stage/plaudon.exe"
-makensis -WX "-DPLAUDON_VERSION=0.1.0" "-DPLAUDON_STAGE=$stage" \
-  "-DPLAUDON_OUTFILE=$(mktemp -d)/setup.exe" apps/plaudon-egui/packaging/windows/plaudon-egui.nsi
+docker run --rm -v "$PWD:/work" -w /work mcr.microsoft.com/dotnet/sdk:8.0 bash -c '
+  export PATH="$PATH:/root/.dotnet/tools"
+  dotnet tool install --global wix --version 5.0.2 >/dev/null
+  stage=$(mktemp -d)
+  : > "$stage/plaudon-egui.exe"; : > "$stage/plaudon.exe"
+  cp apps/plaudon-egui/packaging/windows/plaudon.ico "$stage/"
+  wix build -arch x64 -d Version=0.1.0 -b "$stage" -o /tmp/plaudon.wixipl \
+    apps/plaudon-egui/packaging/windows/plaudon-egui.wxs'
 ```
 
-Neither of those is a Windows run. Installing, launching, the association click-through and the
-`plaudon://` handler can only be verified on Windows hardware or a Windows CI runner — spec 18.4
-forbids calling a Windows leg green from anywhere else, and the `egui-desktop` job on
-`windows-2025` is where that happens.
+The `.wixipl` is a zip holding `wix-ir.json`, whose symbols are the rows of the `Registry`,
+`Shortcut`, `Property`, `Upgrade`, `Directory` and `CustomAction` tables; reading them is how the
+per-user claim is inspected off Windows. (WiX canonicalises every `Directory/@Name` through a
+Windows-only path routine, which is why the install location is a conditional `SetDirectory` rather
+than a named directory tree — the file would otherwise be uncheckable anywhere but Windows.)
+
+Neither of those is a Windows run. Producing the `.msi`, installing it, launching it, the
+association click-through and the `plaudon://` handler can only be verified on Windows hardware or
+a Windows CI runner — spec 18.4 forbids calling a Windows leg green from anywhere else, and the
+`egui-desktop` job on `windows-2025` and the `windows` job in `.github/workflows/release.yml` are
+where that happens.
 
 ---
 
@@ -331,4 +366,32 @@ non-zero. There is no flag that turns a red gate green.
 | `acceptance`, `supply-chain`, `coverage`, `release-gates`, `pipeline-selftest` | as before | unchanged |
 
 The Windows leg of `egui-desktop` locates the SDK's `rc.exe` and exports `RC` before building, and
-installs NSIS with chocolatey.
+installs the pinned WiX toolset as a .NET global tool.
+
+## 9. Releases
+
+`.github/workflows/release.yml` builds what a user installs: the macOS arm64 `Plaudon.app` (zipped,
+features `apple-bridge,local-whisper`) and the Windows x64 `.msi` (features `local-whisper`). A tag
+push (`v*`) runs all three jobs and drafts a GitHub release; `workflow_dispatch` runs the two build
+jobs and uploads artifacts without touching releases.
+
+| Job | Runner | What it does |
+| --- | --- | --- |
+| `version` | ubuntu-latest | refuses a tag that is not `v<workspace version>` |
+| `macos` | macos-15 | optional Developer ID keychain and notarytool credential from secrets, `package-macos-egui.sh`, a ten-second launch of the unzipped bundle against a throwaway `PLAUDON_DATA_DIR`, SHA-256, artifact upload, keychain deleted even on failure |
+| `windows` | windows-2025 | optional PFX from a secret, `package-windows-egui.ps1`, `plaudon.exe --version` against the staged payload (the GUI binary has no `--version`; installing the `.msi` needs an interactive session and is not attempted), SHA-256, artifact upload |
+| `publish` | ubuntu-latest, tags only, the only job with `contents: write` | assembles `checksums.txt`, reads both signing reports and **drafts** the release |
+
+Signing is optional and fails open into honesty, never into a claim: with no credentials the
+packaging scripts exit 3, which this workflow accepts as "built, not publishable". The `publish`
+job then marks the release a prerelease, labels both assets `UNSIGNED / NOT NOTARIZED — development
+build`, and says so at the top of the notes. A release is only described as signed when
+`macos-signing-report.json` says `signature_status: verified` *and* `notarization_status: verified`
+and `windows-signing-report.json` says `signature_status: verified`; a missing or malformed report
+counts as unsigned. Every release is created as a draft — publishing is a human decision.
+
+Secrets, all optional, none of them echoed: `PLAUDON_MACOS_CERTIFICATE_BASE64`,
+`PLAUDON_MACOS_CERTIFICATE_PASSWORD`, `PLAUDON_MACOS_IDENTITY`, `PLAUDON_NOTARY_KEY_BASE64`,
+`PLAUDON_NOTARY_KEY_ID`, `PLAUDON_NOTARY_ISSUER_ID`, `PLAUDON_WINDOWS_CERT_BASE64`,
+`PLAUDON_WINDOWS_CERT_PASSWORD`. The macOS certificate is imported into a temporary keychain that
+the job deletes in an `always()` step.

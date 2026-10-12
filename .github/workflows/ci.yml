@@ -139,9 +139,12 @@ jobs:
           if (-not $rc) { Write-Error "no rc.exe in the Windows SDK"; exit 1 }
           "RC=$($rc.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
 
-      - name: Install NSIS
+      - name: Install the WiX toolset
         if: runner.os == 'Windows'
-        run: choco install nsis --no-progress -y
+        shell: pwsh
+        run: |
+          dotnet tool install --global wix --version 5.0.2
+          "$env:USERPROFILE\.dotnet\tools" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
 
       # egui_kittest through cargo: the whole UI suite is Rust, and
       # docs/EGUI_TESTING.md §1 forbids adding a JavaScript or browser-driver
@@ -197,7 +200,7 @@ jobs:
           path: |
             dist/macos-egui/*.zip
             dist/macos-egui/*.json
-            dist/windows-egui/*.exe
+            dist/windows-egui/*.msi
             dist/windows-egui/*.json
           if-no-files-found: error
           retention-days: 14

@@ -171,7 +171,7 @@ and [`docs/threat-model/README.md`](docs/threat-model/README.md). In summary:
 | --- | --- |
 | **Toolchain** | Rust as pinned by [`rust-toolchain.toml`](rust-toolchain.toml) (`rustup show` reads it). The workspace is edition 2021 with `rust-version = "1.90"`. |
 | **macOS** | Xcode Command Line Tools (`codesign`, `iconutil`, `sips`, `plutil`, `PlistBuddy`). For `whisper-rs`, export the SDK path and *then, separately*, the C++ header flag: `export SDKROOT=$(xcrun --show-sdk-path)` followed by `export CXXFLAGS="-isystem $SDKROOT/usr/include/c++/v1"`. |
-| **Windows** | The Windows SDK resource compiler (`rc.exe`) or LLVM's `llvm-rc` on `PATH`; NSIS 3 for the installer. |
+| **Windows** | The Windows SDK resource compiler (`rc.exe`) or LLVM's `llvm-rc` on `PATH`; the WiX toolset for the `.msi` (`dotnet tool install --global wix --version 5.0.2`). |
 | **Linux** | `libdbus-1-dev` (AccessKit's AT-SPI adapter and the secret-service keyring backend) and `libasound2-dev` (cpal). Linux is a build and test target here, not a published one. |
 
 **Resource policy.** A workstation runs **one** cargo process at `-j 2`, scoped with `-p`. Anything
@@ -225,7 +225,7 @@ PLAUDON_DATA_DIR=/tmp/plaudon-smoke cargo run -j 2 -p plaudon-egui
 scripts/package-macos-egui.sh
 scripts/package-macos-egui.sh --features apple-bridge
 
-# Windows (x64 NSIS installer + a signing report) — dist/windows-egui/
+# Windows (x64 .msi + a signing report) — dist/windows-egui/
 pwsh scripts/package-windows-egui.ps1
 ```
 
@@ -384,10 +384,11 @@ model and how to add a screen.
 has not shipped one. The following are *not* verified, and nothing here should be read as claiming
 otherwise:
 
-* **Windows at run time.** The Windows build is type-checked and the NSIS definition compiles on
-  other platforms, but installing, launching, the file-association click-through and the
-  `plaudon://` handler can only be verified on Windows. No such run is recorded. Windows also has no
-  single-instance handshake: a second launch opens a second window.
+* **Windows at run time.** The Windows build is type-checked and the WiX installer definition
+  compiles and links on other platforms, but producing the `.msi`, installing it, launching it, the
+  file-association click-through and the `plaudon://` handler can only be verified on Windows. No
+  such run is recorded. Windows also has no single-instance handshake: a second launch opens a
+  second window.
 * **Real PLAUD hardware.** The frame codec and the read-only opcode allowlist are implemented and
   unit tested, and have **never been exercised against a real device by this build**. Every
   direct-device compatibility cell is `Unsupported` with no archived evidence.
@@ -453,8 +454,8 @@ The attributions that matter most to this codebase:
   technique and the window-state persistence. What was taken from them is design, not code, and the
   study that records exactly what and why is
   [`docs/EGUI_REFERENCE_COMPONENTS.md`](docs/EGUI_REFERENCE_COMPONENTS.md).
-* Fonts bundled by egui, the pure-Rust Opus decoder (`opus-pure`, BSD-3-Clause) and the NSIS
-  installer stub are attributed in [NOTICE](NOTICE).
+* Fonts bundled by egui and the pure-Rust Opus decoder (`opus-pure`, BSD-3-Clause) are attributed
+  in [NOTICE](NOTICE). The Windows `.msi` redistributes no third-party installer code.
 
 Plaudon is an independent project. It is not produced by, affiliated with or approved by PLAUD,
 OpenRouter or Apple, and it uses no vendor branding beyond naming the services it can talk to.
