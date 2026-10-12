@@ -118,9 +118,9 @@ export function JobsScreen({ focusJobId, onOpenTarget }: JobsScreenProps) {
 
   return (
     <section className="jobs" aria-labelledby="jobs-heading">
-      <h1 id="jobs-heading" className="jobs__heading">
+      <h2 id="jobs-heading" className="jobs__heading">
         Jobs
-      </h1>
+      </h2>
 
       <div className="jobs__filters">
         <fieldset className="jobs__filter-group">

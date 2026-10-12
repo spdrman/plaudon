@@ -6,7 +6,8 @@ import { SettingsScreen } from "./SettingsScreen";
 
 async function setup() {
   const rendered = renderWithApp(<SettingsScreen />, { route: { name: "settings" } });
-  await screen.findByRole("heading", { level: 1, name: "Settings" });
+  // The shell header owns the page <h1>; a screen heading is level 2.
+  await screen.findByRole("heading", { level: 2, name: "Settings" });
   await screen.findByText("/Users/tester/Library/Application Support/Plaudon");
   return rendered;
 }

@@ -15,7 +15,7 @@ export function SettingsScreen() {
 
   return (
     <div className="settings">
-      <h1 className="settings__title">Settings</h1>
+      <h2 className="settings__title">Settings</h2>
 
       <SettingsSection title="Appearance">
         <AppearanceSection />

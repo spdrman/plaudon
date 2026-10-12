@@ -178,6 +178,77 @@ describe("detail pane", () => {
   });
 });
 
+describe("an external revision arriving while editing", () => {
+  async function startEditing(segments = 3) {
+    const backend = new FakeBackend();
+    const recording = backend.addRecording({ segments });
+    const machineRevisionId = recording.revisions[0]!.revision_id;
+    const rendered = renderDetail(backend, recording.recording_id);
+    const row = await screen.findByTestId("segment-0");
+    await rendered.user.dblClick(within(row).getByRole("button", { name: /^Segment 1:/ }));
+    const editor = await screen.findByRole("textbox", { name: "Edit segment 1" });
+    await rendered.user.type(editor, " — my wording");
+    return { ...rendered, backend, recording, machineRevisionId };
+  }
+
+  /** Another writer commits a revision; the event makes the screen refetch. */
+  async function commitElsewhere(backend: FakeBackend, recordingId: string, baseId: string) {
+    await backend.invoke("save_transcript_revision", {
+      recording_id: recordingId,
+      base_revision_id: baseId,
+      edits: [{ index: 1, text: "someone else's wording" }],
+    });
+  }
+
+  it("keeps unsaved edits, pins the revision and explains the newer head", async () => {
+    const { backend, recording, machineRevisionId } = await startEditing();
+    await commitElsewhere(backend, recording.recording_id, machineRevisionId);
+
+    const banner = await screen.findByText(/A newer revision was saved elsewhere/);
+    expect(banner).toHaveAttribute("aria-live", "polite");
+    // The draft survived the refetch and the pane still shows the pinned revision.
+    expect(screen.getByRole("button", { name: /save 1 edited segment/i })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Edit segment 1" })).toHaveValue(
+      `${backend.recordings[0]!.segments.get(machineRevisionId)![0]!.text} — my wording`,
+    );
+    expect(screen.getByLabelText("Transcript revision")).toHaveValue(machineRevisionId);
+    expect(screen.queryByText(/This revision is read-only/)).toBeNull();
+  });
+
+  it("still reaches the non-destructive conflict resolution when saving", async () => {
+    const { user, backend, recording, machineRevisionId } = await startEditing();
+    await commitElsewhere(backend, recording.recording_id, machineRevisionId);
+    await screen.findByText(/A newer revision was saved elsewhere/);
+
+    await user.click(screen.getByRole("button", { name: /save 1 edited segment/i }));
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toMatch(/changed since you opened it/);
+    expect(
+      within(alert).getByRole("button", { name: /reload newest revision/i }),
+    ).toBeInTheDocument();
+    expect(within(alert).getByRole("button", { name: /copy my changes/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /save 1 edited segment/i })).toBeInTheDocument();
+  });
+
+  it("follows the new head when there is nothing unsaved", async () => {
+    const backend = new FakeBackend();
+    const recording = backend.addRecording({ segments: 3 });
+    const machineRevisionId = recording.revisions[0]!.revision_id;
+    renderDetail(backend, recording.recording_id);
+    await screen.findByTestId("segment-0");
+
+    await commitElsewhere(backend, recording.recording_id, machineRevisionId);
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("Transcript revision")).toHaveValue(
+        backend.recordings[0]!.current_revision_id,
+      ),
+    );
+    expect(screen.queryByText(/A newer revision was saved elsewhere/)).toBeNull();
+    expect(await screen.findByText(/someone else's wording/)).toBeInTheDocument();
+  });
+});
+
 describe("export", () => {
   it("exports through the OS save dialog with the chosen format", async () => {
     const backend = new FakeBackend();

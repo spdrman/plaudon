@@ -264,7 +264,11 @@ describe("editing", () => {
     await user.click(within(alert).getByRole("button", { name: /copy my changes/i }));
     await waitFor(() => expect(writeText).toHaveBeenCalledWith("[0:00] my local wording"));
 
+    // Reloading is the one path that drops drafts, so it must be confirmed.
     await user.click(within(alert).getByRole("button", { name: /reload newest revision/i }));
+    const confirm = await screen.findByRole("alertdialog", { name: /discard your unsaved edits/i });
+    expect(onReloadRequested).not.toHaveBeenCalled();
+    await user.click(within(confirm).getByRole("button", { name: /discard and reload/i }));
     expect(onReloadRequested).toHaveBeenCalled();
   });
 });

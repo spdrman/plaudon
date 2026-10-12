@@ -67,9 +67,9 @@ export function ActivityScreen({ onOpenTarget }: ActivityScreenProps) {
 
   return (
     <section className="activity" aria-labelledby="activity-heading">
-      <h1 id="activity-heading" className="activity__heading">
+      <h2 id="activity-heading" className="activity__heading">
         Activity history
-      </h1>
+      </h2>
       <p className="activity__intro">
         Every completion and attention event is recorded here, even when desktop notifications are
         turned off or denied by the operating system.

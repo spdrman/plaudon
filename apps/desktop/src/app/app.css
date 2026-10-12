@@ -103,8 +103,17 @@
   padding: var(--space-5);
 }
 
+/*
+ * Screens that own their own scrolling (virtualized library grid, transcript)
+ * get a bounded flex column: without a constrained height the virtualizer
+ * would expand to fit every loaded row and stop virtualizing.
+ */
 .app-content--flush {
   padding: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .screen-width-notice {

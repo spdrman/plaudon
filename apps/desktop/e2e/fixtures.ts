@@ -37,7 +37,14 @@ export const test = base.extend<{ egress: EgressLog }>({
     page.on("request", (request) => {
       const url = request.url();
       log.all.push(url);
-      if (!/^(data:|blob:|about:)/.test(url) && !url.startsWith("http://127.0.0.1:5273")) {
+      // `plaudon-media:` (and its Windows `http://plaudon-media.localhost`
+      // form) is the custom scheme the Rust side intercepts in-process; it
+      // never reaches a network stack.
+      const local =
+        /^(data:|blob:|about:|plaudon-media:)/.test(url) ||
+        url.startsWith("http://127.0.0.1:5273") ||
+        url.startsWith("http://plaudon-media.localhost");
+      if (!local) {
         log.external.push(url);
       }
     });
@@ -46,6 +53,16 @@ export const test = base.extend<{ egress: EgressLog }>({
 });
 
 export { expect };
+
+/**
+ * Navigates to the app with the in-memory backend and waits until the harness
+ * is installed and the shell has rendered, so `page.evaluate` can drive it.
+ */
+export async function gotoApp(page: Page, query: HarnessQuery = {}, hash = ""): Promise<void> {
+  await page.goto(`${harnessUrl(query)}${hash}`);
+  await page.waitForFunction(() => Boolean(window.__plaudonHarness));
+  await page.getByRole("navigation", { name: "Primary" }).or(page.getByRole("heading", { level: 1 })).first().waitFor();
+}
 
 /** Runs an axe WCAG 2.2 AA audit against the current page. */
 export async function auditPage(page: Page, context?: string) {

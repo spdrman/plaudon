@@ -1,4 +1,4 @@
-import { auditPage, expect, harnessUrl, test } from "./fixtures";
+import { auditPage, expect, gotoApp, test } from "./fixtures";
 
 /**
  * E2.1 / E2.2: review a recording. Playback is keyboard-operable and states
@@ -7,8 +7,8 @@ import { auditPage, expect, harnessUrl, test } from "./fixtures";
  */
 test.describe("recording review", () => {
   test("plays, seeks and reports position as text using the keyboard only", async ({ page }) => {
-    await page.goto(`${harnessUrl({ recordings: 3, segments: 30 })}#/library/rec-00001`);
-    const player = page.getByRole("group", { name: /player|playback/i }).first();
+    await gotoApp(page, { recordings: 3, segments: 30 }, "#/library/rec-00001");
+    const player = page.getByRole("region", { name: /playback/i }).first();
     await expect(player).toBeVisible();
 
     const slider = page.getByRole("slider", { name: /position|seek/i }).first();
@@ -29,7 +29,7 @@ test.describe("recording review", () => {
   });
 
   test("shows an honest indeterminate state when the duration is unknown", async ({ page }) => {
-    await page.goto(harnessUrl({ recordings: 1, segments: 5 }));
+    await gotoApp(page, { recordings: 1, segments: 5 });
     const id = await page.evaluate(() => {
       const rec = window.__plaudonHarness!.addRecording({
         title: "Voice memo without duration",
@@ -53,30 +53,30 @@ test.describe("recording review", () => {
   });
 
   test("edits create a new revision and keep the original retrievable", async ({ page }) => {
-    await page.goto(`${harnessUrl({ recordings: 2, segments: 12 })}#/library/rec-00001`);
-    const firstSegment = page.getByRole("listitem").filter({ hasText: "Segment 1" }).first();
-    await firstSegment.scrollIntoViewIfNeeded();
-    await firstSegment.dblclick();
-    const editor = page.getByRole("textbox").first();
+    await gotoApp(page, { recordings: 2, segments: 12 }, "#/library/rec-00001");
+    const firstSegment = page.getByRole("button", { name: /^Segment 1:/ }).first();
+    await firstSegment.focus();
+    await page.keyboard.press("Enter");
+    const editor = page.getByRole("textbox", { name: /Edit segment 1/ });
     await editor.fill("Corrected opening line");
-    await page.keyboard.press("Escape");
-
-    await firstSegment.dblclick();
-    await page.getByRole("textbox").first().fill("Corrected opening line");
-    await page.getByRole("button", { name: /^Save/ }).first().click();
+    await page.getByRole("button", { name: /^Save 1 edited segment/ }).click();
 
     const result = await page.evaluate(async () => {
       const harness = window.__plaudonHarness!;
       const rec = harness.recordings.find((r) => r.recording_id === "rec-00001")!;
       const original = rec.revisions[0]!;
-      const page1 = (await harness.invoke("get_transcript", {
+      const transcript = await harness.invoke("get_transcript", {
         revision_id: original.revision_id,
         cursor: 0,
         limit: 5,
-      })) as { segments: Array<{ text: string }> };
+      });
+      const segments =
+        transcript && typeof transcript === "object" && "segments" in transcript
+          ? (transcript.segments as Array<{ text: string }>)
+          : [];
       return {
         revisionCount: rec.revisions.length,
-        originalFirstSegment: page1.segments[0]!.text,
+        originalFirstSegment: segments[0]?.text ?? "",
         head: rec.current_revision_id,
         originalId: original.revision_id,
       };
@@ -87,10 +87,11 @@ test.describe("recording review", () => {
   });
 
   test("offers a non-destructive resolution when the base revision changed", async ({ page }) => {
-    await page.goto(`${harnessUrl({ recordings: 2, segments: 8 })}#/library/rec-00002`);
-    const segment = page.getByRole("listitem").filter({ hasText: "Segment 1" }).first();
-    await segment.dblclick();
-    await page.getByRole("textbox").first().fill("My local correction");
+    await gotoApp(page, { recordings: 2, segments: 8 }, "#/library/rec-00002");
+    const segment = page.getByRole("button", { name: /^Segment 1:/ }).first();
+    await segment.focus();
+    await page.keyboard.press("Enter");
+    await page.getByRole("textbox", { name: /Edit segment 1/ }).fill("My local correction");
 
     // Another writer commits a newer revision in the meantime.
     await page.evaluate(async () => {
@@ -103,7 +104,7 @@ test.describe("recording review", () => {
       });
     });
 
-    await page.getByRole("button", { name: /^Save/ }).first().click();
+    await page.getByRole("button", { name: /^Save 1 edited segment/ }).click();
     await expect(page.getByText(/changed since you opened it/i)).toBeVisible();
     await expect(page.getByRole("button", { name: /reload newest revision/i })).toBeVisible();
     await expect(page.getByRole("button", { name: /copy my changes/i })).toBeVisible();

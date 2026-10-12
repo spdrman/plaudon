@@ -15,6 +15,7 @@ import {
 } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Button } from "../../components/Button";
+import { Dialog } from "../../components/Dialog";
 import { StatusBadge, type StatusTone } from "../../components/StatusBadge";
 import { TextField } from "../../components/Field";
 import { CommandError, invokeCommand, toEnvelope } from "../../ipc/client";
@@ -57,11 +58,17 @@ const ANNOTATION_PRESENTATION: Record<
 
 export interface TranscriptPaneProps {
   recordingId: string;
+  /**
+   * Revision to display. The owner pins this to the revision being edited, so
+   * a newer head arriving from an event never replaces unsaved text.
+   */
   revision: TranscriptRevisionRef;
   /** Only the head revision may be edited; older ones are shown verbatim. */
   editable: boolean;
   /** Seek the player; only ever called for segments that carry a timeline. */
   onSeek: (positionMs: number) => void;
+  /** Number of segments with unsaved text; drives the owner's revision pin. */
+  onDirtyChange?: (dirtyCount: number) => void;
   onSaved: (response: SaveTranscriptRevisionResponse) => void;
   /** Reload the recording so the newest revision becomes current. */
   onReloadRequested: () => void;
@@ -72,6 +79,7 @@ export function TranscriptPane({
   revision,
   editable,
   onSeek,
+  onDirtyChange,
   onSaved,
   onReloadRequested,
 }: TranscriptPaneProps) {
@@ -84,10 +92,13 @@ export function TranscriptPane({
   const [query, setQuery] = useState("");
   const [matchCursor, setMatchCursor] = useState(0);
   const [copyStatus, setCopyStatus] = useState("");
+  const [discardPrompt, setDiscardPrompt] = useState(false);
   const save = useCommandMutation("save_transcript_revision");
   const [saveError, setSaveError] = useState<CommandError | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
+  // Drafts are only ever cleared by an explicit user action: picking another
+  // revision, discarding them, or a successful save (§4.5 no silent overwrite).
   useEffect(() => {
     setEdits(createEditState());
     setEditingIndex(null);
@@ -95,6 +106,10 @@ export function TranscriptPane({
     setSelected(new Set());
     setSaveError(null);
   }, [revision.revision_id]);
+
+  useEffect(() => {
+    onDirtyChange?.(edits.drafts.size);
+  }, [edits, onDirtyChange]);
 
   const virtualizer = useVirtualizer<HTMLDivElement, HTMLDivElement>({
     count: segments.length,
@@ -271,7 +286,12 @@ export function TranscriptPane({
         <CommandErrorNotice error={saveError} onRetry={conflict ? undefined : () => void runSave()}>
           {conflict ? (
             <>
-              <Button glyph="↻" onClick={onReloadRequested}>
+              <Button
+                glyph="↻"
+                onClick={() =>
+                  edits.drafts.size > 0 ? setDiscardPrompt(true) : onReloadRequested()
+                }
+              >
                 Reload newest revision
               </Button>
               <Button glyph="⧉" onClick={() => void copyMyChanges()}>
@@ -429,6 +449,31 @@ export function TranscriptPane({
           {loading ? "Loading…" : `Load more segments (${segments.length} of ${total})`}
         </Button>
       ) : null}
+
+      <Dialog
+        open={discardPrompt}
+        destructive
+        title="Discard your unsaved edits?"
+        description={`Reloading replaces what you see with the newest revision. Your ${edits.drafts.size} edited segment${edits.drafts.size === 1 ? "" : "s"} will be lost unless you copy them first.`}
+        onClose={() => setDiscardPrompt(false)}
+        footer={
+          <>
+            <Button onClick={() => setDiscardPrompt(false)}>Keep editing</Button>
+            <Button glyph="⧉" onClick={() => void copyMyChanges()}>
+              Copy my changes
+            </Button>
+            <Button
+              variant="danger"
+              onClick={() => {
+                setDiscardPrompt(false);
+                onReloadRequested();
+              }}
+            >
+              Discard and reload
+            </Button>
+          </>
+        }
+      />
     </section>
   );
 }

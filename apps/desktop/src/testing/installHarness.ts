@@ -5,6 +5,11 @@ declare global {
   interface Window {
     /** Exposed only by the dev harness so e2e tests can drive the fake backend. */
     __plaudonHarness?: FakeBackend;
+    /** Paths the harness file picker returns; set by a test before importing. */
+    __plaudonPickerPaths?: string[];
+    /** Destination the harness save dialog returns. */
+    __plaudonSavePath?: string;
+    __TAURI_INTERNALS__?: { invoke: (cmd: string, payload?: unknown) => Promise<unknown> };
   }
 }
 
@@ -38,6 +43,25 @@ export function installHarness(options: HarnessOptions = {}): FakeBackend {
     default_stt_engine_id: onboarded ? "whisper.cpp" : null,
   };
   setTransport(backend);
+  installDialogBridge();
   window.__plaudonHarness = backend;
   return backend;
+}
+
+/**
+ * Minimal stand-in for the Tauri IPC bridge so the OS file picker and save
+ * dialog resolve in the browser harness. Only the two dialog commands the UI
+ * is allowed to use are answered; everything else rejects, which is what makes
+ * the drag-and-drop code fall back to DOM events outside Tauri.
+ */
+function installDialogBridge(): void {
+  window.__plaudonPickerPaths ??= ["/Users/tester/Audio/standup.mp3"];
+  window.__plaudonSavePath ??= "/Users/tester/Desktop/transcript.txt";
+  window.__TAURI_INTERNALS__ = {
+    invoke: async (command: string) => {
+      if (command === "plugin:dialog|open") return window.__plaudonPickerPaths ?? null;
+      if (command === "plugin:dialog|save") return window.__plaudonSavePath ?? null;
+      throw new Error(`harness: command ${command} is not available outside Tauri`);
+    },
+  };
 }

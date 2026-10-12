@@ -7,10 +7,11 @@ import { auditPage, expect, harnessUrl, test } from "./fixtures";
 test.describe("first-run onboarding", () => {
   test("completes with every account step skipped and no egress", async ({ page, egress }) => {
     await page.goto(harnessUrl({ onboarded: false, recordings: 0 }));
+    await page.waitForFunction(() => Boolean(window.__plaudonHarness));
 
     const heading = page.getByRole("heading", { level: 2 });
     await expect(heading).toBeVisible();
-    await expect(page.getByText(/stay on this computer|stays on this computer/i)).toBeVisible();
+    await expect(page.getByText(/stays? on this computer/i).first()).toBeVisible();
     await auditPage(page, "onboarding privacy step");
 
     // Walk the flow using the keyboard only, skipping every account step.
@@ -37,12 +38,14 @@ test.describe("first-run onboarding", () => {
 
   test("never offers a model download while local-only mode is on", async ({ page }) => {
     await page.goto(harnessUrl({ onboarded: false }));
+    await page.waitForFunction(() => Boolean(window.__plaudonHarness));
     const downloadControls = page.getByRole("button", { name: /download/i });
     await expect(downloadControls).toHaveCount(0);
   });
 
   test("keeps the API key out of the DOM after it is saved", async ({ page }) => {
     await page.goto(harnessUrl({ onboarded: false }));
+    await page.waitForFunction(() => Boolean(window.__plaudonHarness));
     const secret = "sk-or-v1-e2e-secret-value";
     for (let step = 0; step < 8; step += 1) {
       const field = page.getByLabel(/API key/i);

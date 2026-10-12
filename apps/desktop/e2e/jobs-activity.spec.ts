@@ -1,4 +1,4 @@
-import { auditPage, expect, harnessUrl, test } from "./fixtures";
+import { auditPage, expect, gotoApp, test } from "./fixtures";
 
 /**
  * E2.3 / E2.4: job states are explicit, a possibly-billed request never
@@ -7,7 +7,7 @@ import { auditPage, expect, harnessUrl, test } from "./fixtures";
  */
 test.describe("jobs", () => {
   test("renders every job state distinctly and never by colour alone", async ({ page }) => {
-    await page.goto(harnessUrl({ recordings: 2 }));
+    await gotoApp(page, { recordings: 2 });
     const states = await page.evaluate(() => {
       const harness = window.__plaudonHarness!;
       const all = [
@@ -54,7 +54,7 @@ test.describe("jobs", () => {
   test("requires explicit cost acknowledgement before retrying an uncertain cloud request", async ({
     page,
   }) => {
-    await page.goto(harnessUrl({ recordings: 1 }));
+    await gotoApp(page, { recordings: 1 });
     await page.evaluate(() => {
       const harness = window.__plaudonHarness!;
       harness.addJob({
@@ -80,17 +80,20 @@ test.describe("jobs", () => {
     await expect(confirm).toBeEnabled();
     await confirm.click();
 
-    const calls = await page.evaluate(() =>
+    const acknowledgements = await page.evaluate(() =>
       window
         .__plaudonHarness!.calls.filter((c) => c.command === "retry_job")
-        .map((c) => c.args as { cost_acknowledged: boolean }),
+        .map((c) =>
+          c.args && typeof c.args === "object" && "cost_acknowledged" in c.args
+            ? c.args.cost_acknowledged === true
+            : null,
+        ),
     );
-    expect(calls).toHaveLength(1);
-    expect(calls[0]!.cost_acknowledged).toBe(true);
+    expect(acknowledgements).toEqual([true]);
   });
 
   test("shows the empty state with a corrective action", async ({ page }) => {
-    await page.goto(harnessUrl({ recordings: 0 }));
+    await gotoApp(page, { recordings: 0 });
     await page.getByRole("tab", { name: /Jobs/ }).click();
     await expect(page.getByText(/no jobs/i)).toBeVisible();
     await auditPage(page, "jobs empty");
@@ -99,7 +102,7 @@ test.describe("jobs", () => {
 
 test.describe("activity history", () => {
   test("records completions even when the OS denies notifications", async ({ page }) => {
-    await page.goto(harnessUrl({ recordings: 1, notifications: "denied" }));
+    await gotoApp(page, { recordings: 1, notifications: "denied" });
     await page.evaluate(() => {
       const harness = window.__plaudonHarness!;
       harness.addActivity({
@@ -110,14 +113,14 @@ test.describe("activity history", () => {
       harness.emit("activity.added");
     });
     await page.getByRole("tab", { name: /Settings/ }).click();
-    await page.getByRole("link", { name: /activity history/i }).click();
-    await expect(page.getByText("Import finished")).toBeVisible();
+    await page.locator("#main-region").getByRole("button", { name: /open activity history/i }).click();
+    await expect(page.getByText("Import finished").first()).toBeVisible();
     await expect(page.getByText(/not permitted|denied|suppressed/i).first()).toBeVisible();
     await auditPage(page, "activity history");
   });
 
   test("announces unread activity in the header", async ({ page }) => {
-    await page.goto(harnessUrl({ recordings: 1 }));
+    await gotoApp(page, { recordings: 1 });
     await page.evaluate(() => {
       window.__plaudonHarness!.addActivity({
         category: "transcription_finished",

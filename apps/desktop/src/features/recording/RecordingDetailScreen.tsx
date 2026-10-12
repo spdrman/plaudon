@@ -2,7 +2,7 @@
  * Recording detail (§5.2): header with provenance and privacy, playback,
  * transcript, and the Summary/Actions/Decisions/History pane.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./recording.css";
 import { Button } from "../../components/Button";
 import { Dialog } from "../../components/Dialog";
@@ -81,19 +81,38 @@ export function RecordingDetailScreen({
   }, [shortcuts]);
 
   const [selectedRevisionId, setSelectedRevisionId] = useState<string | null>(null);
+  /**
+   * Revision the user is editing. While it is set, an incoming
+   * `transcript.completed` (or any other refetch) must not move the pane to a
+   * newer head: that would discard unsaved text silently (§4.5).
+   */
+  const [pinnedRevisionId, setPinnedRevisionId] = useState<string | null>(null);
   const [staleOutputIds, setStaleOutputIds] = useState<readonly string[]>([]);
   const [tab, setTab] = useState<TabId>("summary");
 
   useEffect(() => {
     setSelectedRevisionId(null);
+    setPinnedRevisionId(null);
     setStaleOutputIds([]);
   }, [recordingId]);
 
   const revisions = useMemo(() => detail?.revisions ?? [], [detail]);
   const activeRevision =
     revisions.find((revision) => revision.revision_id === selectedRevisionId) ??
+    revisions.find((revision) => revision.revision_id === pinnedRevisionId) ??
     revisions.find((revision) => revision.revision_id === detail?.current_revision_id) ??
     null;
+
+  // Read inside the dirty callback, which must pin whatever is on screen now.
+  const displayedRevisionId = useRef<string | null>(null);
+  displayedRevisionId.current = activeRevision?.revision_id ?? null;
+
+  const onDirtyChange = useCallback((dirtyCount: number) => {
+    setPinnedRevisionId((current) => {
+      if (dirtyCount === 0) return null;
+      return current ?? displayedRevisionId.current;
+    });
+  }, []);
 
   if (error) {
     return (
@@ -142,7 +161,7 @@ export function RecordingDetailScreen({
           />
         </div>
 
-        <h1 className="recording__title">{detail.title}</h1>
+        <h2 className="recording__title">{detail.title}</h2>
         <p className="recording__title-note">
           Renaming is not part of this build: no command persists a new title, so the title is shown
           exactly as it was imported.
@@ -208,14 +227,30 @@ export function RecordingDetailScreen({
                 revisions={revisions}
                 selectedRevisionId={activeRevision.revision_id}
                 headRevisionId={detail.current_revision_id}
-                onSelect={setSelectedRevisionId}
+                onSelect={(revisionId) => {
+                  setPinnedRevisionId(null);
+                  setSelectedRevisionId(revisionId);
+                }}
               />
+              {pinnedRevisionId !== null &&
+              detail.current_revision_id !== null &&
+              detail.current_revision_id !== activeRevision.revision_id ? (
+                <p className="recording__pinned" role="status" aria-live="polite">
+                  <span aria-hidden="true">⚑ </span>
+                  A newer revision was saved elsewhere. Your edits are kept; saving will show
+                  resolution options.
+                </p>
+              ) : null}
               <TranscriptPane
                 recordingId={recordingId}
                 revision={activeRevision}
-                editable={activeRevision.revision_id === detail.current_revision_id}
+                editable={
+                  activeRevision.revision_id === (pinnedRevisionId ?? detail.current_revision_id)
+                }
                 onSeek={(positionMs) => controller.seekTo(positionMs)}
+                onDirtyChange={onDirtyChange}
                 onSaved={(response) => {
+                  setPinnedRevisionId(null);
                   setSelectedRevisionId(response.revision_id);
                   setStaleOutputIds(response.stale_output_ids);
                   void refetch();
@@ -226,6 +261,7 @@ export function RecordingDetailScreen({
                   });
                 }}
                 onReloadRequested={() => {
+                  setPinnedRevisionId(null);
                   setSelectedRevisionId(null);
                   void refetch();
                 }}
