@@ -26,12 +26,21 @@ plaudon-app = { workspace = true }
 plaudon-craft-ui = { workspace = true }
 plaudon-domain = { workspace = true }
 plaudon-diagnostics = { workspace = true }
+plaudon-platform = { workspace = true }
 plaudon-ui = { workspace = true }
 eframe = { workspace = true, features = ["default_fonts", "wgpu", "accesskit"] }
 egui = { workspace = true, features = ["default_fonts"] }
 rfd = { workspace = true, features = ["xdg-portal"] }
 tokio = { workspace = true }
 tracing = { workspace = true }
+
+[target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
+# The tray backend (matrix row C11). Deliberately not a Linux dependency: the
+# `tray-icon` Linux backends link GTK and libappindicator, which the headless
+# build and the MARS container do not carry, and a Linux tray additionally
+# needs a StatusNotifierItem host. `plaudon_platform::tray::NativeTray` says so
+# there instead.
+tray-icon = { workspace = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 # Window-system backends are Linux-only features of winit; `default-features`

@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/set_appearance.request.schema.json",
+  "title": "set_appearance.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "appearance",
+    "contrast"
+  ],
+  "properties": {
+    "appearance": {
+      "type": "string",
+      "enum": [
+        "system",
+        "light",
+        "dark"
+      ]
+    },
+    "contrast": {
+      "type": "string",
+      "enum": [
+        "standard",
+        "high"
+      ]
+    }
+  }
+}

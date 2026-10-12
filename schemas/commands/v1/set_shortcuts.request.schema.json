@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/set_shortcuts.request.schema.json",
+  "title": "set_shortcuts.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "bindings",
+    "specs"
+  ],
+  "properties": {
+    "bindings": {
+      "$ref": "#/$defs/bindings"
+    },
+    "specs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/spec"
+      }
+    }
+  },
+  "$defs": {
+    "bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [],
+      "properties": {
+        "overrides": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "label",
+        "group",
+        "default_chord",
+        "rebindable"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "group": {
+          "type": "string"
+        },
+        "default_chord": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "rebindable": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

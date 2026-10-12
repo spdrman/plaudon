@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/remove_local_model.request.schema.json",
+  "title": "remove_local_model.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "model_id",
+    "confirmed"
+  ],
+  "properties": {
+    "model_id": {
+      "type": "string"
+    },
+    "confirmed": {
+      "type": "boolean"
+    }
+  }
+}
