@@ -166,7 +166,8 @@ impl SearchScreen {
                     .desired_width(280.0),
             );
             let field = field.labelled_by(label.id);
-            let submitted = field.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter));
+            let submitted =
+                field.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter));
             if (ui.button("Search").clicked() || submitted) && self.pending.is_none() {
                 self.submit(send);
             }
@@ -213,11 +214,12 @@ impl SearchScreen {
 
         if self.next_cursor.is_some() {
             let busy = self.pending.is_some();
-            let label = if busy { "Loading more…" } else { "More results" };
-            if ui
-                .add_enabled(!busy, egui::Button::new(label))
-                .clicked()
-            {
+            let label = if busy {
+                "Loading more…"
+            } else {
+                "More results"
+            };
+            if ui.add_enabled(!busy, egui::Button::new(label)).clicked() {
                 if let (Some(query), Some(cursor)) =
                     (self.submitted.clone(), self.next_cursor.clone())
                 {
@@ -269,8 +271,7 @@ impl SearchScreen {
                                 }
                                 // §8.6A: no position, no seek control — and
                                 // no invented one.
-                                if let (Some(label), Some(seek_ms)) =
-                                    (seek_label(hit), hit.seek_ms)
+                                if let (Some(label), Some(seek_ms)) = (seek_label(hit), hit.seek_ms)
                                 {
                                     if ui.button(label).clicked() {
                                         intents.push(SearchIntent::Seek {

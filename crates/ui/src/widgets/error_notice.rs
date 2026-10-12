@@ -80,9 +80,8 @@ pub fn error_notice(
         } else {
             format!("{context} {}", envelope.message)
         };
-        let alert = ui.label(
-            RichText::new(format!("✕ {message}")).color(ui.visuals().error_fg_color),
-        );
+        let alert =
+            ui.label(RichText::new(format!("✕ {message}")).color(ui.visuals().error_fg_color));
         alert.widget_info(|| {
             let mut info = egui::WidgetInfo::labeled(egui::WidgetType::Label, true, &message);
             info.current_text_value = Some(message.clone());

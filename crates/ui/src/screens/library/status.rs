@@ -199,8 +199,7 @@ mod tests {
         .into_iter()
         .map(import_status)
         .collect();
-        let labels: std::collections::BTreeSet<_> =
-            descriptors.iter().map(|d| d.label).collect();
+        let labels: std::collections::BTreeSet<_> = descriptors.iter().map(|d| d.label).collect();
         assert_eq!(labels.len(), descriptors.len(), "labels must be distinct");
         assert!(descriptors.iter().all(|d| !d.glyph.is_empty()));
     }
@@ -218,11 +217,9 @@ mod tests {
         .into_iter()
         .map(transcription_status)
         .collect();
-        let labels: std::collections::BTreeSet<_> =
-            descriptors.iter().map(|d| d.label).collect();
+        let labels: std::collections::BTreeSet<_> = descriptors.iter().map(|d| d.label).collect();
         assert_eq!(labels.len(), descriptors.len());
-        let glyphs: std::collections::BTreeSet<_> =
-            descriptors.iter().map(|d| d.glyph).collect();
+        let glyphs: std::collections::BTreeSet<_> = descriptors.iter().map(|d| d.glyph).collect();
         assert_eq!(
             glyphs.len(),
             descriptors.len(),

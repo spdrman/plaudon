@@ -108,7 +108,9 @@ impl RecordingList {
     /// Whether a continuation page is in flight.
     #[must_use]
     pub fn is_loading_more(&self) -> bool {
-        self.pending.as_ref().is_some_and(|pending| pending.continues)
+        self.pending
+            .as_ref()
+            .is_some_and(|pending| pending.continues)
     }
 
     /// Whether anything has been fetched since the last restart.
@@ -257,7 +259,10 @@ mod tests {
     }
 
     fn list() -> (RecordingList, Recorder) {
-        (RecordingList::new(LibraryQuery::default()), Recorder::default())
+        (
+            RecordingList::new(LibraryQuery::default()),
+            Recorder::default(),
+        )
     }
 
     #[test]
@@ -308,7 +313,11 @@ mod tests {
         );
         list.load_more(&mut recorder.send());
         list.load_more(&mut recorder.send());
-        assert_eq!(recorder.sent.len(), 2, "the same page must not be queued twice");
+        assert_eq!(
+            recorder.sent.len(),
+            2,
+            "the same page must not be queued twice"
+        );
     }
 
     #[test]
@@ -343,13 +352,13 @@ mod tests {
             CommandId::from_raw(1),
             &Ok(AppResponse::ListRecordings(page(rows(3), Some("02"), 5))),
         );
-        list.apply(
-            QueryAction::Query("board".to_owned()),
-            &mut recorder.send(),
-        );
+        list.apply(QueryAction::Query("board".to_owned()), &mut recorder.send());
         assert!(list.rows().is_empty());
         assert_eq!(recorder.last_request().cursor, None);
-        assert_eq!(recorder.last_request().filter.query.as_deref(), Some("board"));
+        assert_eq!(
+            recorder.last_request().filter.query.as_deref(),
+            Some("board")
+        );
     }
 
     #[test]

@@ -136,3 +136,29 @@ The resource policy is part of the test strategy: heavy or renderer-dependent ru
 There are none yet, and none may be invented. `docs/benchmarks/README.md` forbids quoting a target
 before a measured baseline. The first measured UI numbers come from the MARS runs of the O1.4 library
 and O1.5 player suites; the budgets are written here then, with the run that produced them.
+
+### 6.1 The library's scale case (O1.4, #202)
+
+`crates/ui/tests/library_perf.rs` holds the 10,000-row case. It asserts two things that do **not**
+need a budget, because they are machine-independent:
+
+| Assertion | Why it is safe to assert anywhere |
+| --- | --- |
+| fewer than 100 of 10,000 rows are laid out per frame | a count from the AccessKit tree, identical on every machine |
+| a 10,000-row frame costs less than 3× a 100-row frame | a ratio measured on the machine running it, so it catches the quadratic implementation regardless of how fast the host is |
+
+The absolute mean frame cost is **printed, not asserted** (`cargo test -p plaudon-ui --test
+library_perf -- --nocapture`). The millisecond budget belongs here, next to the MARS run that
+produced it:
+
+```sh
+PLAUDON_E2E_APT_PACKAGES=libdbus-1-dev scripts/e2e-remote.sh shell \
+  'cargo test -p plaudon-ui --test library_perf -- --nocapture'
+```
+
+**Not yet recorded.** At the time O1.4 landed the MARS runner had no free disk space
+(`rsync: write failed … No space left on device (28)`), so neither the millisecond figure nor the
+committed snapshot baselines for `tests/visual/library_empty.png` and
+`tests/visual/library_100_rows.png` could be produced. The two snapshot assertions therefore report
+`Outcome::Skipped` everywhere (§4.3) and nothing silently claims a comparison it did not make; the
+baselines and the budget are added by the first run after the runner has space.

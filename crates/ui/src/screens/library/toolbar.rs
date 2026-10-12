@@ -13,8 +13,8 @@ use egui::Ui;
 use plaudon_app::dto::{ImportStatus, RecordingSummary, TranscriptionStatus};
 
 use super::query::{
-    tag_options, LibraryQuery, QueryAction, IMPORT_STATUS_OPTIONS, SEARCH_DEBOUNCE,
-    SOURCE_OPTIONS, TRANSCRIPTION_STATUS_OPTIONS,
+    tag_options, LibraryQuery, QueryAction, IMPORT_STATUS_OPTIONS, SEARCH_DEBOUNCE, SOURCE_OPTIONS,
+    TRANSCRIPTION_STATUS_OPTIONS,
 };
 use super::status::{import_status, transcription_status};
 
@@ -75,29 +75,25 @@ pub fn toolbar(
             state.pending_since = Some(ui.input(|input| input.time));
         }
 
-        output
-            .actions
-            .extend(choice_filter(
-                ui,
-                "Import status",
-                "All import states",
-                query.import_status.first().copied(),
-                &IMPORT_STATUS_OPTIONS,
-                |status| import_status(status).label.to_owned(),
-                QueryAction::ImportStatus,
-            ));
+        output.actions.extend(choice_filter(
+            ui,
+            "Import status",
+            "All import states",
+            query.import_status.first().copied(),
+            &IMPORT_STATUS_OPTIONS,
+            |status| import_status(status).label.to_owned(),
+            QueryAction::ImportStatus,
+        ));
 
-        output
-            .actions
-            .extend(choice_filter(
-                ui,
-                "Transcription status",
-                "All transcription states",
-                query.transcription_status.first().copied(),
-                &TRANSCRIPTION_STATUS_OPTIONS,
-                |status| transcription_status(status).label.to_owned(),
-                QueryAction::TranscriptionStatus,
-            ));
+        output.actions.extend(choice_filter(
+            ui,
+            "Transcription status",
+            "All transcription states",
+            query.transcription_status.first().copied(),
+            &TRANSCRIPTION_STATUS_OPTIONS,
+            |status| transcription_status(status).label.to_owned(),
+            QueryAction::TranscriptionStatus,
+        ));
 
         let sources: Vec<String> = SOURCE_OPTIONS
             .iter()

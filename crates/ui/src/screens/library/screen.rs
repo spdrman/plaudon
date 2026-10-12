@@ -79,9 +79,7 @@ impl Screen for LibraryScreen {
                     return;
                 };
                 with_sender!(cx, |send| self.detail.open(parsed, &mut send));
-                let context = DetailContext {
-                    local_only: true,
-                };
+                let context = DetailContext { local_only: true };
                 let panels = self.panels.as_mut();
                 let intents =
                     with_sender!(cx, |send| self.detail.ui(ui, panels, context, &mut send));

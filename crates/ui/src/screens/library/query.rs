@@ -515,7 +515,7 @@ mod tests {
         let shared = row("Shared");
         let only_work = row("Work");
         let merged = merge_inbox_rows(&[
-            &[shared.clone()],
+            std::slice::from_ref(&shared),
             &[shared.clone(), only_work.clone()][..],
         ]);
         assert_eq!(merged.len(), 2);

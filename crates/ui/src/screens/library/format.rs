@@ -72,7 +72,8 @@ pub fn format_timestamp(iso: Option<&str>) -> String {
     let Some(iso) = iso else {
         return UNKNOWN.to_owned();
     };
-    let Ok(parsed) = time::OffsetDateTime::parse(iso, &time::format_description::well_known::Rfc3339)
+    let Ok(parsed) =
+        time::OffsetDateTime::parse(iso, &time::format_description::well_known::Rfc3339)
     else {
         return UNKNOWN.to_owned();
     };
@@ -149,7 +150,11 @@ mod tests {
     fn a_digest_is_shown_as_a_twelve_character_fingerprint() {
         let digest = Sha256Digest::of(b"plaudon");
         let short = short_hash(&digest);
-        assert_eq!(short.chars().count(), 13, "twelve hex characters and an ellipsis");
+        assert_eq!(
+            short.chars().count(),
+            13,
+            "twelve hex characters and an ellipsis"
+        );
         assert!(digest.to_hex().starts_with(&short[..12]));
     }
 }

@@ -25,7 +25,9 @@ use plaudon_domain::ids::RecordingId;
 
 use crate::screens::library::format::{format_duration, format_timestamp, short_hash};
 use crate::screens::library::list::Sender;
-use crate::screens::library::status::{status_badge, transcription_status, StatusDescriptor, StatusTone};
+use crate::screens::library::status::{
+    status_badge, transcription_status, StatusDescriptor, StatusTone,
+};
 use crate::widgets::error_notice::{error_notice, ErrorNoticeAction};
 
 /// Events that change what the detail view shows.
@@ -132,7 +134,8 @@ impl RecordingDetailScreen {
 
     /// Open a recording, fetching it if it is not the one already shown.
     pub fn open(&mut self, recording_id: RecordingId, send: Sender<'_>) {
-        if self.recording_id == Some(recording_id) && (self.detail.is_some() || self.pending.is_some())
+        if self.recording_id == Some(recording_id)
+            && (self.detail.is_some() || self.pending.is_some())
         {
             return;
         }
@@ -370,7 +373,10 @@ mod tests {
             .find(|(name, _)| *name == "Content hash (SHA-256)")
             .expect("the hash row")
             .1;
-        assert!(hash.ends_with('…'), "the hash is a fingerprint, not a value to retype");
+        assert!(
+            hash.ends_with('…'),
+            "the hash is a fingerprint, not a value to retype"
+        );
     }
 
     #[test]
