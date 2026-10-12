@@ -1,6 +1,6 @@
 [package]
 name = "plaudon-audio"
-description = "Media sniffing, probing and canonical PCM derivation."
+description = "Media validation, streaming decode to canonical PCM, chunk planning and overlap-aware timestamp reconciliation."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -11,3 +11,26 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
+plaudon-ai-contracts = { workspace = true }
+plaudon-domain = { workspace = true }
+fs4 = { workspace = true }
+serde = { workspace = true }
+sha2 = { workspace = true }
+symphonia = { workspace = true, features = [
+    "aac",
+    "adpcm",
+    "flac",
+    "isomp4",
+    "mp3",
+    "ogg",
+    "pcm",
+    "vorbis",
+    "wav",
+] }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+serde_json = { workspace = true }
+tempfile = { workspace = true }

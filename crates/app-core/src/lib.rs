@@ -6,9 +6,13 @@
 
 pub mod dedup;
 pub mod import;
+pub mod models;
+pub mod stt;
 
 pub use dedup::{BlobDecision, DedupPolicy};
 pub use import::{ImportOutcome, ImportRequest, ImportService};
+pub use models::{ModelError, ModelId, ModelInstaller, ModelPack, ModelRegistry};
+pub use stt::{select_engine, EngineCandidate, EngineDecision, SelectionRequest};
 
 /// Cargo package name of this crate, used by the workspace layout conformance test.
 pub const PACKAGE_NAME: &str = "plaudon-app-core";

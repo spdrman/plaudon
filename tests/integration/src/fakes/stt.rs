@@ -78,6 +78,11 @@ impl SpeechToText for FakeSpeechToText {
             alignment_origin: self.alignment_origin,
             segments: self.segments.clone(),
             duration_ms: input.duration_ms,
+            engine_params: std::collections::BTreeMap::new(),
+            chunking_strategy: input.chunking_strategy,
+            normalization_profile: input.normalization_profile,
+            annotations: Vec::new(),
+            backend: None,
         })
     }
 }

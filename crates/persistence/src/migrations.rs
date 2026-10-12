@@ -66,6 +66,11 @@ pub const MIGRATIONS: &[Migration] = &[
         version: 300,
         name: "desktop_shell",
         sql: include_str!("../migrations/0300_desktop_shell.sql"),
+    // 200+ is EPIC F's range (task F2.4).
+    Migration {
+        version: 200,
+        name: "transcript_provenance",
+        sql: include_str!("../migrations/0200_transcript_provenance.sql"),
     },
 ];
 
@@ -323,6 +328,10 @@ mod tests {
         let expected: Vec<i64> = MIGRATIONS.iter().map(|m| m.version).collect();
         assert_eq!(report.applied, expected);
         assert_eq!(
+            report.applied,
+            MIGRATIONS.iter().map(|m| m.version).collect::<Vec<_>>()
+        );
+        assert_eq!(
             report.backup_path, None,
             "a fresh library has nothing to back up"
         );
@@ -360,6 +369,13 @@ mod tests {
         let report = full.run(&db).await.unwrap();
         let expected: Vec<i64> = MIGRATIONS.iter().skip(1).map(|m| m.version).collect();
         assert_eq!(report.applied, expected);
+        assert_eq!(
+            report.applied,
+            MIGRATIONS[1..]
+                .iter()
+                .map(|m| m.version)
+                .collect::<Vec<_>>()
+        );
         let backup = report.backup_path.expect("an upgrade must back up first");
         assert!(
             backup.exists(),
