@@ -45,7 +45,7 @@ impl LibraryScreen {
                         .filter_map(|path| path.to_str().map(str::to_owned))
                         .collect();
                     if !paths.is_empty() {
-                        with_sender!(cx, |send| self.import_paths(paths, &mut send));
+                        with_sender!(cx, |send| self.import_paths(&paths, &mut send));
                     }
                 }
                 LibraryIntent::Status(text) => cx.set_status(text),
@@ -60,7 +60,7 @@ impl LibraryScreen {
     /// seeks before returning. One that does arrive would be a panel asking
     /// for a player this host does not have, and dropping it silently is
     /// what this assertion-free `debug_assert` is for.
-    fn drain_panels(&mut self, out: crate::ai::AiOutput, cx: &mut ScreenCtx<'_>) {
+    fn drain_panels(out: crate::ai::AiOutput, cx: &mut ScreenCtx<'_>) {
         let unrouted = apply_ai_output(out, cx);
         debug_assert!(
             unrouted.is_empty(),
@@ -75,7 +75,7 @@ impl LibraryScreen {
         }
         let mut out = crate::ai::AiOutput::default();
         self.detail.close(self.panels.as_mut(), &mut out);
-        self.drain_panels(out, cx);
+        Self::drain_panels(out, cx);
     }
 
     /// Flush everything the panels still hold: the window is closing.
@@ -123,7 +123,7 @@ impl Screen for LibraryScreen {
                 let intents = with_sender!(cx, |send| self
                     .detail
                     .ui(ui, panels, context, &mut send, &mut out));
-                self.drain_panels(out, cx);
+                Self::drain_panels(out, cx);
                 for intent in intents {
                     match intent {
                         DetailIntent::Back => cx.navigate(Route::Library),
@@ -159,7 +159,7 @@ impl Screen for LibraryScreen {
     ) {
         let mut out = AiOutput::default();
         self.panels.on_response(id, command, result, &mut out);
-        self.drain_panels(out, cx);
+        Self::drain_panels(out, cx);
         if self.search.on_response(id, result) || self.detail.on_response(id, result) {
             return;
         }
@@ -173,7 +173,7 @@ impl Screen for LibraryScreen {
         let kind = event.kind;
         let mut out = AiOutput::default();
         self.panels.on_ui_event(event, &mut out);
-        self.drain_panels(out, cx);
+        Self::drain_panels(out, cx);
         with_sender!(cx, |send| {
             LibraryScreen::on_ui_event(self, kind, &mut send);
             self.detail.on_ui_event(kind, &mut send);

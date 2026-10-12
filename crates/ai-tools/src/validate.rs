@@ -122,7 +122,10 @@ mod tests {
         let schema = schema();
         let instance = serde_json::json!({"items": [{"text": "a"}, {"wrong": 1}]});
         let violations = schema.violations(&instance);
-        assert!(!violations.is_empty());
+        assert!(
+            !violations.is_empty(),
+            "expected violations to be non-empty"
+        );
         assert!(violations.iter().any(|p| p.starts_with("/items/1")));
         assert_eq!(
             schema.check(&instance),

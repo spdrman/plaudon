@@ -367,7 +367,11 @@ mod tests {
 
         assert_eq!(result.answer.outcome, AskOutcomeKind::Answered);
         assert_eq!(result.answer.anchors.len(), 1);
-        assert!(result.answer.rejected_anchors.is_empty());
+        assert!(
+            result.answer.rejected_anchors.is_empty(),
+            "expected result.answer.rejected_anchors to be empty, got {:?}",
+            result.answer.rejected_anchors
+        );
     }
 
     #[tokio::test]
@@ -419,7 +423,7 @@ mod tests {
             AskOutcomeKind::NotSupportedByRecording
         );
         assert!(!result.answer.dispatched);
-        assert!(model.prompts().is_empty());
+        assert!(model.prompts().is_empty(), "no prompt may be dispatched");
     }
 
     #[tokio::test]
@@ -441,7 +445,11 @@ mod tests {
         .unwrap();
 
         assert_eq!(result.answer.outcome, AskOutcomeKind::InsufficientEvidence);
-        assert!(result.answer.anchors.is_empty());
+        assert!(
+            result.answer.anchors.is_empty(),
+            "expected result.answer.anchors to be empty, got {:?}",
+            result.answer.anchors
+        );
         assert_eq!(result.answer.rejected_anchors.len(), 1);
         assert!(!result.answer.text.contains("four million"));
     }
@@ -542,7 +550,7 @@ mod tests {
         .await
         .unwrap_err();
         assert_eq!(err, ToolError::CapabilityUnmet);
-        assert!(model.prompts().is_empty());
+        assert!(model.prompts().is_empty(), "no prompt may be dispatched");
     }
 
     #[tokio::test]
@@ -581,7 +589,7 @@ mod tests {
             .unwrap_err(),
             ToolError::Canceled
         );
-        assert!(model.prompts().is_empty());
+        assert!(model.prompts().is_empty(), "no prompt may be dispatched");
     }
 
     #[tokio::test]

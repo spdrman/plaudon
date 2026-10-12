@@ -109,7 +109,11 @@ async fn identical_bytes_from_two_sources_share_one_blob_and_stay_two_recordings
 
     let b = h.service.recordings().get(second_id).await.unwrap();
     assert_eq!(b.title, "Account B copy");
-    assert!(b.tags.is_empty());
+    assert!(
+        b.tags.is_empty(),
+        "expected b.tags to be empty, got {:?}",
+        b.tags
+    );
     assert_eq!(b.annotation, None);
     assert_eq!(
         h.service.recordings().get(first_id).await.unwrap().title,

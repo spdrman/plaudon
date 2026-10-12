@@ -102,7 +102,10 @@ fn the_spike_lists_an_empty_library_imports_a_file_and_shows_the_result() {
     pump_until(&mut harness, "the first library answer", |app| {
         app.state().library_fetched
     });
-    assert!(harness.state().state().recordings.is_empty());
+    assert!(
+        harness.state().state().recordings.is_empty(),
+        "expected harness.state().state().recordings to be empty"
+    );
     assert_eq!(harness.state().state().total, 0);
     assert!(a11y::has_label(
         &harness,
@@ -179,7 +182,10 @@ fn a_cancelled_dialog_imports_nothing_and_says_so() {
 
     assert_eq!(*picker_calls.lock().expect("picker counter"), 1);
     assert_eq!(harness.state().state().status, "Import cancelled");
-    assert!(harness.state().state().recordings.is_empty());
+    assert!(
+        harness.state().state().recordings.is_empty(),
+        "expected harness.state().state().recordings to be empty"
+    );
 }
 
 #[test]

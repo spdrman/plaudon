@@ -102,7 +102,7 @@ impl std::fmt::Debug for ProcessingEngine {
             .field("engine", &self.engine)
             .field("in_flight", &self.inflight.lock().len())
             .field("engines", &self.seam)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
@@ -210,12 +210,12 @@ impl ProcessingHandle {
     /// [`crate::build_ports_with`] does not take — is outside this crate and
     /// therefore cannot call a crate-private constructor. `stop` and
     /// `is_running` were already public; only the constructor was not.
-    pub fn start(backend: Arc<LocalBackend>, workers: Option<usize>) -> Self {
+    pub fn start(backend: &Arc<LocalBackend>, workers: Option<usize>) -> Self {
         let shutdown = CancellationToken::new();
         let count = workers.unwrap_or(DEFAULT_WORKERS).max(1);
         let mut handles = Vec::with_capacity(count);
         for _ in 0..count {
-            let backend = Arc::clone(&backend);
+            let backend = Arc::clone(backend);
             let shutdown = shutdown.clone();
             handles.push(tokio::spawn(
                 async move { run_worker(backend, shutdown).await },

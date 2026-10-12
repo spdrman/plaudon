@@ -424,7 +424,11 @@ mod tests {
         let result = result_from_turns("fake-deterministic", Vec::new());
         let reconciliation = reconcile(&revision, &result).unwrap();
         assert_eq!(reconciliation.unassigned_count(), 3);
-        assert!(reconciliation.cluster_order.is_empty());
+        assert!(
+            reconciliation.cluster_order.is_empty(),
+            "no turns means no clusters, got {:?}",
+            reconciliation.cluster_order
+        );
     }
 
     #[test]

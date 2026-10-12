@@ -219,7 +219,7 @@ fn the_six_steps_appear_in_order_with_a_text_progress_label() {
         assert_eq!(harness.state().screen.state().step(), *step);
         // Progress is a sentence, not a bar on its own.
         harness.get_by_label(&format!("Step {} of 6", index + 1));
-        assert!(has(&harness, step.title()), "{:?} has no heading", step);
+        assert!(has(&harness, step.title()), "{step:?} has no heading");
         if index < OnboardingStep::LAST_INDEX {
             click(&mut harness, "Next");
         }

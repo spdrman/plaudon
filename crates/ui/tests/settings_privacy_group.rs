@@ -419,7 +419,11 @@ fn an_empty_field_submits_nothing() {
     harness.get_by_label("Set key").click();
     harness.run();
 
-    assert!(harness.state().out.command_names().is_empty());
+    assert!(
+        harness.state().out.command_names().is_empty(),
+        "expected harness.state().out.command_names() to be empty, got {:?}",
+        harness.state().out.command_names()
+    );
 }
 
 #[test]
@@ -470,7 +474,11 @@ fn cancelling_the_removal_raises_nothing() {
     harness.get_by_label("Cancel").click();
     harness.run();
 
-    assert!(harness.state().out.command_names().is_empty());
+    assert!(
+        harness.state().out.command_names().is_empty(),
+        "expected harness.state().out.command_names() to be empty, got {:?}",
+        harness.state().out.command_names()
+    );
     assert!(!announces(&harness, OPENROUTER_REMOVE_DISCLOSURE));
 }
 
@@ -647,7 +655,11 @@ fn the_categories_are_inert_while_the_master_switch_is_off() {
     harness.get_by_label("An import finished").click();
     harness.run();
 
-    assert!(harness.state().out.command_names().is_empty());
+    assert!(
+        harness.state().out.command_names().is_empty(),
+        "expected harness.state().out.command_names() to be empty, got {:?}",
+        harness.state().out.command_names()
+    );
 }
 
 #[test]

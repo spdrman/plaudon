@@ -353,7 +353,11 @@ mod tests {
             &Ok(AppResponse::ListRecordings(page(rows(3), Some("02"), 5))),
         );
         list.apply(QueryAction::Query("board".to_owned()), &mut recorder.send());
-        assert!(list.rows().is_empty());
+        assert!(
+            list.rows().is_empty(),
+            "a new query clears the rows first: {:?}",
+            list.rows()
+        );
         assert_eq!(recorder.last_request().cursor, None);
         assert_eq!(
             recorder.last_request().filter.query.as_deref(),
@@ -432,7 +436,11 @@ mod tests {
             &Ok(AppResponse::ListRecordings(page(rows(3), Some("02"), 5))),
         );
         list.on_resync(&mut recorder.send());
-        assert!(list.rows().is_empty());
+        assert!(
+            list.rows().is_empty(),
+            "a new query clears the rows first: {:?}",
+            list.rows()
+        );
         assert_eq!(recorder.last_request().cursor, None);
     }
 }

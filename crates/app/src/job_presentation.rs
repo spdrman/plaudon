@@ -577,9 +577,18 @@ mod tests {
         let mut glyphs: Vec<&str> = Vec::new();
         for state in JobState::ALL {
             let presentation = job_state_presentation(*state);
-            assert!(!presentation.label.is_empty());
-            assert!(!presentation.glyph.is_empty());
-            assert!(!presentation.description.is_empty());
+            assert!(
+                !presentation.label.is_empty(),
+                "expected presentation.label to be non-empty"
+            );
+            assert!(
+                !presentation.glyph.is_empty(),
+                "expected presentation.glyph to be non-empty"
+            );
+            assert!(
+                !presentation.description.is_empty(),
+                "expected presentation.description to be non-empty"
+            );
             labels.push(presentation.label);
             glyphs.push(presentation.glyph);
         }

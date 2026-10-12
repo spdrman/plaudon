@@ -163,7 +163,7 @@ mod imp {
     pub fn trip(_name: &'static str) {}
 
     /// Always zero without the `fault-injection` feature.
-    #[inline(always)]
+    #[inline]
     pub fn hits(_name: &str) -> u32 {
         0
     }

@@ -62,7 +62,7 @@ async fn fixture() -> Fixture {
                 }],
                 duration_ms: Some(1_000),
                 engine_params: std::collections::BTreeMap::default(),
-                chunking_strategy: Default::default(),
+                chunking_strategy: plaudon_ai_contracts::transcript::ChunkingStrategy::default(),
                 normalization_profile: None,
                 annotations: Vec::new(),
                 backend: None,

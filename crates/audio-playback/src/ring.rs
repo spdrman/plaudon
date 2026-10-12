@@ -257,12 +257,12 @@ mod tests {
     #[test]
     fn a_ring_round_trips_frames_in_order() {
         let ring = Ring::new(8);
-        assert!(ring.is_empty());
+        assert!(ring.is_empty(), "expected ring to be empty, got {ring:?}");
         assert_eq!(ring.push(&[1.0, 2.0, 3.0, 4.0]), 4);
         let mut out = [0.0f32; 4];
         assert_eq!(ring.pop(&mut out, 2, 2), 2);
         assert_eq!(out, [1.0, 2.0, 3.0, 4.0]);
-        assert!(ring.is_empty());
+        assert!(ring.is_empty(), "expected ring to be empty, got {ring:?}");
     }
 
     #[test]

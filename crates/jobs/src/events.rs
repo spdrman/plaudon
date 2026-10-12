@@ -605,7 +605,10 @@ mod tests {
     #[test]
     fn buffer_tracks_pending_events() {
         let mut buffer = EventBuffer::new();
-        assert!(buffer.is_empty());
+        assert!(
+            buffer.is_empty(),
+            "expected buffer to be empty, got {buffer:?}"
+        );
         buffer.push(PendingEvent::for_job(
             JobId::new(),
             EventKind::JobUpdated,

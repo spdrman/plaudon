@@ -53,8 +53,8 @@ fn draft(texts: &[&str], origin: AlignmentOrigin) -> TranscriptDraft {
             })
             .collect(),
         duration_ms: Some(10_000),
-        engine_params: Default::default(),
-        chunking_strategy: Default::default(),
+        engine_params: std::collections::BTreeMap::new(),
+        chunking_strategy: plaudon_ai_contracts::transcript::ChunkingStrategy::default(),
         normalization_profile: None,
         annotations: Vec::new(),
         backend: None,
