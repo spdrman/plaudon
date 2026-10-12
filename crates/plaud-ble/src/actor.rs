@@ -366,9 +366,16 @@ impl<T: GattTransport + 'static> DeviceActor<T> {
     }
 
     async fn run_list(&mut self) -> Result<DeltaListing, DeviceError> {
-        if self.session.state() != DeviceSessionState::Authenticated
-            && self.session.state() != DeviceSessionState::Available
-        {
+        // Enumeration is legitimate whenever the session is authenticated,
+        // including after a transfer: the audit lists, reads and lists again.
+        if !matches!(
+            self.session.state(),
+            DeviceSessionState::Authenticated
+                | DeviceSessionState::Available
+                | DeviceSessionState::Verifying
+                | DeviceSessionState::DurableCommit
+                | DeviceSessionState::Imported
+        ) {
             return Err(DeviceError::AuthBootstrapRequired);
         }
         self.session.apply(&SessionEvent::EnumerationStarted);

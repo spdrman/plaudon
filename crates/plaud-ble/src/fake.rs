@@ -97,6 +97,18 @@ pub struct Exchange {
     /// What happens once the frames are delivered.
     #[serde(default)]
     pub then: AfterExchange,
+    /// Delay before each frame of this exchange, in milliseconds.
+    ///
+    /// Zero for every committed fixture: a script is instantaneous unless a
+    /// test deliberately needs the actor to be mid-command, which is how the
+    /// single-owner property is observed.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub delay_ms: u64,
+}
+
+#[allow(clippy::trivially_copy_pass_by_ref)]
+fn is_zero(value: &u64) -> bool {
+    *value == 0
 }
 
 /// A replayable device script.
@@ -285,6 +297,7 @@ pub struct FakeDevice {
     next_exchange: usize,
     pending: VecDeque<Vec<u8>>,
     after: AfterExchange,
+    delay_ms: u64,
     trace: HostTrace,
     disconnected: bool,
 }
@@ -304,6 +317,7 @@ impl FakeDevice {
             next_exchange: 0,
             pending: VecDeque::new(),
             after: AfterExchange::Continue,
+            delay_ms: 0,
             trace: HostTrace::default(),
             disconnected: false,
         })
@@ -327,9 +341,10 @@ impl FakeDevice {
         &self.scenario
     }
 
-    fn arm(&mut self, frames: Vec<Vec<u8>>, after: AfterExchange) {
+    fn arm(&mut self, frames: Vec<Vec<u8>>, after: AfterExchange, delay_ms: u64) {
         self.pending = frames.into();
         self.after = after;
+        self.delay_ms = delay_ms;
     }
 }
 
@@ -359,6 +374,12 @@ impl GattTransport for FakeDevice {
 
     async fn write_control(&mut self, frame: &ControlFrame) -> Result<(), DeviceError> {
         if self.disconnected {
+            return Err(DeviceError::DeviceDisconnected);
+        }
+        // A script that ended in a disconnect has no link left to write to,
+        // even if the host never drained the last notification.
+        if self.after == AfterExchange::Disconnect && self.pending.is_empty() {
+            self.disconnected = true;
             return Err(DeviceError::DeviceDisconnected);
         }
         self.trace.emitted_opcodes.push(frame.opcode);
@@ -392,7 +413,7 @@ impl GattTransport for FakeDevice {
             .iter()
             .filter_map(|hex| decode_hex(hex))
             .collect();
-        self.arm(frames, exchange.then);
+        self.arm(frames, exchange.then, exchange.delay_ms);
         Ok(())
     }
 
@@ -401,6 +422,9 @@ impl GattTransport for FakeDevice {
             return Err(DeviceError::DeviceDisconnected);
         }
         if let Some(frame) = self.pending.pop_front() {
+            if self.delay_ms > 0 {
+                tokio::time::sleep(Duration::from_millis(self.delay_ms)).await;
+            }
             return Ok(frame);
         }
         match self.after {
@@ -437,6 +461,7 @@ pub struct ScenarioBuilder {
     device_model: Option<String>,
     firmware: Option<String>,
     battery_percent: Option<u8>,
+    frame_delay_ms: u64,
     exchanges: Vec<Exchange>,
 }
 
@@ -453,8 +478,17 @@ impl ScenarioBuilder {
                 .first()
                 .map(|f| (*f).to_owned()),
             battery_percent: Some(80),
+            frame_delay_ms: 0,
             exchanges: Vec::new(),
         }
+    }
+
+    /// Deliver transfer frames slowly, so a test can observe the actor while
+    /// it owns the device.
+    #[must_use]
+    pub const fn with_frame_delay_ms(mut self, delay_ms: u64) -> Self {
+        self.frame_delay_ms = delay_ms;
+        self
     }
 
     /// Report a different model, for the wrong-device cases.
@@ -488,6 +522,7 @@ impl ScenarioBuilder {
             expect: ExpectedRequest::Authenticate,
             reply_frames: vec![encode_hex(&frame.encode())],
             then: AfterExchange::Continue,
+            delay_ms: 0,
         });
         self
     }
@@ -502,6 +537,7 @@ impl ScenarioBuilder {
             expect: ExpectedRequest::Authenticate,
             reply_frames: vec![encode_hex(&frame.encode())],
             then,
+            delay_ms: 0,
         });
         self
     }
@@ -521,6 +557,7 @@ impl ScenarioBuilder {
             expect: ExpectedRequest::ListDelta,
             reply_frames: frames,
             then: AfterExchange::Continue,
+            delay_ms: 0,
         });
         self
     }
@@ -549,13 +586,20 @@ impl ScenarioBuilder {
                 }
             }
             TransferFault::ConflictingChunk { index } => {
+                // The pair must arrive while the offset is still ahead of the
+                // write cursor, otherwise the first copy has already been
+                // written and there is nothing left to compare against. The
+                // script therefore delivers the chunk, and its corrupted
+                // twin, before the chunks that precede it.
+                let index = index.max(1).min(frames.len().saturating_sub(1));
                 if let Some(original) = frames.get(index).cloned() {
                     if let Some(mut raw) = decode_hex(&original) {
-                        // Same offset, different payload.
                         if let Some(last) = raw.last_mut() {
                             *last = last.wrapping_add(1);
                         }
-                        frames.insert(index + 1, encode_hex(&raw));
+                        frames.remove(index);
+                        frames.insert(0, encode_hex(&raw));
+                        frames.insert(0, original);
                     }
                 }
             }
@@ -598,6 +642,7 @@ impl ScenarioBuilder {
             },
             reply_frames: frames,
             then,
+            delay_ms: self.frame_delay_ms,
         });
         self
     }
