@@ -357,6 +357,8 @@ model and how to add a screen.
 
 * [`docs/EGUI_ARCHITECTURE.md`](docs/EGUI_ARCHITECTURE.md) — the layers, the command/event flow, how to add a screen
 * [`docs/EGUI_BUILD.md`](docs/EGUI_BUILD.md) — building, testing and packaging, in exact commands
+* [`docs/PRECOMMIT.md`](docs/PRECOMMIT.md) — the local gate that stands in for the disabled GitHub
+  workflows: every check, the CI job it replaces, and the jobs no workstation can reproduce
 * [`docs/EGUI_TESTING.md`](docs/EGUI_TESTING.md) — the kittest rule, the accessibility view, the snapshot policy
 * [`docs/EGUI_DESIGN_SYSTEM.md`](docs/EGUI_DESIGN_SYSTEM.md) — tokens, components, the four themes
 * [`docs/EGUI_MIGRATION_PLAN.md`](docs/EGUI_MIGRATION_PLAN.md) — the parity matrix and its statuses
@@ -410,8 +412,8 @@ otherwise:
 
 ## Contributing
 
-Issues and pull requests are welcome. Before opening one, two things are worth knowing, because they
-are what most review comments would otherwise be about:
+Issues and pull requests are welcome. Before opening one, three things are worth knowing, because
+they are what most review comments would otherwise be about:
 
 1. **Claims are controlled.** A statement about compatibility uses one of six fixed terms —
    `Documented`, `Observed in upstream code`, `Validated`, `Supported`, `Experimental`,
@@ -421,6 +423,14 @@ are what most review comments would otherwise be about:
 2. **Where tests run matters.** `cargo test -j 2 -p <crate>` on a workstation; anything that renders
    or touches `whisper-rs` through [`scripts/e2e-remote.sh`](scripts/e2e-remote.sh). Visual baselines
    are only valid from the container renderer.
+3. **GitHub Actions is switched off, so the gate is local** (#257). Install the hook once with
+   [`scripts/install-hooks.sh`](scripts/install-hooks.sh) — it sets `core.hooksPath` to
+   [`.githooks`](.githooks) — and [`scripts/pre-commit.sh`](scripts/pre-commit.sh) then runs the
+   checks the pipeline used to run. `scripts/pre-commit.sh --list` prints each check and the CI
+   job it stands in for; `--skip-slow`, `--only` and `--skip` make a partial run, and a partial
+   run says loudly what it did not check. The Windows runner jobs cannot be reproduced on any
+   developer machine and are nobody's green. [`docs/PRECOMMIT.md`](docs/PRECOMMIT.md) has the
+   mapping and how to re-enable the workflows.
 
 Formatting and lints: [`scripts/fmt.sh`](scripts/fmt.sh), [`scripts/clippy.sh`](scripts/clippy.sh),
 [`scripts/test.sh`](scripts/test.sh). The workspace denies `clippy::all` and warns on
