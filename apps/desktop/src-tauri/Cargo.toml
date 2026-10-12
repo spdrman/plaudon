@@ -21,6 +21,8 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 plaudon-domain = { workspace = true }
 plaudon-persistence = { workspace = true }
+plaudon-ai-apple = { workspace = true }
+plaudon-ai-contracts = { workspace = true }
 plaudon-app-core = { workspace = true }
 plaudon-notifications = { workspace = true }
 async-trait = { workspace = true }
@@ -42,6 +44,12 @@ uuid = { workspace = true }
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
 dirs = "6"
 sysinfo = "0.37"
+
+[features]
+# Links the Swift bridge so Apple native AI is actually available in the
+# bundle. Off by default so a Windows or toolchain-free build still produces
+# a working application, with the Apple rows reporting platform_unsupported.
+apple-bridge = ["plaudon-ai-apple/apple-bridge"]
 
 [dev-dependencies]
 tempfile = { workspace = true }

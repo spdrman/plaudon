@@ -4,12 +4,22 @@
 //! import deduplicates blobs without merging logical meetings, and how a
 //! repeated import of the same source item stays idempotent.
 
+pub mod chunking;
 pub mod dedup;
+pub mod engine_policy;
 pub mod import;
 pub mod models;
 pub mod stt;
 
+pub use chunking::{
+    plan_chunks, Chunk, ChunkError, ChunkPlan, ChunkPolicy, ContextBudget, ContextOrigin, Coverage,
+    SegmentExtent, UnknownContext,
+};
 pub use dedup::{BlobDecision, DedupPolicy};
+pub use engine_policy::{
+    candidate_from_probe, degrade, explain, select_text_model, CorrectiveAction, Degradation,
+    TextEngineCandidate, TextEngineDecision, TextRequirements, UnavailabilityExplanation,
+};
 pub use import::{ImportOutcome, ImportRequest, ImportService};
 pub use models::{ModelError, ModelId, ModelInstaller, ModelPack, ModelRegistry};
 pub use stt::{select_engine, EngineCandidate, EngineDecision, SelectionRequest};

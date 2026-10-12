@@ -1,0 +1,1 @@
+{"envelope_version":1,"abi_version":2,"op":"transcribe_file","ok":true,"result":{"text":"x","segments":[{"seq_index":0,"start_ms":5,"end_ms":1,"text":"x"}],"alignment_origin":"none","locale":"en_US","final":true}}

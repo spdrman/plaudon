@@ -105,7 +105,7 @@ export type ErrorCode = (typeof ERROR_CODES)[number] | (string & {});
 export type CapabilityStatus = "unknown" | "experimental" | "supported" | "unsupported";
 
 export interface EngineInventoryEntry {
-  /** Stable engine id, e.g. `whisper.cpp` or `apple.speech`. */
+  /** Stable engine id, e.g. `whisper.cpp` or `apple-speech`. */
   engine_id: string;
   display_name: string;
   stage: "stt" | "text";

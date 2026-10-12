@@ -38,3 +38,7 @@ and why, and the consequences we accept.
 ## Job engine (0030-0039)
 
 - [ADR-0030: Job engine durability, idempotency and crash recovery](0030-job-engine-durability.md) — Accepted, 2026-10-11 (spec §14)
+
+## AI adapters (0040-0049)
+
+- [ADR-0040: Apple bridge envelopes, and a load floor far below the feature floor](ADR-0040-apple-bridge-envelopes-and-a-low-load-floor.md) — Accepted, 2026-10-11 (spec §6.6, §11.2, §11.3, §11.6, §12)

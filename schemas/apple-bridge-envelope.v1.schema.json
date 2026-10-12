@@ -1,0 +1,370 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.local/schemas/apple-bridge-envelope.v1.schema.json",
+  "title": "Apple bridge request/response/progress envelope, version 1",
+  "description": "The serialized contract carried across the Swift-Rust C ABI (spec 6.6, 11.2). Every document in either direction validates against one of the three branches below. The header native/apple-bridge/include/plaudon_apple_bridge.h is the normative statement of ownership and threading; this file constrains shape only.",
+  "oneOf": [
+    { "$ref": "#/$defs/request" },
+    { "$ref": "#/$defs/response" },
+    { "$ref": "#/$defs/progress" }
+  ],
+  "$defs": {
+    "envelopeVersion": {
+      "description": "Version of this envelope contract. A peer that does not implement the value refuses the document rather than guessing.",
+      "type": "integer",
+      "const": 1
+    },
+    "abiVersion": {
+      "description": "ABI version of the library that produced a response.",
+      "type": "integer",
+      "const": 2
+    },
+    "operation": {
+      "type": "string",
+      "enum": [
+        "probe_speech",
+        "probe_foundation_model",
+        "install_speech_assets",
+        "transcribe_file",
+        "generate_text"
+      ]
+    },
+    "errorCode": {
+      "description": "Closed vocabulary. A reader that sees a value outside this list treats it as engine_failure and never as success.",
+      "type": "string",
+      "enum": [
+        "invalid_request",
+        "unsupported_envelope_version",
+        "invalid_argument",
+        "platform_unsupported",
+        "hardware_unsupported",
+        "disabled_by_user",
+        "permission_denied",
+        "locale_unsupported",
+        "model_asset_missing",
+        "model_asset_not_ready",
+        "asset_download_failed",
+        "concurrency_limit",
+        "input_unreadable",
+        "unsupported_media",
+        "cancelled",
+        "engine_timeout",
+        "guardrail_violation",
+        "refusal",
+        "context_size_exceeded",
+        "rate_limited",
+        "unsupported_language",
+        "schema_unsupported",
+        "output_not_final",
+        "engine_failure"
+      ]
+    },
+    "assetStatus": {
+      "description": "Installation state of the speech assets for the requested locale.",
+      "type": "string",
+      "enum": ["unsupported", "supported", "downloading", "installed"]
+    },
+    "alignmentOrigin": {
+      "description": "Spec 8.6A. 'native' only when the engine itself reported the offsets.",
+      "type": "string",
+      "enum": ["native", "derived", "none"]
+    },
+    "request": {
+      "description": "A document travelling into the library. Distinguished from the other two branches by carrying neither `ok` (responses) nor `phase` (progress), so the three are mutually exclusive and `oneOf` means what it says.",
+      "type": "object",
+      "required": ["envelope_version", "op"],
+      "not": {
+        "anyOf": [
+          { "required": ["ok"] },
+          { "required": ["abi_version"] },
+          { "required": ["phase"] }
+        ]
+      },
+      "properties": {
+        "envelope_version": { "$ref": "#/$defs/envelopeVersion" },
+        "op": { "$ref": "#/$defs/operation" },
+        "locale": {
+          "description": "BCP 47 tag. Absent asks the library to use the current system locale.",
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 64
+        },
+        "cancel_token": {
+          "description": "Handle from plaudon_apple_new_cancel_token, or 0 for an uncancellable call.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "timeout_ms": {
+          "description": "Wall-clock budget. 0 selects the library default.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "path": {
+          "description": "Absolute path of the media file for transcribe_file.",
+          "type": "string",
+          "minLength": 1
+        },
+        "allow_asset_download": {
+          "description": "Spec 12: assets are only fetched when the caller has obtained consent.",
+          "type": "boolean"
+        },
+        "want_word_timestamps": { "type": "boolean" },
+        "prompt": { "type": "string" },
+        "instructions": { "type": "string" },
+        "schema": {
+          "description": "JSON Schema subset for guided generation. Absent asks for free text.",
+          "type": "object"
+        },
+        "max_output_tokens": { "type": "integer", "minimum": 1 },
+        "temperature": { "type": "number", "minimum": 0.0, "maximum": 2.0 }
+      },
+      "additionalProperties": true
+    },
+    "response": {
+      "type": "object",
+      "required": ["envelope_version", "abi_version", "op", "ok"],
+      "properties": {
+        "envelope_version": { "$ref": "#/$defs/envelopeVersion" },
+        "abi_version": { "$ref": "#/$defs/abiVersion" },
+        "op": { "$ref": "#/$defs/operation" },
+        "ok": { "type": "boolean" },
+        "error": {
+          "type": "object",
+          "required": ["code", "retriable"],
+          "properties": {
+            "code": { "$ref": "#/$defs/errorCode" },
+            "detail": {
+              "description": "Short machine-readable discriminator. Never user-facing prose and never a platform exception message.",
+              "type": ["string", "null"],
+              "maxLength": 256
+            },
+            "retriable": { "type": "boolean" }
+          },
+          "additionalProperties": false
+        },
+        "result": { "type": "object" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "ok": { "const": true } }, "required": ["ok"] },
+          "then": { "required": ["result"] },
+          "else": { "required": ["error"] }
+        },
+        {
+          "if": {
+            "properties": { "ok": { "const": true }, "op": { "const": "probe_speech" } },
+            "required": ["ok", "op"]
+          },
+          "then": { "properties": { "result": { "$ref": "#/$defs/speechProbeResult" } } }
+        },
+        {
+          "if": {
+            "properties": { "ok": { "const": true }, "op": { "const": "probe_foundation_model" } },
+            "required": ["ok", "op"]
+          },
+          "then": { "properties": { "result": { "$ref": "#/$defs/textModelProbeResult" } } }
+        },
+        {
+          "if": {
+            "properties": { "ok": { "const": true }, "op": { "const": "transcribe_file" } },
+            "required": ["ok", "op"]
+          },
+          "then": { "properties": { "result": { "$ref": "#/$defs/transcriptionResult" } } }
+        },
+        {
+          "if": {
+            "properties": { "ok": { "const": true }, "op": { "const": "generate_text" } },
+            "required": ["ok", "op"]
+          },
+          "then": { "properties": { "result": { "$ref": "#/$defs/generationResult" } } }
+        },
+        {
+          "if": {
+            "properties": { "ok": { "const": true }, "op": { "const": "install_speech_assets" } },
+            "required": ["ok", "op"]
+          },
+          "then": { "properties": { "result": { "$ref": "#/$defs/installResult" } } }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "speechProbeResult": {
+      "type": "object",
+      "required": [
+        "available",
+        "supported_locales",
+        "installed_locales",
+        "asset_status",
+        "locale_installed",
+        "supports_on_device",
+        "is_transcriber",
+        "max_concurrent_locales",
+        "accepted_formats",
+        "os_build"
+      ],
+      "properties": {
+        "available": { "type": "boolean" },
+        "supported_locales": { "type": "array", "items": { "type": "string" } },
+        "installed_locales": { "type": "array", "items": { "type": "string" } },
+        "resolved_locale": { "type": ["string", "null"] },
+        "asset_status": {
+          "description": "AssetInventory's own verdict. Corroboration only: measured on macOS 27.0.1 it reported `supported` for a locale that was installed and transcribed successfully.",
+          "$ref": "#/$defs/assetStatus"
+        },
+        "locale_installed": {
+          "description": "Whether the resolved locale is in the platform's installed set. This is the readiness gate the application uses.",
+          "type": "boolean"
+        },
+        "supports_on_device": {
+          "description": "Apple SpeechTranscriber is on-device by construction; reported as an observation, not an assumption.",
+          "type": "boolean"
+        },
+        "is_transcriber": { "type": "boolean", "const": true },
+        "max_concurrent_locales": {
+          "description": "AssetInventory.maximumReservedLocales. The Rust side enforces it as a concurrency limit.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "reserved_locales": { "type": "array", "items": { "type": "string" } },
+        "accepted_formats": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["sample_rate_hz", "channels"],
+            "properties": {
+              "sample_rate_hz": { "type": "number" },
+              "channels": { "type": "integer" }
+            },
+            "additionalProperties": false
+          }
+        },
+        "supports_word_timestamps": { "type": "boolean" },
+        "os_build": { "type": "string" },
+        "os_version": { "type": "string" },
+        "hardware": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "textModelProbeResult": {
+      "type": "object",
+      "required": ["available", "is_transcriber", "supports_structured_output", "os_build"],
+      "properties": {
+        "available": { "type": "boolean" },
+        "is_transcriber": {
+          "description": "Spec 2.3: the system language model never transcribes.",
+          "type": "boolean",
+          "const": false
+        },
+        "supported_languages": { "type": "array", "items": { "type": "string" } },
+        "supports_requested_locale": { "type": ["boolean", "null"] },
+        "supports_structured_output": { "type": "boolean" },
+        "max_context_tokens": {
+          "description": "Null unless the platform reported a context window. A fabricated limit is worse than none.",
+          "type": ["integer", "null"],
+          "minimum": 1
+        },
+        "model_version": { "type": ["string", "null"] },
+        "os_build": { "type": "string" },
+        "os_version": { "type": "string" },
+        "hardware": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "transcriptionResult": {
+      "type": "object",
+      "required": ["text", "segments", "alignment_origin", "locale", "final"],
+      "properties": {
+        "text": { "type": "string" },
+        "segments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["seq_index", "text"],
+            "properties": {
+              "seq_index": { "type": "integer", "minimum": 0 },
+              "start_ms": { "type": ["integer", "null"], "minimum": 0 },
+              "end_ms": { "type": ["integer", "null"], "minimum": 0 },
+              "text": { "type": "string" },
+              "confidence": { "type": ["number", "null"] },
+              "words": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["text", "start_ms", "end_ms"],
+                  "properties": {
+                    "text": { "type": "string" },
+                    "start_ms": { "type": "integer", "minimum": 0 },
+                    "end_ms": { "type": "integer", "minimum": 0 }
+                  },
+                  "additionalProperties": false
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "alignment_origin": { "$ref": "#/$defs/alignmentOrigin" },
+        "locale": { "type": "string" },
+        "duration_ms": { "type": ["integer", "null"], "minimum": 0 },
+        "final": {
+          "description": "False is never written: a volatile result is reported as the output_not_final error instead.",
+          "type": "boolean",
+          "const": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "generationResult": {
+      "type": "object",
+      "required": ["text", "structured"],
+      "properties": {
+        "text": { "type": "string" },
+        "structured": {
+          "description": "True when the platform generated under a guided schema. The Rust side revalidates regardless (spec 11.4).",
+          "type": "boolean"
+        },
+        "model_version": { "type": ["string", "null"] },
+        "context_tokens": { "type": ["integer", "null"], "minimum": 1 },
+        "input_tokens": { "type": ["integer", "null"], "minimum": 0 },
+        "output_tokens": { "type": ["integer", "null"], "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "installResult": {
+      "type": "object",
+      "required": ["asset_status", "locale"],
+      "properties": {
+        "asset_status": {
+          "description": "AssetInventory's own verdict. Corroboration only: measured on macOS 27.0.1 it reported `supported` for a locale that was installed and transcribed successfully.",
+          "$ref": "#/$defs/assetStatus"
+        },
+        "locale_installed": {
+          "description": "Whether the resolved locale is in the platform's installed set. This is the readiness gate the application uses.",
+          "type": "boolean"
+        },
+        "locale": { "type": "string" },
+        "installed_bytes": { "type": ["integer", "null"], "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "progress": {
+      "description": "A notification emitted during a call. Carries `phase` and never `ok`.",
+      "type": "object",
+      "required": ["envelope_version", "op", "phase"],
+      "not": { "required": ["ok"] },
+      "properties": {
+        "envelope_version": { "$ref": "#/$defs/envelopeVersion" },
+        "op": { "$ref": "#/$defs/operation" },
+        "phase": {
+          "type": "string",
+          "enum": ["asset_download", "transcribe", "generate"]
+        },
+        "fraction": { "type": ["number", "null"], "minimum": 0.0, "maximum": 1.0 },
+        "processed_ms": { "type": ["integer", "null"], "minimum": 0 },
+        "completed_units": { "type": ["integer", "null"], "minimum": 0 },
+        "total_units": { "type": ["integer", "null"], "minimum": 0 }
+      },
+      "additionalProperties": false
+    }
+  }
+}

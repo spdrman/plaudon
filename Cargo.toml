@@ -5,6 +5,7 @@ members = [
     "apps/desktop/src-tauri",
     "tests/integration",
     "tests/chaos",
+    "tests/hardware",
     "tests/egress/monitor",
     "tests/egress/scenario",
     "tests/egress/harness",

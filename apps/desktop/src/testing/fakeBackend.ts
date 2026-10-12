@@ -118,7 +118,7 @@ export class FakeBackend implements Transport {
           requires_network: false,
         },
         {
-          engine_id: "apple.speech",
+          engine_id: "apple-speech",
           display_name: "Apple Speech (on-device)",
           stage: "stt",
           status: "unsupported",

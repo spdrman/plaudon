@@ -29,7 +29,7 @@ use plaudon_ai_contracts::policy::{evaluate_stt_candidate, EngineRejection, SttR
 use plaudon_domain::model::EngineId;
 
 /// Engine identifier of the Apple native speech engine.
-pub const APPLE_ENGINE_ID: &str = "apple.speech";
+pub const APPLE_ENGINE_ID: &str = "apple-speech";
 
 /// Engine identifier of the bundled whisper.cpp engine.
 pub const WHISPER_ENGINE_ID: &str = "whisper.cpp";
