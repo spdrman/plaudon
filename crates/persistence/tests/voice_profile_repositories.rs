@@ -530,6 +530,27 @@ async fn deleting_an_enrolment_leaves_a_name_only_roster_entry() {
     assert_eq!(person_id, Some(person.id.to_string()));
     assert_eq!(name, "Priya");
 
+    // VP-080: the journal survives losing the enrolment, exactly as it
+    // survives losing the person.
+    let kinds: Vec<String> = lib
+        .people
+        .events(person.id)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|event| event.kind)
+        .collect();
+    assert_eq!(
+        kinds,
+        vec![
+            "person_created",
+            "assignment_set",
+            "enrolled",
+            "exemplar_added",
+            "enrollment_deleted",
+        ]
+    );
+
     assert!(matches!(
         lib.voices.delete_enrollment(person.id, at(7)).await,
         Err(PersistenceError::RecordNotFound)
