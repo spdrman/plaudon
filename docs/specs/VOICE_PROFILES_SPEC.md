@@ -2,7 +2,9 @@
 
 **Status:** Proposed; no code exists for this feature. Implementation is gated on the ADR-0400 provider
 conditions, on ADR-0080/0081/0082, and on the measured-evidence rules below.
-**Version:** 1.0 — first consensus draft
+**Version:** 1.1 — adds the global master speaker list (the *people roster*), manual assignment
+with biometric matching off, suggestion correction with negative evidence, and propagation rules
+(§2, §7, §8, §9A, §12.2A); 1.0 was the first consensus draft.
 **Spec lineage:** extends the PLAUD BYOK Desktop specification v1.3. Section references of the form
 §N.M refer to that document; references of the form VP-NNN are requirements of this document.
 **ADRs:** [ADR-0080](../adr/ADR-0080-voice-profiles-are-biometric-data-off-by-default-local-only.md),
@@ -25,9 +27,11 @@ downstream. Section 22 collects every unverified claim in one register.
 Plaudon can label *who-spoke-when* inside a single recording (the diarization contract of §8.7 and
 ADR-0400, `crates/ai-diarization`), but every recording starts from zero: "Speaker 1" in Monday's
 stand-up and "Speaker 1" in Tuesday's stand-up are unrelated labels. Users who record the same
-people every week re-name the same colleagues every time. The feature in this document lets a user
-*enroll* a speaker once — with that person's knowledge and consent — and have later recordings
-*suggest* "this cluster sounds like Priya (87%)" for one-click confirmation.
+people every week re-name the same colleagues every time. The feature in this document gives the
+app **one global master speaker list** (the people roster) that any recording can assign speakers
+from, and — optionally, consent-gated — lets a user *enroll* a roster person's voice once, with
+that person's knowledge and consent, so later recordings *suggest* "this cluster sounds like
+Priya (87%)" for one-click confirmation.
 
 - **VP-001.** Voice profiles exist to reduce repeated manual labelling across recordings. They are
   a convenience, not an identification system; the product never presents a match as proof of
@@ -35,10 +39,19 @@ people every week re-name the same colleagues every time. The feature in this do
 - **VP-002.** The entire feature is local-only. Voice embeddings are biometric data; they are
   computed, stored, matched, and deleted exclusively on the user's machine. No embedding, score,
   or profile metadata is ever a permissible payload for any network subsystem (see §11).
-- **VP-003.** The feature is **off by default**. Until the user explicitly enables it and passes
-  the consent gate (§12), no embedding is computed — not even transiently — and the whole pipeline
-  is dormant. Per-recording diarization without cross-recording persistence remains the default
-  behaviour.
+- **VP-003.** Biometric matching is **off by default**. Until the user explicitly enables it and
+  passes the consent gate (§12), no embedding is computed — not even transiently — and the whole
+  §4 pipeline is dormant. Per-recording diarization without cross-recording persistence remains
+  the default behaviour.
+- **VP-010.** There is exactly **one** master speaker list per library, independent of any
+  recording (§9A). Every assignment surface — per-cluster, per-segment, bulk — picks from it;
+  there are no per-recording name silos beyond the existing per-recording `speakers` rows, which
+  become *links* to roster people plus a text snapshot.
+- **VP-011.** Manual assignment is a first-class mode: the roster and every picker work with
+  biometric matching **off**, and in that mode **no embedding is stored or computed** — a
+  name-only roster is ordinary personal data, not biometric data (§12.2A). Nothing in the manual
+  path may call into the embedding/matching code, enforced by the same structural test as the
+  consent gate (§17.1).
 
 ### 1.2 Users
 
@@ -69,7 +82,7 @@ presenting the feature as suitable for those uses.
 
 ## 2. Terminology
 
-These four words are distinct and the code must keep them distinct (the DTO layer, the database
+These five words are distinct and the code must keep them distinct (the DTO layer, the database
 schema and the UI copy all use them in exactly these senses):
 
 - **Speaker turn** — a time span `[start_ms, end_ms)` attributed to one local cluster inside one
@@ -79,19 +92,26 @@ schema and the UI copy all use them in exactly these senses):
   identity and no biometrics; they are what §8.7 diarization produces. Already modelled:
   `ClusterKey`, the `speakers` table row with `provenance = 'inferred'`
   (`crates/persistence/migrations/0002_core.sql`, `0400_transcript_tools.sql`).
-- **Voice profile** — a named, durable, cross-recording record created by explicit enrolment,
-  owning one or more *exemplar embeddings* and a consent record. New in this spec (§7). A profile
-  is the only place embeddings live.
-- **Identity** — the real-world person. Out of the system's reach. A profile *names* someone; it
-  does not *establish* that a voice belongs to them. UI copy must say "sounds like", never "is"
-  (VP-120).
+- **Person** — one entry in the app-global **master speaker list** (the *roster*): a display
+  name, optional aliases and optional plain contact fields (email, organisation). A person row is
+  ordinary personal data, not biometric data; it exists so the same colleague can be picked in any
+  recording, with or without voice matching (§9A, §12.2A). New in this spec (§7).
+- **Voice profile (voice enrolment)** — a person's *optional* biometric attachment, created only
+  by explicit consent-gated enrolment: one `person_voice_enrollments` row owning one or more
+  *exemplar embeddings*. The enrolment is the only place embeddings live; a person without an
+  enrolment is a name-only roster entry.
+- **Identity** — the real-world person. Out of the system's reach. A person row *names* someone;
+  it does not *establish* that a voice belongs to them. UI copy must say "sounds like", never
+  "is" (VP-120).
 
 Supporting terms: an **exemplar** is one stored embedding with provenance (which recording,
 segment range, model and version produced it). An **embedding** is a fixed-length f32 vector
 (256–512 dims for the candidate models, §5) derived from speech audio; it is a biometric template
 in the legal sense (§12.1) regardless of its non-invertibility in practice. A **suggestion** is a
-persisted, pending match between a cluster and a profile with a similarity score; it has no effect
-on transcripts until confirmed.
+persisted, pending match between a cluster and an enrolled person with a similarity score; it has
+no effect on transcripts until confirmed. An **assignment** is the user-made (manual or
+confirmed-suggestion) link from a recording's cluster or segment to a person; assignments are
+ordinary data and exist in both modes.
 
 ## 3. User stories
 
@@ -116,6 +136,17 @@ on transcripts until confirmed.
    suggestion and the feature's encryption key, and turns the feature off (VP-095).
 8. *Bulk review.* After enabling the feature, Dana runs matching over selected past recordings
    (explicit, scoped — never automatic) and reviews suggestions in a single queue.
+9. *Manual-only shop.* Lee never enables voice matching. Lee still keeps the master list —
+   "Priya", "Sam (client)" — and in every recording assigns clusters and single segments by
+   picking from it. No embedding is ever computed or stored (VP-011, §12.2A).
+10. *Correct a wrong suggestion.* The panel says "sounds like Sam (0.74)" but it is actually
+    Priya. Dana presses Not them, the picker opens pre-filtered, Dana picks Priya. The wrong
+    match is recorded as negative evidence against Sam's enrolment for calibration; because Priya
+    is enrolled, the cluster's embedding may be offered as a new exemplar for Priya (VP-216).
+11. *Rename once, everywhere — visibly.* Dana fixes a typo in a person's name; every recording
+    shows the corrected name because assignments reference the person. Dana is told so before
+    saving ("name shown in 14 recordings"). Assignments themselves are never changed by a rename,
+    and no other recording's assignment is ever rewritten by an action in this one (VP-213).
 
 ## 4. Pipeline
 
@@ -360,23 +391,37 @@ this spec requires (VP-041).
 ### 7.2 Tables
 
 ```sql
--- One named person-profile. The only durable home of voice biometrics.
-CREATE TABLE voice_profiles (
-    id               TEXT PRIMARY KEY,            -- UUID
-    display_name     TEXT NOT NULL CHECK (length(display_name) BETWEEN 1 AND 120),
-    created_at       INTEGER NOT NULL,
-    updated_at       INTEGER NOT NULL,
+-- The master speaker list (roster). Ordinary personal data: names and plain contacts,
+-- never biometrics. Exists and is useful with biometric matching off (VP-011).
+CREATE TABLE people (
+    id            TEXT PRIMARY KEY,               -- UUID
+    display_name  TEXT NOT NULL CHECK (length(display_name) BETWEEN 1 AND 120),
+    aliases_json  TEXT NOT NULL DEFAULT '[]',     -- JSON array of alternate names (search only)
+    email         TEXT CHECK (email IS NULL OR length(email) <= 254),
+    organisation  TEXT CHECK (organisation IS NULL OR length(organisation) <= 200),
+    created_at    INTEGER NOT NULL,
+    updated_at    INTEGER NOT NULL,
+    status        TEXT NOT NULL CHECK (status IN ('active','merged'))
+) STRICT;
+
+-- A person's optional biometric attachment (0..1 per person). Only exists after the
+-- consent gate; carries the consent/retention state. Deleting it leaves the person
+-- as a name-only roster entry.
+CREATE TABLE person_voice_enrollments (
+    person_id        TEXT PRIMARY KEY REFERENCES people(id) ON DELETE CASCADE,
     consent_version  TEXT NOT NULL,               -- disclosure text version shown at creation
     consent_note     TEXT,                        -- optional free-text basis the user recorded
     retention_months INTEGER NOT NULL DEFAULT 12 CHECK (retention_months BETWEEN 1 AND 12),
     last_matched_at  INTEGER,                     -- drives the §12.4 expiry clock
-    status           TEXT NOT NULL CHECK (status IN ('active','expired','merged'))
+    status           TEXT NOT NULL CHECK (status IN ('active','expired')),
+    created_at       INTEGER NOT NULL
 ) STRICT;
 
 -- One stored embedding with full provenance. Vector bytes are AEAD-encrypted (§12.5).
 CREATE TABLE voice_exemplars (
     id                 TEXT PRIMARY KEY,
-    profile_id         TEXT NOT NULL REFERENCES voice_profiles(id) ON DELETE CASCADE,
+    person_id          TEXT NOT NULL REFERENCES person_voice_enrollments(person_id)
+                       ON DELETE CASCADE,
     recording_id       TEXT REFERENCES recordings(id) ON DELETE SET NULL,  -- provenance, not ownership
     diarization_run_id TEXT REFERENCES diarization_runs(id) ON DELETE SET NULL,
     cluster_key        TEXT,                      -- which cluster it was cut from
@@ -391,31 +436,36 @@ CREATE TABLE voice_exemplars (
     created_at         INTEGER NOT NULL
 ) STRICT;
 
--- Pending/settled match suggestions. Scores, never labels.
+-- Pending/settled match suggestions. Scores, never labels. A rejected row doubles as
+-- negative evidence for per-enrolment calibration (VP-216): score + decision, no embedding.
 CREATE TABLE speaker_suggestions (
     id                 TEXT PRIMARY KEY,
     recording_id       TEXT NOT NULL REFERENCES recordings(id) ON DELETE CASCADE,
     diarization_run_id TEXT NOT NULL REFERENCES diarization_runs(id) ON DELETE CASCADE,
     cluster_key        TEXT NOT NULL,
-    profile_id         TEXT NOT NULL REFERENCES voice_profiles(id) ON DELETE CASCADE,
+    person_id          TEXT NOT NULL REFERENCES people(id) ON DELETE CASCADE,
     score              REAL NOT NULL,
     score_kind         TEXT NOT NULL CHECK (score_kind IN ('cosine_similarity_asnorm')),
     band               TEXT NOT NULL CHECK (band IN ('suggest','weak')),
-    state              TEXT NOT NULL CHECK (state IN ('pending','confirmed','rejected','expired')),
+    state              TEXT NOT NULL CHECK (state IN
+                       ('pending','confirmed','rejected','corrected','expired')),
+    corrected_person_id TEXT REFERENCES people(id) ON DELETE SET NULL,  -- VP-216 reject→pick flow
     decided_at         INTEGER,
     model_id           TEXT NOT NULL, model_version TEXT NOT NULL,
     created_at         INTEGER NOT NULL,
-    UNIQUE (diarization_run_id, cluster_key, profile_id)
+    UNIQUE (diarization_run_id, cluster_key, person_id)
 ) STRICT;
 
--- Journal of consent-relevant events; append-only, exportable (§12.3).
+-- Journal of roster- and consent-relevant events; append-only, exportable (§12.3).
 CREATE TABLE voice_profile_events (
     id          TEXT PRIMARY KEY,
-    profile_id  TEXT NOT NULL,                    -- deliberately NOT a FK: survives profile deletion
+    person_id   TEXT NOT NULL,                    -- deliberately NOT a FK: survives deletion
     kind        TEXT NOT NULL CHECK (kind IN
-                ('created','exemplar_added','renamed','merged','split',
-                 'suggestion_confirmed','suggestion_rejected','expired','deleted')),
-    detail_json TEXT NOT NULL,                    -- no embeddings, no scores against third profiles
+                ('person_created','person_renamed','person_merged','person_deleted',
+                 'enrolled','exemplar_added','enrollment_split','enrollment_expired',
+                 'enrollment_deleted','suggestion_confirmed','suggestion_rejected',
+                 'suggestion_corrected','assignment_set','assignment_cleared')),
+    detail_json TEXT NOT NULL,                    -- no embeddings, no scores against third people
     created_at  INTEGER NOT NULL
 ) STRICT;
 ```
@@ -430,10 +480,13 @@ CREATE TABLE voice_profile_events (
   cryptographic erasure (VP-095). Consistent with the full-library-encryption threat model
   (`docs/threat-model/full-library-encryption.md`): it protects data at rest, not data in use.
 - **VP-072.** `speakers` rows (per-recording, `crates/persistence/migrations/0002_core.sql`) gain
-  nothing biometric. Confirming a suggestion sets the existing `speakers.name`/`user_confirmed`
-  through the existing rename/confirm path and records `profile_id` in a new nullable
-  `speakers.voice_profile_id` column (ON DELETE SET NULL) so the UI can show "named via voice
-  profile" provenance and deletion can sever it.
+  nothing biometric. An assignment — manual pick or confirmed suggestion — sets the existing
+  `speakers.name`/`user_confirmed` through the existing rename/confirm path and records the link
+  in a new nullable `speakers.person_id` column (ON DELETE SET NULL). The name stays a **text
+  snapshot** beside the link: deleting the person from the roster severs the link and leaves the
+  snapshot, so no recording silently loses its labels (VP-213). Per-segment assignments
+  (`transcript_segments.speaker_id` → that recording's `speakers` row, VP-031) are unchanged in
+  shape; the roster is reached through the `speakers` row's `person_id`.
 - **VP-073.** Suggestion rows reference `diarization_runs`/`speaker_turns`
   (`0400_transcript_tools.sql`) rather than transcript revisions, so re-transcription does not
   orphan them; reconciliation to segments happens at display time through the existing
@@ -453,11 +506,15 @@ CREATE TABLE voice_profile_events (
 
 ### 7.4 Export, backup and sync
 
-- **VP-077.** **Default: voice data is excluded from every export and portable backup.**
-  `export_recording` (all `ExportFormat`s) never contains embeddings, scores or profile metadata;
-  the `.recording-archive` snapshot (`crates/export/src/archive/`, ADR-0070) excludes the three
-  voice tables by default. `SpeakerRow` continues to carry only label/name/confirmed — the
-  confirmed *name* on a transcript is ordinary text and exports as today.
+- **VP-077.** **Default: biometric data is excluded from every export and portable backup; roster
+  rows are not biometric and follow ordinary rules.** `export_recording` (all `ExportFormat`s)
+  never contains embeddings, scores, suggestion history or roster contact fields — a recording
+  export carries only the resolved display-name **text** per speaker, exactly as today
+  (`SpeakerRow` keeps label/name/confirmed). The roster itself (names, aliases, email/org) **is**
+  included in portable backups, plaintext or encrypted, like any other library data — it is a
+  contact list, not a voiceprint (decision; see §12.2A for the boundary). Only the
+  `person_voice_enrollments` + `voice_exemplars` + `speaker_suggestions` tables are
+  biometric-constrained.
 - **VP-078.** An explicit "include voice profiles" toggle exists only for **encrypted** portable
   backups (ADR-0071 Argon2id + STREAM; `Protection::Encrypted` required — a plaintext backup with
   voice data is unrepresentable, enforced in `ExportService::create_portable_backup`). The archive
@@ -469,9 +526,11 @@ CREATE TABLE voice_profile_events (
   not a feature (TM row, §13): the export default (VP-077), the per-library AEAD key (VP-071) and
   the absence of any stable cross-library identifier are the mitigations.
 - **VP-080.** Deletion integrates with the ADR-0072 journal: deleting a recording cascades its
-  suggestions, nulls exemplar provenance (the exemplar itself belongs to the profile and survives
-  unless the profile is deleted — the deletion disclosure says so); deleting a profile is
-  journalled with its own disclosure counting exemplars/suggestions destroyed (`DeletionService`,
+  suggestions and nulls exemplar provenance (an exemplar belongs to the enrolment and survives
+  unless the enrolment is deleted — the deletion disclosure says so). Deleting an **enrolment**
+  destroys its exemplars/suggestions and leaves the person as a name-only roster entry; deleting a
+  **person** additionally severs `speakers.person_id` links (name snapshots remain, disclosure
+  states in how many recordings) — both journalled with exact counts (`DeletionService`,
   `crates/app-core/src/deletion.rs`).
 
 ## 8. Command surface and events
@@ -479,23 +538,30 @@ CREATE TABLE voice_profile_events (
 All names obey the §15.1 guard test
 (`no_generic_shell_http_or_filesystem_command_is_published`, `crates/app/src/command.rs`): no
 `run_`/`exec`/`shell`/`http_`/`read_file`/`write_file` prefixes. Each command adds a table line to
-`command_surface!`, a function in `crates/app/src/commands/voice_profiles.rs` (new module), request/
+`command_surface!`, functions in `crates/app/src/commands/{people,voice_profiles}.rs` (new modules:
+roster commands live in `people`, biometric commands in `voice_profiles`), request/
 response DTOs, two JSON schemas under `schemas/commands/v1/`, an `EGUI_ONLY_COMMANDS` entry and the
 count bump — the mechanism the guard tests enforce.
 
 | Command | Purpose |
 |---|---|
+| **Roster (works with matching off, VP-011)** | |
+| `list_people` | the master list with assignment counts and enrolment presence — never embeddings |
+| `create_person`, `update_person` | roster CRUD: display name, aliases, optional email/org (plain contacts) |
+| `merge_people` | merge duplicates: assignments, enrolments and exemplars repointed; disclosure shows affected-recordings count (VP-213) |
+| `delete_person` | removes the roster entry; severs `speakers.person_id` links, name snapshots remain (VP-080) |
+| `assign_cluster_person` | bulk "this cluster is X" in one recording: sets `speakers.name` + `person_id` for that cluster, nothing beyond the recording |
+| `set_segment_speaker` | the T12 wire leg (VP-031); the segment picker offers roster people, "create new person" and "unknown/none" (VP-210) |
+| **Biometric tier (consent-gated, feature-flagged)** | |
 | `get_voice_profile_settings` / `set_voice_profiles_enabled` | feature gate + consent-gate state (§12.2) |
-| `list_voice_profiles` | profiles with exemplar counts, last-matched, expiry state — never embeddings |
-| `enroll_voice_profile` | create a profile from (recording, cluster) after the consent gate; names the person |
-| `add_voice_exemplar` | extend an existing profile from another recording's cluster |
-| `rename_voice_profile`, `merge_voice_profiles`, `split_voice_profile` | curation (§9) |
-| `delete_voice_profile` | per-person cryptographic delete + journal (§12.4) |
-| `forget_all_voice_profiles` | the "forget everyone" button (VP-095) |
+| `enroll_person_voice` | attach an enrolment to a roster person from (recording, cluster) after the consent gate |
+| `add_voice_exemplar` | extend an enrolment from another recording's cluster |
+| `split_voice_enrollment` | split an enrolment's exemplars by provenance onto another (new) person |
+| `delete_voice_enrollment` | per-person biometric delete + journal (§12.4); person stays as name-only |
+| `forget_all_voice_profiles` | the "forget everyone" button (VP-095): every enrolment + the key; roster survives |
 | `list_speaker_suggestions` | pending suggestions for a recording, or the global review queue |
-| `confirm_speaker_suggestion` | applies profile name to the cluster via the speaker rename path + bulk segment assignment |
-| `reject_speaker_suggestion` | records the rejection; feeds per-profile calibration (VP-063) |
-| `set_segment_speaker` | the T12 wire leg (VP-031) |
+| `confirm_speaker_suggestion` | applies the person to the cluster via the assignment path |
+| `reject_speaker_suggestion` | records the rejection (negative evidence, VP-216); optional `corrected_person_id` for the reject-then-pick flow |
 | `start_speaker_matching` | enqueue the §10 job for a recording (or an explicit selection for bulk review) |
 
 - **VP-085.** DTOs follow `crates/app/src/dto.rs` conventions (`#[serde(rename_all="snake_case")]`,
@@ -503,7 +569,7 @@ count bump — the mechanism the guard tests enforce.
   `assert_no_secret_in_response` (`crates/security/src/response.rs`) gains an embedding-shaped
   check, and the `Debug`-prints-no-arguments rule applies (`a_command_debug_line_never_contains_its_arguments`).
 - **VP-086.** Events: `voiceprofile.suggestions_ready { recording_id, pending_count }`,
-  `voiceprofile.changed { profile_id }`, plus the ordinary `job.updated`. Payloads are ids and
+  `person.changed { person_id }`, plus the ordinary `job.updated`. Payloads are ids and
   counts only — names and scores are fetched by command, never pushed into the event/notification
   path (ADR-0021 keeps notification text generic; a lock-screen toast never contains a person's
   name — see §11).
@@ -516,36 +582,104 @@ status = glyph plus word never colour alone, 24 pt minimum targets, Escape-close
 `confirm_modal` for destructive actions.
 
 - **VP-090.** **Settings → Privacy** gains a "Voice profiles" block in `PrivacySection`
-  (`crates/ui/src/settings/privacy.rs`): the master toggle (off by default), the consent-gate
-  summary, retention default, a link to the profiles screen, and the "Forget all voice profiles"
-  danger button. Copy states plainly: local-only, biometric, off by default, your legal
-  responsibility to get attendees' consent (§12.3).
-- **VP-091.** **Profiles screen** (new `plaudon-ui::screens::voice_profiles`, reachable from
-  Settings and from the speaker panel): list with name, exemplar count, device-diversity hint,
-  last matched, expiry countdown; per-profile actions rename / add-exemplar guidance / merge /
-  split (by exemplar provenance list) / delete-with-disclosure. Every control named for
-  AccessKit (`assert_every_control_is_named`, `crates/ui-testkit`).
+  (`crates/ui/src/settings/privacy.rs`): the biometric-matching master toggle (off by default),
+  the consent-gate summary, retention default, a link to the People screen, and the "Forget all
+  voice profiles" danger button. Copy states plainly: local-only, biometric, off by default, your
+  legal responsibility to get attendees' consent (§12.3) — and that the People list itself works
+  without any of this (VP-011).
+- **VP-091.** **People screen** (new `plaudon-ui::screens::people`, a top-level destination —
+  `Destination::People`, extending `Destination::ALL` and the Mod+N shortcuts — also reachable
+  from Settings and the speaker panel): searchable list (name + aliases) with per-person
+  assignment count ("in 14 recordings"), enrolment presence badge ("voice: enrolled/none"),
+  exemplar count, device-diversity hint, last matched and expiry countdown where enrolled;
+  actions: rename, edit aliases/contacts, merge (with affected-recordings disclosure), enrol
+  voice / delete enrolment, split enrolment by provenance, delete person. Dedupe aid: the list
+  surfaces same-name/same-alias groups as merge candidates — never auto-merged. Every control
+  named for AccessKit (`assert_every_control_is_named`, `crates/ui-testkit`).
 - **VP-092.** **Per-recording speaker panel** (extends the mounted T12 surface,
-  `plaudon_ui::ai::OutputsViewer` / `LivePanels`): per cluster — neutral label, suggestion (if
-  any) with qualitative band + numeric score ("sounds like Priya — strong match, 0.82"),
-  Confirm / Not them, "Create profile from this speaker…", and the per-segment speaker picker
-  (now wired, VP-031) in the transcript chips (`crates/ui/src/transcript/chips.rs::speaker`).
+  `plaudon_ui::ai::OutputsViewer` / `LivePanels`): per cluster — neutral label, the **person
+  picker** (VP-210), suggestion (if any) with qualitative band + numeric score ("sounds like
+  Priya — strong match, 0.82"), Confirm / Not them (reject-then-pick, VP-216), "Enrol this
+  speaker's voice…" where gated-on, and the per-segment person picker (now wired, VP-031) in the
+  transcript chips (`crates/ui/src/transcript/chips.rs::speaker`). The panel works identically
+  with matching off — minus the suggestion rows.
 - **VP-093.** **Bulk review queue**: a single list of pending suggestions across recordings
   (opt-in run, VP-007), keyboard-completable (j/k navigation, Enter confirm, Del reject),
   announced via `Role::Status`/`Live::Polite` like existing toasts.
 - **VP-094.** Enrolment flow: segment-anchored ("create from this speaker"), shows what audio
   span the exemplars come from, enforces VP-065 minima with a progress meter ("12 s of 10 s clean
   speech collected"), and ends at the consent gate (§12.2) before anything is computed.
-- **VP-095.** **Forget everyone:** one action destroys all three voice tables' rows, destroys the
-  `SecretScope::VoiceProfileKey` entry (cryptographic erasure of every `embedding_cipher`,
-  including any copy inside encrypted backups the key never left the device to protect), disables
-  the feature, and writes one journal event. The disclosure lists counts before confirmation,
-  in the ADR-0072 disclosure style. The honest limitation is stated in the disclosure: previously
-  exported *names* in transcripts/exports are plain text and are not recalled, and we make no
-  forensic-erasure claim for SSD sectors (§4.6 of the base spec applies).
+- **VP-095.** **Forget everyone:** one action destroys every enrolment, exemplar and suggestion,
+  destroys the `SecretScope::VoiceProfileKey` entry (cryptographic erasure of every
+  `embedding_cipher`, including any copy inside encrypted backups the key never left the device
+  to protect), disables biometric matching, and writes one journal event. **The roster and all
+  assignments survive** — they are names, not voiceprints; a separate ordinary action deletes
+  people. The disclosure lists counts before confirmation, in the ADR-0072 disclosure style, and
+  states the honest limitation: previously exported *names* in transcripts/exports are plain text
+  and are not recalled, and we make no forensic-erasure claim for SSD sectors (§4.6 of the base
+  spec applies).
 - **VP-096.** A11y: the manual screen-reader script (`docs/accessibility/manual-screen-reader-script.md`)
   gains a voice-profiles chapter; suggestion confirm/reject is fully keyboard-driven; score bands
   have text names ("strong/possible"), not colour-only bars.
+
+## 9A. Master speaker list: pickers, correction, and propagation
+
+The roster is the single assignment vocabulary across the app. This section is normative for both
+modes (matching on and off).
+
+- **VP-210.** **The person picker** is one widget used everywhere a speaker can be set — the
+  per-cluster row in the speaker panel, the per-segment transcript chip, and the bulk-review
+  queue. It is a searchable combobox over the roster (matches display name and aliases,
+  most-recently-assigned first, then alphabetical), with three fixed entries: **"Create new
+  person…"** (inline name field; creates the roster row and assigns in one step),
+  **"Unknown/none"** (clears the assignment back to the neutral cluster label), and — when a
+  suggestion exists — the suggested person pinned on top with its band and score. The picker is
+  fully keyboard-driven: open on Enter/Space, type-to-filter, arrows, Enter assigns, Escape
+  cancels; AccessKit `Role::ComboBox` with the filtered-count announced politely.
+- **VP-211.** **Scope of an assignment action** is exactly what the control names: the segment
+  picker sets one segment (`set_segment_speaker`); the cluster row's "Assign all of Speaker 2 to
+  …" sets that cluster in that recording (`assign_cluster_person`); nothing reaches beyond the
+  open recording. A cluster assignment that would override per-segment exceptions says so
+  ("3 segments were set individually — keep or overwrite?").
+- **VP-212.** **Undo/redo:** every assignment action in the open recording goes through the
+  transcript session's undo stack (`Op::SetSpeaker`, `crates/transcript-doc/src/ops.rs`) — one
+  undo step per user action (a bulk cluster assignment is one step), Cmd/Ctrl+Z works, and undo
+  restores both the segment links and the cluster link. Roster edits (rename, merge) are not in
+  the transcript undo stack; they are journalled, and merge is reversible only via the journalled
+  split, with the disclosure saying so.
+- **VP-213.** **Propagation rules — nothing rewrites other recordings silently.**
+  (a) *Rename/alias/contact edits* propagate by reference: every recording shows the new display
+  name because display joins through `people`, and the edit dialog states the blast radius
+  ("name shown in 14 recordings") before saving. The underlying assignments are untouched.
+  (b) *Assignment changes* (pick, correct, clear) affect only the open recording — never another
+  recording's assignments, suggestions or exemplars.
+  (c) *Merge* repoints assignments and enrolments from both people to the survivor after a
+  disclosure that counts affected recordings, exemplars and pending suggestions; it is journalled
+  (`person_merged`) and the loser row keeps `status='merged'` tombstone semantics for the journal.
+  (d) *Person deletion* severs links and leaves per-recording name snapshots (VP-080); it never
+  erases transcript text.
+  (e) *Enrolment changes* (new exemplars, expiry, deletion) change future matching only; they
+  never touch existing assignments.
+- **VP-214.** **Dedupe:** the People screen groups same-normalised-name/alias rows as merge
+  candidates; merging is always explicit (VP-213c); the picker's create-new entry warns inline
+  when the typed name equals an existing person ("assign to existing Priya instead?").
+- **VP-215.** **Manual-only parity:** with biometric matching off, everything in this section
+  behaves identically except that suggestion rows and enrolment affordances are absent; the
+  picker, bulk assignment, undo, propagation and export behaviour are byte-for-byte the same code
+  paths (no forked manual implementation).
+- **VP-216.** **Correcting a wrong suggestion** is one flow: *Not them* marks the suggestion
+  `rejected` and opens the picker; picking a person records `corrected_person_id` on the
+  suggestion (state `corrected`), assigns that person to the cluster, and the rejected
+  (run, cluster, person, score) tuple becomes **negative evidence** for the wrongly-matched
+  enrolment's per-profile calibration (VP-063). **Deliberate deviation, for privacy:** the
+  negative is the *score record*, never a stored embedding — keeping the rejected cluster's
+  embedding against the wrong person's profile would retain a voiceprint of whoever actually
+  spoke, who may be unenrolled and unconsented (§12.1). If the corrected person **is** enrolled,
+  the flow offers "also add this speech to Priya's exemplars" (ordinary consented exemplar add,
+  VP-064 rules); if not, no embedding outlives the job.
+- **VP-217.** **Suggestion-queue correction parity:** the bulk review queue offers the same
+  reject-then-pick (keyboard: `n` rejects and opens the picker), so correction never requires
+  leaving the queue.
 
 ## 10. Job integration
 
@@ -562,7 +696,7 @@ status = glyph plus word never colour alone, 24 pt minimum targets, Escape-close
 - **VP-102.** Resumable and idempotent: one checkpoint per pipeline stage (§4) through
   `prepare_checkpoint`/`commit_checkpoint`; a crash between embed and match resumes at match;
   re-running a committed stage is refused by the store. Suggestion insertion is idempotent via the
-  `UNIQUE (diarization_run_id, cluster_key, profile_id)` constraint.
+  `UNIQUE (diarization_run_id, cluster_key, person_id)` constraint.
 - **VP-103.** Cancellation and progress use the existing `JobContext { cancel, progress }`
   (`plaudon_ai_contracts::job`) and the coalescing `ProgressReporter`; cancel points at every
   window boundary during embedding, the most expensive loop.
@@ -599,9 +733,13 @@ needs *no relaxation* for this feature — only hardening:
 
 ## 12. Privacy, security and legal
 
-This section is the heart of the feature and the reason ADR-0080 exists. Research pass 2026-10-12;
-primary sources cited; open legal questions are marked CONTESTED and collected in §20/§22. None of
-this is legal advice; a counsel review is a release gate (VP-131).
+This section is the heart of the feature and the reason ADR-0080 exists. It stands on two
+sentences the base spec already commits to: §8.7 — "We will not promise speaker identity from
+voice without explicit opt-in" and "We will distinguish identified speakers (user-confirmed) from
+inferred speaker clusters" — and §1.7 — the app "will not make legal-compliance claims or assume a
+PLAUD purchase establishes rights to third-party voices" (both verified against the source text).
+Research pass 2026-10-12; primary sources cited; open legal questions are marked CONTESTED and
+collected in §20/§22. None of this is legal advice; a counsel review is a release gate (VP-131).
 
 ### 12.1 A voice embedding is biometric data, in every regime that matters
 
@@ -665,7 +803,8 @@ this is legal advice; a counsel review is a release gate (VP-131).
 
 ### 12.2 Consent model
 
-- **VP-120.** The feature has a three-level gate, each strictly stronger: (1) the master toggle
+- **VP-120.** The **biometric tier** has a three-level gate, each strictly stronger: (1) the
+  matching toggle
   (off by default, VP-003); (2) a one-time **activation disclosure** (versioned text, §16-style
   honest language) covering what an embedding is, where it is stored, retention defaults, and the
   sentence "People you enrol must agree first. In Illinois, Texas, Washington, the EU and other
@@ -684,6 +823,38 @@ this is legal advice; a counsel review is a release gate (VP-131).
 - **VP-123.** Withdrawal: "this person withdrew consent" is a first-class action on the profile
   (delete with reason recorded); the disclosure explains what deletion does and does not reach
   (VP-095 honesty rules).
+
+### 12.2A The name-only roster is not biometric data — reasoning and limits
+
+- **VP-126.** **Boundary.** The master list without an enrolment is a contact list: display name,
+  aliases, optional email/organisation, plus links from recordings the user already possesses.
+  None of the biometric definitions reaches it: GDPR Art. 4(14) requires data "resulting from
+  specific technical processing relating to the physical, physiological or behavioural
+  characteristics" of a person — a typed name is not; BIPA's identifier list is "retina or iris
+  scan, fingerprint, voiceprint, or scan of hand or face geometry" and expressly **excludes**
+  writing samples, demographic data and physical descriptions; CUBI and RCW 19.375 enumerate the
+  same closed classes; CCPA's "biometric information" requires characteristics from which "an
+  identifier template, such as a … voiceprint, can be extracted" — a name is not extractable
+  material [VERIFIED: statute texts cited in §12.1]. Therefore the roster, manual assignment and
+  manual-only mode carry **no** consent gate, no retention clock, no AEAD requirement, and no
+  VoiceBiometric egress class.
+- **VP-127.** **Limits of that reasoning — stated, not hidden.** (a) The roster is still
+  *personal data* under GDPR: names, employer, email and "who attended which meeting" need an
+  ordinary Art. 6 basis and fall under access/erasure rights; the household exemption is as
+  narrow here as in §12.1. The product's duties are the ordinary ones it already honours for
+  transcripts (local-only storage, export, delete). (b) The *audio* still exists: a name-only
+  assignment plus the recording would let a future user enrol that person — which is why enrolment
+  always re-runs its own gate and is never implied by an assignment. (c) A name linked to
+  transcript content can still be sensitive in the ordinary sense (who said what); nothing in
+  this section weakens §16.6-style operational honesty. (d) This boundary is jurisdiction-tested
+  only as far as the cited statute texts go — flagged for the same counsel review as §12.1
+  (VP-131), but it is the reason manual mode ships without the biometric machinery (VP-011), not
+  a loophole for storing anything voice-derived: the structural test of §17.1 proves the manual
+  path cannot reach embedding code.
+- **VP-128.** **Consent-text clarity.** The activation disclosure (VP-120) states the two-tier
+  boundary in one sentence: "Keeping a list of names and assigning them to recordings needs no
+  special consent; computing a voiceprint to recognise someone automatically does." ADR-0080 is
+  amended to carry the same distinction.
 
 ### 12.3 What the vendor never has
 
@@ -824,11 +995,14 @@ in CI. Sentence-style test names as throughout the repo.
   refuses to score.
 - Open-set: with zero profiles the match stage is a no-op; unknown clusters stay unknown
   (VP-061); the `UNIQUE` suggestion constraint makes re-runs idempotent.
-- Persistence: schema-contract tests for the three tables; AEAD round-trip; key-absent = locked
+- Persistence: schema-contract tests for the five tables; AEAD round-trip; key-absent = locked
   (not plaintext); migration 0900 up-from-0800 on a populated fixture library; deletion cascades
-  and `voice_profile_events` survivability.
-- Consent gate: disclosure-version bump re-prompts; no embed call is reachable while the gate is
-  unpassed (a scripted embedder that panics on call, driven through the full engine).
+  (enrolment vs person, VP-080) and `voice_profile_events` survivability; merge repoints
+  assignments/enrolments and is journalled.
+- Consent gate and mode separation: disclosure-version bump re-prompts; no embed call is reachable
+  while the gate is unpassed **or while biometric matching is off** (a scripted embedder that
+  panics on call, driven through the full engine in both states — the VP-011/VP-215 structural
+  test); roster CRUD and assignment work end-to-end with matching off.
 
 ### 17.2 Evaluation harness (DER/EER), fixtures and their licences
 
@@ -874,14 +1048,25 @@ in CI. Sentence-style test names as throughout the repo.
 
 ### 17.4 UI (egui_kittest)
 
+- Person picker (VP-210): searchable filtering over names and aliases; "Create new person…"
+  creates and assigns in one step; "Unknown/none" clears; duplicate-name inline warning (VP-214);
+  full keyboard path (Enter/Space opens, type-to-filter, arrows, Enter, Escape); AccessKit
+  ComboBox role with announced filtered count.
 - Suggestion panel: confirm dispatches `confirm_speaker_suggestion` with the right ids; reject
-  never renames; wording assertions for VP-172 ("sounds like", never "identified"); the qualifier
-  renders from the single domain function.
+  never renames; reject-then-pick records `corrected_person_id` and assigns (VP-216); wording
+  assertions for VP-172 ("sounds like", never "identified"); the qualifier renders from the
+  single domain function.
+- Assignment scope and undo: cluster assignment is one undo step and restores segment exceptions
+  (VP-211/VP-212); per-segment exception warning; nothing dispatches against a non-open recording.
 - Enrolment: gate text must be scrolled/acknowledged; minima meter; refusal states (not enough
   clean speech) announced via `Role::Status`.
-- Profiles screen: rename obeys the 120-char rule (same as `speaker_identity.rs` tests); merge
-  keeps provenance; delete shows the disclosure with exact counts; forget-everyone requires typed
-  confirmation; every control named (a11y sweep).
+- People screen: rename obeys the 120-char rule (same as `speaker_identity.rs` tests); rename
+  dialog shows the affected-recordings count (VP-213a); merge shows the disclosure and repoints
+  (VP-213c); delete-person leaves name snapshots; delete-enrolment keeps the person;
+  forget-everyone requires typed confirmation and keeps the roster (VP-095); dedupe groups are
+  suggestions only; every control named (a11y sweep).
+- Manual-only parity: the full-shell scenario runs once with matching on and once off; with it
+  off, pickers/bulk-assign/undo behave identically and no suggestion UI exists (VP-215).
 - Full-shell (`PlaudonShell`, `apps/plaudon-egui/tests/support`): enrol → import second fixture →
   job runs with scripted providers → suggestion appears → confirm → transcript chips update in
   the same frame (the T12 acceptance), with the egress watch asserting zero outbound attempts.
@@ -922,16 +1107,16 @@ below. Issue ids follow the house convention (EPIC P, ≤ 2 phases, ≤ 5 tasks 
 | Task | Deliverable | Acceptance |
 |---|---|---|
 | P1.1 | T12 wire leg: `speaker_id` on `TranscriptSegmentDto`, `set_segment_speaker`, schemas, guard-test updates | per-segment reassignment persists and survives reload; kittest chip test asserts dispatch; T12 parity row updated; `COMMAND_NAMES` guard green |
-| P1.2 | Migration 0900 + repositories + AEAD store + `SecretScope::VoiceProfileKey` | schema-contract tests; AEAD round-trip; locked-store = refusal; migration from populated 0800 library |
+| P1.2 | Migration 0900 (`people`, `person_voice_enrollments`, `voice_exemplars`, `speaker_suggestions`, `voice_profile_events`, `speakers.person_id`) + repositories + AEAD store + `SecretScope::VoiceProfileKey` | schema-contract tests; AEAD round-trip; locked-store = refusal; migration from populated 0800 library; merge/delete cascade semantics (VP-080, VP-213) |
 | P1.3 | `JobKind::SpeakerMatch` executor skeleton with stages Diarize→Embed→Match over scripted providers (fake diarization, scripted embedder) | checkpoint/resume/cancel/idempotency tests; chaos kill/resume; coverage-policy transitions entries |
-| P1.4 | Matching core: cosine + AS-Norm + bands + open-set rules + per-profile calibration bounds (pure `app-core`, no model) | known-answer + property tests; polarity encoded in types; version-mismatch refusal |
-| P1.5 | Commands + DTOs for profiles/suggestions (list/enroll/confirm/reject/delete/forget), consent-gate state machine | schema files; no-embedding-in-DTO response scan; consent-gate unreachable-embed test |
+| P1.4 | Matching core: cosine + AS-Norm + bands + open-set rules + per-profile calibration bounds incl. negative evidence (pure `app-core`, no model) | known-answer + property tests; polarity encoded in types; version-mismatch refusal; rejected/corrected tuples feed calibration (VP-216) |
+| P1.5 | Roster + biometric commands and DTOs (`people` + `voice_profiles` modules: list/create/update/merge/delete people, assign_cluster_person, enrol/split/delete enrolment, suggestions confirm/reject-with-correction, forget-all), consent-gate state machine | schema files; no-embedding-in-DTO response scan; consent-gate + matching-off unreachable-embed tests (VP-011); roster CRUD works with the voice feature flag compiled out |
 
 ### Phase 2 — UI, egress hardening, models, evidence
 
 | Task | Deliverable | Acceptance |
 |---|---|---|
-| P2.1 | Profiles screen + speaker-panel suggestions + bulk review + enrolment flow + Settings block | kittest suites incl. wording and a11y sweeps; full-shell enrol→match→confirm scenario |
+| P2.1 | People screen (new `Destination::People`) + person picker everywhere + speaker-panel suggestions + reject-then-pick + bulk review + enrolment flow + Settings block | kittest suites incl. picker/undo/propagation-disclosure/manual-parity, wording and a11y sweeps; full-shell enrol→match→confirm scenario in both modes |
 | P2.2 | `PayloadClass::VoiceBiometric` (unconsentable) + egress watch scenario + redaction + fuzz targets | outbound refusal in every mode; local_only_egress extended; corpus replay green |
 | P2.3 | Export/backup/deletion integration: voice namespace (encrypted-only), deletion disclosures, forget-everyone, retention expiry job | plaintext-with-voice unrepresentable; restore re-gates consent; journalled deletes; archive fuzz doc target |
 | P2.4 | Evaluation harness + LibriSpeech/TTS fixture generator + EER/DER reports + threshold calibration | committed benchmark JSON; golden tests pinned to model sha256; cross-device conditions reported |
@@ -969,9 +1154,12 @@ parallel; nothing user-visible ships before P2.1 + P2.2 land together.
    surface.)
 5. **Enrolment from imported vendor transcripts** (recordings with vendor speaker labels): allowed
    as provenance, or restricted to app-diarized recordings in V1? (Spec assumption: restricted.)
-6. **Suggestion expiry:** do pending suggestions expire with the profile retention clock or
+6. **Suggestion expiry:** do pending suggestions expire with the enrolment retention clock or
    independently at 90 days? (Spec assumption: with the recording's lifetime, bounded by the
-   profile's.)
+   enrolment's.)
+7. **Roster in recording exports:** VP-077 decides display-name text only (no contacts/aliases).
+   Should an explicit "contact card" export exist for a person (vCard)? (Spec assumption: not in
+   V1; it is ordinary data and could ship later without touching the biometric tier.)
 
 ## 21. Risks
 
@@ -1012,26 +1200,29 @@ VP-045/VP-150, on reference hardware, both platforms, committed to `docs/benchma
 
 ### 22.1 Base-spec section references: verification status
 
-The original `PLAUD_BYOK_Desktop_SPEC_v1.3_Consensus.md` was **not directly readable** while this
-document was written (file permissions). Its §-references here are grounded two ways, disclosed
-per reference:
+Version 1.0 of this document was written while the original
+`PLAUD_BYOK_Desktop_SPEC_v1.3_Consensus.md` was unreadable (file permissions); roughly half of it
+was recovered verbatim from prior read sessions and the rest of the §-references were grounded
+only in repository documents restating them. **For version 1.1 the original became readable and
+every §-reference in this document and in ADR-0080/0081/0082 was re-checked against the source
+text (1703 lines).** Outcome:
 
-- **Recovered verbatim text** (from prior read sessions of the same file; partial, ~47% of lines):
-  §3 (priorities), §4.5, §4.6, §5.3, §5.5, §15.1, §15.3, §16.1, §16.2A, §16.3, §16.4, §16.5,
-  §16.6, §17.1–§17.6, §18.1–§18.9, §21 (ADR-001 text), §23 preamble. References to these sections
-  are verified against that recovered text.
-- **Verified only indirectly, via repository documents that restate them** (ADR texts, code
-  comments, threat-model docs — the body text of these sections was NOT read): §1.4 (user
-  groups; restated in docs/public), §2.4, §3.1 (feature-priority table; restated by ADR-0400/0401
-  gates), §6.3 invariants list (items 1–2 recovered, 3–15 unread; restated by ADR-0013), §8.7
-  (diarization; restated in full by ADR-0400 and `crates/ai-diarization` doc comments), §12
-  (local model management; restated by `MODEL_SOURCE_NOTE` in `crates/app-core/src/models` and
-  ADR-0401), §13.2–§13.8 (storage/backup; restated by ADR-0070/0071/0072/0402 and
-  `docs/threat-model/full-library-encryption.md`), §14.1–§14.7 (jobs; restated by ADR-0030 and
-  `crates/jobs` docs), §15.2 command table (restated by `crates/app/src/command.rs` and
-  ADR-0020), §16.2 threat table rows (column shape recovered; rows restated by
-  `docs/threat-model/traceability.json` `spec_threats`), §22 Definition of Done items (restated
-  throughout `docs/threat-model/open-findings.md`), §24.
-  **Every reference in this second list is UNVERIFIED against the original wording** and must be
-  re-checked against the source document when it becomes readable; if any restatement diverges
-  from the original, the original governs.
+- All previously indirect references held up: §1.4 (user groups; includes the no-compliance-claim
+  sentence quoted by `docs/threat-model/full-library-encryption.md`), §1.7, §3.1 (diarization is
+  P1-conditional, "the core product does not wait on … diarization"), §8.7 (quoted in §12 above),
+  §12 (opt-in model manager, "never silently download multi-gigabyte weights"), §13.5–§13.8
+  (backup/encryption posture as restated by ADR-0070/0071/0072/0402), §14.1–§14.7 (job engine as
+  restated by ADR-0030), §15.1/§15.2/§15.4, §16.1–§16.6 (threat table column shape and the 25
+  threat rows match `traceability.json`'s `spec_threats`), §17, §18, §22, §23, §24. No reference
+  in this document needed correction.
+- One divergence worth recording, in the repository rather than in this document: base-spec §15.2
+  *proposes* a command named `run_transcript_tool`, while the shipped guard
+  (`no_generic_shell_http_or_filesystem_command_is_published`, `crates/app/src/command.rs`)
+  forbids the `run_` prefix and the shipped surface names it differently. The guard, not the
+  proposal table, governs new command names (VP-031 and §8 follow the guard).
+- Base-spec §21 lists ADR-001 through ADR-022 in prose; the repository's `docs/adr/README.md`
+  reserves numbers 0001–0012 for the "§21 initial set" and its test checks exactly those twelve.
+  This document's 0080–0089 range claim is unaffected.
+- The base spec contains no biometric, voiceprint or privacy-statute treatment (checked by
+  search); §12 of this document is additive, constrained by §1.7 and §8.7, and contradicts
+  nothing in the source text.

@@ -1,8 +1,9 @@
 # ADR-0080: Voice profiles are biometric data — off by default, local-only, user-deletable to the key
 
-- **Status:** Proposed
+- **Status:** Proposed; amended 2026-10-12 for the master speaker list (spec v1.1): the rules
+  below govern the *biometric tier*; the name-only roster is explicitly outside them (rule 5)
 - **Date:** 2026-10-12
-- **Spec:** VOICE_PROFILES_SPEC §1, §7, §11, §12, §13 (VP-002/003, VP-071, VP-095, VP-110, VP-120–133); base spec §16.3, §16.4, §13.5, §4.6
+- **Spec:** VOICE_PROFILES_SPEC §1, §7, §9A, §11, §12 (incl. §12.2A), §13 (VP-002/003, VP-010/011, VP-071, VP-095, VP-110, VP-120–133, VP-210–217); base spec §1.7, §8.7, §16.3, §16.4, §13.5, §4.6
 
 ## Context
 
@@ -21,7 +22,7 @@ the vendor, with user-controlled disable and delete.
 
 ## Decision
 
-Voice profiles are governed by four structural rules, none of them waivable by settings:
+Voice profiles are governed by five structural rules, none of them waivable by settings:
 
 1. **Off by default, consent-gated on.** No embedding is computed until the user enables the
    feature, passes a versioned activation disclosure, and — per enrolment — attests that the named
@@ -38,9 +39,21 @@ Voice profiles are governed by four structural rules, none of them waivable by s
    additionally destroys the key, rendering every remaining ciphertext — including any inside
    encrypted backups — permanently undecryptable. Retention defaults to 12 months unused
    (the Texas CUBI outer bound), shortenable, never extendable.
-4. **Exports exclude voice data by default; plaintext voice export is unrepresentable.** The
+4. **Exports exclude biometric data by default; plaintext voice export is unrepresentable.** The
    `.recording-archive` voice namespace exists only inside password-encrypted backups (ADR-0071
    stack), and restore re-runs the consent gate.
+5. **The name-only roster is not biometric data, and must never become it by drift.** The master
+   speaker list (`people`: display name, aliases, plain email/organisation) and manual assignments
+   are ordinary personal data: no statute's biometric definition reaches a typed name (GDPR
+   Art. 4(14) requires data "resulting from specific technical processing" of bodily
+   characteristics; BIPA/CUBI/RCW 19.375 enumerate closed identifier classes; CCPA requires
+   template-extractable material — spec §12.2A). Manual assignment therefore works with biometric
+   matching off, carries no consent gate, no retention clock and no AEAD requirement — and the
+   manual code path is structurally unable to call embedding code (tested). The limits are stated,
+   not hidden: the roster is still ordinary personal data under GDPR; the audio it points at could
+   be enrolled later, which is why enrolment always runs its own gate and is never implied by an
+   assignment; "forget everyone" destroys every enrolment and the key but keeps the roster, and
+   says so.
 
 The vendor-facing posture follows from the same rules: the vendor never receives, holds keys to,
 or can access voiceprints, and the public privacy documents say so affirmatively (and never say
