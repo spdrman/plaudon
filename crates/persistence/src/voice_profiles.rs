@@ -64,9 +64,14 @@ pub enum VoiceProfileEventKind {
     AssignmentSet,
     /// A speaker row's roster link was removed.
     AssignmentCleared,
-    /// Every enrolment in the library was destroyed at once (VP-095). The one
-    /// kind that names no person, because it is about all of them.
+    /// Every enrolment in the library was destroyed at once (VP-095). One of
+    /// the three kinds that name no person, because it is about all of them.
     AllForgotten,
+    /// Biometric matching was turned on after the activation disclosure was
+    /// accepted, recorded with the version that was shown (VP-120, VP-121).
+    FeatureActivated,
+    /// Biometric matching was turned off.
+    FeatureDeactivated,
 }
 
 impl VoiceProfileEventKind {
@@ -89,6 +94,8 @@ impl VoiceProfileEventKind {
             Self::AssignmentSet => "assignment_set",
             Self::AssignmentCleared => "assignment_cleared",
             Self::AllForgotten => "all_forgotten",
+            Self::FeatureActivated => "feature_activated",
+            Self::FeatureDeactivated => "feature_deactivated",
         }
     }
 }
@@ -240,6 +247,30 @@ pub struct StoredExemplar {
     pub embedding_nonce: Vec<u8>,
     /// When the exemplar was stored.
     pub created_at: Timestamp,
+}
+
+/// One exemplar re-sealed for a move between enrolments (merge, split).
+///
+/// Produced by `plaudon_app_core::voice_profiles::enroll`, which owns the key;
+/// this crate only writes the bytes it is handed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResealedExemplar {
+    /// Exemplar being moved.
+    pub id: VoiceExemplarId,
+    /// Ciphertext under the destination person's binding.
+    pub embedding_cipher: Vec<u8>,
+    /// Nonce it was sealed with.
+    pub embedding_nonce: Vec<u8>,
+}
+
+/// One settled decision about a person, as calibration evidence (VP-063).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SettledScore {
+    /// The score the user was shown.
+    pub score: f64,
+    /// Whether they confirmed it. A correction is a rejection of the
+    /// *suggested* person (VP-216).
+    pub confirmed: bool,
 }
 
 /// One suggestion produced by a match job.
@@ -547,6 +578,153 @@ impl VoiceEnrollmentRepository {
         rows.iter().map(decode_exemplar).collect()
     }
 
+    /// One sealed exemplar by id, or `None` when it is gone.
+    ///
+    /// # Errors
+    ///
+    /// Propagates persistence failures.
+    pub async fn exemplar(&self, id: VoiceExemplarId) -> PersistenceResult<Option<StoredExemplar>> {
+        let row = sqlx::query(
+            "SELECT id, person_id, recording_id, diarization_run_id, cluster_key, source_start_ms,
+                    source_end_ms, speech_ms, model_id, model_version, model_sha256, embedding_dim,
+                    embedding_cipher, embedding_nonce, created_at
+             FROM voice_exemplars WHERE id = ?1",
+        )
+        .bind(id.to_string())
+        .fetch_optional(self.db.pool())
+        .await?;
+        row.as_ref().map(decode_exemplar).transpose()
+    }
+
+    /// Move exemplars from one enrolment to another, re-sealed (VP-213c,
+    /// §3.5 split).
+    ///
+    /// A ciphertext is bound to its person as AEAD additional data
+    /// (`plaudon_app_core::voice_profiles::store::ExemplarBinding`), so an
+    /// exemplar cannot be repointed by rewriting one column: the caller has to
+    /// supply the same vector sealed under the destination's binding, which it
+    /// can only do with the library's data key. That is the point —
+    /// an *authorised* move re-seals, and an attacker editing a row still
+    /// produces an undecryptable exemplar.
+    ///
+    /// `resealed` must name exactly the exemplars to move, and each must
+    /// currently belong to `from`.
+    ///
+    /// # Errors
+    ///
+    /// [`PersistenceError::RecordNotFound`] when either enrolment is missing,
+    /// [`PersistenceError::Invalid`] when an exemplar does not belong to
+    /// `from`.
+    pub async fn move_exemplars(
+        &self,
+        from: PersonId,
+        to: PersonId,
+        resealed: &[ResealedExemplar],
+        at: Timestamp,
+    ) -> PersistenceResult<u32> {
+        if from == to {
+            return Err(PersistenceError::Invalid(
+                "an exemplar cannot be moved onto the enrolment it already belongs to".to_owned(),
+            ));
+        }
+        let mut tx = self.db.begin_write().await?;
+        for person in [from, to] {
+            let exists: Option<String> = sqlx::query_scalar(
+                "SELECT person_id FROM person_voice_enrollments WHERE person_id = ?1",
+            )
+            .bind(person.to_string())
+            .fetch_optional(&mut *tx)
+            .await?;
+            if exists.is_none() {
+                return Err(PersistenceError::RecordNotFound);
+            }
+        }
+        let mut moved = 0u32;
+        for exemplar in resealed {
+            let owner: Option<String> =
+                sqlx::query_scalar("SELECT person_id FROM voice_exemplars WHERE id = ?1")
+                    .bind(exemplar.id.to_string())
+                    .fetch_optional(&mut *tx)
+                    .await?;
+            match owner.as_deref() {
+                None => return Err(PersistenceError::RecordNotFound),
+                Some(owner) if owner == from.to_string() => {}
+                Some(_) => {
+                    return Err(PersistenceError::Invalid(
+                        "an exemplar being moved does not belong to the source enrolment"
+                            .to_owned(),
+                    ))
+                }
+            }
+            sqlx::query(
+                "UPDATE voice_exemplars
+                 SET person_id = ?2, embedding_cipher = ?3, embedding_nonce = ?4
+                 WHERE id = ?1",
+            )
+            .bind(exemplar.id.to_string())
+            .bind(to.to_string())
+            .bind(&exemplar.embedding_cipher)
+            .bind(&exemplar.embedding_nonce)
+            .execute(&mut *tx)
+            .await?;
+            moved += 1;
+        }
+        let remaining: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM voice_exemplars WHERE person_id = ?1")
+                .bind(from.to_string())
+                .fetch_one(&mut *tx)
+                .await?;
+        let detail = serde_json::json!({
+            "exemplars_moved": moved,
+            "exemplars_remaining": remaining,
+            "source_person_id": from.to_string(),
+            "target_person_id": to.to_string(),
+        })
+        .to_string();
+        for person in [from, to] {
+            journal(
+                &mut tx,
+                Some(person),
+                VoiceProfileEventKind::EnrollmentSplit,
+                &detail,
+                at,
+            )
+            .await?;
+        }
+        tx.commit().await?;
+        Ok(moved)
+    }
+
+    /// The settled suggestions about one person, as calibration evidence
+    /// (VP-063, VP-216).
+    ///
+    /// Scores and decisions only: the rejected cluster's *embedding* is never
+    /// kept, because it is a voiceprint of whoever actually spoke, who may be
+    /// unenrolled and unconsented. A `corrected` row counts as a rejection of
+    /// the suggested person exactly like a plain rejection does — the
+    /// correction names somebody else.
+    ///
+    /// # Errors
+    ///
+    /// Propagates persistence failures.
+    pub async fn decisions(&self, person_id: PersonId) -> PersistenceResult<Vec<SettledScore>> {
+        let rows = sqlx::query(
+            "SELECT score, state FROM speaker_suggestions
+             WHERE person_id = ?1 AND state IN ('confirmed','rejected','corrected')
+             ORDER BY decided_at, id",
+        )
+        .bind(person_id.to_string())
+        .fetch_all(self.db.pool())
+        .await?;
+        Ok(rows
+            .iter()
+            .map(|row| SettledScore {
+                score: row.get::<f64, _>("score"),
+                confirmed: row.get::<String, _>("state") == "confirmed",
+            })
+            .collect())
+    }
+
     /// Delete a person's enrolment: every exemplar and suggestion goes, the
     /// roster entry stays (VP-080).
     ///
@@ -721,6 +899,53 @@ impl VoiceEnrollmentRepository {
              ORDER BY score DESC, id",
         )
         .bind(recording_id.to_string())
+        .fetch_all(self.db.pool())
+        .await?;
+        rows.iter().map(decode_suggestion).collect()
+    }
+
+    /// One suggestion by id, whatever its state.
+    ///
+    /// # Errors
+    ///
+    /// Propagates persistence failures.
+    pub async fn suggestion(
+        &self,
+        id: SpeakerSuggestionId,
+    ) -> PersistenceResult<Option<StoredSuggestion>> {
+        let row = sqlx::query(
+            "SELECT id, recording_id, diarization_run_id, cluster_key, person_id, score, score_kind,
+                    band, state, corrected_person_id, decided_at, model_id, model_version,
+                    created_at
+             FROM speaker_suggestions WHERE id = ?1",
+        )
+        .bind(id.to_string())
+        .fetch_optional(self.db.pool())
+        .await?;
+        row.as_ref().map(decode_suggestion).transpose()
+    }
+
+    /// The review queue: pending suggestions across every recording, strongest
+    /// score first (VP-093).
+    ///
+    /// Bounded by `limit` because the queue is a UI surface that virtualises
+    /// (VP-153), and an unbounded read of a library at §17.5 scale is a frame
+    /// budget spent on rows nobody scrolled to.
+    ///
+    /// # Errors
+    ///
+    /// Propagates persistence failures.
+    pub async fn pending_queue(&self, limit: u32) -> PersistenceResult<Vec<StoredSuggestion>> {
+        let rows = sqlx::query(
+            "SELECT id, recording_id, diarization_run_id, cluster_key, person_id, score, score_kind,
+                    band, state, corrected_person_id, decided_at, model_id, model_version,
+                    created_at
+             FROM speaker_suggestions
+             WHERE state = 'pending'
+             ORDER BY score DESC, created_at, id
+             LIMIT ?1",
+        )
+        .bind(i64::from(limit))
         .fetch_all(self.db.pool())
         .await?;
         rows.iter().map(decode_suggestion).collect()
@@ -1277,15 +1502,36 @@ impl VoiceProfileGateRepository {
         Ok(())
     }
 
-    /// Turn the feature off without touching the recorded consent history.
+    /// Turn the feature off without touching the recorded consent history,
+    /// and journal that it happened (VP-120).
+    ///
+    /// Idempotent: switching off a feature that is already off records
+    /// nothing, so a library that never had it on has an empty consent
+    /// history rather than a row per settings visit.
     ///
     /// # Errors
     ///
     /// Propagates persistence failures.
-    pub async fn disable(&self) -> PersistenceResult<VoiceProfileGate> {
+    pub async fn disable(&self, at: Timestamp) -> PersistenceResult<VoiceProfileGate> {
         let mut gate = self.load().await?;
+        let was_enabled = gate.enabled;
         gate.enabled = false;
         self.store(&gate).await?;
+        if was_enabled {
+            let mut tx = self.db.begin_write().await?;
+            journal(
+                &mut tx,
+                None,
+                VoiceProfileEventKind::FeatureDeactivated,
+                &serde_json::json!({
+                    "accepted_disclosure_version": gate.consent_version,
+                })
+                .to_string(),
+                at,
+            )
+            .await?;
+            tx.commit().await?;
+        }
         Ok(gate)
     }
 
@@ -1314,6 +1560,7 @@ impl VoiceProfileGateRepository {
         consent_version: &str,
         at: Timestamp,
     ) -> PersistenceResult<VoiceProfileGate> {
+        let previous = self.load().await?;
         let gate = VoiceProfileGate {
             enabled: true,
             consent_version: Some(consent_version.to_owned()),
@@ -1321,7 +1568,51 @@ impl VoiceProfileGateRepository {
             restore_pending_consent: false,
         };
         self.store(&gate).await?;
+        // The acceptance is the fact VP-122's exportable consent record has to
+        // start from, so it is journalled rather than only held in the gate
+        // row the next activation overwrites.
+        let mut tx = self.db.begin_write().await?;
+        journal(
+            &mut tx,
+            None,
+            VoiceProfileEventKind::FeatureActivated,
+            &serde_json::json!({
+                "disclosure_version": consent_version,
+                "previous_disclosure_version": previous.consent_version,
+                "after_restore": previous.restore_pending_consent,
+            })
+            .to_string(),
+            at,
+        )
+        .await?;
+        tx.commit().await?;
         Ok(gate)
+    }
+
+    /// The library-wide consent journal: activations, deactivations and the
+    /// "forget everyone" event, oldest first (VP-122).
+    ///
+    /// # Errors
+    ///
+    /// Propagates persistence failures.
+    pub async fn library_events(&self) -> PersistenceResult<Vec<StoredVoiceProfileEvent>> {
+        let rows = sqlx::query(
+            "SELECT id, person_id, kind, detail_json, created_at
+             FROM voice_profile_events WHERE person_id IS NULL ORDER BY created_at, id",
+        )
+        .fetch_all(self.db.pool())
+        .await?;
+        rows.iter()
+            .map(|row| {
+                Ok(StoredVoiceProfileEvent {
+                    id: row.get("id"),
+                    person_id: None,
+                    kind: row.get("kind"),
+                    detail_json: row.get("detail_json"),
+                    created_at: Timestamp::from_millis(row.get::<i64, _>("created_at")),
+                })
+            })
+            .collect()
     }
 }
 

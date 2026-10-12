@@ -68,8 +68,9 @@ use uuid::Uuid;
 
 use super::embedder::{EmbedError, EmbedWindow, SpeakerEmbedder};
 use super::matching::{
-    ClusterEmbedding, Embedding, Exemplar, MatchError, MatchReport, Matcher, ProfileError,
-    ProfileOffset, VoiceProfile, MIN_EMBED_SPEECH_MS, MIN_IDENTIFY_SPEECH_MS,
+    calibrated_offset, CalibrationOutcome, ClusterEmbedding, Embedding, Exemplar, MatchError,
+    MatchReport, Matcher, NormalisedScore, ProfileError, VoiceProfile, MIN_EMBED_SPEECH_MS,
+    MIN_IDENTIFY_SPEECH_MS,
 };
 use super::store::{ClusterBinding, EmbeddingCipher, ExemplarBinding, SealedEmbedding};
 use super::VoiceProfileError;
@@ -226,6 +227,32 @@ impl MatchGate {
             accepted_disclosure_version: None,
             enrolled_profiles: 0,
             key_available: false,
+        }
+    }
+
+    /// The gate as the library stored it (§12.2).
+    ///
+    /// One source of truth: the toggle and the accepted disclosure version
+    /// come from [`plaudon_persistence::voice_profiles::VoiceProfileGate`],
+    /// the row the consent commands write and a restore invalidates, so a job
+    /// cannot be planned against a second, divergent copy of the same state.
+    /// A restore waiting for the gate (VP-078) reads as "no disclosure
+    /// accepted", which is exactly what it is in *this* library.
+    #[must_use]
+    pub fn from_persisted(
+        gate: &plaudon_persistence::voice_profiles::VoiceProfileGate,
+        enrolled_profiles: usize,
+        key_available: bool,
+    ) -> Self {
+        Self {
+            matching_enabled: gate.enabled,
+            accepted_disclosure_version: if gate.restore_pending_consent {
+                None
+            } else {
+                gate.consent_version.clone()
+            },
+            enrolled_profiles,
+            key_available,
         }
     }
 
@@ -1218,11 +1245,31 @@ impl SpeakerMatchPipeline {
                 skipped += usize::from(wrong_checkpoint);
                 continue;
             }
-            match VoiceProfile::new(
-                enrollment.person_id.to_string(),
-                exemplars,
-                ProfileOffset::ZERO,
-            ) {
+            // The user's own confirmations and rejections are the only
+            // personalisation this feature has (VP-063, VP-171): a rejection
+            // the user had to clean up moves this profile's operating point,
+            // and a correction counts as a rejection of the person who was
+            // suggested (VP-216). The evidence is a score and a boolean —
+            // never the rejected cluster's embedding, which would be a
+            // voiceprint of somebody who never consented.
+            let offset = calibrated_offset(
+                &self
+                    .enrollments
+                    .decisions(enrollment.person_id)
+                    .await?
+                    .into_iter()
+                    .filter_map(|settled| {
+                        let score = NormalisedScore::new(settled.score as f32).ok()?;
+                        Some(if settled.confirmed {
+                            CalibrationOutcome::confirmed(score)
+                        } else {
+                            CalibrationOutcome::rejected(score)
+                        })
+                    })
+                    .collect::<Vec<_>>(),
+                checkpoint.thresholds,
+            );
+            match VoiceProfile::new(enrollment.person_id.to_string(), exemplars, offset) {
                 Ok(profile) => profiles.push(profile),
                 // A profile below the enrolment minimum stops matching rather
                 // than matching on less evidence than the spec allows; it is
@@ -1306,34 +1353,50 @@ fn result_from_rows(
     }
 }
 
+/// A stored reconciliation that will not decode.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("the stored reconciliation is corrupt: {detail}")]
+pub struct CorruptReconciliation {
+    /// What was wrong with the rows.
+    pub detail: String,
+}
+
 /// Rebuild a reconciliation from the rows a committed reconcile stage wrote.
-fn reconciliation_from_rows(
-    request: &SpeakerMatchRequest,
+///
+/// Public because enrolment reads the same view: "clean single-speaker
+/// speech" (VP-022) is a property of the stored reconciliation, and deriving
+/// it a second way for the enrolment path would be a second implementation of
+/// one rule.
+///
+/// # Errors
+///
+/// [`CorruptReconciliation`] when a row claims an assignment its own columns
+/// do not carry.
+pub fn reconciliation_from_assignments(
+    transcript_revision_id: plaudon_domain::ids::TranscriptRevisionId,
     rows: &[AssignmentInsert],
-) -> Result<Reconciliation, SpeakerMatchError> {
+) -> Result<Reconciliation, CorruptReconciliation> {
     let mut segments = Vec::with_capacity(rows.len());
     let mut cluster_order: Vec<ClusterKey> = Vec::new();
     for row in rows {
         let assignment = match row.assignment.as_str() {
             "single" => {
-                let key = row.cluster_key.clone().ok_or_else(|| {
-                    SpeakerMatchError::CorruptCheckpoint {
-                        stage: SpeakerMatchStage::Reconcile.as_str(),
+                let key = row
+                    .cluster_key
+                    .clone()
+                    .ok_or_else(|| CorruptReconciliation {
                         detail: "a single assignment without a cluster".to_owned(),
-                    }
-                })?;
+                    })?;
                 let cluster = ClusterKey::new(key);
                 remember(&mut cluster_order, &cluster);
                 SegmentAssignment::Single { cluster }
             }
             "overlapping" => {
                 let json = row.overlapping_keys_json.as_deref().unwrap_or("[]");
-                let keys: Vec<String> = serde_json::from_str(json).map_err(|error| {
-                    SpeakerMatchError::CorruptCheckpoint {
-                        stage: SpeakerMatchStage::Reconcile.as_str(),
+                let keys: Vec<String> =
+                    serde_json::from_str(json).map_err(|error| CorruptReconciliation {
                         detail: error.to_string(),
-                    }
-                })?;
+                    })?;
                 let clusters: Vec<ClusterKey> = keys.into_iter().map(ClusterKey::new).collect();
                 for cluster in &clusters {
                     remember(&mut cluster_order, cluster);
@@ -1349,9 +1412,22 @@ fn reconciliation_from_rows(
         });
     }
     Ok(Reconciliation {
-        transcript_revision_id: request.revision.id,
+        transcript_revision_id,
         segments,
         cluster_order,
+    })
+}
+
+/// Rebuild a reconciliation for one run of the pipeline.
+fn reconciliation_from_rows(
+    request: &SpeakerMatchRequest,
+    rows: &[AssignmentInsert],
+) -> Result<Reconciliation, SpeakerMatchError> {
+    reconciliation_from_assignments(request.revision.id, rows).map_err(|error| {
+        SpeakerMatchError::CorruptCheckpoint {
+            stage: SpeakerMatchStage::Reconcile.as_str(),
+            detail: error.detail,
+        }
     })
 }
 

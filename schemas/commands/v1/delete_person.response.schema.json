@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/delete_person.response.schema.json",
+  "title": "delete_person.response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "applied",
+    "severed_speaker_links",
+    "recordings",
+    "exemplars",
+    "suggestions"
+  ],
+  "properties": {
+    "applied": {
+      "type": "boolean"
+    },
+    "severed_speaker_links": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "recordings": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "exemplars": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "suggestions": {
+      "type": "integer",
+      "minimum": 0
+    }
+  }
+}

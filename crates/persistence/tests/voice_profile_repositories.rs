@@ -12,7 +12,7 @@ use plaudon_persistence::error::PersistenceError;
 use plaudon_persistence::migrations::MigrationRunner;
 use plaudon_persistence::people::{PeopleRepository, PersonDraft, PersonStatus};
 use plaudon_persistence::voice_profiles::{
-    EnrollmentDraft, ExemplarInsert, SuggestionInsert, VoiceEnrollmentRepository,
+    EnrollmentDraft, ExemplarInsert, ResealedExemplar, SuggestionInsert, VoiceEnrollmentRepository,
 };
 use sqlx::Row;
 use uuid::Uuid;
@@ -139,6 +139,28 @@ fn consent() -> EnrollmentDraft {
         consent_note: Some("asked at the stand-up".to_owned()),
         retention_months: 12,
     }
+}
+
+/// The loser's exemplars, re-sealed for the merge.
+///
+/// A ciphertext authenticates the person it belongs to (VP-071), so a merge
+/// takes the moved exemplars sealed under the survivor's binding; the
+/// re-sealing itself lives in `plaudon_app_core::voice_profiles::enroll`,
+/// which owns the key. This suite stores opaque bytes rather than real
+/// ciphertexts, so it re-presents them unchanged — what is under test here is
+/// that the merge demands coverage of exactly the rows it moves.
+async fn resealed(lib: &Library, loser: PersonId) -> Vec<ResealedExemplar> {
+    lib.voices
+        .exemplars(loser)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|row| ResealedExemplar {
+            id: row.id,
+            embedding_cipher: row.embedding_cipher,
+            embedding_nonce: row.embedding_nonce,
+        })
+        .collect()
 }
 
 #[tokio::test]
@@ -307,7 +329,12 @@ async fn merging_repoints_assignments_enrolments_and_suggestions() {
 
     let outcome = lib
         .people
-        .merge(duplicate.id, survivor.id, at(7))
+        .merge(
+            duplicate.id,
+            survivor.id,
+            &resealed(&lib, duplicate.id).await,
+            at(7),
+        )
         .await
         .unwrap();
     assert_eq!(outcome, preview, "the preview is what the merge executes");
@@ -359,12 +386,14 @@ async fn merging_repoints_assignments_enrolments_and_suggestions() {
     }
 
     assert!(matches!(
-        lib.people.merge(survivor.id, survivor.id, at(8)).await,
+        lib.people.merge(survivor.id, survivor.id, &[], at(8)).await,
         Err(PersistenceError::Invalid(_))
     ));
     // A tombstone cannot become a merge target.
     assert!(matches!(
-        lib.people.merge(survivor.id, duplicate.id, at(9)).await,
+        lib.people
+            .merge(survivor.id, duplicate.id, &[], at(9))
+            .await,
         Err(PersistenceError::Invalid(_))
     ));
 }
@@ -409,7 +438,12 @@ async fn merging_two_enrolled_people_keeps_the_shorter_retention() {
 
     let outcome = lib
         .people
-        .merge(duplicate.id, survivor.id, at(7))
+        .merge(
+            duplicate.id,
+            survivor.id,
+            &resealed(&lib, duplicate.id).await,
+            at(7),
+        )
         .await
         .unwrap();
     assert!(!outcome.enrollment_moved);

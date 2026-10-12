@@ -12,14 +12,16 @@
 //!
 //! Three rules shape it.
 //!
-//! * **Off unless the gate says otherwise (VP-003).** The toggle lives in
-//!   `app_preferences` under [`VOICE_MATCHING_PREFERENCE_KEY`] and is absent —
-//!   therefore off — in a library nobody turned it on in.
-//!   [`LocalBackend::enqueue_speaker_match`] refuses to queue work the gate
-//!   would not let run, and the executor re-reads the gate at run time, because
-//!   a user may have turned the feature off or deleted their profiles while the
-//!   job sat in the queue. In that state the plan simply has no embed, match or
-//!   suggest stage (VP-024).
+//! * **Off unless the gate says otherwise (VP-003).** The toggle and the
+//!   accepted disclosure version live in the one place the consent commands
+//!   write them,
+//!   [`VoiceProfileGateRepository`](plaudon_persistence::voice_profiles::VoiceProfileGateRepository),
+//!   and are absent — therefore off — in a library nobody turned the feature
+//!   on in. [`LocalBackend::enqueue_speaker_match`] refuses to queue work the
+//!   gate would not let run, and the executor re-reads the gate at run time,
+//!   because a user may have turned the feature off or deleted their profiles
+//!   while the job sat in the queue. In that state the plan simply has no
+//!   embed, match or suggest stage (VP-024).
 //! * **No engine, no job (§14.4).** This build ships no speaker-embedding
 //!   model: the ONNX tier is a later phase, so [`an_embedder_is_installed`]
 //!   answers `false` on a host and preflight parks the job in
@@ -45,35 +47,13 @@ use plaudon_app_core::voice_profiles::store::EmbeddingCipher;
 use plaudon_domain::error::{AppError, AppErrorCode};
 use plaudon_domain::ids::{JobId, RecordingId};
 use plaudon_jobs::store::JobOutput;
-use plaudon_persistence::voice_profiles::VoiceEnrollmentRepository;
-use serde::{Deserialize, Serialize};
+use plaudon_persistence::voice_profiles::{VoiceEnrollmentRepository, VoiceProfileGateRepository};
 use sqlx::Row;
 
 use crate::backend::LocalBackend;
 use crate::dto::{JobKind, OutputLink, OutputLinkKind};
 
 use super::{Completion, RunContext, StageRequest};
-
-/// `app_preferences` key holding the runtime voice-matching state (§12.2).
-///
-/// An absent row is the default posture: matching off, no disclosure accepted.
-pub const VOICE_MATCHING_PREFERENCE_KEY: &str = "voice.matching";
-
-/// The runtime half of the §12.2 gate, as stored.
-///
-/// The build feature and this toggle are two independent switches (VP-191);
-/// this is the second one. The disclosure *text* and the command that records
-/// an acceptance belong to the roster surface; what is persisted here is which
-/// version the user accepted, so a newer disclosure re-gates (VP-121).
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct VoiceMatchingSettings {
-    /// Whether the user turned biometric matching on. Off by default (VP-003).
-    #[serde(default)]
-    pub enabled: bool,
-    /// Version of the activation disclosure the user accepted, if any.
-    #[serde(default)]
-    pub accepted_disclosure_version: Option<String>,
-}
 
 /// Which voice engines a worker may run.
 #[derive(Clone, Default)]
@@ -112,9 +92,11 @@ impl std::fmt::Debug for VoiceSeam {
 ///
 /// Preflight asks before a job is admitted: an absent model parks the job in
 /// `waiting_for_model`, which the user can act on, rather than failing it
-/// (§14.4).
-pub(super) fn an_embedder_is_installed(backend: &LocalBackend) -> bool {
-    matches!(backend.processing().voice, VoiceSeam::Substituted { .. })
+/// (§14.4). The settings surface asks for the same reason: a build with no
+/// model says so instead of offering an enrolment button that cannot work
+/// (VP-090).
+pub(crate) fn an_embedder_is_installed(backend: &LocalBackend) -> bool {
+    backend.processing().voice_embedder().is_some()
 }
 
 /// Run one speaker-matching job.
@@ -180,6 +162,21 @@ pub async fn match_speakers(run: &RunContext) -> Result<Completion, AppError> {
     };
 
     run.stage(outcome_label(&outcome)).await;
+    if outcome.suggestions_written > 0 {
+        // VP-086: the event says *that* suggestions exist and how many are
+        // pending; the panel fetches the rest by command, so no name and no
+        // score ever travels on the event or notification path.
+        let pending = backend
+            .voices()
+            .pending_for_recording(recording_id)
+            .await
+            .map_or(outcome.suggestions_written, |rows| {
+                u32::try_from(rows.len()).unwrap_or(u32::MAX)
+            });
+        backend
+            .publish_suggestions_ready(recording_id, pending)
+            .await;
+    }
     Ok(Completion {
         outputs: vec![JobOutput::new(
             "diarization_run",
@@ -258,61 +255,12 @@ async fn preferred_media_asset_id(
 }
 
 impl LocalBackend {
-    /// The runtime voice-matching state, defaulting to off (VP-003).
-    ///
-    /// # Errors
-    ///
-    /// Propagates storage failures.
-    pub async fn voice_matching_settings(&self) -> Result<VoiceMatchingSettings, AppError> {
-        let stored: Option<String> =
-            sqlx::query_scalar("SELECT value_json FROM app_preferences WHERE key = ?1")
-                .bind(VOICE_MATCHING_PREFERENCE_KEY)
-                .fetch_optional(self.pool())
-                .await
-                .map_err(|error| {
-                    AppError::new(
-                        AppErrorCode::StorageUnavailable,
-                        format!("cannot read the voice-matching preference: {error}"),
-                    )
-                })?;
-        Ok(stored
-            .and_then(|json| serde_json::from_str(&json).ok())
-            .unwrap_or_default())
-    }
-
-    /// Persist the runtime voice-matching state.
-    ///
-    /// # Errors
-    ///
-    /// Propagates storage failures.
-    pub async fn set_voice_matching_settings(
-        &self,
-        settings: &VoiceMatchingSettings,
-    ) -> Result<(), AppError> {
-        let json = serde_json::to_string(settings).map_err(|error| {
-            AppError::new(
-                AppErrorCode::InternalError,
-                format!("the voice-matching preference is not serializable: {error}"),
-            )
-        })?;
-        sqlx::query(
-            "INSERT INTO app_preferences (key, version, value_json) VALUES (?1, 1, ?2) \
-             ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json",
-        )
-        .bind(VOICE_MATCHING_PREFERENCE_KEY)
-        .bind(json)
-        .execute(self.pool())
-        .await
-        .map_err(|error| {
-            AppError::new(
-                AppErrorCode::StorageUnavailable,
-                format!("cannot store the voice-matching preference: {error}"),
-            )
-        })?;
-        Ok(())
-    }
-
     /// The consent state a match job is planned against (§12.2).
+    ///
+    /// One source of truth: the toggle and the accepted disclosure version
+    /// come from the gate the consent commands write and a restore
+    /// invalidates (VP-078, VP-121), so a job can never be planned against a
+    /// second, divergent copy of the same state.
     ///
     /// # Errors
     ///
@@ -320,27 +268,30 @@ impl LocalBackend {
     /// error here: it closes the gate, exactly as ADR-0014 requires, and the
     /// name-only roster keeps working beside it.
     pub async fn voice_match_gate(&self) -> Result<MatchGate, AppError> {
-        let settings = self.voice_matching_settings().await?;
+        let storage = |error: plaudon_persistence::PersistenceError| {
+            AppError::new(
+                AppErrorCode::StorageUnavailable,
+                format!("cannot read the voice-profile gate: {error}"),
+            )
+        };
+        let gate = VoiceProfileGateRepository::new(self.store().db().clone())
+            .load()
+            .await
+            .map_err(storage)?;
         let enrolments = VoiceEnrollmentRepository::new(self.store().db().clone())
             .active_enrollments()
             .await
-            .map_err(|error| {
-                AppError::new(
-                    AppErrorCode::StorageUnavailable,
-                    format!("cannot read the enrolled profiles: {error}"),
-                )
-            })?;
+            .map_err(storage)?;
         // `check_available` answers whether the *vault* answers; a library that
         // has never sealed anything has no key yet, and that is not a refusal.
         let key_available = EmbeddingCipher::new(Arc::clone(self.voice_secrets()))
             .check_available()
             .is_ok();
-        Ok(MatchGate {
-            matching_enabled: settings.enabled,
-            accepted_disclosure_version: settings.accepted_disclosure_version,
-            enrolled_profiles: enrolments.len(),
+        Ok(MatchGate::from_persisted(
+            &gate,
+            enrolments.len(),
             key_available,
-        })
+        ))
     }
 
     /// The pipeline this build runs, or the honest refusal that it has no
