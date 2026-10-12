@@ -11,6 +11,8 @@
 
 #![deny(missing_docs)]
 
+pub mod activity;
 pub mod ai;
+pub mod jobs;
 pub mod player;
 pub mod transcript;
