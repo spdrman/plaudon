@@ -3314,6 +3314,9 @@ name = "plaudon-chaos-tests"
 version = "0.1.0"
 dependencies = [
  "hex",
+ "plaudon-ai-contracts",
+ "plaudon-ai-openrouter",
+ "plaudon-app-core",
  "plaudon-domain",
  "plaudon-jobs",
  "plaudon-persistence",
