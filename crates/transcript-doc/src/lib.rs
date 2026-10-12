@@ -80,7 +80,9 @@ pub mod session;
 pub mod testing;
 pub mod text;
 
-pub use anchors::{map_anchor, map_anchors, AnchorMapping, AnchorStaleness, MappedSpan};
+pub use anchors::{
+    map_anchor, map_anchors, map_claim, AnchorMapping, AnchorStaleness, ClaimMapping, MappedSpan,
+};
 pub use autosave::{Autosave, AutosaveState, SaveRequest};
 pub use caret::{Motion, Position, Selection};
 pub use doc::{DocError, DocumentSource, Segment, SegmentId, SegmentSeed, TranscriptDocument};

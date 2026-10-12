@@ -27,7 +27,8 @@
 //! coordinates cease to exist.
 
 use plaudon_domain::anchor::SourceAnchor;
-use plaudon_domain::ids::TranscriptRevisionId;
+use plaudon_domain::claim::Claim;
+use plaudon_domain::ids::{ClaimId, TranscriptRevisionId};
 
 use crate::doc::TranscriptDocument;
 use crate::text::SpanMapping;
@@ -216,6 +217,70 @@ pub fn map_anchors(document: &TranscriptDocument, anchors: &[SourceAnchor]) -> V
         .collect()
 }
 
+/// How a whole claim's evidence survived the edits.
+///
+/// A claim is grounded by *all* of its citations (`plaudon_domain::claim`), so
+/// it can only be carried forward when every one of them survived. One broken
+/// citation makes the claim stale — the same conclusion
+/// `persistence::intelligence::mark_stale` reaches for every output over a
+/// superseded revision, reached here per claim instead of per revision.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClaimMapping {
+    /// The claim the mapping belongs to.
+    pub claim_id: ClaimId,
+    /// One mapping per cited anchor, in the claim's order.
+    pub anchors: Vec<AnchorMapping>,
+}
+
+impl ClaimMapping {
+    /// Whether every citation survived, so the claim keeps its grounding.
+    #[must_use]
+    pub fn is_fully_mapped(&self) -> bool {
+        !self.anchors.is_empty() && self.anchors.iter().all(AnchorMapping::is_mapped)
+    }
+
+    /// Whether the claim must be marked stale.
+    #[must_use]
+    pub fn is_stale(&self) -> bool {
+        !self.is_fully_mapped()
+    }
+
+    /// Why the first surviving-failure happened, for `ai_outputs.stale_reason`.
+    #[must_use]
+    pub fn staleness(&self) -> Option<&AnchorStaleness> {
+        self.anchors.iter().find_map(AnchorMapping::staleness)
+    }
+
+    /// The anchors to store against the saved revision, or `None` when the
+    /// claim is stale and must not be carried forward.
+    #[must_use]
+    pub fn carried_anchors(&self, revision_id: TranscriptRevisionId) -> Option<Vec<SourceAnchor>> {
+        if !self.is_fully_mapped() {
+            return None;
+        }
+        Some(
+            self.anchors
+                .iter()
+                .filter_map(AnchorMapping::mapped)
+                .map(|span| span.clone().into_anchor(revision_id))
+                .collect(),
+        )
+    }
+}
+
+/// Map every citation of a claim through the edits applied so far.
+#[must_use]
+pub fn map_claim(document: &TranscriptDocument, claim: &Claim) -> ClaimMapping {
+    ClaimMapping {
+        claim_id: claim.id,
+        anchors: claim
+            .anchors
+            .iter()
+            .map(|cited| map_anchor(document, &cited.anchor))
+            .collect(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -239,6 +304,65 @@ mod tests {
             .take((end - start) as usize)
             .collect();
         SourceAnchor::new(document.base_revision_id(), seq_index, start, end, excerpt)
+    }
+
+    fn claim_with(
+        anchors: Vec<SourceAnchor>,
+        revision: &plaudon_domain::transcript::TranscriptRevision,
+    ) -> Claim {
+        use plaudon_domain::claim::{ClaimCategory, ClaimDraft, ClaimKind, EntailmentCheck};
+        let verifications = anchors
+            .iter()
+            .map(|anchor| anchor.resolve(revision))
+            .collect();
+        Claim::from_draft(
+            ClaimDraft::new(
+                "/decisions/0",
+                ClaimKind::Decision,
+                "the invoice will not be paid before the audit",
+                anchors,
+            ),
+            verifications,
+            ClaimCategory::General,
+            EntailmentCheck::Supported,
+            true,
+        )
+    }
+
+    #[test]
+    fn a_claim_survives_only_while_every_one_of_its_citations_does() {
+        let original = revision_with(&["we will not pay the invoice", "that is final"]);
+        let mut document = TranscriptDocument::from_revision(&original);
+        let first = document.segment_at(0).expect("segment").id;
+        let claim = claim_with(
+            vec![
+                SourceAnchor::new(original.id, 0, 8, 15, "not pay"),
+                SourceAnchor::new(original.id, 1, 0, 13, "that is final"),
+            ],
+            &original,
+        );
+        assert!(claim.is_grounded(), "the fixture claim starts grounded");
+
+        // An edit outside both citations keeps the claim grounded.
+        document.insert_text(first, 0, "Frankly, ").expect("insert");
+        let mapping = map_claim(&document, &claim);
+        assert!(mapping.is_fully_mapped());
+        assert_eq!(mapping.claim_id, claim.id);
+        let carried = mapping
+            .carried_anchors(document.base_revision_id())
+            .expect("carried");
+        assert_eq!(carried.len(), 2);
+        assert_eq!((carried[0].char_start, carried[0].char_end), (17, 24));
+
+        // Editing one cited span is enough to make the whole claim stale.
+        document.delete_text(first, 17, "not ").expect("delete");
+        let mapping = map_claim(&document, &claim);
+        assert!(mapping.is_stale());
+        assert_eq!(
+            mapping.staleness().map(AnchorStaleness::code),
+            Some("span_edited")
+        );
+        assert_eq!(mapping.carried_anchors(document.base_revision_id()), None);
     }
 
     #[test]
