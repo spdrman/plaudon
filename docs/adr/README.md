@@ -5,8 +5,9 @@ there; do not reuse them. Later ranges are allocated per work stream so two
 authors never mint the same number: 0013-0019 security and privacy, 0020-0029
 desktop shell, 0030-0039 job engine, 0040-0049 AI adapters, 0050-0059 sources
 and ingestion, 0060-0069 direct-device import, 0070-0079 export, backup and
-deletion, 0400-0499 transcript tools and automation, everything else
-unallocated — claim a range in this file before using it.
+deletion, 0080-0089 speaker voice profiles, 0400-0499 transcript tools and
+automation, everything else unallocated — claim a range in this file before
+using it.
 
 Every record states context, the decision, the alternatives that were rejected
 and why, and the consequences we accept.
@@ -64,6 +65,12 @@ and why, and the consequences we accept.
 - [ADR-0070: An explicitly versioned `.recording-archive` container, not a ZIP](ADR-0070-recording-archive-container.md) — Accepted, 2026-10-11 (spec §13.6, §13.8, §16.5)
 - [ADR-0071: Argon2id plus STREAM XChaCha20-Poly1305 for encrypted backups](ADR-0071-argon2id-stream-aead-backups.md) — Accepted, 2026-10-11 (spec §13.7, §13.8)
 - [ADR-0072: Deletion is a journalled operation with a confirmed disclosure](ADR-0072-deletion-disclosure-and-tombstones.md) — Accepted, 2026-10-11 (spec §4.6, §7.10, §13.5)
+
+## Speaker voice profiles (0080-0089)
+
+- [ADR-0080: Voice profiles are biometric data — off by default, local-only, user-deletable to the key](ADR-0080-voice-profiles-are-biometric-data-off-by-default-local-only.md) — Proposed, 2026-10-12 (VOICE_PROFILES_SPEC §1, §7, §11, §12, §13; spec §16.3, §16.4, §13.5)
+- [ADR-0081: Speaker embedding runtime and model licensing](ADR-0081-speaker-embedding-runtime-and-model-licensing.md) — Proposed, 2026-10-12 (VOICE_PROFILES_SPEC §5, §14; spec §8.7, §12, §3.1; extends ADR-0400)
+- [ADR-0082: A voice match is a suggestion, never an identity](ADR-0082-a-voice-match-is-a-suggestion-never-an-identity.md) — Proposed, 2026-10-12 (VOICE_PROFILES_SPEC §6, §16; spec §8.7, §17.6, §16.6)
 
 ## Transcript tools and automation (0400-0499)
 
