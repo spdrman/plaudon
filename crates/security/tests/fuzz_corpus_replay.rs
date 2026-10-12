@@ -55,6 +55,7 @@ pub mod checks {
     use std::path::{Component, Path, PathBuf};
     use std::sync::LazyLock;
 
+    use plaudon_audio::opus::{OpusPacketDecoder, OpusStreamParams, MAX_FRAME_SAMPLES_PER_CHANNEL};
     use plaudon_diagnostics::redact::MAX_SCAN_BYTES;
     use plaudon_diagnostics::Redactor;
     use plaudon_domain::error::{AppErrorCode, ErrorEnvelope, Redactor as DomainRedactor};
@@ -1591,6 +1592,89 @@ pub mod checks {
             );
         }
     }
+
+    // ---------------------------------------------------------------------
+    // fuzz_opus_packet
+    // ---------------------------------------------------------------------
+
+    /// §16.2 "Malicious audio decoder input", §18.5 (media parsers), App. B.7,
+    /// ADR-0015. Task O1.6 (#214).
+    ///
+    /// The input is one raw RFC 6716 Opus packet, which is what a device
+    /// `.ASR` sidecar and every Ogg Opus import ultimately hand the decoder.
+    /// Both channel counts are exercised from the same bytes, because a
+    /// packet coded for one and decoded as the other is a real case: an Ogg
+    /// stream states its channel count in `OpusHead`, which the file controls.
+    ///
+    /// Invariants:
+    /// * `OpusPacketDecoder::decode` never panics, whatever the bytes;
+    /// * a refusal is one of our typed errors with a non-empty stable detail,
+    ///   never a partially decoded frame;
+    /// * an accepted packet produces at most one Opus frame
+    ///   (`MAX_FRAME_SAMPLES_PER_CHANNEL` per channel), an exact multiple of
+    ///   the channel count, and only finite samples — silence is never
+    ///   substituted for audio that failed to decode;
+    /// * decoding allocates from the bytes present, not from what the packet
+    ///   claims: the decoder's buffers are sized once at construction.
+    pub fn check_opus_packet(data: &[u8]) {
+        let input_len = data.len().min(MAX_INPUT_BYTES);
+        let data = &data[..input_len];
+
+        for channels in [1u8, 2] {
+            let params =
+                OpusStreamParams::rtp(channels).expect("1 and 2 are family-0 channel counts");
+            let mut decoder =
+                OpusPacketDecoder::new(params).expect("a family-0 decoder always builds");
+
+            alloc_meter::start();
+            let accepted = match decoder.decode(data) {
+                Ok(pcm) => {
+                    let channels = usize::from(channels);
+                    assert!(!pcm.is_empty(), "accepted a packet but produced no audio");
+                    assert_eq!(
+                        pcm.len() % channels,
+                        0,
+                        "produced {} samples for {channels} channels",
+                        pcm.len()
+                    );
+                    assert!(
+                        pcm.len() / channels <= MAX_FRAME_SAMPLES_PER_CHANNEL,
+                        "produced {} samples per channel, over the \
+                         {MAX_FRAME_SAMPLES_PER_CHANNEL} cap",
+                        pcm.len() / channels
+                    );
+                    assert!(
+                        pcm.iter().all(|sample| sample.is_finite()),
+                        "produced a non-finite sample"
+                    );
+                    true
+                }
+                Err(error) => {
+                    assert!(
+                        !error.detail().is_empty(),
+                        "a refusal must carry a stable reason: {error}"
+                    );
+                    assert!(
+                        !error.to_string().is_empty(),
+                        "a refusal must be reportable to the user"
+                    );
+                    false
+                }
+            };
+            alloc_meter::stop();
+            assert_allocation_bounded("opus_packet", input_len);
+
+            // The decoder must survive the packet: a reset followed by the
+            // same bytes behaves identically, which is what the player does
+            // after a seek.
+            decoder.reset();
+            assert_eq!(
+                accepted,
+                decoder.decode(data).is_ok(),
+                "the decoder's verdict changed after a reset"
+            );
+        }
+    }
 }
 
 // =========================================================================
@@ -1760,6 +1844,7 @@ mod replay {
             "archive_entry",
             "error_envelope",
             "domain_redactor",
+            "opus_packet",
         ] {
             let dir = corpus_dir(target);
             assert!(dir.is_dir(), "missing corpus directory {}", dir.display());
@@ -1862,6 +1947,15 @@ mod replay {
     fn archive_entry_corpus_holds_its_invariants() {
         let n = replay("archive_entry", checks::check_archive_entry);
         assert!(n >= 25, "archive_entry corpus shrank to {n} entries");
+    }
+
+    /// §16.2 "Malicious audio decoder input": the Opus packet decoder added
+    /// by O1.6 (#214) over the committed packet corpus — real packets from
+    /// the fixtures, plus the framing shapes RFC 6716 forbids.
+    #[test]
+    fn opus_packet_corpus_holds_its_invariants() {
+        let n = replay("opus_packet", checks::check_opus_packet);
+        assert!(n >= 15, "opus_packet corpus shrank to {n} entries");
     }
 
     /// §18.5 hostile filenames: the shared D2.2 corpus must also be safe to

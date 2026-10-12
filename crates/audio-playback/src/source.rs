@@ -199,8 +199,21 @@ impl SymphoniaPcmSource {
             .codec_params
             .channels
             .map_or(0, |layout| layout.count() as u16);
-        let total_frames = track.codec_params.n_frames;
-        let decoder = symphonia::default::get_codecs()
+        // An Ogg Opus granule position counts the pre-skip samples the
+        // decoder discards (RFC 7845 §4.2), so the container's frame count
+        // is longer than the audio that will be produced. Reporting it raw
+        // would make the transport's end-of-file arrive before the clock's.
+        let total_frames = track.codec_params.n_frames.map(|frames| {
+            if track.codec_params.codec == symphonia::core::codecs::CODEC_TYPE_OPUS {
+                frames.saturating_sub(u64::from(track.codec_params.delay.unwrap_or(0)))
+            } else {
+                frames
+            }
+        });
+        // `plaudon_audio`'s registry, not Symphonia's global one: it is the
+        // same set plus the Opus decoder (O1.6), so the player and the
+        // transcription pipeline support exactly the same files.
+        let decoder = plaudon_audio::codecs::registry()
             .make(&track.codec_params, &DecoderOptions::default())
             .map_err(|error| SourceError::Unsupported {
                 path: path.to_path_buf(),
@@ -501,13 +514,37 @@ mod tests {
         assert_eq!(source.read(100, &mut out), 0);
     }
 
+    /// O1.5 pinned the Opus gap here and said the test must be rewritten the
+    /// day a decoder lands. O1.6 (#214) landed it: an Ogg Opus recording —
+    /// the shape every device `.ASR` derivative has — now opens and plays.
     #[test]
-    fn an_ogg_opus_recording_is_refused_with_a_reason() {
+    fn an_ogg_opus_recording_opens_and_plays() {
         let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../tests/fixtures/audio/valid/tone-mono-16k.opus");
-        let error =
-            SymphoniaPcmSource::open(&fixture).expect_err("symphonia 0.5 has no Opus decoder");
-        assert!(matches!(error, SourceError::Unsupported { .. }), "{error}");
+        let mut source = SymphoniaPcmSource::open(&fixture).expect("Opus plays");
+        // Opus always decodes at 48 kHz whatever the source rate was.
+        assert_eq!(source.sample_rate(), 48_000);
+        assert_eq!(source.channels(), 1);
+        assert_eq!(source.total_frames(), Some(48_000));
+
+        let mut head = [0.0f32; 480];
+        assert_eq!(source.read(0, &mut head), 480);
+        let peak = head
+            .iter()
+            .fold(0.0f32, |peak, sample| peak.max(sample.abs()));
+        assert!(peak > 0.01, "the first 10 ms are silent: peak {peak}");
+
+        // A seek into the middle still lands on real audio, which is what a
+        // click on the waveform does.
+        let mut middle = [0.0f32; 480];
+        assert_eq!(source.read(24_000, &mut middle), 480);
+        let peak = middle
+            .iter()
+            .fold(0.0f32, |peak, sample| peak.max(sample.abs()));
+        assert!(peak > 0.01, "mid-stream is silent: peak {peak}");
+
+        // Reading past the end is short, not a repeat of the tail.
+        assert_eq!(source.read(48_000, &mut middle), 0);
 
         let vorbis = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../tests/fixtures/audio/valid/tone-mono-16k.ogg");

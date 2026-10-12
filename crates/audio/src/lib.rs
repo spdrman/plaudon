@@ -22,8 +22,10 @@
 //! ```
 
 pub mod chunk;
+pub mod codecs;
 pub mod decode;
 pub mod error;
+pub mod opus;
 pub mod pathguard;
 pub mod probe;
 pub mod reconcile;
@@ -34,11 +36,16 @@ pub mod testing;
 pub mod validate;
 
 pub use chunk::{BoundaryStrategy, ChunkPlan, ChunkSpec, EngineLimits};
+pub use codecs::registry as codec_registry;
 pub use decode::{
     decode_to_canonical_pcm, CanonicalPcmProfile, ChannelPolicy, DecodeOutcome, PcmSampleFormat,
     PcmSink, ScratchPcm,
 };
 pub use error::AudioError;
+pub use opus::{
+    parse_opus_head, ChannelMapping, OpusAudioDecoder, OpusDecodeError, OpusPacketDecoder,
+    OpusStreamParams,
+};
 pub use pathguard::{resolve_media_path, sanitize_file_name, PathPolicy, ResolvedMediaPath};
 pub use probe::{probe_bytes, probe_path, DurationSource, MediaProfile};
 pub use reconcile::{reconcile_chunks, ChunkTranscript, ReconcileError};
