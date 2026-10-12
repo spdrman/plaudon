@@ -205,7 +205,9 @@ mkdir -p "$RESULTS_DIR"
 if [[ "$MODE" == "playwright" ]]; then
   find_expr="-path './apps/desktop/playwright-report/*' -o -path './apps/desktop/test-results/*'"
 else
-  find_expr="-name '*.diff.png' -o -name '*.new.png' -o -path '*/snapshots/*'"
+  # `*/visual/*` is Plaudon's own baseline directory (docs/EGUI_TESTING.md §4);
+  # `*/snapshots/*` is egui_kittest's default, kept for any crate that uses it.
+  find_expr="-name '*.diff.png' -o -name '*.new.png' -o -path '*/snapshots/*' -o -path '*/visual/*'"
 fi
 if ssh "${SSH_OPTS[@]}" "$HOST" "
     cd $(printf '%q' "$REMOTE_DIR") &&

@@ -37,6 +37,7 @@ and why, and the consequences we accept.
 - [ADR-0020: Desktop command surface and the two additions to the §15.2 table](ADR-0020-command-surface.md) — Accepted, 2026-10-11 (spec §15.2)
 - [ADR-0021: Native notification backends and privacy-safe payloads](ADR-0021-notifications.md) — Accepted, 2026-10-11 (spec §5.5, §16.6)
 - [ADR-0022: The cloud command surface, and what `Verified` is allowed to mean](ADR-0022-cloud-command-surface-and-verification.md) — Accepted, 2026-10-12 (spec §10, §8.6A, §15.2, §16.3)
+- [ADR-0023: An egui/eframe shell, and the evidence that answers ADR-0001's accessibility objection](ADR-0023-egui-shell-and-the-accessibility-evidence-plan.md) — Accepted, 2026-10-11 (spec §1, §2.4, §5.3, §6.1, §6.3(1), §15.1, §15.3, §18.6A)
 
 ## Job engine (0030-0039)
 

@@ -5,19 +5,14 @@
 //! `request` struct, validates it in Rust and returns either a typed response
 //! or the §15.4 error envelope. The allowlist test at the bottom of this file
 //! fails if a handler outside the published list is ever registered.
+//!
+//! The command bodies themselves live in `plaudon_app::commands`; this module
+//! is only the Tauri binding, and it is deleted with the Tauri shell.
 
-pub mod archive;
-pub mod cloud;
-pub mod devices;
-pub mod import;
-pub mod jobs;
-pub mod library;
-pub mod outputs;
-pub mod search;
-pub mod settings;
-pub mod sources;
-pub mod speakers;
-pub mod transcript;
+pub use plaudon_app::commands::{
+    archive, cloud, devices, import, jobs, library, outputs, search, settings, sources, speakers,
+    transcript,
+};
 
 use tauri::State;
 
