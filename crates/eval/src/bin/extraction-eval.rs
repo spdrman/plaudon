@@ -12,8 +12,8 @@ use std::process;
 use std::sync::Arc;
 
 use plaudon_ai_contracts::job::JobContext;
-use plaudon_ai_contracts::validation::RepairPolicy;
 use plaudon_ai_contracts::text::TextModel;
+use plaudon_ai_contracts::validation::RepairPolicy;
 use plaudon_app_core::chunking::ChunkPolicy;
 use plaudon_app_core::pipeline::{
     PipelineRequest, SteppingClock, SummarizationPipeline, PIPELINE_VERSION,

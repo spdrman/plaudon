@@ -51,15 +51,23 @@ pub fn ground_items(
             .iter()
             .map(|anchor| verify_anchor(anchor, revision))
             .collect();
+        // The span proves the citation is precise; entailment is judged
+        // against the whole cited segment, which is what a reviewer reads
+        // when they open the anchor. Judging a summarized sentence against a
+        // single quoted clause would mark almost every faithful paraphrase
+        // unsupported and make "review required" meaningless.
         let supporting: Vec<&str> = verifications
             .iter()
-            .filter_map(|verification| {
-                verification
-                    .verified()
-                    .map(|verified| verified.matched_text.as_str())
+            .filter_map(|verification| verification.verified())
+            .filter_map(|verified| {
+                revision
+                    .segments()
+                    .iter()
+                    .find(|segment| segment.seq_index == verified.seq_index)
+                    .map(|segment| segment.text.as_str())
             })
             .collect();
-        let entailment = spot_check_entailment(&draft.text, &supporting);
+        let entailment = spot_check_item(&accepted.item, &draft.text, &supporting);
         let category = classify_item(&accepted.item);
         let anchors_required = template.anchors_required(&accepted.field);
         claims.push(Claim::from_draft(
@@ -72,6 +80,53 @@ pub fn ground_items(
     }
     let summary = GroundingSummary::of(&claims);
     GroundingOutcome { claims, summary }
+}
+
+/// Entailment spot-check for one extracted item.
+///
+/// Runs the lexical check over the rendered claim and additionally requires
+/// that any name the model put in a structured owner or participant field
+/// actually occurs in the cited span. That is the §18.6A "falsified owner"
+/// case, and checking the field rather than the sentence keeps the check
+/// precise without punishing paraphrase.
+#[must_use]
+pub fn spot_check_item(
+    item: &ExtractedItem,
+    claim_text: &str,
+    supporting_spans: &[&str],
+) -> EntailmentCheck {
+    let lexical = spot_check_entailment(claim_text, supporting_spans);
+    if lexical != EntailmentCheck::Supported {
+        return lexical;
+    }
+    let evidence = supporting_spans.join(" ").to_lowercase();
+    for name in named_references(item) {
+        let lowered = name.to_lowercase();
+        if !lowered.is_empty() && !evidence.contains(&lowered) {
+            return EntailmentCheck::Unsupported;
+        }
+    }
+    EntailmentCheck::Supported
+}
+
+/// Names the model asserted in a structured field, which the cited span must
+/// contain.
+fn named_references(item: &ExtractedItem) -> Vec<&str> {
+    use plaudon_ai_contracts::extraction::OwnerRef;
+    match item {
+        ExtractedItem::Decision(decision) => {
+            decision.participants.iter().map(String::as_str).collect()
+        }
+        ExtractedItem::ActionItem(action) => match &action.owner {
+            OwnerRef::Named(name) => vec![name.as_str()],
+            OwnerRef::Unassigned => Vec::new(),
+        },
+        ExtractedItem::Question(question) => match &question.owner {
+            OwnerRef::Named(name) => vec![name.as_str()],
+            OwnerRef::Unassigned => Vec::new(),
+        },
+        _ => Vec::new(),
+    }
 }
 
 /// Classify the consequence category of one extracted item (spec 9.6A).
@@ -273,17 +328,16 @@ fn tokenize_with_case(text: &str) -> impl Iterator<Item = (String, String)> + '_
 }
 
 /// Whether a token is specific enough that its absence from the cited span is
-/// evidence of fabrication: anything containing a digit, or a capitalized word
-/// that is not the first word of a sentence-like fragment.
+/// evidence of fabrication.
+///
+/// Only tokens containing a digit qualify: amounts, quantities, dates and
+/// times. A faithful summary legitimately paraphrases prose, so requiring
+/// every proper noun of a rendered claim to appear inside one short cited
+/// clause would mark almost every honest claim unsupported. Named references
+/// are checked structurally instead, by [`named_references`], which reads the
+/// owner and participant *fields* rather than the rendered sentence.
 fn is_distinguishing(raw: &str) -> bool {
-    if raw.chars().any(|c| c.is_ascii_digit()) {
-        return true;
-    }
-    let mut chars = raw.chars();
-    let Some(first) = chars.next() else {
-        return false;
-    };
-    first.is_uppercase() && chars.any(char::is_lowercase) && raw.chars().count() >= 3
+    raw.chars().any(|c| c.is_ascii_digit())
 }
 
 fn is_sentinel_or_stopword(lowered: &str) -> bool {

@@ -24,8 +24,7 @@ pub struct ItemMatch {
 }
 
 /// All §17.3 metrics for one run.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct EvalMetrics {
     // Decision metrics
     /// Decision precision.
@@ -153,7 +152,8 @@ impl EvalMetrics {
 /// Extract items from a body field.
 fn extract_items(body: &serde_json::Value, field: &str) -> Vec<serde_json::Value> {
     body.get(field)
-        .and_then(|v| v.as_array()).cloned()
+        .and_then(|v| v.as_array())
+        .cloned()
         .unwrap_or_default()
 }
 
@@ -232,14 +232,11 @@ fn compute_precision_recall_f1(
 }
 
 /// Compute owner accuracy over matched action items.
-fn compute_owner_accuracy<T>(
+fn compute_owner_accuracy(
     body: &serde_json::Value,
-    reference: &[T],
+    reference: &[crate::corpus::ReferenceActionItem],
     matches: &[ItemMatch],
-) -> (Option<f64>, u32)
-where
-    T: AsRef<str>,
-{
+) -> (Option<f64>, u32) {
     if matches.is_empty() {
         return (None, 0);
     }
@@ -255,7 +252,7 @@ where
                     .get("owner")
                     .and_then(|v| v.as_str())
                     .unwrap_or("");
-                let ref_owner_str = ref_owner.as_ref();
+                let ref_owner_str = ref_owner.owner.as_str();
                 if pred_owner == ref_owner_str {
                     correct += 1;
                 }
@@ -272,14 +269,11 @@ where
 }
 
 /// Compute due date accuracy over matched action items.
-fn compute_due_date_accuracy<T>(
+fn compute_due_date_accuracy(
     body: &serde_json::Value,
-    reference: &[T],
+    reference: &[crate::corpus::ReferenceActionItem],
     matches: &[ItemMatch],
-) -> (Option<f64>, u32)
-where
-    T: AsRef<str>,
-{
+) -> (Option<f64>, u32) {
     if matches.is_empty() {
         return (None, 0);
     }
@@ -295,7 +289,7 @@ where
                     .get("due_date")
                     .and_then(|v| v.as_str())
                     .unwrap_or("");
-                let ref_date_str = ref_date.as_ref();
+                let ref_date_str = ref_date.due_date.as_str();
                 if pred_date == ref_date_str {
                     correct += 1;
                 }
@@ -387,4 +381,3 @@ mod tests {
         assert_eq!(f1, None);
     }
 }
-

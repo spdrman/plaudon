@@ -124,6 +124,36 @@ pub struct ReferenceData {
     pub executive_summary: Vec<ReferenceExecSummary>,
 }
 
+impl ReferenceData {
+    /// Every labelled item as `(rendered text, evidence pointer)`.
+    ///
+    /// Used by the reference model to build section summaries that cite only
+    /// the segments the pipeline actually sent it.
+    #[must_use]
+    pub fn evidence_pointers(&self) -> Vec<(String, EvidencePointer)> {
+        let mut pointers: Vec<(String, EvidencePointer)> = Vec::new();
+        for item in &self.executive_summary {
+            pointers.push((item.text.clone(), item.evidence.clone()));
+        }
+        for item in &self.decisions {
+            pointers.push((item.statement.clone(), item.evidence.clone()));
+        }
+        for item in &self.action_items {
+            pointers.push((item.description.clone(), item.evidence.clone()));
+        }
+        for item in &self.risks {
+            pointers.push((item.description.clone(), item.evidence.clone()));
+        }
+        for item in &self.questions {
+            pointers.push((item.question.clone(), item.evidence.clone()));
+        }
+        for item in &self.topics {
+            pointers.push((item.heading.clone(), item.evidence.clone()));
+        }
+        pointers
+    }
+}
+
 /// Segment in the corpus format.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CorpusSegment {

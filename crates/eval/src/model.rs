@@ -166,6 +166,63 @@ impl ReferenceModel {
             "excerpt": excerpt
         })
     }
+
+    /// Build the section/consolidated summary response for one prompt.
+    ///
+    /// The prompt's fenced data region labels every segment it contains with
+    /// `[index]`, so the reference model reports exactly the range it was
+    /// actually given rather than claiming to have read the whole recording.
+    fn build_summary_response(&self, prompt: &str) -> serde_json::Value {
+        let (first, last) = segment_range_in(prompt).unwrap_or_else(|| {
+            let last = self
+                .fixture
+                .segments
+                .last()
+                .map_or(0, |segment| segment.seq_index);
+            (0, last)
+        });
+
+        let bullets: Vec<serde_json::Value> = self
+            .fixture
+            .reference
+            .evidence_pointers()
+            .into_iter()
+            .filter(|(_, evidence)| evidence.seq_index >= first && evidence.seq_index <= last)
+            .map(|(text, evidence)| {
+                json!({
+                    "text": text,
+                    "anchors": [self.evidence_to_anchor(&evidence)],
+                })
+            })
+            .collect();
+
+        json!({
+            "bullets": bullets,
+            "covered_first_segment": first,
+            "covered_last_segment": last,
+        })
+    }
+}
+
+/// Lowest and highest `[index]` marker in a fenced transcript region.
+fn segment_range_in(prompt: &str) -> Option<(u32, u32)> {
+    let mut first: Option<u32> = None;
+    let mut last: Option<u32> = None;
+    for line in prompt.lines() {
+        let trimmed = line.trim_start();
+        let Some(rest) = trimmed.strip_prefix('[') else {
+            continue;
+        };
+        let Some(end) = rest.find(']') else {
+            continue;
+        };
+        let Ok(index) = rest[..end].parse::<u32>() else {
+            continue;
+        };
+        first = Some(first.map_or(index, |value: u32| value.min(index)));
+        last = Some(last.map_or(index, |value: u32| value.max(index)));
+    }
+    Some((first?, last?))
 }
 
 #[async_trait]
@@ -193,15 +250,28 @@ impl TextModel for ReferenceModel {
 
     async fn generate_structured(
         &self,
-        _request: StructuredRequest,
+        request: StructuredRequest,
         _ctx: JobContext,
     ) -> Result<StructuredResponse, TextModelError> {
-        // Apply mutation profile
-        let body = self.build_extraction_response();
-        let mutated = self.profile.apply(body, &self.fixture, self.revision_id);
+        // The pipeline asks three different stages for three different
+        // shapes. The response schema says which one: only the section and
+        // consolidated summary stages require `bullets`.
+        let wants_summary = request
+            .output_schema
+            .get("properties")
+            .and_then(|properties| properties.get("bullets"))
+            .is_some();
+
+        let body = if wants_summary {
+            self.build_summary_response(&request.prompt)
+        } else {
+            let extraction = self.build_extraction_response();
+            self.profile
+                .apply(extraction, &self.fixture, self.revision_id)
+        };
 
         Ok(StructuredResponse {
-            body: mutated,
+            body,
             repair_attempts: 0,
             usage: None,
         })

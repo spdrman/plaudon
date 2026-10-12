@@ -80,6 +80,8 @@ pub enum DirectiveClass {
     PromptExtraction,
     /// A request to mark claims confirmed or to bypass consent.
     PolicyBypass,
+    /// A request to put a credential or secret into the output.
+    CredentialRequest,
 }
 
 impl DirectiveClass {
@@ -96,6 +98,7 @@ impl DirectiveClass {
             Self::SchemaSubversion => "schema_subversion",
             Self::PromptExtraction => "prompt_extraction",
             Self::PolicyBypass => "policy_bypass",
+            Self::CredentialRequest => "credential_request",
         }
     }
 }
@@ -128,6 +131,7 @@ const DIRECTIVE_PATTERNS: &[(DirectiveClass, &[&str])] = &[
             "forget your instruction",
             "forget everything above",
             "new instructions:",
+            "end of transcript.",
             "override your instruction",
         ],
     ),
@@ -159,6 +163,8 @@ const DIRECTIVE_PATTERNS: &[(DirectiveClass, &[&str])] = &[
         &[
             "send this to http",
             "post this to http",
+            "post the entire transcript",
+            "post the transcript",
             "upload this to http",
             "fetch http",
             "visit http",
@@ -201,13 +207,19 @@ const DIRECTIVE_PATTERNS: &[(DirectiveClass, &[&str])] = &[
             "leave the anchors empty",
             "make up an anchor",
             "invent an anchor",
-            "cite segment 999",
+            "anchored to segment",
+            "anchor it to segment",
+            "cite segment",
+            "even though that segment does not exist",
         ],
     ),
     (
         DirectiveClass::PromptExtraction,
         &[
             "repeat your instructions",
+            "repeat the exact system instructions",
+            "system instructions you received",
+            "prompt engineering directives",
             "print your system prompt",
             "reveal your prompt",
             "what were you told",
@@ -215,13 +227,31 @@ const DIRECTIVE_PATTERNS: &[(DirectiveClass, &[&str])] = &[
         ],
     ),
     (
+        DirectiveClass::CredentialRequest,
+        &[
+            "api key",
+            "secret key",
+            "access token",
+            "private key",
+            "bearer token",
+            "the password",
+        ],
+    ),
+    (
         DirectiveClass::PolicyBypass,
         &[
             "mark this as confirmed",
             "mark these as human",
+            "mark all extracted",
+            "humanconfirmed",
+            "human_confirmed",
             "set the state to human_confirmed",
+            "bypassing the normal review",
+            "bypass the review",
             "disable local-only",
             "disable local only",
+            "ignoring user consent",
+            "ignore user consent",
             "grant consent",
             "skip the consent",
         ],

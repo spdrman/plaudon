@@ -1,4 +1,4 @@
-# ADR-0030: An anchor proves traceability, not truth
+# ADR-0041: An anchor proves traceability, not truth
 
 - **Status:** Accepted
 - **Spec:** PLAUD BYOK Desktop SPEC v1.3 (Consensus) — §9.1, §9.5, §9.6, §9.6A, §17.3

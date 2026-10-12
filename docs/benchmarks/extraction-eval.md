@@ -67,23 +67,40 @@ Every `evidence` pointer in the reference data is validated at load time to be a
 
 ## Baseline Measurements (Perfect Profile)
 
-The following numbers were measured with the Perfect mutation profile on the initial corpus set. These are **harness measurements**, not quality claims.
+Measured on 2026-10-12 with the Perfect mutation profile over the five corpus
+fixtures, locale `en-US`, pipeline version `1.0.0`, prompt envelope `1.0.0`,
+template version `1.0.0`. These are **harness measurements on synthetic
+fixtures**. They say nothing about any provider's quality (§17.2, §17.6).
 
 | Metric                  | Value  | Sample Size |
 |-------------------------|--------|-------------|
-| Decision Precision      | 1.0000 | TBD         |
-| Decision Recall         | 1.0000 | TBD         |
-| Decision F1             | 1.0000 | TBD         |
-| Action Item Precision   | 1.0000 | TBD         |
-| Action Item Recall      | 1.0000 | TBD         |
-| Action Item F1          | 1.0000 | TBD         |
-| Owner Accuracy          | 1.0000 | TBD         |
-| Due Date Accuracy       | 1.0000 | TBD         |
-| Schema Validity Rate    | 1.0000 | TBD         |
-| Anchor Correctness      | 1.0000 | TBD         |
-| Unsupported Claim Rate  | 0.0000 | TBD         |
+| Decision Precision      | 1.0000 | 18          |
+| Decision Recall         | 1.0000 | 18          |
+| Decision F1             | 1.0000 | 18          |
+| Action Item Precision   | 1.0000 | 30          |
+| Action Item Recall      | 1.0000 | 30          |
+| Action Item F1          | 1.0000 | 30          |
+| Owner Accuracy          | 1.0000 | 15          |
+| Due Date Accuracy       | 1.0000 | 15          |
+| Schema Validity Rate    | 1.0000 | 75          |
+| Anchor Correctness      | 1.0000 | 75          |
+| Unsupported Claim Rate  | 0.6533 | 75          |
 
-**Update these numbers after the first successful run.**
+The unsupported-claim rate is high *by construction*, and that is the honest
+result rather than a defect. The entailment spot-check (§9.6A) is lexical and
+deliberately conservative: it asks whether the distinguishing tokens of a
+rendered claim occur in the cited segment. The reference corpus states its
+decisions and summary points as paraphrases of the spoken text, so roughly two
+thirds of otherwise perfectly anchored claims are returned as `needs review`
+rather than silently accepted. §17.3 asks us to prefer omission or review over
+confident inference for exactly this reason. The number is tracked so a change
+in either direction is visible; it is not a gate, because a model cannot be
+blamed for a property of the check and the corpus.
+
+Anchor correctness is `1.0000` because it is computed from our own offline
+verification (I2.1) rather than from any model assertion: a Perfect-profile run
+cites spans that really exist, and every mutation profile that fabricates or
+shifts a span drives it below `1.0`.
 
 ## Thresholds (§17.6)
 
