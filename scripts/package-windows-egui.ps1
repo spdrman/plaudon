@@ -214,31 +214,35 @@ if (-not (Test-Path $Installer)) {
 # The source audit above says what we wrote; this says what was built. The
 # package is opened read-only through Windows Installer's own automation
 # interface, so these are the rows the operating system will act on.
+#
+# The calls are plain late-bound COM calls rather than Type.InvokeMember:
+# PowerShell 7's COM binder rejects the InvokeMember form of these with
+# DISP_E_TYPEMISMATCH, and `pwsh` is what CI runs.
 $WindowsInstaller = New-Object -ComObject WindowsInstaller.Installer
-$Database = $WindowsInstaller.GetType().InvokeMember(
-    "OpenDatabase", "InvokeMethod", $null, $WindowsInstaller, @($Installer, 0))
+$Database = $WindowsInstaller.OpenDatabase($Installer, 0)
 
 function Invoke-MsiQuery([string]$Sql) {
-    $View = $Database.GetType().InvokeMember("OpenView", "InvokeMethod", $null, $Database, @($Sql))
-    $View.GetType().InvokeMember("Execute", "InvokeMethod", $null, $View, $null) | Out-Null
+    $View = $Database.OpenView($Sql)
+    $View.Execute()
     $Rows = @()
-    while ($true) {
-        $Record = $View.GetType().InvokeMember("Fetch", "InvokeMethod", $null, $View, $null)
-        if (-not $Record) { break }
-        $Count = $Record.GetType().InvokeMember("FieldCount", "GetProperty", $null, $Record, $null)
+    while ($null -ne ($Record = $View.Fetch())) {
         $Row = @()
-        for ($Field = 1; $Field -le $Count; $Field++) {
-            $Row += $Record.GetType().InvokeMember("StringData", "GetProperty", $null, $Record, @($Field))
+        for ($Field = 1; $Field -le $Record.FieldCount; $Field++) {
+            $Row += [string]$Record.StringData($Field)
         }
         $Rows += , $Row
     }
-    $View.GetType().InvokeMember("Close", "InvokeMethod", $null, $View, $null) | Out-Null
-    return $Rows
+    $View.Close()
+    return , $Rows
 }
 
 # Registry root 2 is HKLM and -1 is "whichever hive the install scope picks",
 # which for a package that must never be machine-wide is just as wrong.
 $RegistryRows = Invoke-MsiQuery "SELECT ``Root``, ``Key`` FROM ``Registry``"
+if ($RegistryRows.Count -eq 0) {
+    Write-Error "reason=missing_binary: the built package has no Registry rows; the association claim did not make it in"
+    exit 1
+}
 foreach ($Row in $RegistryRows) {
     if ($Row[0] -ne "1") {
         Write-Error "reason=entitlement_rejected: the built package writes registry root $($Row[0]) at '$($Row[1])'; a per-user install writes HKCU (1) and nothing else"
@@ -252,11 +256,8 @@ if ($AllUsers.Count -ne 0 -and $AllUsers[0][0] -ne "") {
 }
 # Summary information property 15 is the word count; bit 3 (value 8) is
 # "elevated privileges are not required to install".
-$SummaryInformation = $Database.GetType().InvokeMember(
-    "SummaryInformation", "GetProperty", $null, $Database, @(0))
-$WordCount = $SummaryInformation.GetType().InvokeMember(
-    "Property", "GetProperty", $null, $SummaryInformation, @(15))
-if ((($WordCount -band 8) -eq 0)) {
+$WordCount = [int]$Database.SummaryInformation(0).Property(15)
+if (($WordCount -band 8) -eq 0) {
     Write-Error "reason=entitlement_rejected: the package asks for elevation (word count $WordCount)"
     exit 1
 }
