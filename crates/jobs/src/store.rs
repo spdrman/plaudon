@@ -431,9 +431,9 @@ impl JobStore {
         let canonical = request.key.canonical_text();
         let key_kind = request.key.kind_str().to_string();
         let is_reprocess = request.key.is_reprocess();
-        let reprocess_token = request
+        let reprocess_nonce = request
             .key
-            .reprocess_token()
+            .reprocess_nonce()
             .map(|t| t.as_uuid().to_string());
         let config = serde_json::to_string(&request.config_snapshot)
             .map_err(|e| JobError::encoding("job config snapshot", e))?;
@@ -476,7 +476,7 @@ impl JobStore {
 
                     sqlx::query(
                         "INSERT INTO job_engine_state (job_id, key_kind, key_canonical,
-                             is_reprocess, reprocess_token, reprocess_of, resource_class,
+                             is_reprocess, reprocess_nonce, reprocess_of, resource_class,
                              consent_id, recording_id, dispatched, updated_at)
                          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 0, ?10)",
                     )
@@ -484,7 +484,7 @@ impl JobStore {
                     .bind(&key_kind)
                     .bind(&canonical)
                     .bind(i64::from(is_reprocess))
-                    .bind(reprocess_token.as_deref())
+                    .bind(reprocess_nonce.as_deref())
                     .bind(request.reprocess_of.map(|id| id.to_string()))
                     .bind(request.resource_class.as_str())
                     .bind(request.consent_id.as_deref())

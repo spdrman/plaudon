@@ -36,12 +36,10 @@ const STATUS_GLYPHS: Record<string, string> = {
   unknown: "?",
 };
 
-const STATUS_LABELS: Record<string, string> = {
-  supported: "Supported",
-  experimental: "Experimental",
-  unsupported: "Unsupported",
-  unknown: "Unknown",
-};
+/** Label text is derived from the backend-provided status; no claim is hardcoded here. */
+function statusLabel(status: string): string {
+  return status ? status.charAt(0).toUpperCase() + status.slice(1) : "unknown";
+}
 
 /**
  * First-run onboarding (§4.1, §5.2). Nothing here touches the network, asks
@@ -305,7 +303,7 @@ function EnginesStep({
               <StatusBadge
                 tone={STATUS_TONES[engine.status] ?? "neutral"}
                 glyph={STATUS_GLYPHS[engine.status] ?? "?"}
-                label={STATUS_LABELS[engine.status] ?? "Unknown"}
+                label={statusLabel(engine.status)}
               />
             </div>
             {engine.unavailable_reason ? (

@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS job_engine_state (
     key_kind            TEXT    NOT NULL,
     key_canonical       TEXT    NOT NULL,
     is_reprocess        INTEGER NOT NULL DEFAULT 0 CHECK (is_reprocess IN (0,1)),
-    reprocess_token     TEXT,
+    reprocess_nonce     TEXT,
     reprocess_of        TEXT REFERENCES jobs(id) ON DELETE SET NULL,
     resource_class      TEXT    NOT NULL,
     wait_reason         TEXT,
