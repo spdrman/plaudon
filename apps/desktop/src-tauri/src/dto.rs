@@ -1140,6 +1140,412 @@ pub struct SetOpenRouterKeyRequest {
     pub key: String,
 }
 
+/* ----------------------------------------------------------------- sources */
+
+/// The only user-intent tokens `plaud_connect` accepts.
+///
+/// Spec §7.1: every launch of the vendor tool follows an explicit user action.
+/// The UI states which action it is acting for; Rust maps the token onto a
+/// `&'static str` it controls and rejects anything else, so the string that
+/// reaches the process runner is never frontend-supplied text.
+pub const PLAUD_CONNECT_INTENT: &str = "connect_plaud_account";
+
+/// `plaud_connect` request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlaudConnectRequest {
+    /// The user action that triggered the request; must be
+    /// [`PLAUD_CONNECT_INTENT`].
+    pub user_intent: String,
+}
+
+/// `plaud_list` request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlaudListRequest {
+    /// Cursor returned by the previous page, or `null` for the first page.
+    pub cursor: Option<String>,
+}
+
+/// `plaud_import` request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlaudImportRequest {
+    /// External IDs from the last listing; any other ID rejects the request.
+    pub external_ids: Vec<String>,
+}
+
+/// Machine-readable lifecycle state of the cloud connector.
+pub type PlaudConnectorState = plaudon_source_plaud_cli::state::ConnectorState;
+
+/// What the user should do next; the variants are the §5.4 corrective
+/// actions, and the UI maps each to a control rather than composing text.
+pub type PlaudNextAction = plaudon_source_plaud_cli::diagnostics::NextAction;
+
+/// Which truthful disconnect wording applies (spec §4.2.7).
+pub type PlaudDisconnectVariant = plaudon_source_plaud_cli::diagnostics::DisconnectCopy;
+
+/// Compatibility verdict of the detected CLI version, in one word.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PlaudCompatibility {
+    /// No readable version.
+    Unknown,
+    /// The version is in the validated compatibility table.
+    Tested,
+    /// The version was read but never validated.
+    Untested,
+}
+
+/// Persisted connector facts (spec §7.1), without any prose.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlaudConnectorStatus {
+    /// Lifecycle state.
+    pub state: PlaudConnectorState,
+    /// Version the tool reported, when readable.
+    pub detected_version: Option<String>,
+    /// Whether the version is in the validated compatibility table.
+    pub version_validated: bool,
+    /// Where the executable was found.
+    pub program_origin: Option<String>,
+    /// Stable code of the last error.
+    pub last_error: Option<plaudon_domain::error::AppErrorCode>,
+    /// Whether the last listing may not include every recording.
+    pub listing_possibly_incomplete: bool,
+    /// Whether the listing is read from an on-screen table.
+    pub scraping_warning: bool,
+    /// When the status last changed, Unix epoch milliseconds.
+    pub updated_at_ms: i64,
+}
+
+/// The diagnostics panel payload (spec §4.2, §7.5, §7.6).
+///
+/// `headline`, `detail` and `warnings` are written in
+/// `plaudon_source_plaud_cli::diagnostics` from a stable state or code and are
+/// rendered verbatim by the UI; there is no vendor text to forward.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlaudDiagnostics {
+    /// Lifecycle state.
+    pub state: PlaudConnectorState,
+    /// One-line summary.
+    pub headline: String,
+    /// Explanation in the application's own words.
+    pub detail: String,
+    /// The concrete next step.
+    pub next_action: PlaudNextAction,
+    /// Version the tool reported, when readable.
+    pub detected_version: Option<String>,
+    /// Compatibility verdict.
+    pub compatibility: PlaudCompatibility,
+    /// Where the executable was found.
+    pub program_origin: Option<String>,
+    /// Stable code of the last error, for log correlation.
+    pub last_error: Option<plaudon_domain::error::AppErrorCode>,
+    /// Warnings to render alongside the panel.
+    pub warnings: Vec<String>,
+}
+
+/// Disconnect wording for the detected release (spec §4.2.7).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlaudDisconnectCopy {
+    /// Which variant applies.
+    pub variant: PlaudDisconnectVariant,
+    /// Button label.
+    pub label: String,
+    /// Explanatory body.
+    pub body: String,
+}
+
+/// Response of `plaud_probe`, `plaud_connect` and the connector half of
+/// `plaud_disconnect`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlaudConnectorSnapshot {
+    /// Persisted connector facts.
+    pub status: PlaudConnectorStatus,
+    /// The diagnostics panel.
+    pub diagnostics: PlaudDiagnostics,
+    /// The disconnect control's wording.
+    pub disconnect: PlaudDisconnectCopy,
+}
+
+/// Response of `plaud_disconnect`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlaudDisconnectResponse {
+    /// The wording that was true for what just happened.
+    pub disconnect: PlaudDisconnectCopy,
+    /// The connector after disconnecting.
+    pub snapshot: PlaudConnectorSnapshot,
+}
+
+/// Whether a listing page may be partial (spec §7.2).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PlaudListingCompleteness {
+    /// Pagination has been observed for this release.
+    Complete,
+    /// Paging was never observed; more recordings may exist.
+    PossiblyIncomplete,
+}
+
+/// One cloud recording as listed.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlaudItemSummary {
+    /// Vendor identifier; the only handle `plaud_import` accepts.
+    pub external_id: String,
+    /// Name the account gives the recording. Advisory metadata.
+    pub display_name: String,
+    /// Capture time, when reported.
+    pub captured_at: Option<String>,
+    /// Duration, when reported.
+    pub duration_ms: Option<u64>,
+    /// Declared size in bytes, when reported. Untrusted until verified.
+    pub declared_byte_length: Option<u64>,
+    /// The library recording that already holds this item, if imported.
+    pub imported_recording_id: Option<RecordingId>,
+}
+
+/// Response of `plaud_list`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlaudListResponse {
+    /// The library source row for this connector; the handle `source_sync` and
+    /// `source_reconcile` accept.
+    pub source_id: String,
+    /// Recordings on this page.
+    pub items: Vec<PlaudItemSummary>,
+    /// Cursor of the next page, or `null`.
+    pub next_cursor: Option<String>,
+    /// Completeness disclosure for the listing.
+    pub completeness: PlaudListingCompleteness,
+    /// Shown when the account looks empty. Not an error (spec §7.5).
+    pub empty_account_advisory: Option<String>,
+}
+
+/// Per-ID result of `plaud_import`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "outcome", rename_all = "snake_case")]
+pub enum PlaudImportOutcome {
+    /// The recording was downloaded, verified and committed.
+    Imported {
+        /// The listed identifier.
+        external_id: String,
+        /// The import job.
+        job_id: JobId,
+        /// The recording now in the library.
+        recording_id: RecordingId,
+    },
+    /// The recording was already in the library; nothing changed.
+    AlreadyImported {
+        /// The listed identifier.
+        external_id: String,
+        /// The existing recording.
+        recording_id: RecordingId,
+    },
+    /// The import failed; the job holds the same code.
+    Failed {
+        /// The listed identifier.
+        external_id: String,
+        /// The job that recorded the failure.
+        job_id: JobId,
+        /// §15.4 envelope with a stable code and no vendor text.
+        error: ErrorEnvelope,
+    },
+}
+
+/// Response of `plaud_import`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlaudImportResponse {
+    /// One outcome per requested ID, in request order.
+    pub results: Vec<PlaudImportOutcome>,
+}
+
+/// What a watched folder does with the audio it imports (spec §4.3(7)).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WatchedFolderRule {
+    /// Import the audio and stop there.
+    ImportOnly,
+    /// Import and queue local transcription; no egress.
+    ImportAndQueueLocalStt,
+    /// Import, and refuse every background cloud dispatch without consent.
+    AskBeforeCloud,
+}
+
+impl WatchedFolderRule {
+    /// Stable wire string, equal to the stored column value.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::ImportOnly => "import_only",
+            Self::ImportAndQueueLocalStt => "import_and_queue_local_stt",
+            Self::AskBeforeCloud => "ask_before_cloud",
+        }
+    }
+}
+
+/// `source_add_folder` request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SourceAddFolderRequest {
+    /// Folder obtained from the OS directory picker.
+    pub path: String,
+    /// Whether subdirectories are included.
+    pub recursive: bool,
+    /// What the folder may do with imported audio.
+    pub rule: WatchedFolderRule,
+}
+
+/// `source_add_folder` response.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SourceAddFolderResponse {
+    /// The watched folder's source ID.
+    pub source_id: String,
+    /// Rule now in force.
+    pub rule: WatchedFolderRule,
+    /// Whether subdirectories are included.
+    pub recursive: bool,
+}
+
+/// Why a sync was started.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SyncTrigger {
+    /// The user pressed a sync control.
+    Manual,
+    /// The periodic scheduler (watched folders only; the PLAUD cloud never
+    /// syncs unattended, spec §7.1).
+    Background,
+}
+
+/// `source_sync` request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SourceSyncRequest {
+    /// A watched folder ID or the `source_id` from `plaud_list`.
+    pub source_id: String,
+    /// Why the sync runs.
+    pub trigger: SyncTrigger,
+}
+
+/// `source_reconcile` request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SourceReconcileRequest {
+    /// A watched folder ID or the `source_id` from `plaud_list`.
+    pub source_id: String,
+}
+
+/// What kind of source a sync or reconcile ran against.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SyncedSourceKind {
+    /// A watched folder.
+    WatchedFolder,
+    /// The PLAUD cloud connector.
+    PlaudCloud,
+}
+
+/// Counts from one watched-folder pass.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FolderSyncCounts {
+    /// Entries the bounded sweep inspected.
+    pub scanned: u32,
+    /// Whether the sweep saw the whole folder.
+    pub inventory_complete: bool,
+    /// Recordings newly committed.
+    pub imported: u32,
+    /// Files already in the library.
+    pub already_imported: u32,
+    /// Files still changing or not yet local.
+    pub deferred: u32,
+    /// Files the user deleted locally, not resurrected.
+    pub refused_tombstoned: u32,
+    /// Files that failed validation.
+    pub rejected: u32,
+    /// Known files that are no longer present (marked unavailable).
+    pub vanished: u32,
+}
+
+/// `source_sync` response.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SourceSyncResponse {
+    /// The job that recorded the sync.
+    pub job_id: JobId,
+    /// The synced source.
+    pub source_id: String,
+    /// Kind of source.
+    pub source_kind: SyncedSourceKind,
+    /// Terminal state of the job.
+    pub state: JobState,
+    /// Folder counts; `null` for the PLAUD cloud.
+    pub folder: Option<FolderSyncCounts>,
+    /// Recordings the PLAUD listing returned; `null` for a folder.
+    pub listed: Option<u32>,
+    /// Recordings the sync committed to the library.
+    pub imported_recording_ids: Vec<RecordingId>,
+}
+
+/// One reconciliation decision (spec §7.5, App. A.2), with stable names only.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReconcileDecisionSummary {
+    /// Vendor identifier of the item, when it has one.
+    pub external_id: Option<String>,
+    /// App. A.2 row, snake_case.
+    pub event: String,
+    /// Actions taken, snake_case.
+    pub actions: Vec<String>,
+}
+
+/// `source_reconcile` response.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SourceReconcileResponse {
+    /// The job that recorded the pass.
+    pub job_id: JobId,
+    /// The reconciled source.
+    pub source_id: String,
+    /// Kind of source.
+    pub source_kind: SyncedSourceKind,
+    /// Decisions for a PLAUD listing; empty for a folder, and empty for a
+    /// listing that may be partial (nothing is recorded in that case).
+    pub decisions: Vec<ReconcileDecisionSummary>,
+    /// Whether the PLAUD listing was known to be complete; `null` for a
+    /// folder. A partial listing cannot prove an item is gone, so it is not
+    /// reconciled (spec §7.5).
+    pub listing_complete: Option<bool>,
+    /// Folder counts; `null` for the PLAUD cloud.
+    pub folder: Option<FolderSyncCounts>,
+}
+
+/// `list_source_artifacts` request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ListSourceArtifactsRequest {
+    /// Recording whose vendor exports are listed.
+    pub recording_id: String,
+}
+
+/// One vendor export found alongside a recording, with its provenance.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SourceArtifactSummary {
+    /// Row identity.
+    pub artifact_id: String,
+    /// `transcript`, `summary` or `tags`.
+    pub kind: String,
+    /// Vendor that produced it, for example `plaud`.
+    pub source_vendor: String,
+    /// Digest of the original exported bytes.
+    pub content_sha256: String,
+    /// Length of those bytes.
+    pub byte_length: u64,
+    /// Name the export used. Metadata only.
+    pub original_filename: Option<String>,
+    /// When it became a transcript revision; `null` while only recorded.
+    pub imported_at: Option<String>,
+    /// Mode that applied when it was seen.
+    pub import_mode: String,
+    /// When the app first recorded it.
+    pub recorded_at: String,
+}
+
+/// `list_source_artifacts` response.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ListSourceArtifactsResponse {
+    /// Vendor exports, oldest first.
+    pub artifacts: Vec<SourceArtifactSummary>,
+}
+
 /* ------------------------------------------------------------------ events */
 
 /// §15.3 event names.
@@ -1169,6 +1575,12 @@ pub enum EventKind {
     /// An operation needs consent.
     #[serde(rename = "consent.required")]
     ConsentRequired,
+    /// A source needs the user to sign in again (spec §15.3).
+    #[serde(rename = "source.auth_required")]
+    SourceAuthRequired,
+    /// A source sync, listing or import pass ended (spec §15.3).
+    #[serde(rename = "source.sync_finished")]
+    SourceSyncFinished,
     /// The library listing changed.
     #[serde(rename = "library.changed")]
     LibraryChanged,
@@ -1194,6 +1606,8 @@ impl EventKind {
         Self::ToolCompleted,
         Self::ModelAvailabilityChanged,
         Self::ConsentRequired,
+        Self::SourceAuthRequired,
+        Self::SourceSyncFinished,
         Self::LibraryChanged,
         Self::ActivityAdded,
         Self::ActivationRequested,
@@ -1211,6 +1625,8 @@ impl EventKind {
             Self::ToolCompleted => "tool.completed",
             Self::ModelAvailabilityChanged => "model.availability_changed",
             Self::ConsentRequired => "consent.required",
+            Self::SourceAuthRequired => "source.auth_required",
+            Self::SourceSyncFinished => "source.sync_finished",
             Self::LibraryChanged => "library.changed",
             Self::ActivityAdded => "activity.added",
             Self::ActivationRequested => "ui.activation_requested",
@@ -1283,8 +1699,9 @@ mod tests {
             let json = serde_json::to_string(kind).unwrap();
             assert_eq!(json, format!("\"{}\"", kind.as_str()));
         }
-        // The ten §15.3 names plus the ADR-0020 activation event.
-        assert_eq!(EventKind::ALL.len(), 11);
+        // The twelve §15.3 names this build emits plus the ADR-0020
+        // activation event.
+        assert_eq!(EventKind::ALL.len(), 13);
     }
 
     #[test]

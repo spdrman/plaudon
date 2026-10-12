@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/source_reconcile.response.schema.json",
+  "title": "source_reconcile.response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "job_id",
+    "source_id",
+    "source_kind",
+    "decisions",
+    "listing_complete",
+    "folder"
+  ],
+  "properties": {
+    "job_id": {
+      "type": "string"
+    },
+    "source_id": {
+      "type": "string"
+    },
+    "source_kind": {
+      "enum": [
+        "watched_folder",
+        "plaud_cloud"
+      ]
+    },
+    "decisions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/decision"
+      }
+    },
+    "listing_complete": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "folder": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/counts"
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scanned",
+        "inventory_complete",
+        "imported",
+        "already_imported",
+        "deferred",
+        "refused_tombstoned",
+        "rejected",
+        "vanished"
+      ],
+      "properties": {
+        "scanned": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "inventory_complete": {
+          "type": "boolean"
+        },
+        "imported": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "already_imported": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "deferred": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "refused_tombstoned": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "rejected": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "vanished": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "external_id",
+        "event",
+        "actions"
+      ],
+      "properties": {
+        "external_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "event": {
+          "type": "string"
+        },
+        "actions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

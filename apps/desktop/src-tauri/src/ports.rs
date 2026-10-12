@@ -12,11 +12,14 @@ use plaudon_domain::error::AppError;
 use plaudon_domain::ids::{JobId, RecordingId};
 use plaudon_domain::transcript::AlignmentOrigin;
 
+use crate::dto::SourceAddFolderRequest;
 use crate::dto::{
     ActivityPage, Capabilities, CompleteOnboardingRequest, DuplicatePolicy, ImportFilesResponse,
-    JobPage, JobSummary, LocalOnlyModeResponse, NotificationSettings, NotificationSettingsResponse,
-    Preferences, RecordingDetail, RecordingPage, SaveTranscriptRevisionResponse, TranscriptPage,
-    TranscriptRevisionRef,
+    JobPage, JobSummary, ListSourceArtifactsResponse, LocalOnlyModeResponse, NotificationSettings,
+    NotificationSettingsResponse, PlaudConnectorSnapshot, PlaudDisconnectResponse,
+    PlaudImportResponse, PlaudListResponse, Preferences, RecordingDetail, RecordingPage,
+    SaveTranscriptRevisionResponse, SourceAddFolderResponse, SourceReconcileResponse,
+    SourceSyncResponse, SyncTrigger, TranscriptPage, TranscriptRevisionRef,
 };
 use crate::validate::{
     ValidatedExport, ValidatedGetTranscript, ValidatedListActivity, ValidatedListJobs,
@@ -201,4 +204,67 @@ pub trait SettingsPort: Send + Sync {
 pub trait ExportPort: Send + Sync {
     /// Run the export as a job and return it.
     async fn export_recording(&self, request: ValidatedExport) -> Result<JobId, AppError>;
+}
+
+/// Recording sources: the PLAUD cloud connector and watched folders
+/// (`plaud_*`, `source_*`, `list_source_artifacts`).
+///
+/// Commands never see the connector, the process runner or the folder service:
+/// they validate their arguments and call this port, so Local-only Mode,
+/// consent and the user-intent rule (spec §7.1, §22(15)) are enforced in one
+/// place no matter which command reaches a source.
+#[async_trait]
+pub trait SourcesPort: Send + Sync {
+    /// Connector status and diagnostics (`plaud_probe`).
+    ///
+    /// Locates the official CLI and reads its version while the connector has
+    /// no usable binding; never signs in and never lists.
+    async fn plaud_probe(&self) -> Result<PlaudConnectorSnapshot, AppError>;
+
+    /// Discover the CLI, then hand authentication to it (`plaud_connect`).
+    /// `user_intent` is the validated action the user took.
+    async fn plaud_connect(
+        &self,
+        user_intent: &'static str,
+    ) -> Result<PlaudConnectorSnapshot, AppError>;
+
+    /// Drop the app's association (`plaud_disconnect`, spec §4.2.7).
+    async fn plaud_disconnect(&self) -> Result<PlaudDisconnectResponse, AppError>;
+
+    /// One page of the account's recordings (`plaud_list`).
+    async fn plaud_list(&self, cursor: Option<String>) -> Result<PlaudListResponse, AppError>;
+
+    /// Download, verify and commit listed recordings (`plaud_import`). An ID
+    /// that was not in the last listing rejects the whole request.
+    async fn plaud_import(
+        &self,
+        external_ids: Vec<String>,
+    ) -> Result<PlaudImportResponse, AppError>;
+
+    /// Register a watched folder (`source_add_folder`). The path is validated
+    /// inside the port, against the approved roots, exactly like a manual
+    /// import path.
+    async fn source_add_folder(
+        &self,
+        request: SourceAddFolderRequest,
+    ) -> Result<SourceAddFolderResponse, AppError>;
+
+    /// Run one sync of a source (`source_sync`).
+    async fn source_sync(
+        &self,
+        source_id: uuid::Uuid,
+        trigger: SyncTrigger,
+    ) -> Result<SourceSyncResponse, AppError>;
+
+    /// Reconcile a source against the library (`source_reconcile`).
+    async fn source_reconcile(
+        &self,
+        source_id: uuid::Uuid,
+    ) -> Result<SourceReconcileResponse, AppError>;
+
+    /// Vendor exports found alongside a recording (`list_source_artifacts`).
+    async fn list_source_artifacts(
+        &self,
+        recording_id: RecordingId,
+    ) -> Result<ListSourceArtifactsResponse, AppError>;
 }

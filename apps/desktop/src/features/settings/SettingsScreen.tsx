@@ -48,6 +48,16 @@ export function SettingsScreen() {
         )}
       </SettingsSection>
 
+      <SettingsSection title="PLAUD and sources">
+        <p className="settings-section__note">
+          Connect the official PLAUD command line tool to list and import your cloud recordings.
+          Importing files by hand always works.
+        </p>
+        <Button onClick={() => navigate({ name: "settings.sources" })}>
+          Open PLAUD and sources
+        </Button>
+      </SettingsSection>
+
       <SettingsSection title="Activity history">
         <p className="settings-section__note">
           Every import, transcription and attention notice is kept in the app, whether or not the

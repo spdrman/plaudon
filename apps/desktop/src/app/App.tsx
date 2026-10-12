@@ -16,6 +16,7 @@ import { JobsScreen } from "../features/jobs/JobsScreen";
 import { TemplatesScreen } from "../features/templates/TemplatesScreen";
 import { SettingsScreen } from "../features/settings/SettingsScreen";
 import { ActivityScreen } from "../features/activity/ActivityScreen";
+import { SourcesScreen } from "../features/sources/SourcesScreen";
 import { ImportDropTarget } from "../features/import/ImportDropTarget";
 import { ImportButton } from "../features/import/ImportButton";
 import { ActivityBell } from "../features/activity/ActivityBell";
@@ -213,6 +214,8 @@ function RouteView() {
           }
         />
       );
+    case "settings.sources":
+      return <SourcesScreen />;
     default: {
       const never: never = route;
       throw new Error(`unhandled route ${JSON.stringify(never)}`);

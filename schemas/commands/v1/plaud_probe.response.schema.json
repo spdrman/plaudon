@@ -1,0 +1,214 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/plaud_probe.response.schema.json",
+  "title": "plaud_probe.response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "status",
+    "diagnostics",
+    "disconnect"
+  ],
+  "properties": {
+    "status": {
+      "$ref": "#/$defs/status"
+    },
+    "diagnostics": {
+      "$ref": "#/$defs/diagnostics"
+    },
+    "disconnect": {
+      "$ref": "#/$defs/disconnect_copy"
+    }
+  },
+  "$defs": {
+    "state": {
+      "enum": [
+        "unconfigured",
+        "cli_detected",
+        "auth_required",
+        "authenticated",
+        "enumerating",
+        "ready",
+        "expired_auth",
+        "incompatible_version",
+        "error"
+      ]
+    },
+    "next_action": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ],
+          "properties": {
+            "kind": {
+              "enum": [
+                "none",
+                "install_cli",
+                "sign_in",
+                "retry",
+                "wait_and_retry",
+                "review_local_only_mode",
+                "import_manually",
+                "check_account_and_region"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "usable_versions"
+          ],
+          "properties": {
+            "kind": {
+              "const": "install_tested_version"
+            },
+            "usable_versions": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "status": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "detected_version",
+        "version_validated",
+        "program_origin",
+        "last_error",
+        "listing_possibly_incomplete",
+        "scraping_warning",
+        "updated_at_ms"
+      ],
+      "properties": {
+        "state": {
+          "$ref": "#/$defs/state"
+        },
+        "detected_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "version_validated": {
+          "type": "boolean"
+        },
+        "program_origin": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "last_error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "listing_possibly_incomplete": {
+          "type": "boolean"
+        },
+        "scraping_warning": {
+          "type": "boolean"
+        },
+        "updated_at_ms": {
+          "type": "integer"
+        }
+      }
+    },
+    "diagnostics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "headline",
+        "detail",
+        "next_action",
+        "detected_version",
+        "compatibility",
+        "program_origin",
+        "last_error",
+        "warnings"
+      ],
+      "properties": {
+        "state": {
+          "$ref": "#/$defs/state"
+        },
+        "headline": {
+          "type": "string"
+        },
+        "detail": {
+          "type": "string"
+        },
+        "next_action": {
+          "$ref": "#/$defs/next_action"
+        },
+        "detected_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "compatibility": {
+          "enum": [
+            "unknown",
+            "tested",
+            "untested"
+          ]
+        },
+        "program_origin": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "last_error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "disconnect_copy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "variant",
+        "label",
+        "body"
+      ],
+      "properties": {
+        "variant": {
+          "enum": [
+            "association_only",
+            "with_vendor_logout"
+          ]
+        },
+        "label": {
+          "type": "string"
+        },
+        "body": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

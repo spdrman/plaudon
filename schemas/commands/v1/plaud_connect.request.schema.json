@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/plaud_connect.request.schema.json",
+  "title": "plaud_connect.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "user_intent"
+  ],
+  "properties": {
+    "user_intent": {
+      "const": "connect_plaud_account"
+    }
+  }
+}

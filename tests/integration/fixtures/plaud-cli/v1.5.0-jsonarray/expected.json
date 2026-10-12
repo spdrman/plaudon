@@ -1,0 +1,24 @@
+{
+  "completeness": "complete",
+  "next_cursor": "eyJvZmZzZXQiOjJ9",
+  "items": [
+    {
+      "external_id": "rec_01HFB7PP",
+      "display_name": "Design review",
+      "duration_ms": 2700000,
+      "declared_byte_length": 86400044,
+      "captured_at_ms": 1760400000000,
+      "remote_version": "3",
+      "vendor_transcript_available": true
+    },
+    {
+      "external_id": "rec_01HFC2RS",
+      "display_name": "Réunion d'équipe — 11/10/2026",
+      "duration_ms": 900000,
+      "declared_byte_length": 28800044,
+      "captured_at_ms": 1760486400000,
+      "remote_version": "1",
+      "vendor_transcript_available": false
+    }
+  ]
+}

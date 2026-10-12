@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/plaud_import.response.schema.json",
+  "title": "plaud_import.response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "results"
+  ],
+  "properties": {
+    "results": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/plaud_import_outcome"
+      }
+    }
+  },
+  "$defs": {
+    "error_envelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "message",
+        "retryable",
+        "diagnostic_id"
+      ],
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "retryable": {
+          "type": "boolean"
+        },
+        "action": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "diagnostic_id": {
+          "type": "string"
+        }
+      }
+    },
+    "plaud_import_outcome": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "outcome",
+            "external_id",
+            "job_id",
+            "recording_id"
+          ],
+          "properties": {
+            "outcome": {
+              "const": "imported"
+            },
+            "external_id": {
+              "type": "string"
+            },
+            "job_id": {
+              "type": "string"
+            },
+            "recording_id": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "outcome",
+            "external_id",
+            "recording_id"
+          ],
+          "properties": {
+            "outcome": {
+              "const": "already_imported"
+            },
+            "external_id": {
+              "type": "string"
+            },
+            "recording_id": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "outcome",
+            "external_id",
+            "job_id",
+            "error"
+          ],
+          "properties": {
+            "outcome": {
+              "const": "failed"
+            },
+            "external_id": {
+              "type": "string"
+            },
+            "job_id": {
+              "type": "string"
+            },
+            "error": {
+              "$ref": "#/$defs/error_envelope"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

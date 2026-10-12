@@ -29,9 +29,14 @@ symphonia = { version = "0.5", default-features = false, features = [
     "flac",
 ] }
 plaudon-app-core = { workspace = true }
+plaudon-diagnostics = { workspace = true }
 plaudon-domain = { workspace = true }
 plaudon-persistence = { workspace = true }
 plaudon-recording-sources = { workspace = true }
+plaudon-security = { workspace = true }
+plaudon-source-folder = { workspace = true, features = ["test-harness"] }
+plaudon-source-plaud-cli = { workspace = true, features = ["test-harness"] }
+hex = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }

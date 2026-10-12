@@ -497,6 +497,177 @@ export interface StatusResponse {
   ok: true;
 }
 
+/* ----------------------------------------------------------------- sources */
+
+/** `plaudon_source_plaud_cli::state::ConnectorState` (serde snake_case). */
+export type PlaudConnectorState =
+  | "unconfigured"
+  | "cli_detected"
+  | "auth_required"
+  | "authenticated"
+  | "enumerating"
+  | "ready"
+  | "expired_auth"
+  | "incompatible_version"
+  | "error";
+
+/**
+ * `plaudon_source_plaud_cli::diagnostics::NextAction`. Each kind maps to one
+ * control in the UI; the sentence that explains it comes from Rust.
+ */
+export type PlaudNextAction =
+  | { kind: "none" }
+  | { kind: "install_cli" }
+  | { kind: "install_tested_version"; usable_versions: string[] }
+  | { kind: "sign_in" }
+  | { kind: "retry" }
+  | { kind: "wait_and_retry" }
+  | { kind: "review_local_only_mode" }
+  | { kind: "import_manually" }
+  | { kind: "check_account_and_region" };
+
+export type PlaudCompatibility = "unknown" | "tested" | "untested";
+
+export interface PlaudConnectorStatus {
+  state: PlaudConnectorState;
+  detected_version: string | null;
+  version_validated: boolean;
+  program_origin: string | null;
+  last_error: ErrorCode | null;
+  listing_possibly_incomplete: boolean;
+  scraping_warning: boolean;
+  updated_at_ms: number;
+}
+
+/** `headline`, `detail` and `warnings` are rendered verbatim (§7.6). */
+export interface PlaudDiagnostics {
+  state: PlaudConnectorState;
+  headline: string;
+  detail: string;
+  next_action: PlaudNextAction;
+  detected_version: string | null;
+  compatibility: PlaudCompatibility;
+  program_origin: string | null;
+  last_error: ErrorCode | null;
+  warnings: string[];
+}
+
+/** §4.2.7: which truthful wording applies. */
+export type PlaudDisconnectVariant = "association_only" | "with_vendor_logout";
+
+export interface PlaudDisconnectCopy {
+  variant: PlaudDisconnectVariant;
+  label: string;
+  body: string;
+}
+
+export interface PlaudConnectorSnapshot {
+  status: PlaudConnectorStatus;
+  diagnostics: PlaudDiagnostics;
+  disconnect: PlaudDisconnectCopy;
+}
+
+export interface PlaudDisconnectResponse {
+  disconnect: PlaudDisconnectCopy;
+  snapshot: PlaudConnectorSnapshot;
+}
+
+export interface PlaudItemSummary {
+  external_id: string;
+  display_name: string;
+  captured_at: string | null;
+  duration_ms: number | null;
+  declared_byte_length: number | null;
+  imported_recording_id: string | null;
+}
+
+export type PlaudListingCompleteness = "complete" | "possibly_incomplete";
+
+export interface PlaudListResponse {
+  source_id: string;
+  items: PlaudItemSummary[];
+  next_cursor: string | null;
+  completeness: PlaudListingCompleteness;
+  empty_account_advisory: string | null;
+}
+
+export type PlaudImportOutcome =
+  | { outcome: "imported"; external_id: string; job_id: string; recording_id: string }
+  | { outcome: "already_imported"; external_id: string; recording_id: string }
+  | { outcome: "failed"; external_id: string; job_id: string; error: ErrorEnvelope };
+
+export interface PlaudImportResponse {
+  results: PlaudImportOutcome[];
+}
+
+export type WatchedFolderRule = "import_only" | "import_and_queue_local_stt" | "ask_before_cloud";
+export type SyncTrigger = "manual" | "background";
+export type SyncedSourceKind = "watched_folder" | "plaud_cloud";
+
+export interface SourceAddFolderRequest {
+  path: string;
+  recursive: boolean;
+  rule: WatchedFolderRule;
+}
+
+export interface SourceAddFolderResponse {
+  source_id: string;
+  rule: WatchedFolderRule;
+  recursive: boolean;
+}
+
+export interface FolderSyncCounts {
+  scanned: number;
+  inventory_complete: boolean;
+  imported: number;
+  already_imported: number;
+  deferred: number;
+  refused_tombstoned: number;
+  rejected: number;
+  vanished: number;
+}
+
+export interface SourceSyncResponse {
+  job_id: string;
+  source_id: string;
+  source_kind: SyncedSourceKind;
+  state: JobState;
+  folder: FolderSyncCounts | null;
+  listed: number | null;
+  imported_recording_ids: string[];
+}
+
+export interface ReconcileDecisionSummary {
+  external_id: string | null;
+  event: string;
+  actions: string[];
+}
+
+export interface SourceReconcileResponse {
+  job_id: string;
+  source_id: string;
+  source_kind: SyncedSourceKind;
+  decisions: ReconcileDecisionSummary[];
+  listing_complete: boolean | null;
+  folder: FolderSyncCounts | null;
+}
+
+export interface SourceArtifactSummary {
+  artifact_id: string;
+  kind: string;
+  source_vendor: string;
+  content_sha256: string;
+  byte_length: number;
+  original_filename: string | null;
+  imported_at: string | null;
+  import_mode: string;
+  recorded_at: string;
+}
+
+export interface ListSourceArtifactsResponse {
+  artifacts: SourceArtifactSummary[];
+}
+
 /* ------------------------------------------------------------ command map */
 
 export interface CommandMap {
@@ -522,6 +693,15 @@ export interface CommandMap {
   remove_openrouter_key: { req: Record<string, never>; res: StatusResponse };
   list_activity: { req: ListActivityRequest; res: ActivityPage };
   complete_onboarding: { req: CompleteOnboardingRequest; res: Preferences };
+  plaud_probe: { req: Record<string, never>; res: PlaudConnectorSnapshot };
+  plaud_connect: { req: { user_intent: "connect_plaud_account" }; res: PlaudConnectorSnapshot };
+  plaud_disconnect: { req: Record<string, never>; res: PlaudDisconnectResponse };
+  plaud_list: { req: { cursor: string | null }; res: PlaudListResponse };
+  plaud_import: { req: { external_ids: string[] }; res: PlaudImportResponse };
+  source_add_folder: { req: SourceAddFolderRequest; res: SourceAddFolderResponse };
+  source_sync: { req: { source_id: string; trigger: SyncTrigger }; res: SourceSyncResponse };
+  source_reconcile: { req: { source_id: string }; res: SourceReconcileResponse };
+  list_source_artifacts: { req: { recording_id: string }; res: ListSourceArtifactsResponse };
 }
 
 export type CommandName = keyof CommandMap;
@@ -547,7 +727,24 @@ export const SPEC_COMMANDS: readonly CommandName[] = [
 /** Additions reviewed in ADR-0020 because §15.2 has no read path for them. */
 export const ADR_0020_COMMANDS: readonly CommandName[] = ["list_activity", "complete_onboarding"];
 
-export const ALL_COMMANDS: readonly CommandName[] = [...SPEC_COMMANDS, ...ADR_0020_COMMANDS];
+/** EPIC K source commands, quoted from the §15.2 table. */
+export const EPIC_K_COMMANDS: readonly CommandName[] = [
+  "plaud_probe",
+  "plaud_connect",
+  "plaud_disconnect",
+  "plaud_list",
+  "plaud_import",
+  "source_add_folder",
+  "source_sync",
+  "source_reconcile",
+  "list_source_artifacts",
+];
+
+export const ALL_COMMANDS: readonly CommandName[] = [
+  ...SPEC_COMMANDS,
+  ...ADR_0020_COMMANDS,
+  ...EPIC_K_COMMANDS,
+];
 
 /* ----------------------------------------------------------------- events */
 
@@ -565,6 +762,8 @@ export const EVENT_KINDS = [
   "tool.completed",
   "model.availability_changed",
   "consent.required",
+  "source.auth_required",
+  "source.sync_finished",
   "library.changed",
   "activity.added",
   "ui.activation_requested",

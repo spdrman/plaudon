@@ -1,0 +1,8 @@
+{
+  "version": "1.2.0",
+  "listing_format": "delimited_table",
+  "pagination_observed": false,
+  "account_scope": "plaud:eu:account-a",
+  "captured_on": "2026-10-11",
+  "note": "Synthetic capture of a human-readable layout. Spec 7.2 permits scraping only under a version lock with this golden snapshot and the compatibility warning."
+}

@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/plaud_list.request.schema.json",
+  "title": "plaud_list.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "cursor"
+  ],
+  "properties": {
+    "cursor": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1,
+      "maxLength": 512
+    }
+  }
+}

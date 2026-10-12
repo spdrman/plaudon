@@ -1,0 +1,24 @@
+{
+  "completeness": "possibly_incomplete",
+  "next_cursor": null,
+  "items": [
+    {
+      "external_id": "rec_01HFD8TT",
+      "display_name": "Quarterly planning",
+      "duration_ms": 4500000,
+      "declared_byte_length": null,
+      "captured_at_ms": null,
+      "remote_version": null,
+      "vendor_transcript_available": true
+    },
+    {
+      "external_id": "rec_01HFE4VV",
+      "display_name": "Coffee chat",
+      "duration_ms": 510000,
+      "declared_byte_length": null,
+      "captured_at_ms": null,
+      "remote_version": null,
+      "vendor_transcript_available": false
+    }
+  ]
+}

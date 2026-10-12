@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/source_sync.request.schema.json",
+  "title": "source_sync.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "source_id",
+    "trigger"
+  ],
+  "properties": {
+    "source_id": {
+      "type": "string"
+    },
+    "trigger": {
+      "enum": [
+        "manual",
+        "background"
+      ]
+    }
+  }
+}

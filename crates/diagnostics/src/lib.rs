@@ -26,6 +26,7 @@
 
 pub mod crash;
 pub mod logging;
+pub mod metrics;
 pub mod notification;
 pub mod patterns;
 pub mod redact;
@@ -37,6 +38,7 @@ pub use logging::{
     build_subscriber, init_logging, LogFormat, LoggingConfig, LoggingError, LoggingHandle,
     WirePayloadLogging,
 };
+pub use metrics::{MetricSeries, MetricsRegistry, WatcherMetric, WatcherMetricsSnapshot};
 pub use notification::redact_notification;
 pub use redact::{Finding, Redactor, RegisterSecretError};
 #[cfg(feature = "scanner")]

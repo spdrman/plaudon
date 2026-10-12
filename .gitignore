@@ -16,3 +16,6 @@ apps/desktop/playwright-report/
 # tsc emit must never land beside sources
 apps/desktop/src/**/*.js
 apps/desktop/*.tsbuildinfo
+apps/desktop/e2e/**/*.js
+apps/desktop/*.config.js
+apps/desktop/vitest.setup.js

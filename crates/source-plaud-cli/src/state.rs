@@ -5,6 +5,7 @@
 //! `INCOMPATIBLE_VERSION`. Transitions are total and explicit: an event that
 //! does not apply leaves the state unchanged rather than silently advancing.
 
+use plaudon_domain::error::{AppError, AppErrorCode};
 use plaudon_recording_sources::source::SourceError;
 use serde::{Deserialize, Serialize};
 
@@ -83,20 +84,29 @@ impl ConnectorState {
                 Self::CliDetected | Self::Authenticated | Self::Ready | Self::Enumerating,
                 ConnectorEvent::LoginRequired,
             ) => Self::AuthRequired,
-            (Self::AuthRequired | Self::ExpiredAuth, ConnectorEvent::LoginSucceeded) => {
-                Self::Authenticated
-            }
-            (Self::AuthRequired | Self::ExpiredAuth, ConnectorEvent::LoginCanceled) => {
-                Self::AuthRequired
-            }
+            // Spec 4.2 step 3 starts the browser login right after detection,
+            // without an intervening "you must sign in" answer from the tool,
+            // so `CliDetected` is a legitimate origin for both outcomes.
             (
-                Self::Authenticated | Self::Ready | Self::Enumerating,
+                Self::CliDetected | Self::AuthRequired | Self::ExpiredAuth,
+                ConnectorEvent::LoginSucceeded,
+            ) => Self::Authenticated,
+            (
+                Self::CliDetected | Self::AuthRequired | Self::ExpiredAuth,
+                ConnectorEvent::LoginCanceled,
+            ) => Self::AuthRequired,
+            (
+                Self::CliDetected | Self::Authenticated | Self::Ready | Self::Enumerating,
                 ConnectorEvent::SessionExpired,
             ) => Self::ExpiredAuth,
 
-            (Self::Authenticated | Self::Ready, ConnectorEvent::EnumerationStarted) => {
-                Self::Enumerating
-            }
+            // Enumeration may start straight after detection: running `files`
+            // is how we learn whether the vendor tool still has a session, and
+            // spec 4.2 does not give us a separate "am I signed in" query.
+            (
+                Self::CliDetected | Self::Authenticated | Self::Ready,
+                ConnectorEvent::EnumerationStarted,
+            ) => Self::Enumerating,
             (Self::Enumerating, ConnectorEvent::EnumerationSucceeded) => Self::Ready,
             (Self::Enumerating, ConnectorEvent::EnumerationFailed) => Self::Error,
 
@@ -107,7 +117,7 @@ impl ConnectorState {
     /// Whether enumeration may be attempted from this state.
     #[must_use]
     pub const fn may_enumerate(self) -> bool {
-        matches!(self, Self::Authenticated | Self::Ready)
+        matches!(self, Self::CliDetected | Self::Authenticated | Self::Ready)
     }
 
     /// Whether the connector needs the user before it can progress.
@@ -132,9 +142,136 @@ impl ConnectorState {
     }
 }
 
+/// The persisted, UI-observable connector status (spec 7.1, 4.2, 15.3).
+///
+/// Everything here is either our own text or a stable code. There is no field
+/// that can carry vendor stdout or stderr, which is how spec 7.6's "we will
+/// not leak raw vendor error payloads" is enforced for the status surface
+/// rather than merely intended.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ConnectorStatus {
+    /// Contract version of this payload.
+    pub payload_version: u32,
+    /// Lifecycle state.
+    pub state: ConnectorState,
+    /// Version string the tool reported, when it was readable.
+    pub detected_version: Option<String>,
+    /// Whether the detected version is in the committed compatibility table.
+    pub version_validated: bool,
+    /// Where the executable was found, as a stable label.
+    pub program_origin: Option<String>,
+    /// Last stable error, as a code only.
+    pub last_error: Option<AppErrorCode>,
+    /// Whether the last listing may be a partial view of the account.
+    pub listing_possibly_incomplete: bool,
+    /// Whether the active parser scrapes a human-readable layout (spec 7.2).
+    pub scraping_warning: bool,
+    /// When this status was last written, in milliseconds since the epoch.
+    pub updated_at_ms: i64,
+}
+
+impl ConnectorStatus {
+    /// Contract version understood by this build.
+    pub const SUPPORTED_PAYLOAD_VERSION: u32 = 1;
+
+    /// Preference key the status is persisted under.
+    pub const PREFERENCE_KEY: &'static str = "source.plaud_cloud_cli.status";
+
+    /// The status of a connector nobody has configured yet.
+    #[must_use]
+    pub const fn unconfigured(at_ms: i64) -> Self {
+        Self {
+            payload_version: Self::SUPPORTED_PAYLOAD_VERSION,
+            state: ConnectorState::Unconfigured,
+            detected_version: None,
+            version_validated: false,
+            program_origin: None,
+            last_error: None,
+            listing_possibly_incomplete: false,
+            scraping_warning: false,
+            updated_at_ms: at_ms,
+        }
+    }
+
+    /// Apply an event and record when it happened.
+    #[must_use]
+    pub fn apply(mut self, event: ConnectorEvent, at_ms: i64) -> Self {
+        self.state = self.state.apply(event);
+        self.updated_at_ms = at_ms;
+        if matches!(
+            event,
+            ConnectorEvent::Disconnected | ConnectorEvent::CliMissing
+        ) {
+            self.detected_version = None;
+            self.version_validated = false;
+            self.program_origin = None;
+            self.listing_possibly_incomplete = false;
+            self.scraping_warning = false;
+        }
+        self.last_error = self
+            .state
+            .as_source_error()
+            .map(|error| AppError::from(error).code());
+        self
+    }
+
+    /// Record a classified failure without changing the lifecycle state.
+    #[must_use]
+    pub fn with_error(mut self, error: SourceError, at_ms: i64) -> Self {
+        self.last_error = Some(AppError::from(error).code());
+        self.updated_at_ms = at_ms;
+        self
+    }
+
+    /// Whether a payload decoded from storage is usable by this build.
+    #[must_use]
+    pub const fn is_supported_payload(&self) -> bool {
+        self.payload_version == Self::SUPPORTED_PAYLOAD_VERSION
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn signing_in_straight_after_detection_reaches_authenticated() {
+        // Spec 4.2: steps 1 and 3 are adjacent. The tool does not tell us "you
+        // must sign in" before we offer the button, so a login outcome has to
+        // be accepted from `CliDetected` or the panel would keep asking the
+        // user to do something they just did.
+        assert_eq!(
+            ConnectorState::CliDetected.apply(ConnectorEvent::LoginSucceeded),
+            ConnectorState::Authenticated
+        );
+    }
+
+    #[test]
+    fn cancelling_the_first_login_asks_again_rather_than_looking_connected() {
+        assert_eq!(
+            ConnectorState::CliDetected.apply(ConnectorEvent::LoginCanceled),
+            ConnectorState::AuthRequired
+        );
+        assert_eq!(
+            ConnectorState::AuthRequired.apply(ConnectorEvent::LoginCanceled),
+            ConnectorState::AuthRequired
+        );
+        assert_eq!(
+            ConnectorState::ExpiredAuth.apply(ConnectorEvent::LoginCanceled),
+            ConnectorState::AuthRequired
+        );
+    }
+
+    #[test]
+    fn a_login_outcome_never_resurrects_a_disconnected_or_incompatible_connector() {
+        for state in [
+            ConnectorState::Unconfigured,
+            ConnectorState::IncompatibleVersion,
+        ] {
+            assert_eq!(state.apply(ConnectorEvent::LoginSucceeded), state);
+            assert_eq!(state.apply(ConnectorEvent::LoginCanceled), state);
+        }
+    }
 
     const ALL_STATES: [ConnectorState; 9] = [
         ConnectorState::Unconfigured,

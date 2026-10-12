@@ -43,7 +43,11 @@ impl Migration {
 /// Version ranges are allocated per EPIC so two branches cannot renumber each
 /// other, and because [`MigrationRunner`] refuses a version below the applied
 /// head: 0001-0099 EPIC B (core), 0100-0199 EPIC C (job engine), 0200-0299
-/// EPIC F (audio/STT), 0300-0399 the desktop shell.
+/// EPIC F (audio/STT), 0300-0399 the desktop shell, 0400-0449 transcript
+/// tools and automation, 0450-0499 cloud AI, 0500-0599 direct-device import,
+/// 0600-0699 meeting intelligence, 0700-0799 export, portable archive and
+/// deletion, 0800-0899 source reconciliation and watched folders. Claim a
+/// range in this comment before using it.
 pub const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 1,
@@ -72,6 +76,12 @@ pub const MIGRATIONS: &[Migration] = &[
         version: 300,
         name: "desktop_shell",
         sql: include_str!("../migrations/0300_desktop_shell.sql"),
+    },
+    // 800+ is EPIC K's range: source reconciliation and watched folders.
+    Migration {
+        version: 800,
+        name: "source_reconciliation",
+        sql: include_str!("../migrations/0800_source_reconciliation.sql"),
     },
 ];
 

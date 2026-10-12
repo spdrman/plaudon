@@ -1,4 +1,4 @@
-//! The entire IPC surface: sixteen narrow commands and nothing else.
+//! The entire IPC surface: narrow commands and nothing else.
 //!
 //! Spec §15.1: no generic shell execution, no HTTP proxy and no generic
 //! filesystem command is exposed to JavaScript. Every command takes one
@@ -10,6 +10,7 @@ pub mod import;
 pub mod jobs;
 pub mod library;
 pub mod settings;
+pub mod sources;
 pub mod transcript;
 
 use tauri::State;
@@ -18,16 +19,21 @@ use crate::dto::{
     ActivityPage, CancelJobRequest, Capabilities, CompleteOnboardingRequest, EmptyRequest,
     ExportRecordingRequest, ExportRecordingResponse, GetRecordingRequest, GetTranscriptRequest,
     ImportFilesRequest, ImportFilesResponse, JobPage, JobSummary, ListActivityRequest,
-    ListJobsRequest, ListRecordingsRequest, LocalOnlyModeResponse, NotificationSettingsResponse,
-    Preferences, RecordingDetail, RecordingPage, RetryJobRequest, SaveTranscriptRevisionRequest,
-    SaveTranscriptRevisionResponse, SetLocalOnlyModeRequest, SetNotificationSettingsRequest,
-    SetOpenRouterKeyRequest, StatusResponse, TranscriptPage,
+    ListJobsRequest, ListRecordingsRequest, ListSourceArtifactsRequest,
+    ListSourceArtifactsResponse, LocalOnlyModeResponse, NotificationSettingsResponse,
+    PlaudConnectRequest, PlaudConnectorSnapshot, PlaudDisconnectResponse, PlaudImportRequest,
+    PlaudImportResponse, PlaudListRequest, PlaudListResponse, Preferences, RecordingDetail,
+    RecordingPage, RetryJobRequest, SaveTranscriptRevisionRequest, SaveTranscriptRevisionResponse,
+    SetLocalOnlyModeRequest, SetNotificationSettingsRequest, SetOpenRouterKeyRequest,
+    SourceAddFolderRequest, SourceAddFolderResponse, SourceReconcileRequest,
+    SourceReconcileResponse, SourceSyncRequest, SourceSyncResponse, StatusResponse, TranscriptPage,
 };
 use crate::error::{to_command_result, CommandResult};
 use crate::AppState;
 
 /// The command names this build exposes, in the order of the §15.2 table
-/// followed by the two additions recorded in ADR-0020.
+/// followed by the two additions recorded in ADR-0020 and the EPIC K source
+/// commands, which §15.2 lists verbatim.
 pub const COMMAND_ALLOWLIST: &[&str] = &[
     "get_capabilities",
     "list_recordings",
@@ -45,6 +51,15 @@ pub const COMMAND_ALLOWLIST: &[&str] = &[
     "remove_openrouter_key",
     "list_activity",
     "complete_onboarding",
+    "plaud_probe",
+    "plaud_connect",
+    "plaud_disconnect",
+    "plaud_list",
+    "plaud_import",
+    "source_add_folder",
+    "source_sync",
+    "source_reconcile",
+    "list_source_artifacts",
 ];
 
 /// Every command of the IPC surface, for [`tauri::Builder::invoke_handler`].
@@ -67,7 +82,16 @@ pub fn handler<R: tauri::Runtime>() -> impl Fn(tauri::ipc::Invoke<R>) -> bool + 
         set_openrouter_key,
         remove_openrouter_key,
         list_activity,
-        complete_onboarding
+        complete_onboarding,
+        plaud_probe,
+        plaud_connect,
+        plaud_disconnect,
+        plaud_list,
+        plaud_import,
+        source_add_folder,
+        source_sync,
+        source_reconcile,
+        list_source_artifacts
     ]
 }
 
@@ -199,6 +223,78 @@ pub async fn complete_onboarding(
     to_command_result(settings::complete_onboarding(&state.ports, request).await)
 }
 
+#[tauri::command]
+pub async fn plaud_probe(
+    state: State<'_, AppState>,
+    #[allow(unused_variables)] request: Option<EmptyRequest>,
+) -> CommandResult<PlaudConnectorSnapshot> {
+    to_command_result(sources::plaud_probe(&state.ports).await)
+}
+
+#[tauri::command]
+pub async fn plaud_connect(
+    state: State<'_, AppState>,
+    request: PlaudConnectRequest,
+) -> CommandResult<PlaudConnectorSnapshot> {
+    to_command_result(sources::plaud_connect(&state.ports, request).await)
+}
+
+#[tauri::command]
+pub async fn plaud_disconnect(
+    state: State<'_, AppState>,
+    #[allow(unused_variables)] request: Option<EmptyRequest>,
+) -> CommandResult<PlaudDisconnectResponse> {
+    to_command_result(sources::plaud_disconnect(&state.ports).await)
+}
+
+#[tauri::command]
+pub async fn plaud_list(
+    state: State<'_, AppState>,
+    request: PlaudListRequest,
+) -> CommandResult<PlaudListResponse> {
+    to_command_result(sources::plaud_list(&state.ports, request).await)
+}
+
+#[tauri::command]
+pub async fn plaud_import(
+    state: State<'_, AppState>,
+    request: PlaudImportRequest,
+) -> CommandResult<PlaudImportResponse> {
+    to_command_result(sources::plaud_import(&state.ports, request).await)
+}
+
+#[tauri::command]
+pub async fn source_add_folder(
+    state: State<'_, AppState>,
+    request: SourceAddFolderRequest,
+) -> CommandResult<SourceAddFolderResponse> {
+    to_command_result(sources::source_add_folder(&state.ports, request).await)
+}
+
+#[tauri::command]
+pub async fn source_sync(
+    state: State<'_, AppState>,
+    request: SourceSyncRequest,
+) -> CommandResult<SourceSyncResponse> {
+    to_command_result(sources::source_sync(&state.ports, request).await)
+}
+
+#[tauri::command]
+pub async fn source_reconcile(
+    state: State<'_, AppState>,
+    request: SourceReconcileRequest,
+) -> CommandResult<SourceReconcileResponse> {
+    to_command_result(sources::source_reconcile(&state.ports, request).await)
+}
+
+#[tauri::command]
+pub async fn list_source_artifacts(
+    state: State<'_, AppState>,
+    request: ListSourceArtifactsRequest,
+) -> CommandResult<ListSourceArtifactsResponse> {
+    to_command_result(sources::list_source_artifacts(&state.ports, request).await)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -248,6 +344,73 @@ mod tests {
                 registered.iter().any(|registered| registered == name),
                 "{name} is published but not registered"
             );
+        }
+    }
+
+    /// The IPC surface before EPIC K, as published in §15.2 and ADR-0020.
+    const BASELINE: [&str; 16] = [
+        "get_capabilities",
+        "list_recordings",
+        "import_files",
+        "get_recording",
+        "get_transcript",
+        "save_transcript_revision",
+        "list_jobs",
+        "cancel_job",
+        "retry_job",
+        "export_recording",
+        "set_notification_settings",
+        "set_local_only_mode",
+        "set_openrouter_key",
+        "remove_openrouter_key",
+        "list_activity",
+        "complete_onboarding",
+    ];
+
+    /// What EPIC K adds, quoted from the §15.2 table.
+    const EPIC_K_ADDITIONS: [&str; 9] = [
+        "plaud_probe",
+        "plaud_connect",
+        "plaud_disconnect",
+        "plaud_list",
+        "plaud_import",
+        "source_add_folder",
+        "source_sync",
+        "source_reconcile",
+        "list_source_artifacts",
+    ];
+
+    #[test]
+    fn the_source_commands_are_the_only_additions_for_epic_k() {
+        // Nothing the baseline published went away.
+        for name in BASELINE {
+            assert!(COMMAND_ALLOWLIST.contains(&name), "{name} was removed");
+        }
+        // Every EPIC K command is published and registered exactly once.
+        let registered = registered_handlers();
+        for name in EPIC_K_ADDITIONS {
+            assert_eq!(
+                COMMAND_ALLOWLIST.iter().filter(|n| **n == name).count(),
+                1,
+                "{name} must be allowlisted exactly once"
+            );
+            assert_eq!(
+                registered.iter().filter(|n| n.as_str() == name).count(),
+                1,
+                "{name} must be registered exactly once"
+            );
+        }
+        // Anything else touching a source is a widening of the surface.
+        for name in COMMAND_ALLOWLIST {
+            let is_source_command = name.starts_with("plaud_")
+                || name.starts_with("source_")
+                || name.contains("source_artifacts");
+            if is_source_command {
+                assert!(
+                    EPIC_K_ADDITIONS.contains(name),
+                    "{name} is a source command that EPIC K did not publish"
+                );
+            }
         }
     }
 

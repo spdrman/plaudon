@@ -29,6 +29,7 @@ path = "src/bin/secret_scan.rs"
 required-features = ["scanner"]
 
 [dependencies]
+parking_lot = { workspace = true }
 rand = { workspace = true }
 regex = { workspace = true }
 rusqlite = { workspace = true, optional = true }

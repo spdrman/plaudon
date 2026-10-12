@@ -16,6 +16,9 @@ import type {
   ImportOutcome,
   JobSummary,
   NotificationSettings,
+  PlaudConnectorSnapshot,
+  PlaudImportOutcome,
+  PlaudListResponse,
   Preferences,
   RecordingDetail,
   RecordingPage,
@@ -64,6 +67,67 @@ export function envelope(
   };
 }
 
+/** A connector that is signed in and ready; tests override the parts they script. */
+export function fakePlaudSnapshot(
+  overrides: Partial<PlaudConnectorSnapshot["diagnostics"]> = {},
+  disconnectVariant: PlaudConnectorSnapshot["disconnect"]["variant"] = "association_only",
+): PlaudConnectorSnapshot {
+  const diagnostics = {
+    state: "ready" as const,
+    headline: "Connected to PLAUD",
+    detail: "Your PLAUD recordings are listed.",
+    next_action: { kind: "none" as const },
+    detected_version: "1.4.2",
+    compatibility: "tested" as const,
+    program_origin: "standard installation directory",
+    last_error: null,
+    warnings: [],
+    ...overrides,
+  };
+  return {
+    status: {
+      state: diagnostics.state,
+      detected_version: diagnostics.detected_version,
+      version_validated: diagnostics.compatibility === "tested",
+      program_origin: diagnostics.program_origin,
+      last_error: diagnostics.last_error,
+      listing_possibly_incomplete: false,
+      scraping_warning: false,
+      updated_at_ms: 1_760_000_000_000,
+    },
+    diagnostics,
+    disconnect:
+      disconnectVariant === "association_only"
+        ? {
+            variant: "association_only",
+            label: "Disconnect from this app",
+            body: "This removes the link between this app and the PLAUD command line tool. It does not sign you out of PLAUD.",
+          }
+        : {
+            variant: "with_vendor_logout",
+            label: "Disconnect and sign out",
+            body: "This removes the link and runs the tool's sign-out command.",
+          },
+  };
+}
+
+export function fakePlaudListing(count = 2): PlaudListResponse {
+  return {
+    source_id: "src-plaud",
+    items: Array.from({ length: count }, (_, index) => ({
+      external_id: `rec_${index + 1}`,
+      display_name: `Recording ${index + 1}`,
+      captured_at: "2026-10-11T09:00:00Z",
+      duration_ms: 90_000 * (index + 1),
+      declared_byte_length: null,
+      imported_recording_id: null,
+    })),
+    next_cursor: null,
+    completeness: "complete",
+    empty_account_advisory: null,
+  };
+}
+
 export class FakeBackend implements Transport {
   recordings: FakeRecording[] = [];
   jobs: JobSummary[] = [];
@@ -79,11 +143,22 @@ export class FakeBackend implements Transport {
   failures = new Map<CommandName, ErrorEnvelope>();
   /** When true, emitted events skip a sequence number to simulate a dropped event. */
   dropNextEvent = false;
+  /** What `plaud_probe` / `plaud_connect` return; tests script the connector state. */
+  plaud: PlaudConnectorSnapshot = fakePlaudSnapshot();
+  /** What `plaud_list` returns. */
+  plaudListing: PlaudListResponse = fakePlaudListing();
+  /** Overrides the per-ID outcome of `plaud_import`. */
+  plaudImportOutcome: ((externalId: string) => PlaudImportOutcome) | null = null;
 
   #seq = 0;
   #handlers = new Map<EventKind, Set<(e: UiEvent) => void>>();
   #capabilities: Capabilities;
   #idCounter = 0;
+
+  #nextId(prefix: string): string {
+    this.#idCounter += 1;
+    return `${prefix}-${this.#idCounter}`;
+  }
 
   constructor(options: FakeBackendOptions = {}) {
     this.osNotificationPermission = options.osNotificationPermission ?? "granted";
@@ -368,6 +443,48 @@ export class FakeBackend implements Transport {
         };
         return this.preferences;
       }
+      case "plaud_probe":
+      case "plaud_connect":
+        return this.plaud;
+      case "plaud_disconnect":
+        return { disconnect: this.plaud.disconnect, snapshot: this.plaud };
+      case "plaud_list":
+        return this.plaudListing;
+      case "plaud_import":
+        return {
+          results: (request.external_ids as string[]).map(
+            (id): PlaudImportOutcome =>
+              this.plaudImportOutcome?.(id) ?? {
+                outcome: "imported",
+                external_id: id,
+                job_id: this.#nextId("job"),
+                recording_id: this.#nextId("rec"),
+              },
+          ),
+        };
+      case "source_add_folder":
+        return { source_id: this.#nextId("src"), rule: request.rule, recursive: request.recursive };
+      case "source_sync":
+        return {
+          job_id: this.#nextId("job"),
+          source_id: request.source_id,
+          source_kind: "plaud_cloud",
+          state: "completed",
+          folder: null,
+          listed: this.plaudListing.items.length,
+          imported_recording_ids: [],
+        };
+      case "source_reconcile":
+        return {
+          job_id: this.#nextId("job"),
+          source_id: request.source_id,
+          source_kind: "plaud_cloud",
+          decisions: [],
+          listing_complete: false,
+          folder: null,
+        };
+      case "list_source_artifacts":
+        return { artifacts: [] };
       default: {
         const never: never = command;
         throw envelope("INTERNAL_ERROR", `No such command: ${String(never)}`);
