@@ -43,8 +43,10 @@ impl Migration {
 /// Version ranges are allocated per EPIC so two branches cannot renumber each
 /// other, and because [`MigrationRunner`] refuses a version below the applied
 /// head: 0001-0099 EPIC B (core), 0100-0199 EPIC C (job engine), 0200-0299
-/// EPIC F (audio/STT), 0300-0399 the desktop shell, 0400-0499 transcript tools
-/// and automation, 0500-0599 direct-device import.
+/// EPIC F (audio/STT), 0300-0399 the desktop shell, 0400-0449 transcript tools
+/// and automation, 0450-0499 cloud AI, 0500-0599 direct-device import,
+/// 0600-0699 meeting intelligence, 0700-0799 export, portable archive and
+/// deletion.
 pub const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 1,
