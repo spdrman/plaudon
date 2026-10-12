@@ -206,3 +206,50 @@ describe("responses produced by the reference backend satisfy the schemas", () =
     expect(ok, ajv().errorsText(validator.errors)).toBe(true);
   });
 });
+
+describe("device commands produced by the reference backend satisfy the schemas", () => {
+  it("validates every device request and response", async () => {
+    const backend = new FakeBackend();
+    backend.devices.addDevice({ peripheral_id: "d1", support_status: "supported", permits_transfer: true, may_advertise_sync: true });
+    backend.devices.addDevice({ peripheral_id: "d2", nearby: false, authorized: true });
+
+    const scanRequest = { timeout_ms: 5000 };
+    validate("list_nearby_devices.request.schema.json", scanRequest);
+    validate("list_nearby_devices.response.schema.json", await backend.invoke("list_nearby_devices", scanRequest));
+
+    const probeRequest = { peripheral_id: "d1", experimental_probe_approved: false };
+    validate("device_probe.request.schema.json", probeRequest);
+    validate("device_probe.response.schema.json", await backend.invoke("device_probe", probeRequest));
+
+    const authorizeRequest = { peripheral_id: "d1", token_hex: "00112233445566778899aabbccddeeff" };
+    validate("device_authorize.request.schema.json", authorizeRequest);
+    const authorized = await backend.invoke("device_authorize", authorizeRequest);
+    validate("device_authorize.response.schema.json", authorized);
+    expect(JSON.stringify(authorized)).not.toContain(authorizeRequest.token_hex);
+
+    const idRequest = { peripheral_id: "d1" };
+    validate("device_list_recordings.request.schema.json", idRequest);
+    validate("device_list_recordings.response.schema.json", await backend.invoke("device_list_recordings", idRequest));
+
+    const importRequest = { peripheral_id: "d1", recording_ids: ["rec-1"], local_only: true };
+    validate("device_import.request.schema.json", importRequest);
+    validate("device_import.response.schema.json", await backend.invoke("device_import", importRequest));
+    backend.devices.setTransfer("d1", "rec-1", "receiving", { bytes_received: 5, observed_bytes_per_sec: 5, eta_seconds_estimate: 3 });
+    validate("device_list_recordings.response.schema.json", await backend.invoke("device_list_recordings", idRequest));
+
+    const syncRequest = { peripheral_id: "d1", enable_when_nearby: true };
+    validate("device_sync_policy.request.schema.json", syncRequest);
+    validate("device_sync_policy.response.schema.json", await backend.invoke("device_sync_policy", syncRequest));
+
+    const disconnectRequest = { peripheral_id: "d1", forget_authorization: true };
+    validate("device_disconnect.request.schema.json", disconnectRequest);
+    validate("device_disconnect.response.schema.json", await backend.invoke("device_disconnect", disconnectRequest));
+  });
+
+  it("accepts the new device event kinds", () => {
+    const schema = JSON.parse(readFileSync(EVENT_SCHEMA, "utf8"));
+    for (const kind of ["device.discovered", "device.connected", "device.compatibility_changed", "device.transfer_progress", "device.transfer_verified", "device.disconnected"]) {
+      expect(schema.properties.kind.enum).toContain(kind);
+    }
+  });
+});

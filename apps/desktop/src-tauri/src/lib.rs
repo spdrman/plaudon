@@ -2,9 +2,9 @@
 //!
 //! The shell owns three things and delegates everything else:
 //!
-//! * [`commands`] — sixteen narrow IPC commands (spec §15.2) that validate
-//!   their arguments in Rust and answer with typed DTOs or the §15.4 error
-//!   envelope;
+//! * [`commands`] — sixteen narrow IPC commands (spec §15.2) plus the seven
+//!   `device_*` commands of EPIC L, which validate their arguments in Rust and
+//!   answer with typed DTOs or the §15.4 error envelope;
 //! * [`events`] — the §15.3 UI event stream, sequenced after the database
 //!   commit that caused each event;
 //! * [`media`] — the `plaudon-media` scheme, which serves archived audio
@@ -31,11 +31,12 @@ use std::sync::Arc;
 
 use plaudon_domain::error::AppError;
 
+use crate::backend::devices::{DeviceRadio, DevicesBackend, DevicesDeps, NoRadio};
 use crate::backend::LocalBackend;
 use crate::events::{EventSink, TauriEventSink};
 use crate::ports::{
-    ActivityPort, CapabilitiesPort, ExportPort, ImportPort, JobsPort, LibraryPort, SettingsPort,
-    TranscriptPort,
+    ActivityPort, CapabilitiesPort, DevicesPort, ExportPort, ImportPort, JobsPort, LibraryPort,
+    SettingsPort, TranscriptPort,
 };
 use crate::secrets::{KeyringSecretStore, SecretStore};
 
@@ -58,6 +59,8 @@ pub struct AppPorts {
     pub settings: Arc<dyn SettingsPort>,
     /// Transcript export.
     pub export: Arc<dyn ExportPort>,
+    /// Direct PLAUD device access (read-only).
+    pub devices: Arc<dyn DevicesPort>,
     /// OS keychain storage.
     pub secrets: Arc<dyn SecretStore>,
     /// The UI event stream, shared with the notification activation route.
@@ -80,13 +83,35 @@ pub struct AppState {
 /// Build every port over the library in `app_data_dir`.
 ///
 /// This is the swap point: replacing the job engine or the library backend is
-/// a change to this function and nothing else.
+/// a change to this function and nothing else. The direct-device port gets no
+/// radio here (it reports [`dto::RadioState::UnavailableInBuild`]); a build
+/// with a BLE radio calls [`build_ports_with_radio`].
 pub async fn build_ports(
     app_data_dir: &Path,
     sink: Arc<dyn EventSink>,
     notifications: Arc<plaudon_notifications::Dispatcher>,
     secrets: Arc<dyn SecretStore>,
     approved_roots: Vec<PathBuf>,
+) -> Result<AppPorts, AppError> {
+    build_ports_with_radio(
+        app_data_dir,
+        sink,
+        notifications,
+        secrets,
+        approved_roots,
+        Arc::new(NoRadio),
+    )
+    .await
+}
+
+/// [`build_ports`] with a BLE radio actor for the direct-device port.
+pub async fn build_ports_with_radio(
+    app_data_dir: &Path,
+    sink: Arc<dyn EventSink>,
+    notifications: Arc<plaudon_notifications::Dispatcher>,
+    secrets: Arc<dyn SecretStore>,
+    approved_roots: Vec<PathBuf>,
+    radio: Arc<dyn DeviceRadio>,
 ) -> Result<AppPorts, AppError> {
     let backend = Arc::new(
         LocalBackend::open(
@@ -107,6 +132,11 @@ pub async fn build_ports(
         );
     }
     let events = backend.events().clone();
+    let devices = DevicesBackend::new(DevicesDeps::production(
+        backend.pool().clone(),
+        events.clone(),
+        radio,
+    )?);
     Ok(AppPorts {
         capabilities: Arc::clone(&backend) as Arc<dyn CapabilitiesPort>,
         library: Arc::clone(&backend) as Arc<dyn LibraryPort>,
@@ -116,6 +146,7 @@ pub async fn build_ports(
         import: Arc::clone(&backend) as Arc<dyn ImportPort>,
         settings: Arc::clone(&backend) as Arc<dyn SettingsPort>,
         export: backend as Arc<dyn ExportPort>,
+        devices: Arc::new(devices),
         secrets,
         events,
     })

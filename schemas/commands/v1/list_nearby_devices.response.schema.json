@@ -1,0 +1,143 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/list_nearby_devices.response.schema.json",
+  "title": "list_nearby_devices.response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "radio",
+    "devices",
+    "scanned_at"
+  ],
+  "properties": {
+    "radio": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "code",
+        "message"
+      ],
+      "properties": {
+        "state": {
+          "type": "string",
+          "enum": [
+            "scanned",
+            "permission_denied",
+            "unavailable_in_build"
+          ]
+        },
+        "code": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "devices": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "peripheral_id",
+          "section",
+          "advertised_name",
+          "rssi_dbm",
+          "transport",
+          "model",
+          "firmware",
+          "support_status",
+          "status_label",
+          "identity",
+          "identity_label",
+          "authorized",
+          "last_contact_at"
+        ],
+        "properties": {
+          "peripheral_id": {
+            "type": "string"
+          },
+          "section": {
+            "type": "string",
+            "enum": [
+              "nearby",
+              "connected",
+              "needs_authorization",
+              "unsupported_firmware",
+              "previously_linked"
+            ]
+          },
+          "advertised_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rssi_dbm": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "transport": {
+            "type": "string"
+          },
+          "model": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "firmware": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "support_status": {
+            "type": "string",
+            "enum": [
+              "not_evaluated",
+              "experimental",
+              "supported",
+              "known_unsupported"
+            ]
+          },
+          "status_label": {
+            "type": "string"
+          },
+          "identity": {
+            "type": "string",
+            "enum": [
+              "unverified",
+              "profile_authenticated"
+            ]
+          },
+          "identity_label": {
+            "type": "string"
+          },
+          "authorized": {
+            "type": "boolean"
+          },
+          "last_contact_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "scanned_at": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/device_import.request.schema.json",
+  "title": "device_import.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "peripheral_id",
+    "recording_ids",
+    "local_only"
+  ],
+  "properties": {
+    "peripheral_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "recording_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64
+      },
+      "minItems": 1,
+      "maxItems": 64,
+      "uniqueItems": true
+    },
+    "local_only": {
+      "type": "boolean"
+    }
+  }
+}

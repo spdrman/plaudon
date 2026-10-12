@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/device_authorize.request.schema.json",
+  "title": "device_authorize.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "peripheral_id",
+    "token_hex"
+  ],
+  "properties": {
+    "peripheral_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "token_hex": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[0-9a-fA-F]+$"
+    }
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/device_disconnect.response.schema.json",
+  "title": "device_disconnect.response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "peripheral_id",
+    "local_archive_retained",
+    "authorization_revoked"
+  ],
+  "properties": {
+    "peripheral_id": {
+      "type": "string"
+    },
+    "local_archive_retained": {
+      "const": true
+    },
+    "authorization_revoked": {
+      "type": "boolean"
+    }
+  }
+}

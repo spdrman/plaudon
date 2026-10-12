@@ -1,0 +1,237 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/device_probe.response.schema.json",
+  "title": "device_probe.response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "peripheral_id",
+    "advertised_name",
+    "transport",
+    "model",
+    "firmware",
+    "auth_mode",
+    "battery_percent",
+    "rssi_dbm",
+    "section",
+    "support_status",
+    "status_label",
+    "known_limitations",
+    "gate",
+    "identity",
+    "identity_label",
+    "capabilities",
+    "source_label",
+    "cloud_route",
+    "disclosures",
+    "provisioning_note",
+    "authorized",
+    "last_contact_at",
+    "sync"
+  ],
+  "properties": {
+    "peripheral_id": {
+      "type": "string"
+    },
+    "advertised_name": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "transport": {
+      "type": "string"
+    },
+    "model": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "firmware": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "auth_mode": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "battery_percent": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 100
+    },
+    "rssi_dbm": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "section": {
+      "type": "string",
+      "enum": [
+        "nearby",
+        "connected",
+        "needs_authorization",
+        "unsupported_firmware",
+        "previously_linked"
+      ]
+    },
+    "support_status": {
+      "type": "string",
+      "enum": [
+        "not_evaluated",
+        "experimental",
+        "supported",
+        "known_unsupported"
+      ]
+    },
+    "status_label": {
+      "type": "string"
+    },
+    "known_limitations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "permits_transfer",
+        "experimental_probe_available",
+        "experimental_probe_approved",
+        "refusal_code"
+      ],
+      "properties": {
+        "permits_transfer": {
+          "type": "boolean"
+        },
+        "experimental_probe_available": {
+          "type": "boolean"
+        },
+        "experimental_probe_approved": {
+          "type": "boolean"
+        },
+        "refusal_code": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "identity": {
+      "type": "string",
+      "enum": [
+        "unverified",
+        "profile_authenticated"
+      ]
+    },
+    "identity_label": {
+      "type": "string"
+    },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "capability",
+          "available",
+          "reason"
+        ],
+        "properties": {
+          "capability": {
+            "type": "string",
+            "enum": [
+              "read_only_listing",
+              "read_only_transfer",
+              "automatic_sync"
+            ]
+          },
+          "available": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "source_label": {
+      "type": "string"
+    },
+    "cloud_route": {
+      "type": "string",
+      "enum": [
+        "not_used",
+        "used"
+      ]
+    },
+    "disclosures": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "provisioning_note": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "authorized": {
+      "type": "boolean"
+    },
+    "last_contact_at": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "sync": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "peripheral_id",
+        "may_advertise",
+        "enabled",
+        "default_on",
+        "audit_code",
+        "explanation"
+      ],
+      "properties": {
+        "peripheral_id": {
+          "type": "string"
+        },
+        "may_advertise": {
+          "type": "boolean"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "default_on": {
+          "const": false
+        },
+        "audit_code": {
+          "type": "string"
+        },
+        "explanation": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

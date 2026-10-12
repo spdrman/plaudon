@@ -15,6 +15,7 @@
 
 pub mod activity;
 pub mod capabilities;
+pub mod devices;
 pub mod export;
 pub mod import;
 pub mod jobs;

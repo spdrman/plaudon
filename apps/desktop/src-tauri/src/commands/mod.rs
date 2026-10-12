@@ -1,4 +1,5 @@
-//! The entire IPC surface: sixteen narrow commands and nothing else.
+//! The entire IPC surface: the sixteen narrow commands of EPIC E plus the seven
+//! `device_*` commands of EPIC L, and nothing else.
 //!
 //! Spec §15.1: no generic shell execution, no HTTP proxy and no generic
 //! filesystem command is exposed to JavaScript. Every command takes one
@@ -6,6 +7,7 @@
 //! or the §15.4 error envelope. The allowlist test at the bottom of this file
 //! fails if a handler outside the published list is ever registered.
 
+pub mod devices;
 pub mod import;
 pub mod jobs;
 pub mod library;
@@ -15,13 +17,16 @@ pub mod transcript;
 use tauri::State;
 
 use crate::dto::{
-    ActivityPage, CancelJobRequest, Capabilities, CompleteOnboardingRequest, EmptyRequest,
+    ActivityPage, CancelJobRequest, Capabilities, CompleteOnboardingRequest, DeviceAuthStatusDto,
+    DeviceAuthorizeRequest, DeviceDisconnectDto, DeviceDisconnectRequest, DeviceIdRequest,
+    DeviceImportDto, DeviceImportRequest, DeviceListingDto, DeviceProbeDto, DeviceProbeRequest,
+    DeviceScanDto, DeviceSyncPolicyDto, DeviceSyncPolicyRequest, EmptyRequest,
     ExportRecordingRequest, ExportRecordingResponse, GetRecordingRequest, GetTranscriptRequest,
     ImportFilesRequest, ImportFilesResponse, JobPage, JobSummary, ListActivityRequest,
-    ListJobsRequest, ListRecordingsRequest, LocalOnlyModeResponse, NotificationSettingsResponse,
-    Preferences, RecordingDetail, RecordingPage, RetryJobRequest, SaveTranscriptRevisionRequest,
-    SaveTranscriptRevisionResponse, SetLocalOnlyModeRequest, SetNotificationSettingsRequest,
-    SetOpenRouterKeyRequest, StatusResponse, TranscriptPage,
+    ListJobsRequest, ListNearbyDevicesRequest, ListRecordingsRequest, LocalOnlyModeResponse,
+    NotificationSettingsResponse, Preferences, RecordingDetail, RecordingPage, RetryJobRequest,
+    SaveTranscriptRevisionRequest, SaveTranscriptRevisionResponse, SetLocalOnlyModeRequest,
+    SetNotificationSettingsRequest, SetOpenRouterKeyRequest, StatusResponse, TranscriptPage,
 };
 use crate::error::{to_command_result, CommandResult};
 use crate::AppState;
@@ -45,6 +50,13 @@ pub const COMMAND_ALLOWLIST: &[&str] = &[
     "remove_openrouter_key",
     "list_activity",
     "complete_onboarding",
+    "list_nearby_devices",
+    "device_probe",
+    "device_authorize",
+    "device_list_recordings",
+    "device_import",
+    "device_disconnect",
+    "device_sync_policy",
 ];
 
 /// Every command of the IPC surface, for [`tauri::Builder::invoke_handler`].
@@ -67,7 +79,14 @@ pub fn handler<R: tauri::Runtime>() -> impl Fn(tauri::ipc::Invoke<R>) -> bool + 
         set_openrouter_key,
         remove_openrouter_key,
         list_activity,
-        complete_onboarding
+        complete_onboarding,
+        list_nearby_devices,
+        device_probe,
+        device_authorize,
+        device_list_recordings,
+        device_import,
+        device_disconnect,
+        device_sync_policy
     ]
 }
 
@@ -197,6 +216,62 @@ pub async fn complete_onboarding(
     request: CompleteOnboardingRequest,
 ) -> CommandResult<Preferences> {
     to_command_result(settings::complete_onboarding(&state.ports, request).await)
+}
+
+#[tauri::command]
+pub async fn list_nearby_devices(
+    state: State<'_, AppState>,
+    request: ListNearbyDevicesRequest,
+) -> CommandResult<DeviceScanDto> {
+    to_command_result(devices::list_nearby_devices(&state.ports, request).await)
+}
+
+#[tauri::command]
+pub async fn device_probe(
+    state: State<'_, AppState>,
+    request: DeviceProbeRequest,
+) -> CommandResult<DeviceProbeDto> {
+    to_command_result(devices::device_probe(&state.ports, request).await)
+}
+
+#[tauri::command]
+pub async fn device_authorize(
+    state: State<'_, AppState>,
+    request: DeviceAuthorizeRequest,
+) -> CommandResult<DeviceAuthStatusDto> {
+    to_command_result(devices::device_authorize(&state.ports, request).await)
+}
+
+#[tauri::command]
+pub async fn device_list_recordings(
+    state: State<'_, AppState>,
+    request: DeviceIdRequest,
+) -> CommandResult<DeviceListingDto> {
+    to_command_result(devices::device_list_recordings(&state.ports, request).await)
+}
+
+#[tauri::command]
+pub async fn device_import(
+    state: State<'_, AppState>,
+    request: DeviceImportRequest,
+) -> CommandResult<DeviceImportDto> {
+    to_command_result(devices::device_import(&state.ports, request).await)
+}
+
+#[tauri::command]
+pub async fn device_disconnect(
+    state: State<'_, AppState>,
+    request: DeviceDisconnectRequest,
+) -> CommandResult<DeviceDisconnectDto> {
+    to_command_result(devices::device_disconnect(&state.ports, request).await)
+}
+
+#[tauri::command]
+pub async fn device_sync_policy(
+    state: State<'_, AppState>,
+    request: DeviceSyncPolicyRequest,
+) -> CommandResult<DeviceSyncPolicyDto> {
+    to_command_result(devices::device_sync_policy(&state.ports, request).await)
 }
 
 #[cfg(test)]

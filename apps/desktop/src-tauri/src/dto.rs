@@ -1140,6 +1140,377 @@ pub struct SetOpenRouterKeyRequest {
     pub key: String,
 }
 
+/* ----------------------------------------------------------------- devices */
+//
+// Spec §4.2A, §5.2 "PLAUD Devices", §15.2 `device_*`, App. B.8. Every label a
+// device screen shows is produced here from the compatibility register or from
+// a `*_ui_label()` helper in `plaudon_source_plaud_device`; the UI renders the
+// strings and never composes a compatibility claim of its own.
+
+/// The App. B.8 list sections.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DeviceSection {
+    /// Advertising now; not probed or not yet linked.
+    Nearby,
+    /// A live session authenticated with the stored device credential.
+    Connected,
+    /// Probed, supported by a named profile, but no credential is stored.
+    NeedsAuthorization,
+    /// Probed, but outside every validated profile or needing an
+    /// authentication mode this build does not implement.
+    UnsupportedFirmware,
+    /// Linked before and not advertising right now.
+    PreviouslyLinked,
+}
+
+/// Whether the radio could be consulted.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RadioState {
+    /// A scan ran; an empty device list means nothing was heard.
+    Scanned,
+    /// The operating system denied radio access; nothing was scanned.
+    PermissionDenied,
+    /// This build has no BLE radio; nothing was scanned.
+    UnavailableInBuild,
+}
+
+/// Radio status of a scan, so "no devices nearby" is never confused with
+/// "we could not look" (spec §5.4).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RadioStatusDto {
+    /// What happened.
+    pub state: RadioState,
+    /// Stable error code when the radio could not be used.
+    pub code: Option<String>,
+    /// Plain-language explanation.
+    pub message: String,
+}
+
+/// Whether a cloud route was involved in a device operation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CloudRoute {
+    /// No cloud route was involved: the bytes travel device → this computer.
+    NotUsed,
+    /// A cloud route was involved.
+    Used,
+}
+
+/// One row of the Devices list.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeviceCandidateDto {
+    /// Host-assigned peripheral identifier; stable on this host only.
+    pub peripheral_id: String,
+    /// List section.
+    pub section: DeviceSection,
+    /// Local name exactly as advertised. Display only; never an identity.
+    pub advertised_name: Option<String>,
+    /// Signal strength in dBm, when the host reports it.
+    pub rssi_dbm: Option<i16>,
+    /// Transport, for example `ble`.
+    pub transport: String,
+    /// Model, only after a probe established it.
+    pub model: Option<String>,
+    /// Firmware, only after a probe established it.
+    pub firmware: Option<String>,
+    /// Register status of the probed profile.
+    pub support_status: plaudon_source_plaud_device::SupportStatus,
+    /// Register-derived label of `support_status`.
+    pub status_label: String,
+    /// Identity assurance.
+    pub identity: plaudon_source_plaud_device::IdentityAssurance,
+    /// The exact phrase for `identity`.
+    pub identity_label: String,
+    /// Whether a device credential is stored in the OS vault.
+    pub authorized: bool,
+    /// Last time the device answered this application.
+    pub last_contact_at: Option<String>,
+}
+
+/// `list_nearby_devices` request.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ListNearbyDevicesRequest {
+    /// Scan duration in milliseconds.
+    pub timeout_ms: u64,
+}
+
+/// `list_nearby_devices` response.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeviceScanDto {
+    /// Whether the radio was consulted.
+    pub radio: RadioStatusDto,
+    /// Candidates plus previously linked devices.
+    pub devices: Vec<DeviceCandidateDto>,
+    /// When the scan finished; `null` if no scan ran.
+    pub scanned_at: Option<String>,
+}
+
+/// What the gate decided for a probed profile.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeviceGateDto {
+    /// Whether a transfer is permitted (only a `Supported` register cell).
+    pub permits_transfer: bool,
+    /// Whether the user may opt in to a read-only experimental probe.
+    pub experimental_probe_available: bool,
+    /// Whether an experimental probe was approved for this device.
+    pub experimental_probe_approved: bool,
+    /// Stable refusal code, when the gate refused or only offered a probe.
+    pub refusal_code: Option<String>,
+}
+
+/// A capability a device detail page lists.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DeviceCapability {
+    /// Read-only listing of recordings on the device.
+    ReadOnlyListing,
+    /// Read-only transfer of a listed recording.
+    ReadOnlyTransfer,
+    /// Automatic transfer when the device is nearby.
+    AutomaticSync,
+}
+
+/// One capability and whether it is available now.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeviceCapabilityDto {
+    /// Which capability.
+    pub capability: DeviceCapability,
+    /// Whether it may be used now.
+    pub available: bool,
+    /// Why it is not available, when it is not.
+    pub reason: Option<String>,
+}
+
+/// Whether automatic sync may be advertised for a device (spec §4.2A.7).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeviceSyncPolicyDto {
+    /// Host-assigned peripheral identifier.
+    pub peripheral_id: String,
+    /// Whether the interface may offer the option at all.
+    pub may_advertise: bool,
+    /// Whether the user opted in.
+    pub enabled: bool,
+    /// Whether the option would start on; always `false`.
+    pub default_on: bool,
+    /// Stable code of the audit outcome behind `may_advertise`.
+    pub audit_code: String,
+    /// Plain-language reason from the audit outcome.
+    pub explanation: String,
+}
+
+/// `device_probe` request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeviceProbeRequest {
+    /// Host-assigned peripheral identifier.
+    pub peripheral_id: String,
+    /// The user explicitly approved a read-only experimental probe.
+    pub experimental_probe_approved: bool,
+}
+
+/// `device_probe` response: evidence about one device.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeviceProbeDto {
+    /// Host-assigned peripheral identifier.
+    pub peripheral_id: String,
+    /// Local name exactly as advertised.
+    pub advertised_name: Option<String>,
+    /// Transport, for example `ble`.
+    pub transport: String,
+    /// Model as probed; `null` when it could not be established.
+    pub model: Option<String>,
+    /// Firmware as probed; `null` when it could not be verified.
+    pub firmware: Option<String>,
+    /// Authentication mode the device offered; `null` when unknown.
+    pub auth_mode: Option<String>,
+    /// Battery level; `null` when the device did not report one.
+    pub battery_percent: Option<u8>,
+    /// Signal strength in dBm; `null` when unknown.
+    pub rssi_dbm: Option<i16>,
+    /// List section.
+    pub section: DeviceSection,
+    /// Register status.
+    pub support_status: plaudon_source_plaud_device::SupportStatus,
+    /// Register-derived label of `support_status`.
+    pub status_label: String,
+    /// `known_limitations` of the matched register row.
+    pub known_limitations: Vec<String>,
+    /// The gate's decision.
+    pub gate: DeviceGateDto,
+    /// Identity assurance.
+    pub identity: plaudon_source_plaud_device::IdentityAssurance,
+    /// The exact phrase for `identity`.
+    pub identity_label: String,
+    /// Capabilities and their availability.
+    pub capabilities: Vec<DeviceCapabilityDto>,
+    /// Label of the media this source yields, for example
+    /// `Device BLE · compressed ASR`.
+    pub source_label: String,
+    /// Whether a cloud route is involved. Direct BLE never involves one.
+    pub cloud_route: CloudRoute,
+    /// Radio disclosures the user must read for this profile.
+    pub disclosures: Vec<String>,
+    /// How a credential for this device may be obtained.
+    pub provisioning_note: Option<String>,
+    /// Whether a credential is stored in the OS vault.
+    pub authorized: bool,
+    /// Last time the device answered this application.
+    pub last_contact_at: Option<String>,
+    /// Whether automatic sync may be advertised.
+    pub sync: DeviceSyncPolicyDto,
+}
+
+/// `device_authorize` request.
+///
+/// Deliberately not `Debug`, not `Serialize` and not `Clone`: the token is
+/// transported once, stored in the OS vault and never returned.
+#[allow(missing_debug_implementations)]
+#[derive(Deserialize)]
+pub struct DeviceAuthorizeRequest {
+    /// Host-assigned peripheral identifier.
+    pub peripheral_id: String,
+    /// Token the user already holds for their own device, hex encoded.
+    pub token_hex: String,
+}
+
+/// `device_authorize` response: status only, never the token.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeviceAuthStatusDto {
+    /// Host-assigned peripheral identifier.
+    pub peripheral_id: String,
+    /// Whether a credential is stored in the OS vault.
+    pub credential_stored: bool,
+    /// Identity assurance. Storing a credential does not authenticate.
+    pub identity: plaudon_source_plaud_device::IdentityAssurance,
+    /// The exact phrase for `identity`.
+    pub identity_label: String,
+}
+
+/// Request carrying only a device identifier.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeviceIdRequest {
+    /// Host-assigned peripheral identifier.
+    pub peripheral_id: String,
+}
+
+/// How complete a device listing is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ListingCompleteness {
+    /// A delta of unsynchronized files; files synced elsewhere may be absent.
+    UnsyncedDelta,
+    /// A delta, and the device returned fewer entries than it holds.
+    UnsyncedDeltaTruncated,
+    /// The completeness of the listing is unknown.
+    Unknown,
+}
+
+/// Transfer state and progress of one on-device recording.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeviceTransferDto {
+    /// Transfer identifier; `null` until a transfer was requested.
+    pub transfer_id: Option<String>,
+    /// Ledger state.
+    pub state: plaudon_source_plaud_device::TransferState,
+    /// `TransferState::ui_label`.
+    pub state_label: String,
+    /// Bytes received so far; `null` before any arrived.
+    pub bytes_received: Option<u64>,
+    /// Observed bandwidth in bytes per second; `null` until measurable.
+    pub observed_bytes_per_sec: Option<u64>,
+    /// An estimate of the seconds remaining; `null` when it cannot be
+    /// estimated. It is never a promise.
+    pub eta_seconds_estimate: Option<u64>,
+    /// Whether the received bytes passed verification.
+    pub verified: bool,
+    /// Label of the media this transfer yields.
+    pub source_label: String,
+    /// Whether a cloud route was involved.
+    pub cloud_route: CloudRoute,
+}
+
+/// One recording the device lists.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeviceRecordingDto {
+    /// Device-scoped recording identifier.
+    pub recording_id: String,
+    /// Display name the device reports. Advisory metadata only.
+    pub display_name: String,
+    /// Byte length the device declares. A claim, not a measurement.
+    pub declared_byte_length: u64,
+    /// Capture time the device reports.
+    pub captured_at: Option<String>,
+    /// Transfer state.
+    pub transfer: DeviceTransferDto,
+}
+
+/// `device_list_recordings` response.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeviceListingDto {
+    /// Host-assigned peripheral identifier.
+    pub peripheral_id: String,
+    /// Recordings the device lists right now.
+    pub items: Vec<DeviceRecordingDto>,
+    /// Number of entries the device returned.
+    pub file_count: u32,
+    /// Completeness qualifier.
+    pub completeness: ListingCompleteness,
+    /// Plain-language statement that the scan is not an exhaustive history.
+    pub completeness_label: String,
+    /// Identity assurance after the listing authenticated.
+    pub identity: plaudon_source_plaud_device::IdentityAssurance,
+    /// The exact phrase for `identity`.
+    pub identity_label: String,
+}
+
+/// `device_import` request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeviceImportRequest {
+    /// Host-assigned peripheral identifier.
+    pub peripheral_id: String,
+    /// Recordings from the device's own listing.
+    pub recording_ids: Vec<String>,
+    /// Process the result locally only.
+    pub local_only: bool,
+}
+
+/// `device_import` response.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeviceImportDto {
+    /// One transfer identifier per requested recording, in request order.
+    pub transfer_ids: Vec<String>,
+}
+
+/// `device_disconnect` request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeviceDisconnectRequest {
+    /// Host-assigned peripheral identifier.
+    pub peripheral_id: String,
+    /// Also remove the stored credential and the link.
+    pub forget_authorization: bool,
+}
+
+/// `device_disconnect` response.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeviceDisconnectDto {
+    /// Host-assigned peripheral identifier.
+    pub peripheral_id: String,
+    /// Always `true`: recordings already archived are never removed.
+    pub local_archive_retained: bool,
+    /// Whether the stored credential was removed.
+    pub authorization_revoked: bool,
+}
+
+/// `device_sync_policy` request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeviceSyncPolicyRequest {
+    /// Host-assigned peripheral identifier.
+    pub peripheral_id: String,
+    /// Opt in to read-only transfer when the device is nearby.
+    pub enable_when_nearby: bool,
+}
+
 /* ------------------------------------------------------------------ events */
 
 /// §15.3 event names.
@@ -1181,6 +1552,24 @@ pub enum EventKind {
     /// two command additions.
     #[serde(rename = "ui.activation_requested")]
     ActivationRequested,
+    /// A device advertisement was heard (spec §15.3).
+    #[serde(rename = "device.discovered")]
+    DeviceDiscovered,
+    /// A device session was authenticated.
+    #[serde(rename = "device.connected")]
+    DeviceConnected,
+    /// A probe changed what is known about a device's compatibility.
+    #[serde(rename = "device.compatibility_changed")]
+    DeviceCompatibilityChanged,
+    /// Bytes of a device transfer arrived or its state changed.
+    #[serde(rename = "device.transfer_progress")]
+    DeviceTransferProgress,
+    /// A device transfer passed verification.
+    #[serde(rename = "device.transfer_verified")]
+    DeviceTransferVerified,
+    /// A device session ended.
+    #[serde(rename = "device.disconnected")]
+    DeviceDisconnected,
 }
 
 impl EventKind {
@@ -1197,6 +1586,12 @@ impl EventKind {
         Self::LibraryChanged,
         Self::ActivityAdded,
         Self::ActivationRequested,
+        Self::DeviceDiscovered,
+        Self::DeviceConnected,
+        Self::DeviceCompatibilityChanged,
+        Self::DeviceTransferProgress,
+        Self::DeviceTransferVerified,
+        Self::DeviceDisconnected,
     ];
 
     /// Stable wire string, which is also the Tauri event name.
@@ -1214,6 +1609,12 @@ impl EventKind {
             Self::LibraryChanged => "library.changed",
             Self::ActivityAdded => "activity.added",
             Self::ActivationRequested => "ui.activation_requested",
+            Self::DeviceDiscovered => "device.discovered",
+            Self::DeviceConnected => "device.connected",
+            Self::DeviceCompatibilityChanged => "device.compatibility_changed",
+            Self::DeviceTransferProgress => "device.transfer_progress",
+            Self::DeviceTransferVerified => "device.transfer_verified",
+            Self::DeviceDisconnected => "device.disconnected",
         }
     }
 }
@@ -1283,8 +1684,22 @@ mod tests {
             let json = serde_json::to_string(kind).unwrap();
             assert_eq!(json, format!("\"{}\"", kind.as_str()));
         }
-        // The ten §15.3 names plus the ADR-0020 activation event.
-        assert_eq!(EventKind::ALL.len(), 11);
+        // The ten job/library names, the ADR-0020 activation event and the six
+        // §15.3 `device.*` names.
+        assert_eq!(EventKind::ALL.len(), 17);
+        for name in [
+            "device.discovered",
+            "device.connected",
+            "device.compatibility_changed",
+            "device.transfer_progress",
+            "device.transfer_verified",
+            "device.disconnected",
+        ] {
+            assert!(
+                EventKind::ALL.iter().any(|kind| kind.as_str() == name),
+                "{name} is not an event kind"
+            );
+        }
     }
 
     #[test]

@@ -1,8 +1,16 @@
 /**
- * Navigation model (§5.1). Five top-level destinations; recording detail stays
- * inside Library and never becomes a top-level destination.
+ * Navigation model (§5.1). Six top-level destinations; recording detail stays
+ * inside Library and never becomes a top-level destination. Devices (App. B.8)
+ * is last so the Mod+1…Mod+5 shortcuts keep their meaning.
  */
-export const DESTINATIONS = ["library", "inbox", "jobs", "templates", "settings"] as const;
+export const DESTINATIONS = [
+  "library",
+  "inbox",
+  "jobs",
+  "templates",
+  "settings",
+  "devices",
+] as const;
 export type Destination = (typeof DESTINATIONS)[number];
 
 export type Route =
@@ -13,7 +21,9 @@ export type Route =
   | { name: "jobs.job"; jobId: string }
   | { name: "templates" }
   | { name: "settings" }
-  | { name: "settings.activity" };
+  | { name: "settings.activity" }
+  | { name: "devices" }
+  | { name: "devices.device"; peripheralId: string };
 
 export const DEFAULT_ROUTE: Route = { name: "library" };
 
@@ -23,6 +33,7 @@ export const DESTINATION_LABELS: Record<Destination, string> = {
   jobs: "Jobs",
   templates: "Templates",
   settings: "Settings",
+  devices: "Devices",
 };
 
 /** The top-level destination that owns a route, for nav highlighting. */
@@ -41,6 +52,9 @@ export function destinationOf(route: Route): Destination {
     case "settings":
     case "settings.activity":
       return "settings";
+    case "devices":
+    case "devices.device":
+      return "devices";
     default: {
       const never: never = route;
       throw new Error(`unhandled route ${JSON.stringify(never)}`);
@@ -66,6 +80,10 @@ export function formatRoute(route: Route): string {
       return "#/settings";
     case "settings.activity":
       return "#/settings/activity";
+    case "devices":
+      return "#/devices";
+    case "devices.device":
+      return `#/devices/${encodeURIComponent(route.peripheralId)}`;
     default: {
       const never: never = route;
       throw new Error(`unhandled route ${JSON.stringify(never)}`);
@@ -90,6 +108,8 @@ export function parseRoute(hash: string): Route {
       return { name: "templates" };
     case "settings":
       return tail === "activity" ? { name: "settings.activity" } : { name: "settings" };
+    case "devices":
+      return tail ? { name: "devices.device", peripheralId: tail } : { name: "devices" };
     default:
       return DEFAULT_ROUTE;
   }
@@ -99,5 +119,6 @@ export function parseRoute(hash: string): Route {
 export function routeTitle(route: Route): string {
   if (route.name === "library.recording") return "Recording";
   if (route.name === "settings.activity") return "Activity history";
+  if (route.name === "devices.device") return "Device";
   return DESTINATION_LABELS[destinationOf(route)];
 }

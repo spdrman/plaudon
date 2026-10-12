@@ -16,6 +16,7 @@ import { JobsScreen } from "../features/jobs/JobsScreen";
 import { TemplatesScreen } from "../features/templates/TemplatesScreen";
 import { SettingsScreen } from "../features/settings/SettingsScreen";
 import { ActivityScreen } from "../features/activity/ActivityScreen";
+import { DevicesScreen } from "../features/devices/DevicesScreen";
 import { ImportDropTarget } from "../features/import/ImportDropTarget";
 import { ImportButton } from "../features/import/ImportButton";
 import { ActivityBell } from "../features/activity/ActivityBell";
@@ -197,6 +198,18 @@ function RouteView() {
       );
     case "templates":
       return <TemplatesScreen />;
+    case "devices":
+    case "devices.device":
+      return (
+        <DevicesScreen
+          selectedId={route.name === "devices.device" ? route.peripheralId : null}
+          onSelect={(peripheralId) =>
+            navigate(
+              peripheralId ? { name: "devices.device", peripheralId } : { name: "devices" },
+            )
+          }
+        />
+      );
     case "settings":
       return <SettingsScreen />;
     case "settings.activity":
