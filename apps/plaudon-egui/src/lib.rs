@@ -262,13 +262,13 @@ impl PlaudonEgui {
     fn refresh_library(&mut self) {
         let id = self.engine.dispatcher().send(Self::list_command());
         self.state.pending_list = Some(id);
-        self.state.status = "Loading library…".to_owned();
+        "Loading library…".clone_into(&mut self.state.status);
     }
 
     fn start_import(&mut self) {
         let paths = (self.hooks.pick_audio_files)();
         if paths.is_empty() {
-            self.state.status = "Import cancelled".to_owned();
+            "Import cancelled".clone_into(&mut self.state.status);
             return;
         }
         let count = paths.len();
@@ -364,7 +364,7 @@ impl PlaudonEgui {
                 // The envelope is the only thing the user ever sees: it carries
                 // a canonical message and a diagnostic id, never a path, a key
                 // or transcript text (spec §15.4).
-                self.state.status = envelope.message.clone();
+                self.state.status.clone_from(&envelope.message);
                 self.log(format!(
                     "{command} failed: {} ({})",
                     envelope.message, envelope.diagnostic_id

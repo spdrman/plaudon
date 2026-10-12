@@ -60,7 +60,7 @@ impl LibraryApp {
         intents.extend(produced);
     }
 
-    fn respond(&mut self, id: u64, result: Result<AppResponse, ErrorEnvelope>) {
+    fn respond(&mut self, id: u64, result: &Result<AppResponse, ErrorEnvelope>) {
         let Self {
             screen,
             sent,
@@ -72,7 +72,7 @@ impl LibraryApp {
             sent.push(command);
             CommandId::from_raw(*next_id)
         };
-        screen.on_response(CommandId::from_raw(id), &result, &mut send);
+        screen.on_response(CommandId::from_raw(id), result, &mut send);
     }
 
     fn list_requests(&self) -> Vec<&ListRecordingsRequest> {
@@ -115,7 +115,7 @@ fn harness_with_rows(count: usize) -> Harness<'static, LibraryApp> {
     let items = rows(count);
     harness.state_mut().respond(
         1,
-        Ok(AppResponse::ListRecordings(page(items, None, count as u64))),
+        &Ok(AppResponse::ListRecordings(page(items, None, count as u64))),
     );
     harness.run();
     harness
@@ -151,7 +151,7 @@ fn an_empty_library_offers_import_and_connect_plaud() {
     let mut harness = harness();
     harness.state_mut().respond(
         1,
-        Ok(AppResponse::ListRecordings(page(Vec::new(), None, 0))),
+        &Ok(AppResponse::ListRecordings(page(Vec::new(), None, 0))),
     );
     harness.run();
 
@@ -177,7 +177,7 @@ fn an_empty_result_under_a_filter_offers_to_clear_it_instead() {
     let id = harness.state().list_requests().len() as u64;
     harness.state_mut().respond(
         id,
-        Ok(AppResponse::ListRecordings(page(Vec::new(), None, 0))),
+        &Ok(AppResponse::ListRecordings(page(Vec::new(), None, 0))),
     );
     harness.run();
     // A sort is not a filter, so the unfiltered empty state is still right.
@@ -275,7 +275,7 @@ fn clicking_a_column_sorts_by_it_and_clicking_again_reverses() {
     let id = harness.state().list_requests().len() as u64;
     harness.state_mut().respond(
         id,
-        Ok(AppResponse::ListRecordings(page(rows(10), None, 10))),
+        &Ok(AppResponse::ListRecordings(page(rows(10), None, 10))),
     );
     harness.run();
 
@@ -531,7 +531,7 @@ fn reaching_the_last_loaded_row_asks_for_the_next_page_by_cursor() {
     let mut harness = harness();
     harness.state_mut().respond(
         1,
-        Ok(AppResponse::ListRecordings(page(
+        &Ok(AppResponse::ListRecordings(page(
             rows(100),
             Some("ff01"),
             250,
@@ -606,7 +606,7 @@ fn a_rejected_file_is_reported_next_to_the_accepted_ones() {
         + 1;
     harness.state_mut().respond(
         import_id,
-        Ok(AppResponse::ImportFiles(ImportFilesResponse {
+        &Ok(AppResponse::ImportFiles(ImportFilesResponse {
             results: vec![
                 ImportOutcome::Accepted {
                     path: "/tmp/plaudon-test/board.wav".to_owned(),
@@ -647,7 +647,7 @@ fn a_duplicate_asks_rather_than_deciding_for_the_user() {
         + 1;
     harness.state_mut().respond(
         import_id,
-        Ok(AppResponse::ImportFiles(ImportFilesResponse {
+        &Ok(AppResponse::ImportFiles(ImportFilesResponse {
             results: vec![ImportOutcome::Duplicate {
                 path: "/tmp/plaudon-test/copy.wav".to_owned(),
                 sha256: plaudon_domain::media::Sha256Digest::of(b"same"),
@@ -687,7 +687,7 @@ fn a_failed_page_shows_the_envelope_message_and_a_way_forward() {
     let mut harness = harness();
     harness
         .state_mut()
-        .respond(1, Err(envelope(AppErrorCode::StorageUnavailable)));
+        .respond(1, &Err(envelope(AppErrorCode::StorageUnavailable)));
     harness.run();
 
     let message = AppErrorCode::StorageUnavailable.canonical_message();
@@ -710,7 +710,7 @@ fn an_error_never_renders_an_internal_detail() {
     let mut harness = harness();
     harness
         .state_mut()
-        .respond(1, Err(envelope(AppErrorCode::InternalError)));
+        .respond(1, &Err(envelope(AppErrorCode::InternalError)));
     harness.run();
     for node in a11y::nodes(&harness) {
         if let Some(text) = node.announced() {

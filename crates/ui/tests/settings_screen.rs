@@ -351,7 +351,7 @@ fn an_intent_that_is_not_a_command_is_not_counted_as_one() {
     out.push(SettingsIntent::CopyText("sha256:abc".to_owned()));
     assert_eq!(out.command_names(), Vec::<&str>::new());
     assert_eq!(out.drain().len(), 2);
-    assert!(out.is_empty());
+    assert!(out.is_empty(), "expected out to be empty, got {out:?}");
 }
 
 #[test]

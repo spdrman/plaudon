@@ -449,7 +449,10 @@ fn the_resync_request_repeats_the_page_on_screen_under_the_current_filters() {
     let initial = harness.state().screen.resync_request();
     assert_eq!(initial.cursor, None);
     assert_eq!(initial.limit, 50);
-    assert!(initial.states.is_empty() && initial.kinds.is_empty());
+    assert!(
+        initial.states.is_empty() && initial.kinds.is_empty(),
+        "expected initial.states.is_empty() && initial.kinds to be empty"
+    );
 
     harness.get_by_label("Transcription").click();
     harness.run();

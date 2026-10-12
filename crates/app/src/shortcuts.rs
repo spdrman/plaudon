@@ -210,6 +210,10 @@ const KEY_ALIASES: &[(&str, &str)] = &[
 /// `command` is the platform modifier, stored apart from a literal `ctrl` so a
 /// binding made on macOS means the same thing on Windows.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+// The four flags are the four physical modifier keys a keyboard reports; they
+// are independent by definition, so folding them into enums would only hide
+// the shape the OS hands us.
+#[allow(clippy::struct_excessive_bools)]
 pub struct KeyChord {
     /// Canonical key name, one of [`KEY_NAMES`].
     pub key: String,
@@ -323,7 +327,7 @@ impl KeyChord {
                 }
             }
         }
-        parsed.key = canonical_key(key?)?.to_owned();
+        canonical_key(key?)?.clone_into(&mut parsed.key);
         Some(parsed)
     }
 
@@ -891,7 +895,10 @@ mod tests {
         let mut bindings: ShortcutBindings =
             serde_json::from_str(r#"{"overrides":{"nav_moon":"Mod+M"}}"#).unwrap();
         bindings.check(&specs()).unwrap();
-        assert!(bindings.overrides().is_empty());
+        assert!(
+            bindings.overrides().is_empty(),
+            "expected bindings.overrides() to be empty"
+        );
     }
 
     #[test]

@@ -548,7 +548,10 @@ fn the_audio_fixtures_validate_and_agree_on_content() {
             "{label} length {frames} differs from wav {wav_frames} by more than a second"
         );
     }
-    assert!(!wav.is_empty() && !mp3.is_empty() && !m4a.is_empty());
+    assert!(
+        !wav.is_empty() && !mp3.is_empty() && !m4a.is_empty(),
+        "expected wav.is_empty() && !mp3.is_empty() && !m4a to be non-empty"
+    );
 }
 
 #[test]

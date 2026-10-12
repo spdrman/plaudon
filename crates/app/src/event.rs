@@ -486,7 +486,7 @@ mod tests {
                 ..
             })
         ));
-        assert!(rx.is_empty());
+        assert!(rx.is_empty(), "expected rx to be empty, got {rx:?}");
     }
 
     #[test]
@@ -537,7 +537,7 @@ mod tests {
             EventKind::LibraryChanged,
             Some(RecordingId::new()),
         )));
-        assert!(rx.is_empty());
+        assert!(rx.is_empty(), "expected rx to be empty, got {rx:?}");
         assert_eq!(rx.stats().duplicates, 1);
     }
 
@@ -664,7 +664,10 @@ mod tests {
     fn draining_an_idle_channel_yields_nothing_so_the_interface_can_sleep() {
         let (_tx, rx) = open(8);
         let _ = rx.drain();
-        assert!(rx.drain().is_empty());
+        assert!(
+            rx.drain().is_empty(),
+            "the receiver has nothing left to drain"
+        );
         assert!(rx.next_timeout(Duration::from_millis(1)).is_none());
     }
 }

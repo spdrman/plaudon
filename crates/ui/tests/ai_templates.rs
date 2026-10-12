@@ -107,10 +107,10 @@ fn copy_summary() -> TemplateSummaryDto {
     }
 }
 
-fn catalogue() -> Result<AppResponse, ErrorEnvelope> {
-    Ok(AppResponse::ListTemplates(ListTemplatesResponse {
+fn catalogue() -> AppResponse {
+    AppResponse::ListTemplates(ListTemplatesResponse {
         templates: vec![built_in_summary(), copy_summary()],
-    }))
+    })
 }
 
 fn document(template_id: &str, version: &str, built_in: bool) -> TemplateDocumentDto {
@@ -165,36 +165,32 @@ fn document(template_id: &str, version: &str, built_in: bool) -> TemplateDocumen
 
 /// A user copy's history: two stored versions, newest first, each with the
 /// time it was written.
-fn history() -> Result<AppResponse, ErrorEnvelope> {
-    Ok(AppResponse::ListTemplateVersions(
-        ListTemplateVersionsResponse {
-            versions: vec![
-                TemplateVersionDto {
-                    version: "2".to_owned(),
-                    created_at: Some("2026-03-04T10:00:00Z".to_owned()),
-                    is_current: true,
-                },
-                TemplateVersionDto {
-                    version: "1".to_owned(),
-                    created_at: Some("2026-03-01T09:00:00Z".to_owned()),
-                    is_current: false,
-                },
-            ],
-        },
-    ))
+fn history() -> AppResponse {
+    AppResponse::ListTemplateVersions(ListTemplateVersionsResponse {
+        versions: vec![
+            TemplateVersionDto {
+                version: "2".to_owned(),
+                created_at: Some("2026-03-04T10:00:00Z".to_owned()),
+                is_current: true,
+            },
+            TemplateVersionDto {
+                version: "1".to_owned(),
+                created_at: Some("2026-03-01T09:00:00Z".to_owned()),
+                is_current: false,
+            },
+        ],
+    })
 }
 
 /// A built-in's history: one version, compiled in, with no stored time.
-fn built_in_history() -> Result<AppResponse, ErrorEnvelope> {
-    Ok(AppResponse::ListTemplateVersions(
-        ListTemplateVersionsResponse {
-            versions: vec![TemplateVersionDto {
-                version: "3".to_owned(),
-                created_at: None,
-                is_current: true,
-            }],
-        },
-    ))
+fn built_in_history() -> AppResponse {
+    AppResponse::ListTemplateVersions(ListTemplateVersionsResponse {
+        versions: vec![TemplateVersionDto {
+            version: "3".to_owned(),
+            created_at: None,
+            is_current: true,
+        }],
+    })
 }
 
 fn envelope(code: AppErrorCode, message: &str) -> ErrorEnvelope {
@@ -210,7 +206,7 @@ fn envelope(code: AppErrorCode, message: &str) -> ErrorEnvelope {
 /// Open the catalogue and select one template, leaving the dispatch log empty.
 fn opened(template: &str, built_in: bool, version: &str) -> Harness<'static, App> {
     let mut harness = harness();
-    respond(&mut harness, "list_templates", &catalogue());
+    respond(&mut harness, "list_templates", &Ok(catalogue()));
     harness
         .get_by_label(if built_in {
             "Meeting notes"
@@ -226,11 +222,11 @@ fn opened(template: &str, built_in: bool, version: &str) -> Harness<'static, App
             template, version, built_in,
         ))),
     );
-    let versions = if built_in {
+    let versions = Ok(if built_in {
         built_in_history()
     } else {
         history()
-    };
+    });
     respond(&mut harness, "list_template_versions", &versions);
     clear(&mut harness);
     harness
@@ -241,7 +237,7 @@ fn opened(template: &str, built_in: bool, version: &str) -> Harness<'static, App
 #[test]
 fn the_catalogue_distinguishes_built_ins_from_copies_by_label_not_colour() {
     let mut harness = harness();
-    respond(&mut harness, "list_templates", &catalogue());
+    respond(&mut harness, "list_templates", &Ok(catalogue()));
     let text = announced(&harness);
 
     assert!(text.contains("◆ Built-in"), "{text}");
@@ -261,7 +257,7 @@ fn the_catalogue_distinguishes_built_ins_from_copies_by_label_not_colour() {
 #[test]
 fn selecting_a_template_reads_it_and_its_history_exactly_once() {
     let mut harness = harness();
-    respond(&mut harness, "list_templates", &catalogue());
+    respond(&mut harness, "list_templates", &Ok(catalogue()));
     clear(&mut harness);
 
     harness.get_by_label("My meeting notes").click();
