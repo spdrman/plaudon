@@ -8,9 +8,16 @@ use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 
 /// An ISO 4217 currency code.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
-#[serde(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Currency([u8; 3]);
+
+impl Serialize for Currency {
+    /// Serialize as the three-letter code, which is what [`Deserialize`]
+    /// expects: a byte-array representation would not round-trip.
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.as_str())
+    }
+}
 
 /// Reason a currency code was rejected.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
@@ -170,6 +177,16 @@ mod tests {
         assert!(Currency::parse("US").is_err());
         assert!(Currency::parse("US1").is_err());
         assert_eq!(Currency::parse("usd").unwrap(), Currency::USD);
+    }
+
+    #[test]
+    fn a_currency_round_trips_through_json() {
+        let json = serde_json::to_string(&Currency::USD).expect("serialize");
+        assert_eq!(json, "\"USD\"");
+        assert_eq!(
+            serde_json::from_str::<Currency>(&json).expect("deserialize"),
+            Currency::USD
+        );
     }
 
     #[test]

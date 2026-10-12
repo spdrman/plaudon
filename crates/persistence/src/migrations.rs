@@ -43,7 +43,8 @@ impl Migration {
 /// Version ranges are allocated per EPIC so two branches cannot renumber each
 /// other, and because [`MigrationRunner`] refuses a version below the applied
 /// head: 0001-0099 EPIC B (core), 0100-0199 EPIC C (job engine), 0200-0299
-/// EPIC F (audio/STT), 0300-0399 the desktop shell.
+/// EPIC F (audio/STT), 0300-0399 the desktop shell, 0400-0499 EPIC G
+/// (OpenRouter BYOK).
 pub const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 1,
@@ -72,6 +73,13 @@ pub const MIGRATIONS: &[Migration] = &[
         version: 300,
         name: "desktop_shell",
         sql: include_str!("../migrations/0300_desktop_shell.sql"),
+    },
+    // OpenRouter BYOK: capability registry, model selection and per-route
+    // retention policies. Versions 400-499 are reserved for EPIC G.
+    Migration {
+        version: 400,
+        name: "cloud_ai",
+        sql: include_str!("../migrations/0400_cloud_ai.sql"),
     },
 ];
 
