@@ -502,6 +502,20 @@ mod tests {
     }
 
     #[test]
+    fn an_ogg_opus_recording_is_refused_with_a_reason() {
+        let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/audio/valid/tone-mono-16k.opus");
+        let error =
+            SymphoniaPcmSource::open(&fixture).expect_err("symphonia 0.5 has no Opus decoder");
+        assert!(matches!(error, SourceError::Unsupported { .. }), "{error}");
+
+        let vorbis = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/audio/valid/tone-mono-16k.ogg");
+        let source = SymphoniaPcmSource::open(&vorbis).expect("ogg vorbis plays");
+        assert!(source.sample_rate() > 0);
+    }
+
+    #[test]
     fn a_file_that_is_not_audio_is_refused() {
         let dir = tempfile::tempdir().expect("tempdir");
         let path = dir.path().join("notes.txt");

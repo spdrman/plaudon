@@ -66,6 +66,7 @@ Reviewed on 2026-10-11.
 | `egui` | MIT or Apache-2.0 | bundle | notice file | immediate-mode UI; renders our own data only | Bundle (EPIC O: the Tauri webview is replaced by egui). |
 | `cpal` | Apache-2.0 | bundle | notice file | opens the platform audio output device; no input stream is ever created, so no microphone permission is requested | Bundle. Needed because Rust has no audio output otherwise (EPIC O task O1.5 #203). |
 | `egui_kittest` | MIT or Apache-2.0 | development only | — | drives the UI in tests through AccessKit | Development dependency. |
+| `epaint_default_fonts` (Ubuntu Light, Hack, Noto Emoji, emoji-icon-font) | (MIT or Apache-2.0) AND OFL-1.1 AND Ubuntu-font-1.0 | bundle | notice file carrying both font licences | font files only; no code | Bundle. Reached through egui's `default_fonts` feature. Both font licences permit redistribution inside an application provided the licence text ships with it. Revisit at EPIC O task O1.3: the design system specifies system fonts, and turning `default_fonts` off would retire this row. |
 | filmcraft (`spdrman/filmcraft`) | MIT or Apache-2.0 | bundle (adapted source) | **`NOTICE`, per file** | `std`-only ring buffer and mixing thread; no `unsafe` | Adapt, not depend: `crates/audio-playback/src/ring.rs` is derived from its `play_ahead.rs`, and `cpal_out.rs` and the waveform mesh follow its structure. Every adapted file names the origin in its header and in `NOTICE`. A git dependency is impossible here — `deny.toml` sets `unknown-git = "deny"` — and the crate is unpublished. |
 
 ## Model weights

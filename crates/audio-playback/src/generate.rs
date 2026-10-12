@@ -7,13 +7,16 @@
 //! of writing it anywhere — peak building never materialises the recording,
 //! on disk or in memory.
 //!
-//! Opus is the one gap. Device `.ASR` derivatives are remuxed to Ogg Opus by
-//! `plaudon_plaud_protocol::remux_to_ogg_opus`, and the Symphonia feature set
-//! `plaudon_audio` enables (aac, adpcm, flac, isomp4, mp3, ogg, pcm, vorbis,
-//! wav) has no Opus decoder, so such a file fails validation or decode here
-//! exactly as it does in the rest of the pipeline. That is surfaced as
-//! [`PeakBuildError::Decode`] rather than hidden behind an empty waveform;
-//! closing the gap is a `plaudon-audio` feature decision, not a player one.
+//! Opus is the one gap, and it is not a feature flag away: Symphonia 0.5 has
+//! no Opus decoder at all, for any feature set. Device `.ASR` derivatives are
+//! remuxed to Ogg Opus by `plaudon_plaud_protocol::remux_to_ogg_opus`, so
+//! such a file is refused here — `AudioError::UnsupportedCodec`, surfaced as
+//! [`PeakBuildError::Validate`] — exactly as it is refused by the rest of the
+//! pipeline today. That is a visible, accurate error rather than an empty
+//! waveform, and the test below pins it against the committed fixture. Ogg
+//! Vorbis decodes normally; only Opus is affected. Closing the gap means a
+//! new decoder dependency in `plaudon-audio` (ADR territory), which is out of
+//! scope for the player.
 
 use std::path::{Path, PathBuf};
 
@@ -153,6 +156,16 @@ mod tests {
 
     use super::*;
 
+    /// A committed media fixture, canonicalised for the path guard.
+    fn fixture_path(name: &str) -> std::path::PathBuf {
+        std::fs::canonicalize(
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../tests/fixtures/audio/valid")
+                .join(name),
+        )
+        .expect("committed fixture")
+    }
+
     /// A 16-bit PCM WAV of `seconds` of a 220 Hz tone at 16 kHz, mono.
     fn write_wav(path: &Path, seconds: f64) {
         let rate = 16_000u32;
@@ -222,6 +235,28 @@ mod tests {
             build_peaks(&path, PeakParams::default(), &ctx),
             Err(PeakBuildError::Validate { .. })
         ));
+    }
+
+    /// Pins the Opus gap against the committed fixture, so the day a decoder
+    /// is added this test fails and the claim above gets rewritten.
+    #[test]
+    fn an_ogg_opus_recording_is_refused_with_a_reason() {
+        // Canonicalised: the path guard refuses a `..` component outright,
+        // which would make this test pass for the wrong reason.
+        let fixture = fixture_path("tone-mono-16k.opus");
+        let ctx = JobContext::new(JobId::new());
+        let error = build_peaks(&fixture, PeakParams::default(), &ctx)
+            .expect_err("symphonia 0.5 has no Opus decoder");
+        assert!(matches!(error, PeakBuildError::Validate { .. }), "{error}");
+        assert!(
+            error.to_string().contains("unsupported codec"),
+            "the refusal must name the codec: {error}"
+        );
+
+        // Ogg itself is fine: the container is supported, the codec is not.
+        let vorbis = fixture_path("tone-mono-16k.ogg");
+        let built = build_peaks(&vorbis, PeakParams::default(), &ctx).expect("ogg vorbis");
+        assert!(built.pyramid.total_frames() > 0);
     }
 
     #[test]
