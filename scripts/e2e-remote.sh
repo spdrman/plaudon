@@ -22,7 +22,11 @@
 # Results land in $PLAUDON_E2E_RESULTS (default: target/e2e-results).
 #
 # Environment overrides:
-#   PLAUDON_E2E_HOST         ssh destination           (devshell@192.168.0.100)
+#   PLAUDON_E2E_HOST         auto (default) | local | ssh destination
+#                            auto: MARS (devshell@192.168.0.100) unless it is unreachable or
+#                            busy (1-min load > 75% of its cores), then local arm64 Docker.
+#                            local: this machine, same container recipe, capped at 4 cores / 12g
+#                            (the workstation budget is 5 cores / 20 GB across all agents).
 #   PLAUDON_E2E_REMOTE_ROOT  remote scratch parent     (/home/devshell/.plaudon-e2e)
 #   PLAUDON_E2E_IMAGE        docker image for the mode (mode-specific default)
 #   PLAUDON_E2E_CPUS         docker --cpus             (8)
@@ -33,13 +37,42 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-HOST="${PLAUDON_E2E_HOST:-devshell@192.168.0.100}"
+MARS_HOST="devshell@192.168.0.100"
+HOST="${PLAUDON_E2E_HOST:-auto}"
 # /tmp on MARS is a small tmpfs; scratch lives under the home disk instead.
-REMOTE_ROOT="${PLAUDON_E2E_REMOTE_ROOT:-/home/devshell/.plaudon-e2e}"
-CPUS="${PLAUDON_E2E_CPUS:-8}"
-MEMORY="${PLAUDON_E2E_MEMORY:-12g}"
 RESULTS_DIR="${PLAUDON_E2E_RESULTS:-$REPO_ROOT/target/e2e-results}"
 SSH_OPTS=(-o BatchMode=yes -o ConnectTimeout=20)
+
+if [[ "$HOST" == "auto" ]]; then
+  HOST="$MARS_HOST"
+  if load_and_cores="$(ssh "${SSH_OPTS[@]}" -o ConnectTimeout=8 "$HOST" 'echo $(cut -d" " -f1 /proc/loadavg) $(nproc)' 2>/dev/null)"; then
+    read -r load1 cores <<<"$load_and_cores"
+    if awk -v l="$load1" -v c="$cores" 'BEGIN { exit !(l > 0.75 * c) }'; then
+      echo "==> MARS is busy (load $load1 on $cores cores); running locally" >&2
+      HOST=local
+    fi
+  else
+    echo "==> MARS unreachable; running locally" >&2
+    HOST=local
+  fi
+fi
+
+if [[ "$HOST" == "local" ]]; then
+  LOCAL=1
+  REMOTE_ROOT="${PLAUDON_E2E_REMOTE_ROOT:-${TMPDIR:-/tmp}/plaudon-e2e}"
+  CPUS="${PLAUDON_E2E_CPUS:-4}"
+  MEMORY="${PLAUDON_E2E_MEMORY:-12g}"
+else
+  LOCAL=0
+  REMOTE_ROOT="${PLAUDON_E2E_REMOTE_ROOT:-/home/devshell/.plaudon-e2e}"
+  CPUS="${PLAUDON_E2E_CPUS:-8}"
+  MEMORY="${PLAUDON_E2E_MEMORY:-12g}"
+fi
+
+# Run a shell snippet on the target (stdin is forwarded for `bash -s`).
+rexec() {
+  if [[ "$LOCAL" == 1 ]]; then bash -c "$1"; else ssh "${SSH_OPTS[@]}" "$HOST" "$1"; fi
+}
 
 usage() {
   sed -n '2,32p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
@@ -78,8 +111,8 @@ run_id="$(od -An -N6 -tx1 /dev/urandom | tr -d ' \n')"
 REMOTE_DIR="$REMOTE_ROOT/plaudon-e2e-$run_id"
 CONTAINER="plaudon-e2e-$run_id"
 REMOTE_TARBALL="$REMOTE_ROOT/$CONTAINER-artifacts.tar.gz"
-# A named Docker volume lives on the large docker data disk; the scratch
-# parent (/home/devshell/.plaudon-e2e) is a small tmpfs on MARS and a cargo target cache filled it.
+# A named Docker volume lives on the large docker data disk; MARS /tmp is a
+# small tmpfs that a cargo target cache once filled.
 CACHE_VOLUME="${PLAUDON_E2E_CACHE_VOLUME:-plaudon-e2e-cache}"
 
 cleanup() {
@@ -87,7 +120,7 @@ cleanup() {
   trap - EXIT INT TERM
   # Container first (it owns the mount), then the working copy. Files written by
   # the container belong to root, so fall back to a root container for removal.
-  ssh "${SSH_OPTS[@]}" "$HOST" "
+  rexec "
     docker rm -f $(printf '%q' "$CONTAINER") >/dev/null 2>&1 || true
     rm -f $(printf '%q' "$REMOTE_TARBALL") $(printf '%q' "$REMOTE_TARBALL.list") 2>/dev/null || true
     if ! rm -rf $(printf '%q' "$REMOTE_DIR") 2>/dev/null; then
@@ -113,23 +146,20 @@ fi
 echo "==> host=$HOST image=$IMAGE cpus=$CPUS memory=$MEMORY"
 echo "==> remote dir $REMOTE_DIR (removed on exit)"
 
-ssh "${SSH_OPTS[@]}" "$HOST" "mkdir -p $(printf '%q' "$REMOTE_ROOT")"
-rsync -a --delete \
-  --exclude '.git/' \
-  --exclude 'target/' \
-  --exclude 'node_modules/' \
-  --exclude 'dist/' \
-  --exclude 'e2e-results/' \
-  --exclude 'playwright-report/' \
-  --exclude 'test-results/' \
-  -e "ssh ${SSH_OPTS[*]}" \
-  "$REPO_ROOT/" "$HOST:$REMOTE_DIR/"
+rexec "mkdir -p $(printf '%q' "$REMOTE_ROOT")"
+rsync_excludes=(--exclude '.git/' --exclude 'target/' --exclude 'node_modules/' --exclude 'dist/'
+  --exclude 'e2e-results/' --exclude 'playwright-report/' --exclude 'test-results/')
+if [[ "$LOCAL" == 1 ]]; then
+  rsync -a --delete "${rsync_excludes[@]}" "$REPO_ROOT/" "$REMOTE_DIR/"
+else
+  rsync -a --delete "${rsync_excludes[@]}" -e "ssh ${SSH_OPTS[*]}" "$REPO_ROOT/" "$HOST:$REMOTE_DIR/"
+fi
 
 # MARS runs rootless Docker: the container's root maps to an unprivileged host
 # subuid but its gid maps to the ssh user's group. Group-writable trees plus a
 # 002 umask inside the container are therefore what lets both sides read and
 # delete each other's files.
-ssh "${SSH_OPTS[@]}" "$HOST" "chmod -R g+rwX $(printf '%q' "$REMOTE_DIR")"
+rexec "chmod -R g+rwX $(printf '%q' "$REMOTE_DIR")"
 
 # Mesa/lavapipe gives wgpu a software Vulkan adapter; the rest are build deps
 # for the native crates (audio, TLS, bindgen).
@@ -191,7 +221,7 @@ for e in "${docker_env[@]}"; do
 done
 
 status=0
-ssh "${SSH_OPTS[@]}" "$HOST" "bash -s" <<EOF || status=$?
+rexec "bash -s" <<EOF || status=$?
 set -euo pipefail
 docker run --rm --name $(printf '%q' "$CONTAINER") \
   --cpus $(printf '%q' "$CPUS") --memory $(printf '%q' "$MEMORY") --shm-size=2g \
@@ -211,7 +241,7 @@ else
   # `*/snapshots/*` is egui_kittest's default, kept for any crate that uses it.
   find_expr="-name '*.diff.png' -o -name '*.new.png' -o -path '*/snapshots/*' -o -path '*/visual/*'"
 fi
-if ssh "${SSH_OPTS[@]}" "$HOST" "
+if rexec "
     cd $(printf '%q' "$REMOTE_DIR") &&
     find . -path ./target -prune -o -type f \\( $find_expr \\) -print0 \
       > $(printf '%q' "$REMOTE_TARBALL.list") &&
@@ -219,7 +249,11 @@ if ssh "${SSH_OPTS[@]}" "$HOST" "
     tar --null --files-from=$(printf '%q' "$REMOTE_TARBALL.list") \
       -czf $(printf '%q' "$REMOTE_TARBALL")
   "; then
-  scp "${SSH_OPTS[@]}" -q "$HOST:$REMOTE_TARBALL" "$RESULTS_DIR/artifacts.tar.gz"
+  if [[ "$LOCAL" == 1 ]]; then
+    cp "$REMOTE_TARBALL" "$RESULTS_DIR/artifacts.tar.gz"
+  else
+    scp "${SSH_OPTS[@]}" -q "$HOST:$REMOTE_TARBALL" "$RESULTS_DIR/artifacts.tar.gz"
+  fi
   tar -xzf "$RESULTS_DIR/artifacts.tar.gz" -C "$RESULTS_DIR"
   rm -f "$RESULTS_DIR/artifacts.tar.gz"
   echo "==> artifacts copied to $RESULTS_DIR"
