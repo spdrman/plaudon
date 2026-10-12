@@ -32,6 +32,7 @@ pub mod models;
 pub mod notifications;
 pub mod privacy;
 pub mod section;
+pub mod shell_adapter;
 pub mod shortcuts;
 pub mod storage;
 pub mod templates;
@@ -49,6 +50,7 @@ use plaudon_app::shortcuts::{ShortcutBindings, ShortcutSpec};
 use plaudon_domain::error::ErrorEnvelope;
 
 pub use intent::{FilePurpose, FolderPurpose, SettingsDestination, SettingsIntent, SettingsOutput};
+pub use shell_adapter::{OnboardingShellScreen, SettingsShellScreen};
 pub use theme::{SettingsTokens, Tone, VisualsTokens};
 
 /// A path the user chose in a native dialog, on its way back to the section
