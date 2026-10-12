@@ -238,6 +238,23 @@ way: unsigned is exit 3. Neither script ever prints "signed" for an unsigned art
 for one that was not submitted. **No signed or notarized release has been produced from this
 repository.** See [`docs/EGUI_BUILD.md`](docs/EGUI_BUILD.md) §5–§6.
 
+### Release
+
+A release is cut by moving `main` onto the `release` branch; everything after that push is
+`.github/workflows/release.yml`:
+
+```sh
+git push origin main:release
+```
+
+It builds `Plaudon.app.zip` on macOS and the per-user `.msi` on Windows, smoke-tests both, creates
+the tag `v<workspace version>` at the released commit, drafts a GitHub release with the artifacts,
+their SHA-256 sums and both signing reports, and then merges `release` back into `main` through a
+pull request. Without signing credentials the release is a draft **prerelease** whose assets are
+labelled `UNSIGNED / NOT NOTARIZED — development build`; nothing is ever described as signed or
+notarized on the strength of a report that does not say so. `workflow_dispatch` builds the same
+artifacts and creates no tag and no release. See [`docs/EGUI_BUILD.md`](docs/EGUI_BUILD.md) §9.
+
 ---
 
 ## Testing

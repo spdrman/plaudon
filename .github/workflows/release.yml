@@ -6,6 +6,26 @@ name: Release
 #   macOS   arm64 Plaudon.app, zipped, built by scripts/package-macos-egui.sh
 #   Windows x64 .msi, built by scripts/package-windows-egui.ps1 over WiX
 #
+# A release is cut by moving `main` onto the `release` branch:
+#
+#   git push origin main:release
+#
+# That push is the trigger. This file then does the whole of it — build, tag,
+# release, merge back — with no manual step and no external script beyond the
+# repository's own packaging scripts:
+#
+#   version     reads the workspace version and refuses to run if v<version>
+#               is already tagged
+#   macos       builds and smoke-tests Plaudon.app.zip
+#   windows     builds and smoke-tests the .msi
+#   publish     creates the tag v<version> at the released commit and drafts
+#               the GitHub release with both artifacts, their checksums and
+#               both signing reports
+#   merge-back  merges `release` back into `main` through a pull request
+#
+# `workflow_dispatch` runs the two build jobs and stops there: artifacts, no
+# tag, no release, no merge.
+#
 # Signing is secrets-driven and entirely optional. Without credentials both
 # packaging scripts exit 3 — "built and verifiable, NOT publishable" — and
 # this workflow treats that as success with a warning: the artifacts are
@@ -14,13 +34,21 @@ name: Release
 # signing report does not say `verified`, and it never claims notarization
 # that was not performed.
 #
-# A tag push builds and drafts a release. `workflow_dispatch` builds the same
-# artifacts and stops there: no release, no tag, just the files.
+# Two GitHub behaviours this file is deliberately built around:
+#
+#   * Anything done with GITHUB_TOKEN — the tag, the release, the merge
+#     commit on `main` — raises no workflow event. Nothing here waits for a
+#     downstream workflow, and CI does not re-run on the merge commit; the
+#     commit that was built and released is the one that lands on `main`.
+#   * `gh pr create` from a workflow needs "Allow GitHub Actions to create and
+#     approve pull requests" (repository Settings → Actions → General →
+#     Workflow permissions). The merge-back job detects its absence and prints
+#     exactly what to switch on rather than failing with GitHub's message.
 
 on:
   push:
-    tags:
-      - "v*"
+    branches:
+      - release
   workflow_dispatch:
 
 permissions:
@@ -43,40 +71,58 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.workspace.outputs.version }}
+      tag: ${{ steps.workspace.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: The tag is the workspace version
+      - name: The release is the workspace version, and it must be new
         id: workspace
         shell: bash
         env:
-          REF_NAME: ${{ github.ref_name }}
-          REF_TYPE: ${{ github.ref_type }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
           if [ -z "$version" ]; then
             echo "the workspace version could not be read from Cargo.toml" >&2
             exit 1
           fi
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          if [ "$REF_TYPE" = "tag" ] && [ "$REF_NAME" != "v$version" ]; then
-            echo "tag $REF_NAME does not match the workspace version v$version;" >&2
-            echo "bump Cargo.toml or retag — a release must not be able to lie about its version" >&2
+          tag="v$version"
+          {
+            echo "version=$version"
+            echo "tag=$tag"
+          } >> "$GITHUB_OUTPUT"
+          echo "workspace version $version, tag $tag"
+          if [ "$EVENT_NAME" != "push" ]; then
+            echo "workflow_dispatch: artifacts only, no tag and no release"
+            exit 0
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+            echo "::error::$tag already exists, so this push to release would publish a version that has already been released." >&2
+            echo "Bump the workspace version in Cargo.toml and push again, or delete the tag if it was a mistake." >&2
             exit 1
           fi
-          echo "workspace version $version, ref $REF_NAME"
 
   macos:
     name: macOS arm64 (.app)
     needs: version
     runs-on: macos-15
     env:
-      # macos-15 arm64 runners have three cores; the packaging script would
+      # Apple silicon runners have three cores; the packaging script would
       # otherwise use the workstation default of two.
       CARGO_BUILD_JOBS: "3"
-      # The Apple bridge and the local whisper engine are what makes a
-      # released bundle different from a development one (docs/EGUI_BUILD.md).
-      PLAUDON_RELEASE_FEATURES: apple-bridge,local-whisper
+      # The local whisper engine is what makes a released bundle different
+      # from a development one (docs/EGUI_BUILD.md).
+      #
+      # `apple-bridge` is deliberately **not** here, and that is a gap rather
+      # than a preference: native/apple-bridge's Swift sources use
+      # `SpeechTranscriber`, `AssetInventory` and — under
+      # `#available(macOS 27.0, *)` — `LanguageModelError`, so the bridge only
+      # compiles against the macOS 27 SDK. No hosted runner image has one:
+      # macos-15 carries Xcode 16.4 and macos-26 tops out at Xcode 26.6, and
+      # both were tried. Until an image ships Xcode 27, a released bundle
+      # reports the Apple engines as unavailable in this build, and
+      # `cargo_features` in the signing report says exactly what was built.
+      PLAUDON_RELEASE_FEATURES: local-whisper
     steps:
       - uses: actions/checkout@v4
 
@@ -240,6 +286,10 @@ jobs:
     runs-on: windows-2025
     env:
       CARGO_BUILD_JOBS: "4"
+      # ggml's Vulkan backend nests its CMake scratch directories deep enough
+      # that MSBuild's FileTracker runs past MAX_PATH under the default
+      # D:\a\plaudon\plaudon\target. The packaging script honours this.
+      CARGO_TARGET_DIR: C:\pt
       # No apple-bridge on Windows; the local whisper engine is what makes a
       # released installer different from a development build.
       PLAUDON_RELEASE_FEATURES: local-whisper
@@ -265,6 +315,21 @@ jobs:
             Where-Object { $_.FullName -match '\\x64\\' } | Select-Object -First 1
           if (-not $rc) { Write-Error "no rc.exe in the Windows SDK"; exit 1 }
           "RC=$($rc.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      # whisper-rs links ggml's Vulkan backend on Windows
+      # (crates/ai-whisper/Cargo.toml), and its build script requires the SDK
+      # rather than probing for it. A machine without a Vulkan loader is a
+      # runtime probe failure, which is the engine's business, not a build
+      # failure here.
+      - name: Install the Vulkan SDK
+        shell: pwsh
+        run: |
+          choco install vulkan-sdk --no-progress -y
+          $sdk = Get-ChildItem C:\VulkanSDK -Directory -ErrorAction SilentlyContinue |
+            Sort-Object Name -Descending | Select-Object -First 1
+          if (-not $sdk) { Write-Error "the Vulkan SDK did not install"; exit 1 }
+          Write-Host "Vulkan SDK: $($sdk.FullName)"
+          "VULKAN_SDK=$($sdk.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Install the WiX toolset
         shell: pwsh
@@ -300,6 +365,7 @@ jobs:
             exit $LASTEXITCODE
           }
           Get-Content dist/windows-egui/windows-signing-report.json
+          exit 0
 
       - name: Smoke test the packaged payload
         # The GUI executable takes a document path or a plaudon:// link on its
@@ -308,12 +374,14 @@ jobs:
         # Installing and launching the .msi needs an interactive session and
         # is not attempted here.
         shell: pwsh
+        env:
+          WORKSPACE_VERSION: ${{ needs.version.outputs.version }}
         run: |
           $cli = "dist/windows-egui/stage/plaudon.exe"
           $reported = (& $cli --version) -join " "
           if ($LASTEXITCODE -ne 0) { Write-Error "the packaged CLI failed to run"; exit 1 }
           Write-Host "packaged CLI reports: $reported"
-          $version = "${{ needs.version.outputs.version }}"
+          $version = $env:WORKSPACE_VERSION
           if ($reported -notmatch [regex]::Escape($version)) {
             Write-Error "the packaged CLI reports '$reported', not the workspace version $version"
             exit 1
@@ -338,9 +406,9 @@ jobs:
           retention-days: 14
 
   publish:
-    name: Draft the release
+    name: Tag and draft the release
     needs: [version, macos, windows]
-    if: github.ref_type == 'tag'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/release'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -435,12 +503,32 @@ jobs:
           printf '%s\n' "${notes[@]}" > release-notes.md
           cat release-notes.md
 
+      - name: Tag the released commit
+        # The tag is created explicitly rather than left to `gh release
+        # create`, because a *draft* release does not create one: the tag
+        # would appear only when a human published the release, and the
+        # merge-back below would then be merging an untagged commit.
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if gh api "repos/$GH_REPO/git/ref/tags/$TAG" >/dev/null 2>&1; then
+            echo "::error::$TAG was created while this run was building; refusing to move it" >&2
+            exit 1
+          fi
+          gh api "repos/$GH_REPO/git/refs" \
+            -f "ref=refs/tags/$TAG" -f "sha=$GITHUB_SHA" > /dev/null
+          echo "tagged $GITHUB_SHA as $TAG"
+
       - name: Draft the release
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ needs.version.outputs.tag }}
           VERSION: ${{ needs.version.outputs.version }}
           PUBLISHABLE: ${{ steps.assemble.outputs.publishable }}
           MSI: ${{ steps.assemble.outputs.msi }}
@@ -449,7 +537,7 @@ jobs:
           # Always a draft: a human decides when a release is published, and
           # an unsigned build is additionally marked as a prerelease so that
           # nothing downstream can mistake it for a shipped version.
-          args=(--draft --title "Plaudon $TAG" --notes-file release-notes.md)
+          args=(--draft --target "$GITHUB_SHA" --title "Plaudon $TAG" --notes-file release-notes.md)
           if [ "$PUBLISHABLE" = "true" ]; then
             macos_label="Plaudon.app (macOS arm64, signed and notarized)"
             windows_label="Plaudon installer (Windows x64, signed)"
@@ -464,3 +552,102 @@ jobs:
             "release/checksums.txt#SHA-256 checksums" \
             "release/macos-signing-report.json#macOS signing report" \
             "release/windows-signing-report.json#Windows signing report"
+
+  merge-back:
+    name: Merge release back into main
+    needs: [version, publish]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/release'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Merge the released commit back into main
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.version.outputs.tag }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          git fetch --quiet origin main release
+
+          # Idempotent: a re-run after a successful merge, or a release cut
+          # from a commit main already has, has nothing to do.
+          ahead=$(git rev-list --count origin/main..origin/release)
+          if [ "$ahead" -eq 0 ]; then
+            echo "main already contains every commit on release; nothing to merge back"
+            exit 0
+          fi
+          echo "release is $ahead commit(s) ahead of main"
+
+          number=$(gh pr list --head release --base main --state open --json number --jq '.[0].number // empty')
+          if [ -z "$number" ]; then
+            # The repository requires a closing keyword in every pull request
+            # body, so the merge-back gets a tracking issue of its own, which
+            # the merge then closes. An open one from a failed earlier attempt
+            # is reused rather than duplicated.
+            title="Release $TAG merged back"
+            issue=$(gh issue list --state open --search "$title in:title" --json number,title \
+              --jq "[.[] | select(.title == \"$title\")][0].number // empty")
+            if [ -z "$issue" ]; then
+              issue_url=$(gh issue create --title "$title" --label task --body \
+                "Tracks the merge of \`release\` ($TAG) back into \`main\`, opened by the release workflow. Closed by the merge-back pull request. Release run: $RUN_URL")
+              issue="${issue_url##*/}"
+            fi
+            echo "tracking issue #$issue"
+
+            body=$(printf '%s\n' \
+              "The \`release\` branch carries $TAG, which was built, tagged and drafted by $RUN_URL." \
+              "" \
+              "This merges it back so \`main\` and \`release\` do not diverge. It is a merge, not a squash:" \
+              "the released commits keep their identity, which is what the tag points at." \
+              "" \
+              "Closes #$issue")
+            if ! pr_url=$(gh pr create --base main --head release \
+              --title "Merge release $TAG back to main" --body "$body" 2> pr-create.err); then
+              cat pr-create.err >&2
+              if grep -qi "not permitted to create or approve pull requests" pr-create.err; then
+                echo "::error::GitHub Actions is not allowed to open pull requests in this repository, so the merge-back cannot run." >&2
+                echo "Enable it at Settings → Actions → General → Workflow permissions → 'Allow GitHub Actions to create and approve pull requests'." >&2
+                echo "Equivalently: gh api -X PUT repos/$GH_REPO/actions/permissions/workflow -F can_approve_pull_request_reviews=true -f default_workflow_permissions=read" >&2
+                echo "Nothing else about this release is affected: $TAG is tagged and the draft release exists." >&2
+              fi
+              exit 1
+            fi
+            number="${pr_url##*/}"
+          fi
+          echo "merge-back pull request #$number"
+
+          # GitHub computes mergeability asynchronously; UNKNOWN means "ask
+          # again", not "fine".
+          state=UNKNOWN
+          for _ in $(seq 1 12); do
+            state=$(gh pr view "$number" --json mergeable --jq '.mergeable')
+            [ "$state" != "UNKNOWN" ] && break
+            sleep 5
+          done
+          if [ "$state" = "CONFLICTING" ]; then
+            echo "::error::release cannot be merged into main without resolving conflicts. Pull request #$number is left open for a human; the release itself is unaffected." >&2
+            exit 1
+          fi
+          if [ "$state" = "UNKNOWN" ]; then
+            echo "::error::GitHub did not report whether #$number can be merged; it is left open rather than merged blind." >&2
+            exit 1
+          fi
+
+          if ! gh pr merge "$number" --merge 2> pr-merge.err; then
+            cat pr-merge.err >&2
+            echo "::error::#$number could not be merged; it is left open. $TAG is tagged and the draft release exists." >&2
+            exit 1
+          fi
+          echo "merged #$number into main"
+          # A merge made with GITHUB_TOKEN raises no push event, so CI will not
+          # re-run on main for this commit. That is deliberate: this exact tree
+          # is what the macos and windows jobs above built and released.

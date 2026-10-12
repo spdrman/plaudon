@@ -66,8 +66,13 @@ if (-not $SkipBuild) {
     if ($LASTEXITCODE -ne 0) { Write-Error "reason=missing_binary: the automation CLI failed to build"; exit 1 }
 }
 
-$Exe = Join-Path $RepoRoot "target/release/plaudon-egui.exe"
-$Cli = Join-Path $RepoRoot "target/release/plaudon.exe"
+# CARGO_TARGET_DIR is honoured because on Windows it is sometimes the only
+# way to build at all: ggml's Vulkan backend nests its CMake scratch
+# directories deep enough that MSBuild's FileTracker exceeds MAX_PATH when
+# the target directory sits inside a checkout path of any length.
+$TargetDir = if ($env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR } else { Join-Path $RepoRoot "target" }
+$Exe = Join-Path $TargetDir "release/plaudon-egui.exe"
+$Cli = Join-Path $TargetDir "release/plaudon.exe"
 foreach ($Required in @($Exe, $Cli)) {
     if (-not (Test-Path $Required)) {
         Write-Error "reason=missing_binary: $Required was not produced"
