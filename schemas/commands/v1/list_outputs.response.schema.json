@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/list_outputs.response.json",
+  "type": "object",
+  "required": ["outputs"],
+  "additionalProperties": false,
+  "properties": {
+    "outputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["output_id", "recording_id", "transcript_revision_id", "output_type", "template_id", "template_version", "pipeline_version", "status", "coverage", "created_at", "claims"],
+        "properties": {
+          "output_id": {"type": "string"},
+          "recording_id": {"type": "string"},
+          "transcript_revision_id": {"type": "string"},
+          "output_type": {"type": "string"},
+          "template_id": {"type": "string"},
+          "template_version": {"type": "string"},
+          "pipeline_version": {"type": "string"},
+          "status": {"type": "string", "enum": ["complete", "needs_review"]},
+          "coverage": {
+            "type": "object",
+            "required": ["state"],
+            "properties": {
+              "state": {"type": "string", "enum": ["full", "model_reported_partial"]},
+              "chunks": {"type": "array", "items": {"type": "number"}}
+            }
+          },
+          "stale": {
+            "type": "object",
+            "required": ["stale_at", "reason"],
+            "properties": {
+              "stale_at": {"type": "string", "format": "date-time"},
+              "reason": {"type": "string"}
+            }
+          },
+          "created_at": {"type": "string", "format": "date-time"},
+          "claims": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["claim_id", "item_path", "text", "state", "review_required", "review_reasons", "entailment", "category", "fields", "anchors"]
+            }
+          }
+        }
+      }
+    }
+  }
+}
