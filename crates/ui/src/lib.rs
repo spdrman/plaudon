@@ -14,5 +14,6 @@
 pub mod player;
 pub mod shell;
 pub mod theme;
+pub mod screens;
 pub mod transcript;
 pub mod widgets;

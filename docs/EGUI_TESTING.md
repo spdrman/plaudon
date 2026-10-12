@@ -125,6 +125,7 @@ regenerated baseline is committed **with the change that caused it**, never on i
 | Token contrast and theme unit tests (O1.3) | anywhere, no GPU | `cargo test -p plaudon-ui theme::` |
 | Shell interaction and accessibility suite (O1.3) | locally for logic, MARS for pixels | `cargo test -p plaudon-ui --test shell_kittest` |
 | Window wiring and state persistence (O1.3) | anywhere (software raster) | `cargo test -p plaudon-egui --test shell_app` |
+| `plaudon-ui` screen and copy tests (devices, sources) | anywhere (software raster) | `cargo test -p plaudon-ui` |
 | kittest interaction tests | locally for logic, MARS for pixels | `cargo test -p plaudon-egui --test spike_kittest` |
 | Snapshot comparison, scale and performance runs | **MARS only** | `scripts/e2e-remote.sh …` |
 
