@@ -62,7 +62,6 @@ use plaudon_security::secrets::SecretString;
 use plaudon_ui::shell::{HostHooks, Route};
 use plaudon_ui_testkit::kittest::Queryable as _;
 use plaudon_ui_testkit::{a11y, Harness};
-use serde_json::json;
 
 /// Sample rate of every fixture, matching the fake device's.
 const RATE: u32 = support::FAKE_RATE;
@@ -929,12 +928,7 @@ fn scripted_engine(dir: &Path) -> AppEngine {
         .with_pace_ms(40)
         .shared()])
         .with_text_model(
-            ScriptedTextModel::new(json!({
-                "decisions": [],
-                "action_items": [],
-                "open_questions": [],
-                "risks": []
-            }))
+            ScriptedTextModel::new(serde_json::Value::Null)
             .shared(),
         );
     AppEngine::start(config).expect("the engine starts over the library")
@@ -944,7 +938,11 @@ fn scripted_engine(dir: &Path) -> AppEngine {
 fn imported_over(engine: AppEngine, hooks: HostHooks) -> App {
     let (audio, _device) = support::fake_audio_out();
     let app = support::app_over(engine, hooks, audio);
+    // Tall, for the same reason `imported_in` is: the recording detail is a
+    // fixed pane, so at the default height the transcript rows are laid out
+    // below the fold and never created.
     let mut harness = plaudon_ui_testkit::builder()
+        .with_size(egui::vec2(plaudon_ui_testkit::DEFAULT_SIZE.x, 1_800.0))
         .build_ui_state(|ui, app: &mut PlaudonShell| app.view(ui), app);
     support::settle(&mut harness);
     support::run_until_announced(&mut harness, "Import an audio file");
@@ -1016,7 +1014,11 @@ fn a_queued_stage_runs_to_completion_and_its_transcript_and_summary_appear() {
     let row = recordings(harness.state()).remove(0);
 
     prefer_engine(harness.state(), "transcribe", SCRIPTED_STT_ENGINE);
-    prefer_engine(harness.state(), "summarize", SCRIPTED_STT_ENGINE);
+    prefer_engine(
+        harness.state(),
+        "structured_extraction",
+        SCRIPTED_STT_ENGINE,
+    );
     let job_id = start_stage(harness.state(), row.recording_id, "transcribe");
 
     harness.state_mut().shell_mut().navigate(Route::Jobs);
@@ -1046,12 +1048,16 @@ fn a_queued_stage_runs_to_completion_and_its_transcript_and_summary_appear() {
 
     // The transcript the executor committed is the one the editor shows.
     open_detail(&mut harness, row.recording_id);
-    open_tab(&mut harness, "Transcript");
-    support::run_until_announced(&mut harness, "We agreed to ship on Friday.");
+    support::run_until_announced(&mut harness, "Segment 1");
+    assert_eq!(
+        segment_text(&harness),
+        "We agreed to ship on Friday.",
+        "the editor opened on the revision the worker committed"
+    );
 
     // And the summary stage, over the committed revision, produces an output
     // the review tab can list.
-    let summary_job = start_stage(harness.state(), row.recording_id, "summarize");
+    let summary_job = start_stage(harness.state(), row.recording_id, "structured_extraction");
     support::run_until_frame(&mut harness, "the summary to finish", |harness| {
         job_is_done(harness.state(), &summary_job)
     });
@@ -1123,7 +1129,7 @@ fn cancelling_a_running_stage_ends_it_and_commits_no_transcript() {
 
     let detail = detail(harness.state(), row.recording_id);
     assert!(
-        detail.head_revision.is_none(),
+        detail.revisions.is_empty() && detail.current_revision_id.is_none(),
         "a cancelled run committed a partial transcript"
     );
 }
