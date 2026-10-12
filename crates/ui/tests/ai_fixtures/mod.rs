@@ -329,17 +329,26 @@ pub fn outputs(outputs: Vec<OutputDto>) -> ListOutputsResponse {
     ListOutputsResponse { outputs }
 }
 
+/// One speaker row, as `list_speakers` and the three labelling commands
+/// describe it. `name` is what a user typed; `confirmed` is their claim.
+pub fn speaker(name: Option<&str>, confirmed: bool) -> SpeakerDto {
+    SpeakerDto {
+        speaker_id: SPEAKER_ID.parse().expect("speaker id"),
+        recording_id: RECORDING_ID.parse().expect("recording id"),
+        // A rename overwrites the label, exactly as the store does.
+        label: name.unwrap_or("Speaker 1").to_owned(),
+        name: name.map(ToOwned::to_owned),
+        confirmed,
+        original_label: "SPEAKER_00".to_owned(),
+        renamed_at: name.map(|_| plaudon_domain::time::Timestamp::from_millis(1_770_000_000_000)),
+        confirmed_at: confirmed
+            .then(|| plaudon_domain::time::Timestamp::from_millis(1_770_000_060_000)),
+    }
+}
+
 pub fn speakers() -> ListSpeakersResponse {
     ListSpeakersResponse {
-        speakers: vec![SpeakerDto {
-            speaker_id: SPEAKER_ID.parse().expect("speaker id"),
-            recording_id: RECORDING_ID.parse().expect("recording id"),
-            label: "Speaker 1".to_owned(),
-            confirmed: false,
-            original_label: "SPEAKER_00".to_owned(),
-            renamed_at: None,
-            confirmed_at: None,
-        }],
+        speakers: vec![speaker(None, false)],
     }
 }
 

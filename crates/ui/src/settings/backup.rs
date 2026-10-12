@@ -837,4 +837,17 @@ impl Section for BackupSection {
             PickedPath::Folder(_) => {}
         }
     }
+
+    fn on_open_archive(&mut self, path: &str) -> bool {
+        // Opening the document opens the flow it belongs to, at its first
+        // stage: the archive is chosen, and nothing has been read from it.
+        // The dry run still has to be asked for, because an encrypted
+        // archive needs a password and because no library is ever changed
+        // without the review step in between.
+        self.close_backup();
+        self.close_restore();
+        self.restore_open = true;
+        self.archive_path = Some(path.to_owned());
+        true
+    }
 }

@@ -323,7 +323,11 @@ fn the_outputs_viewer_groups_the_section_nine_two_field_sets() {
                 viewer: OutputsViewer::default(),
                 capabilities: fx::capabilities(false, Vec::new()),
                 outputs: fx::outputs(vec![fx::output(claims, None)]),
-                speakers: fx::speakers(),
+                // Renamed but not confirmed, which is the only state in
+                // which "Confirm speaker" is offered.
+                speakers: plaudon_app::dto::ListSpeakersResponse {
+                    speakers: vec![fx::speaker(Some("Dana"), false)],
+                },
                 collected: Collected::default(),
             },
         );
@@ -336,6 +340,10 @@ fn the_outputs_viewer_groups_the_section_nine_two_field_sets() {
     assert!(text.contains("Participants: Not evidenced"), "{text}");
     assert!(text.contains("Speaker identification"), "{text}");
     assert!(text.contains("Machine label: SPEAKER_00"), "{text}");
+    assert!(
+        text.contains("Speaker: Dana (inferred cluster)"),
+        "a typed name is not an identity until it is confirmed: {text}"
+    );
     assert!(text.contains("Template: meeting.v1"), "{text}");
 
     harness.get_by_label("Confirm speaker").click();

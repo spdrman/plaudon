@@ -25,7 +25,7 @@ use plaudon_transcript_doc::playback::PlaybackPosition;
 use plaudon_transcript_doc::search::SearchMatch;
 use plaudon_transcript_doc::session::EditSession;
 
-pub use chips::{SpeakerAction, SpeakerChoice};
+pub use chips::{SpeakerChoice, SPEAKER_EDIT_HINT};
 pub use find::{FindBarState, FindOutcome};
 pub use style::TranscriptStyle;
 
@@ -115,8 +115,6 @@ pub struct TranscriptEditorOutput {
     pub copied: Option<String>,
     /// The document changed.
     pub edited: bool,
-    /// A speaker was reassigned, as `(segment, speaker)`.
-    pub speaker_changed: Option<(SegmentId, Option<SpeakerId>)>,
     /// The user resolved a save conflict.
     pub conflict_choice: Option<ConflictChoice>,
 }
@@ -430,27 +428,7 @@ impl<'a> TranscriptEditor<'a> {
                     egui::pos2(left + style.gutter_width, y + style.row_padding.y),
                     Vec2::new(style.speaker_width - style.row_padding.x, line_height),
                 );
-                let editable = self.session.document().is_editable();
-                let speaker_before = row.speaker_id;
-                match chips::speaker(ui, speaker_rect, speaker_before, self.speakers, editable) {
-                    SpeakerAction::None => {}
-                    SpeakerAction::Assign(speaker) => {
-                        if self.session.set_speaker(segment_id, speaker).is_ok() {
-                            output.speaker_changed = Some((segment_id, speaker));
-                            output.edited = true;
-                        }
-                    }
-                    SpeakerAction::AssignEverywhere(speaker) => {
-                        if self
-                            .session
-                            .reassign_speaker_everywhere(speaker_before, speaker)
-                            .is_ok()
-                        {
-                            output.speaker_changed = Some((segment_id, speaker));
-                            output.edited = true;
-                        }
-                    }
-                }
+                chips::speaker(ui, speaker_rect, row.speaker_id, self.speakers);
 
                 if is_edited {
                     ui.painter().rect_filled(

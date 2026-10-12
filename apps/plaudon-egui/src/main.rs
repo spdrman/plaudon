@@ -61,6 +61,26 @@ fn main() -> ExitCode {
     };
     let hooks = native_hooks(store, engine.handle());
 
+    // Matrix row C10. What the OS asked for, before the window exists.
+    //
+    // Windows is the whole mechanism here: the installer registers
+    // `"%EXEPATH%" "%1"` for both the `.plaudon` extension and the
+    // `plaudon://` scheme (`packaging/windows/plaudon-egui.nsi`), so a
+    // double-click or a link **starts a process** with the document or the
+    // link as `argv[1]`. There is no single-instance handshake in this
+    // build, and nothing in the lock file provides one, so a second launch
+    // while Plaudon is running opens a second window which answers that
+    // argument; the first window is left as it was.
+    //
+    // macOS behaves differently and is handled in `plaudon_egui::mac_open`:
+    // Launch Services sends an Apple event, which never reaches `argv`.
+    let launch = plaudon_egui::desktop::Desktop::launch_event(
+        std::env::args(),
+        &plaudon_egui::desktop::approved_roots(),
+    );
+    #[cfg(target_os = "macos")]
+    plaudon_egui::mac_open::install();
+
     let result = eframe::run_native(
         "Plaudon",
         options,
@@ -73,6 +93,18 @@ fn main() -> ExitCode {
             plaudon_egui::desktop::install_tray(&desktop, false);
             // Every destination, in one place the tests drive as well.
             plaudon_egui::screens::register_all(&mut app, audio_output(), Some(peak_cache));
+            // Parity row S8: the menu macOS expects, built from the same
+            // command registry the in-window bar draws. Here, because it has
+            // to be created on the event loop's thread once the application
+            // exists, and after the screens so their commands are registered.
+            #[cfg(target_os = "macos")]
+            plaudon_egui::app_menu::install(&mut app);
+            if let Some(event) = launch {
+                app.queue_desktop_event(event);
+            }
+            // Nothing drains the tray, the menu or an open event unless the
+            // application owns the adapters: this is where they get a home.
+            app.set_desktop(desktop);
             Ok(Box::new(app))
         }),
     );

@@ -54,6 +54,7 @@ pub fn register_all(
     // Matrix row A12: an honest placeholder — "no template backend exists",
     // not "this screen was not built" — until EPIC O task O2.6 (#224) lands
     // the template commands and its own screen.
-    app.shell_mut()
-        .register(Box::new(plaudon_ui::screens::templates::TemplatesScreen::new()));
+    app.shell_mut().register(Box::new(
+        plaudon_ui::screens::templates::TemplatesScreen::new(),
+    ));
 }

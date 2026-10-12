@@ -128,6 +128,14 @@ impl Screen for LibraryScreen {
                     match intent {
                         DetailIntent::Back => cx.navigate(Route::Library),
                         DetailIntent::OpenSettings => cx.navigate(Route::Settings),
+                        DetailIntent::Deleted { summary } => {
+                            // The backend emits `library.changed` as well,
+                            // but the page is refetched here so a coalesced
+                            // event cannot leave the deleted row on screen.
+                            with_sender!(cx, |send| self.list.refresh(&mut send));
+                            cx.set_status(summary);
+                            cx.navigate(Route::Library);
+                        }
                     }
                 }
             }

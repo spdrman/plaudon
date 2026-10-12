@@ -986,6 +986,7 @@ export interface Speaker {
   speaker_id: string;
   recording_id: string;
   label: string;
+  name: string | null;
   confirmed: boolean;
   original_label: string;
   renamed_at: string | null;

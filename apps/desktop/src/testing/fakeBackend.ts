@@ -1147,6 +1147,7 @@ export class FakeBackend implements Transport {
       speaker_id: `${recordingId}-spk-${index + 1}`,
       recording_id: recordingId,
       label,
+      name: null,
       confirmed: false,
       original_label: label,
       renamed_at: null,
@@ -1186,6 +1187,7 @@ export class FakeBackend implements Transport {
     const speaker = this.#requireSpeaker(recordingId, String(request.speaker_id));
     const previous = speaker.label;
     speaker.label = name;
+    speaker.name = name;
     speaker.renamed_at = this.#stamp();
     this.#relabelSegments(recordingId, previous, name);
     this.emit("library.changed", { recording_id: recordingId });
@@ -1207,6 +1209,7 @@ export class FakeBackend implements Transport {
     const speaker = this.#requireSpeaker(recordingId, String(request.speaker_id));
     const previous = speaker.label;
     speaker.label = speaker.original_label;
+    speaker.name = null;
     speaker.confirmed = false;
     speaker.renamed_at = null;
     speaker.confirmed_at = null;

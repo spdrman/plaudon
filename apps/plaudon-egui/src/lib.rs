@@ -31,6 +31,18 @@ pub mod shell_app;
 pub mod desktop;
 pub mod tray;
 
+// The status item and the macOS application menu share one `muda` event
+// channel, so they share one drain. Neither exists on Linux.
+#[cfg(target_os = "macos")]
+pub mod app_menu;
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+pub mod menu_events;
+
+// A document or link the OS hands a *running* macOS application arrives as
+// an Apple event, not in `argv`; nothing else needs this.
+#[cfg(target_os = "macos")]
+pub mod mac_open;
+
 use std::fmt;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -278,7 +290,7 @@ impl PlaudonEgui {
                     id,
                     command,
                     result,
-                } => self.apply_response(id, command, result),
+                } => self.apply_response(id, command, *result),
             }
         }
     }
