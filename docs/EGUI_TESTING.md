@@ -30,6 +30,14 @@ Fixed by the builder, because a test that depends on the host is not a test:
 | Reported OS | `OperatingSystem::Mac` | shortcut rendering (`Cmd` vs `Ctrl`) must not depend on the runner |
 | Snapshot options | `tests/visual`, per-pixel threshold 0.6, **0** tolerated failing pixels | §4 |
 
+**A test crate that drives the pointer must enable egui's `default_fonts`.** The workspace entry
+builds egui with `default-features = false`, so a crate that only dev-depends on `egui_kittest`
+links no font: every galley lays out with zero glyphs, `Galley::cursor_from_pos` answers offset 0
+for every position, and click-to-place-caret, drag-select and double-click-to-select-a-word all
+pass vacuously. `plaudon-ui-testkit` turns the feature on for the tests that go through it; a crate
+that builds its own harness (`crates/ui`) adds
+`egui = { workspace = true, features = ["default_fonts"] }` to its `[dev-dependencies]`.
+
 ## 3. Accessibility assertions replace axe
 
 egui has no axe equivalent, and pretending otherwise would be the easiest way to claim a WCAG 2.2 AA
