@@ -678,10 +678,25 @@ mod tests {
             .commit_staged(&staging, &relative_path(&id, "wav"))
             .unwrap();
 
-        // A destination we cannot create at all is reported as an I/O failure,
-        // never as a silently successful relocation.
-        let impossible = Path::new("/this/path/cannot/be/created/by/a/test");
-        assert!(archive.relocate_to(impossible).is_err());
+        // A destination that cannot be created is reported as an I/O failure,
+        // never as a silently successful relocation. The unwritable path is a
+        // child of a regular file, which is refused with `ENOTDIR` whoever
+        // asks: an absolute path outside the test's own directories would only
+        // be unwritable for a non-root user, and the containerised runner is
+        // root.
+        let elsewhere = tempfile::tempdir().unwrap();
+        let blocker = elsewhere.path().join("a-file-not-a-directory");
+        std::fs::write(&blocker, b"not a parent").unwrap();
+        let impossible = blocker.join("destination");
+        assert!(matches!(
+            archive.relocate_to(&impossible),
+            Err(PersistenceError::Io(_))
+        ));
+        assert!(
+            !impossible.exists(),
+            "nothing was created at {impossible:?}"
+        );
+        // ...and the archive it refused to move is still whole.
         archive.verify(&relative_path(&id, "wav"), &id).unwrap();
     }
 
