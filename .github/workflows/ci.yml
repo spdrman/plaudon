@@ -13,12 +13,11 @@ name: CI
 # tests/e2e/scenarios.toml, which is reviewable, rather than by adding a retry
 # loop. Nothing in this pipeline retries a failed test.
 #
-# Two desktop shells are built while EPIC O is in flight: `desktop-ui` runs
-# the Tauri/React suites and stays until the cutover deletes apps/desktop,
-# and `egui-desktop` builds, tests (egui_kittest through cargo — no vitest,
-# no Playwright) and packages apps/plaudon-egui on the same native runners.
-# Neither job holds a signing credential, so both packaging steps are
-# expected to report `not_verified` and `publishable: false`.
+# One desktop shell is built: `egui-desktop` builds, tests (egui_kittest
+# through cargo — no browser runner, no JavaScript toolchain) and packages
+# apps/plaudon-egui on the same native runners as the Rust job. It holds no
+# signing credential, so its packaging steps are expected to report
+# `not_verified` and `publishable: false`.
 
 on:
   push:
@@ -144,10 +143,11 @@ jobs:
         if: runner.os == 'Windows'
         run: choco install nsis --no-progress -y
 
-      # egui_kittest through cargo. There is no vitest and no Playwright in
-      # this job, and docs/EGUI_TESTING.md §1 forbids adding one. Pixel
-      # comparison stays off: PLAUDON_VISUAL is only valid on the MARS
-      # renderer, so these legs assert behaviour and the accessibility tree.
+      # egui_kittest through cargo: the whole UI suite is Rust, and
+      # docs/EGUI_TESTING.md §1 forbids adding a JavaScript or browser-driver
+      # runner back. Pixel comparison stays off: PLAUDON_VISUAL is only valid
+      # on the MARS renderer, so these legs assert behaviour and the
+      # accessibility tree.
       - name: UI, shell and packaging suites
         run: >
           cargo test
@@ -201,45 +201,6 @@ jobs:
             dist/windows-egui/*.json
           if-no-files-found: error
           retention-days: 14
-
-  desktop-ui:
-    name: Desktop UI (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-15, windows-2025]
-    defaults:
-      run:
-        working-directory: apps/desktop
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: npm
-          cache-dependency-path: apps/desktop/package-lock.json
-      - run: npm ci
-      - name: Type check
-        run: npx tsc -b
-      - name: Component, contract and accessibility tests
-        run: npm run test
-      - name: Production bundle
-        run: npm run build
-      - name: Install Playwright browser
-        run: npx playwright install --with-deps chromium
-      - name: UI smoke, keyboard and WCAG suite
-        # The runner is a disposable container, which is where this suite is
-        # allowed to run; workstations go through scripts/e2e-remote.sh.
-        env:
-          PLAUDON_E2E_ALLOW_LOCAL: "1"
-        run: npx playwright test --reporter=line
-      - uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: playwright-report-${{ matrix.os }}
-          path: apps/desktop/playwright-report
-          retention-days: 7
 
   acceptance:
     name: E2E acceptance (${{ matrix.os }})

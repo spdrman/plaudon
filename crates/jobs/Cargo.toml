@@ -5,6 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+publish.workspace = true
 description = "Persisted job orchestration: state machine, idempotency, checkpoints, scheduling, cancellation, durable events and crash recovery (SPEC v1.3 §14)."
 
 [lints]

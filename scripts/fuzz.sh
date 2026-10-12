@@ -26,7 +26,6 @@ TARGETS=(
   fuzz_destination_url
   fuzz_path_validation
   fuzz_archive_entry
-  fuzz_allowlist_manifest
   fuzz_redactor
   fuzz_error_envelope
   fuzz_domain_redactor

@@ -15,11 +15,11 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use plaudon_ai_contracts::policy::SttRequirements;
 use plaudon_ai_contracts::stt::{SpeechToText, SttInput, TranscriptDraft};
 use plaudon_ai_contracts::transcript::SourceTime;
 use plaudon_ai_openrouter::registry::OPENROUTER_ENGINE_ID;
 use plaudon_app_core::engine_policy::candidate_from_probe;
-use plaudon_ai_contracts::policy::SttRequirements;
 use plaudon_app_core::stt::selection::CloudPolicy;
 use plaudon_app_core::stt::{select_engine, EngineCandidate, Platform, SelectionRequest};
 use plaudon_domain::error::{AppError, AppErrorCode};
@@ -69,7 +69,9 @@ impl std::fmt::Debug for EngineSeam {
 pub(super) fn a_local_engine_is_installed(backend: &LocalBackend) -> bool {
     match &backend.processing().seam {
         EngineSeam::Substituted(engines) => !engines.is_empty(),
-        EngineSeam::Host => apple_speech_available() || !installed_whisper_models(backend).is_empty(),
+        EngineSeam::Host => {
+            apple_speech_available() || !installed_whisper_models(backend).is_empty()
+        }
     }
 }
 
@@ -228,9 +230,7 @@ async fn commit(
 /// The draft's segments in the wire shape the revision writer takes.
 pub(super) fn machine_segments(draft: &TranscriptDraft) -> Vec<MachineSegment> {
     let to_ms = |time: SourceTime| {
-        time.sample_offset
-            .saturating_mul(1000)
-            / u64::from(time.sample_rate_hz.max(1))
+        time.sample_offset.saturating_mul(1000) / u64::from(time.sample_rate_hz.max(1))
     };
     draft
         .segments
@@ -252,12 +252,11 @@ fn host_engines(backend: &LocalBackend) -> Vec<Arc<dyn SpeechToText>> {
     match &backend.processing().seam {
         EngineSeam::Substituted(engines) => engines.clone(),
         EngineSeam::Host => {
-            let mut engines: Vec<Arc<dyn SpeechToText>> = vec![Arc::new(
-                plaudon_ai_apple::stt::AppleSpeechToText::new(
+            let mut engines: Vec<Arc<dyn SpeechToText>> =
+                vec![Arc::new(plaudon_ai_apple::stt::AppleSpeechToText::new(
                     plaudon_ai_apple::host_bridge(),
                     crate::backend::capabilities::apple_probe_cache(),
-                ),
-            )];
+                ))];
             engines.extend(whisper_engines(backend));
             engines
         }

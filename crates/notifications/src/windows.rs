@@ -3,11 +3,13 @@
 //! # Backend choice
 //!
 //! Delivery goes through **`tauri-winrt-notification`**, a thin wrapper over
-//! `Windows.UI.Notifications.ToastNotificationManager`. It produces a real
-//! `WinRT` toast (no PowerShell shelling, no balloon-tip fallback), it is
-//! maintained by the Tauri organisation whose runtime this app already ships,
-//! and it depends only on the `windows` crate family — no HTTP, mail or push
-//! dependency (see [`crate::deps_policy`]). Driving
+//! `Windows.UI.Notifications.ToastNotificationManager`. The name is
+//! misleading after the EPIC O cutover (ADR-0024): the crate is a standalone
+//! WinRT toast wrapper published by the Tauri organisation, it does not pull
+//! the Tauri framework, and nothing of a webview reaches this build. It
+//! produces a real `WinRT` toast (no PowerShell shelling, no balloon-tip
+//! fallback) and it depends only on the `windows` crate family — no HTTP,
+//! mail or push dependency (see [`crate::deps_policy`]). Driving
 //! `ToastNotificationManager` by hand would mean hand-building the toast XML
 //! and the `TypedEventHandler` plumbing for no behavioural gain.
 //!

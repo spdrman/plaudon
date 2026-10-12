@@ -518,21 +518,10 @@ fn directory_entries(root: &Path) -> BTreeSet<PathBuf> {
 /// directory, and they are not compiled into the application.
 const STD_FS_ALLOWLIST: &[(&str, &str)] = &[
     (
-        "src/bin/tauri_audit.rs",
-        "developer-facing audit binary: reads the Tauri manifests and writes the \
-         report to the paths named on its own command line, never an app path",
-    ),
-    (
         "src/bin/sandbox_probe.rs",
         "the sandbox probe helper: deliberately attempts reads and writes at the \
          paths its test driver sends it, so the suite can observe the OS refusing \
          them. Mediating those calls would remove the thing being measured",
-    ),
-    (
-        "src/tauri_guard/audit.rs",
-        "reads Tauri configuration, capability manifests and Rust sources from the \
-         repository being audited; developer tooling over build inputs, not over \
-         user data",
     ),
     (
         "src/sandbox/unix.rs",

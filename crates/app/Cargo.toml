@@ -5,6 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+publish.workspace = true
 description = "The application layer: ports, validated commands, the typed command/event boundary and the owned Tokio runtime. No user-interface dependency."
 
 [lib]
@@ -27,6 +28,18 @@ local-whisper = ["dep:plaudon-ai-whisper"]
 # Scripted speech and text engines, so a dependent crate's tests can drive
 # the whole processing pipeline without a model file or a network.
 test-support = []
+# Builds the `mock_plaud` executable declared below. It exists only so Cargo
+# exports `CARGO_BIN_EXE_mock_plaud` to this crate's integration tests, which
+# is why the dev-dependency section depends on this crate with the feature
+# turned on. Nothing in the library reads it.
+test-harness = []
+
+# A scripted stand-in for the vendor CLI, driven by `tests/plaud_commands.rs`;
+# never part of a release build.
+[[bin]]
+name = "mock_plaud"
+path = "src/bin/mock_plaud.rs"
+required-features = ["test-harness"]
 
 [dependencies]
 plaudon-domain = { workspace = true }
@@ -70,6 +83,12 @@ dirs = "6"
 sysinfo = "0.37"
 
 [dev-dependencies]
+# Enables the mock vendor CLI for this crate's own integration tests. A crate
+# cannot ask for a feature of itself, so it dev-depends on itself by path; that
+# is the only way to get a `required-features` binary built for a test target,
+# and it is exactly what the deleted Tauri shell crate did for the same mock.
+plaudon-app = { path = ".", features = ["test-harness"] }
+# The hermetic harness switch: only test builds may accept a loopback origin.
 plaudon-source-plaud-cli = { workspace = true, features = ["test-harness"] }
 plaudon-plaud-ble = { workspace = true, features = ["test-support"] }
 plaudon-security = { workspace = true, features = ["test-support"] }

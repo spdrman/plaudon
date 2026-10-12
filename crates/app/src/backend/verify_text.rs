@@ -59,9 +59,7 @@ use crate::backend::cloud::{card_dto, cost_value, CAPABILITY_CHECK_RECORDING};
 use crate::backend::jobs::{self, JobDraft};
 use crate::backend::store::storage_error;
 use crate::backend::LocalBackend;
-use crate::dto::{
-    EventKind, JobKind, JobState, ModelPricing, ModelPrivacy, VerifyModelResponse,
-};
+use crate::dto::{EventKind, JobKind, JobState, ModelPricing, ModelPrivacy, VerifyModelResponse};
 use crate::error::internal;
 use crate::events::EventDraft;
 use crate::validate::ValidatedVerifyModel;
@@ -238,7 +236,9 @@ impl LocalBackend {
         let engine = capabilities.engine_id.as_str().to_owned();
 
         if on_device(&capabilities) {
-            return self.run_on_device_check(request, model.as_ref(), &engine).await;
+            return self
+                .run_on_device_check(request, model.as_ref(), &engine)
+                .await;
         }
 
         // A cloud engine reached through the seam is still a cloud dispatch.
@@ -649,7 +649,10 @@ mod tests {
             .card_for(ModelTask::TextGeneration, MODEL)
             .await
             .expect("the card is readable");
-        assert_eq!(card.max_output_tokens, Known::Known(TEXT_PROBE_OUTPUT_TOKENS));
+        assert_eq!(
+            card.max_output_tokens,
+            Known::Known(TEXT_PROBE_OUTPUT_TOKENS)
+        );
         assert_eq!(card.supports_structured_output, Tri::Yes);
     }
 
@@ -818,17 +821,27 @@ mod tests {
             .expect("the on-device check passes");
 
         assert_eq!(response.model.verification, "verified");
-        assert_eq!(response.model.engine, crate::testing_engines::SCRIPTED_TEXT_ENGINE);
+        assert_eq!(
+            response.model.engine,
+            crate::testing_engines::SCRIPTED_TEXT_ENGINE
+        );
         assert_eq!(response.model.pricing.basis, "none");
         assert!(response.model.pricing.amount_per_unit.is_none());
-        assert_eq!(response.cost.confidence, crate::dto::CostConfidence::Finalized);
+        assert_eq!(
+            response.cost.confidence,
+            crate::dto::CostConfidence::Finalized
+        );
         let zero = plaudon_ai_openrouter::service::usage::money_to_string(Money::new(
             0,
             AMOUNT_SCALE,
             Currency::USD,
         ));
         assert_eq!(
-            response.cost.amount.as_ref().map(|amount| amount.amount.clone()),
+            response
+                .cost
+                .amount
+                .as_ref()
+                .map(|amount| amount.amount.clone()),
             Some(zero)
         );
         assert!(response.provider_request_id.is_none());
@@ -840,15 +853,19 @@ mod tests {
             .card_for(ModelTask::TextGeneration, APPLE_TEXT_ENGINE_ID)
             .await
             .expect("the card is readable");
-        assert_eq!(card.max_output_tokens, Known::Known(TEXT_PROBE_OUTPUT_TOKENS));
+        assert_eq!(
+            card.max_output_tokens,
+            Known::Known(TEXT_PROBE_OUTPUT_TOKENS)
+        );
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn an_on_device_model_that_cannot_answer_stays_unverified() {
         let fixture = backend_fixture().await;
-        let backend = fixture.backend.clone().with_text_model(
-            ScriptedTextModel::new(json!({ "sorry": "no" })).shared(),
-        );
+        let backend = fixture
+            .backend
+            .clone()
+            .with_text_model(ScriptedTextModel::new(json!({ "sorry": "no" })).shared());
 
         let error = backend
             .verify_model(verify(APPLE_TEXT_ENGINE_ID))

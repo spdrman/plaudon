@@ -54,9 +54,41 @@ use plaudon_app::dto::{
     RecordingSort, RecordingSortField, RecordingSummary, SortDirection,
 };
 use plaudon_app::event::{AppEvent, ResyncReason, Waker};
-use plaudon_app::runtime::AppEngine;
+use plaudon_app::runtime::{AppEngine, EngineConfig};
 use plaudon_craft_ui::layout::{split_rect, ResizeHandle, ResizeHandleStyle, SplitAxis, SplitSize};
 use plaudon_domain::error::ErrorEnvelope;
+
+/// Whether this binary was built with the real Bluetooth radio
+/// (`--features hardware-scan`, matrix row D12).
+///
+/// Public because it is the honest answer to "can this build scan?", and the
+/// one a test asserts against rather than re-deriving the `cfg!` itself.
+pub const HARDWARE_SCAN: bool = cfg!(feature = "hardware-scan");
+
+/// Apply this build's hardware choices to the engine configuration.
+///
+/// Matrix row D12. With `hardware-scan` the engine is told to use the host's
+/// own Bluetooth adapter, which is the whole meaning of the feature: before
+/// this call existed the feature compiled the `btleplug` stack into the
+/// binary and then never reached it, so even a `--features hardware-scan`
+/// build reported `RadioState::UnavailableInBuild`.
+///
+/// Without the feature the configuration is returned untouched and the
+/// engine keeps `NoRadio`, which still reports `UnavailableInBuild` — the
+/// honest answer for a binary that contains no Bluetooth stack at all. That
+/// is also why the default build, and therefore CI, cannot reach a radio
+/// through this function: there is no code path to it to reach.
+#[must_use]
+pub fn with_build_hardware(config: EngineConfig) -> EngineConfig {
+    #[cfg(feature = "hardware-scan")]
+    {
+        config.with_host_bluetooth()
+    }
+    #[cfg(not(feature = "hardware-scan"))]
+    {
+        config
+    }
+}
 
 /// How many recordings one page of the spike's list holds.
 const PAGE_SIZE: u32 = 100;

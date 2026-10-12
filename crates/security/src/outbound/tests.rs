@@ -455,7 +455,7 @@ fn describe_is_honest_about_what_is_not_guaranteed() {
 }
 
 #[test]
-fn describe_round_trips_through_json_for_the_tauri_command() {
+fn describe_round_trips_through_json_for_the_command_response() {
     let policy = OutboundPolicy::network_permitted(permissive_grant());
     let described = policy.describe();
     let json = serde_json::to_string(&described).unwrap();

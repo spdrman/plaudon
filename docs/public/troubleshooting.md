@@ -99,6 +99,14 @@ path or key material.
 exact path is shown in Settings. It is stored unencrypted, so use full-disk
 encryption if that matters to you.
 
+**Opening a different library for one run.** Set `PLAUDON_DATA_DIR` to an
+absolute path before launching. Everything that lives in the library — the
+database, the media archive, the logs, the waveform cache and the window
+state — follows the override, so the installed library is not touched at all.
+The path must be absolute; a relative or empty value is refused with an error
+rather than guessed at. This is what a support session or a release smoke test
+uses.
+
 **Restoring an archive refused to proceed.** An archive is validated before
 anything is written: path traversal, duplicate entries, decompression bombs,
 checksum mismatches and unknown schema versions are all rejected, and your

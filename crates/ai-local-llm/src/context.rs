@@ -234,11 +234,18 @@ impl SectionPlanner for LocalSectionPlanner {
 
             if end_cursor <= cursor {
                 // No forward progress is possible without dropping content.
-                let uncovered =
-                    vec![segments[cursor].seq_index..segments[segments.len() - 1].seq_index + 1];
+                // Everything from the stalled cursor to the last segment is
+                // uncovered, as one contiguous span of sequence indices. The
+                // span is named rather than written inline because `vec![a..b]`
+                // is ambiguous enough that clippy asks whether a collected
+                // `Vec<u32>` of every index was meant instead.
+                let uncovered_span =
+                    segments[cursor].seq_index..segments[segments.len() - 1].seq_index + 1;
                 return Ok(SectionPlan {
                     sections,
-                    coverage: Coverage::Incomplete { uncovered },
+                    coverage: Coverage::Incomplete {
+                        uncovered: vec![uncovered_span],
+                    },
                     budget: budget.clone(),
                 });
             }

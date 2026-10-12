@@ -13,7 +13,7 @@ and why, and the consequences we accept.
 
 ## Spec §21 initial set
 
-- [ADR-0001: Rust core with a Tauri 2 shell](ADR-0001-rust-core-with-a-tauri-2-shell.md) — Accepted, 2026-10-11 (spec §1, §6.1, §6.3(1), §2.4)
+- [ADR-0001: Rust core with a Tauri 2 shell](ADR-0001-rust-core-with-a-tauri-2-shell.md) — Superseded by ADR-0023 and ADR-0024, 2026-10-12; the Rust-core half still stands (spec §1, §6.1, §6.3(1), §2.4)
 - [ADR-0002: OpenRouter is the only cloud AI gateway in V1](ADR-0002-openrouter-is-the-only-cloud-ai-gateway-in-v1.md) — Accepted, 2026-10-11 (spec §1.2(3), §2.2, §10, §8.6)
 - [ADR-0003: Local-first processing with explicit, scoped cloud consent](ADR-0003-local-first-processing-with-explicit-scoped-cloud-consent.md) — Accepted, 2026-10-11 (spec §1.1, §3, §4.4, §16.3, §10.8)
 - [ADR-0004: PLAUD adapters are gated on evidence, not on vendor names](ADR-0004-plaud-adapters-are-gated-on-evidence-not-on-vendor-names.md) — Accepted, 2026-10-11 (spec §2.5A, §2.5B, §7.9, App. B.2)
@@ -34,10 +34,11 @@ and why, and the consequences we accept.
 
 ## Desktop shell (0020-0029)
 
-- [ADR-0020: Desktop command surface and the two additions to the §15.2 table](ADR-0020-command-surface.md) — Accepted, 2026-10-11 (spec §15.2)
-- [ADR-0021: Native notification backends and privacy-safe payloads](ADR-0021-notifications.md) — Accepted, 2026-10-11 (spec §5.5, §16.6)
+- [ADR-0020: Desktop command surface and the two additions to the §15.2 table](ADR-0020-command-surface.md) — Accepted, 2026-10-11; amended 2026-10-12 for the in-process transport (spec §15.2)
+- [ADR-0021: Native notification backends and privacy-safe payloads](ADR-0021-notifications.md) — Accepted, 2026-10-11; amended 2026-10-12 for the in-process transport (spec §5.5, §16.6)
 - [ADR-0022: The cloud command surface, and what `Verified` is allowed to mean](ADR-0022-cloud-command-surface-and-verification.md) — Accepted, 2026-10-12 (spec §10, §8.6A, §15.2, §16.3)
 - [ADR-0023: An egui/eframe shell, and the evidence that answers ADR-0001's accessibility objection](ADR-0023-egui-shell-and-the-accessibility-evidence-plan.md) — Accepted, 2026-10-11 (spec §1, §2.4, §5.3, §6.1, §6.3(1), §15.1, §15.3, §18.6A)
+- [ADR-0024: The Tauri/React stack is deleted, not kept beside the egui shell](ADR-0024-delete-the-tauri-react-stack-at-the-egui-cutover.md) — Accepted, 2026-10-12 (spec §1, §2.4, §5.3, §6.1, §6.3(1), §15.1, §15.3, §18.4, §18.6A)
 
 ## Job engine (0030-0039)
 

@@ -1449,11 +1449,15 @@ mod tests {
         assert_eq!(refused.code(), AppErrorCode::InvalidArgument);
     }
 
+    /// One structural rule: the problem code it must raise, and the single
+    /// mutation that breaks that rule in an otherwise valid template.
+    type StructuralCase = (&'static str, Box<dyn FnOnce(&mut Value)>);
+
     #[tokio::test]
     async fn each_structural_rule_has_its_own_problem_code() {
         let (backend, _dir) = backend();
         let copy = a_copy(&backend).await;
-        let cases: Vec<(&str, Box<dyn FnOnce(&mut Value)>)> = vec![
+        let cases: Vec<StructuralCase> = vec![
             (
                 PROBLEM_SCHEMA_VERSION,
                 Box::new(|value: &mut Value| value["template_schema_version"] = json!(99)),

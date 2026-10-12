@@ -203,7 +203,14 @@ struct PoolState {
 
 impl ProcessingHandle {
     /// Start `workers` tasks on the current Tokio runtime.
-    pub(crate) fn start(backend: Arc<LocalBackend>, workers: Option<usize>) -> Self {
+    ///
+    /// Public because [`crate::AppPorts`] carries a `ProcessingHandle` as a
+    /// public field and an integration test that composes its own ports — one
+    /// that needs a connector factory or a recording cloud transport, which
+    /// [`crate::build_ports_with`] does not take — is outside this crate and
+    /// therefore cannot call a crate-private constructor. `stop` and
+    /// `is_running` were already public; only the constructor was not.
+    pub fn start(backend: Arc<LocalBackend>, workers: Option<usize>) -> Self {
         let shutdown = CancellationToken::new();
         let count = workers.unwrap_or(DEFAULT_WORKERS).max(1);
         let mut handles = Vec::with_capacity(count);
@@ -436,9 +443,7 @@ async fn dispatch_executor(run: &RunContext, kind: JobKind) -> Result<Completion
 /// Commit the outputs and complete the job.
 async fn commit(backend: &LocalBackend, job_id: JobId, completion: Completion) {
     if let Some(link) = &completion.link {
-        if let Err(error) =
-            write_output_link(backend, job_id, link).await
-        {
+        if let Err(error) = write_output_link(backend, job_id, link).await {
             tracing::warn!(
                 code = error.code().as_str(),
                 "the job's output link could not be recorded"
@@ -528,13 +533,10 @@ async fn settle_error(backend: &LocalBackend, job_id: JobId, error: &AppError) {
     } else {
         EngineJobState::FailedTerminal
     };
-    if let Err(step) = write_step(backend, job_id, state.as_str(), Some("failed"), None).await
-    {
+    if let Err(step) = write_step(backend, job_id, state.as_str(), Some("failed"), None).await {
         tracing::warn!(code = step.code().as_str(), "a job step was not recorded");
     }
-    if let Err(stored) =
-        write_error_code(backend, job_id, error.code()).await
-    {
+    if let Err(stored) = write_error_code(backend, job_id, error.code()).await {
         tracing::warn!(
             code = stored.code().as_str(),
             "a job error code was not recorded"
@@ -797,12 +799,7 @@ impl StageRequest {
 
     /// Rebuild a request from the durable snapshot of an earlier run.
     fn from_config(kind: JobKind, recording_id: RecordingId, config: &Value) -> Option<Self> {
-        let text = |key: &str| {
-            config
-                .get(key)
-                .and_then(Value::as_str)
-                .map(str::to_owned)
-        };
+        let text = |key: &str| config.get(key).and_then(Value::as_str).map(str::to_owned);
         Some(Self {
             recording_id,
             kind,
@@ -865,14 +862,10 @@ impl LocalBackend {
             object.insert("cloud".to_owned(), json!(request.cloud));
         }
         let enqueue = |key: ProcessingJobKey| {
-            EnqueueRequest::new(
-                request.kind.as_str(),
-                JobKey::Processing(key),
-                class,
-            )
-            .with_config_snapshot(config.clone())
-            .with_recording(request.recording_id)
-            .with_input_hash(request.audio_sha256.clone())
+            EnqueueRequest::new(request.kind.as_str(), JobKey::Processing(key), class)
+                .with_config_snapshot(config.clone())
+                .with_recording(request.recording_id)
+                .with_input_hash(request.audio_sha256.clone())
         };
 
         let outcome = self
@@ -985,7 +978,6 @@ impl LocalBackend {
         Ok(summary)
     }
 }
-
 
 /* ------------------------------------------------- durable UI-facing rows */
 

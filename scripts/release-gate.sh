@@ -8,6 +8,7 @@
 # claimed configuration without its evidence as a release failure, so "could
 # not check" never reads as "fine".
 #
+#   scripts/release-gate.sh <app.zip> [--evidence <dir>] [--allow-unsigned]
 #   scripts/release-gate.sh --artifact <app.zip> --evidence <dir> [--allow-unsigned]
 #
 # `--allow-unsigned` is for a development run on a workstation with no
@@ -15,13 +16,10 @@
 # gate still exits non-zero; it exists so the remaining steps can be exercised,
 # not to turn a red gate green.
 #
-# The artifact is whichever shell is being gated: `dist/macos/Plaudon.app.zip`
-# from `scripts/package-macos.sh` (Tauri, until the cutover) or
-# `dist/macos-egui/Plaudon.app.zip` from `scripts/package-macos-egui.sh`. The
-# bundle layout the gate asserts — a `.app` with a `CFBundleExecutable` that
-# starts and keeps running — is the same for both. The egui-specific steps
-# (the kittest suite, the library-directory check) detect the egui bundle by
-# its executable name and are recorded as `not_applicable` for the Tauri one.
+# The artifact is `dist/macos-egui/Plaudon.app.zip` from
+# `scripts/package-macos-egui.sh`: one shell ships, so the gate asserts one
+# bundle layout — a `.app` whose `CFBundleExecutable` starts and keeps
+# running, resolving its library from the bundle identifier.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 REPO_ROOT="$PWD"
@@ -34,7 +32,16 @@ while [ $# -gt 0 ]; do
     --artifact) ARTIFACT="$2"; shift 2 ;;
     --evidence) EVIDENCE="$2"; shift 2 ;;
     --allow-unsigned) ALLOW_UNSIGNED=1; shift ;;
-    *) echo "unknown argument: $1" >&2; exit 2 ;;
+    -*) echo "unknown argument: $1" >&2; exit 2 ;;
+    # A bare path is the artifact: that is how the gate is invoked by hand
+    # right after a packaging run, and a silent "unknown argument" there would
+    # look like a gate failure rather than a typo.
+    *)
+      if [ -n "$ARTIFACT" ]; then
+        echo "unexpected second artifact: $1" >&2
+        exit 2
+      fi
+      ARTIFACT="$1"; shift ;;
   esac
 done
 
@@ -48,20 +55,11 @@ record() { # name verdict detail
   printf '%-34s %-14s %s\n' "$1" "$2" "$3"
   case "$2" in
     pass) ;;
-    # A step that does not exist for the artifact under test is not a missing
-    # verification: the Tauri bundle has no kittest suite and the egui bundle
-    # has no capability manifest. The detail must say which artifact it is,
-    # and `not_applicable` is never used for something that could have been
-    # checked here and was not — that is `not_verified`, and it fails.
-    not_applicable) ;;
     *) FAILED=1 ;;
   esac
 }
 
 HOST_OS="$(uname -s)"
-# Which shell the artifact carries. Detected from the bundle below; on a leg
-# that has no bundle to inspect (the Windows one) it is declared.
-SHELL_KIND="${PLAUDON_UI_SHELL:-unknown}"
 CLEAN_MACHINE="${PLAUDON_CLEAN_MACHINE:-0}"
 if [ "$CLEAN_MACHINE" = "1" ]; then
   record environment pass "clean, native $HOST_OS runner with no pre-provisioned application state"
@@ -84,11 +82,6 @@ else
       record install fail "the artifact contains no .app bundle"
     else
       record install pass "extracted $(basename "$APP") into a clean location"
-      case "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Contents/Info.plist" 2>/dev/null)" in
-        plaudon-egui) SHELL_KIND="egui" ;;
-        plaudon-desktop|Plaudon) SHELL_KIND="tauri" ;;
-        *) ;;
-      esac
 
       if codesign --verify --deep --strict "$APP" 2>/dev/null; then
         if spctl --assess --type execute "$APP" 2>/dev/null; then
@@ -142,10 +135,10 @@ else
       fi
 
       # The library directory is the whole upgrade story (migration plan R7):
-      # the egui shell resolves it from the bundle identifier with `dirs`,
-      # the Tauri shell resolved it from the same identifier with
-      # `app_data_dir()`. If the two disagree, an existing user launches the
-      # new build into an empty library and nothing in the UI says why.
+      # the shell resolves it from the bundle identifier with `dirs`, and the
+      # bundle declares that identifier in its Info.plist. If the two
+      # disagree, an existing user launches the new build into an empty
+      # library and nothing in the UI says why.
       IDENTIFIER="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Contents/Info.plist" 2>/dev/null)"
       EXPECTED_IDENTIFIER="$(sed -n 's/.*APPLICATION_IDENTIFIER: &str = "\([^"]*\)".*/\1/p' \
         "$REPO_ROOT/crates/app/src/runtime.rs" | head -1)"
@@ -155,13 +148,13 @@ else
       elif [ "${PLAUDON_SKIP_LAUNCH:-0}" = "1" ]; then
         record library_directory not_verified "the library is created on first launch, which was skipped"
       elif [ -d "$LIBRARY" ]; then
-        record library_directory pass "the launched bundle used $LIBRARY, the same path app_data_dir() resolved for $IDENTIFIER"
+        record library_directory pass "the launched bundle used $LIBRARY, the path the application resolves for $IDENTIFIER"
       else
-        record library_directory fail "nothing was created at $LIBRARY: the launched bundle is not using the Tauri-era library path"
+        record library_directory fail "nothing was created at $LIBRARY: the launched bundle is not using the identifier's library path"
       fi
     fi
   else
-    record install not_verified "this gate step is implemented for macOS; run scripts/package-windows.ps1 plus this gate's Windows leg natively (spec 18.4)"
+    record install not_verified "this gate step is implemented for macOS; run scripts/package-windows-egui.ps1 plus this gate's Windows leg natively (spec 18.4)"
   fi
 fi
 
@@ -172,29 +165,19 @@ else
   record offline_smoke fail "the offline import/transcribe/export acceptance scenarios failed"
 fi
 
-# ------------------------------------------- 2b. the shell's own test suite
-# For the egui shell this is the whole UI suite: kittest interaction,
-# accessibility-tree and packaging assertions, driven by `cargo test`. There
-# is no vitest and no Playwright in it, and none may be added
-# (docs/EGUI_TESTING.md §1). Pixel comparison stays opt-in and off here: it
-# is only valid on the MARS renderer, so a workstation run would either lie
-# or fail for the wrong reason.
+# --------------------------------------------- 2b. the shell's own test suite
+# The whole UI suite: kittest interaction, accessibility-tree and packaging
+# assertions, driven by `cargo test`. It is Rust end to end and no JavaScript
+# or browser-driver runner may be added (docs/EGUI_TESTING.md §1). Pixel
+# comparison stays opt-in and off here: it is only valid on the MARS
+# renderer, so a workstation run would either lie or fail for the wrong
+# reason.
 UI_LOG="$EVIDENCE/release-gate/ui-suite.log"
-case "$SHELL_KIND" in
-  egui)
-    if cargo test -p plaudon-egui -p plaudon-ui -p plaudon-platform --quiet > "$UI_LOG" 2>&1; then
-      record ui_suite pass "the egui shell, screen and packaging suites pass (kittest; log at $UI_LOG)"
-    else
-      record ui_suite fail "the egui UI suite failed: $(tail -c 400 "$UI_LOG")"
-    fi
-    ;;
-  tauri)
-    record ui_suite not_applicable "the artifact is the Tauri bundle, whose UI is gated by apps/desktop's own suites until the cutover"
-    ;;
-  *)
-    record ui_suite not_verified "the artifact did not identify a shell; pass PLAUDON_UI_SHELL=egui or tauri"
-    ;;
-esac
+if cargo test -p plaudon-egui -p plaudon-ui -p plaudon-platform --quiet > "$UI_LOG" 2>&1; then
+  record ui_suite pass "the egui shell, screen and packaging suites pass (kittest; log at $UI_LOG)"
+else
+  record ui_suite fail "the egui UI suite failed: $(tail -c 400 "$UI_LOG")"
+fi
 
 # ----------------------------------------------- 3. signed update and rollback
 if cargo test -p plaudon-updater --quiet 2>&1 | tail -5 | grep -q "test result: ok"; then
@@ -204,9 +187,19 @@ else
 fi
 
 # ------------------------------------------------ 4. portable archive round trip
-if cargo test -p plaudon-export --quiet 2>&1 | tail -5 | grep -q "test result: ok" \
-   && cargo test -p plaudon-export --quiet 2>&1 | grep -qv "running 0 tests"; then
-  record archive_restore pass "portable archive export and restore reproduce media hashes and structured records"
+# One invocation, not two: the suite was being run twice and judged on
+# `tail -5`, which reads whichever target happened to print last. A crate with
+# an empty second target therefore reported "no passing round-trip" while all
+# of its tests passed. Judge the whole output instead: at least one test must
+# have passed, and no block may have failed.
+ARCHIVE_OUT="$(cargo test -p plaudon-export --quiet 2>&1 || true)"
+ARCHIVE_PASSED="$(printf '%s\n' "$ARCHIVE_OUT" \
+  | sed -n 's/^test result: ok\. \([0-9]*\) passed.*/\1/p' | awk '{n += $1} END {print n + 0}')"
+if printf '%s\n' "$ARCHIVE_OUT" | grep -q "test result: FAILED"; then
+  record archive_restore fail "the portable archive suite has failing tests"
+elif [ "$ARCHIVE_PASSED" -gt 0 ]; then
+  record archive_restore pass \
+    "portable archive export and restore reproduce media hashes and structured records ($ARCHIVE_PASSED tests)"
 else
   record archive_restore not_verified "the portable archive suite produced no passing round-trip; export/restore is a release gate (spec 22(9))"
 fi

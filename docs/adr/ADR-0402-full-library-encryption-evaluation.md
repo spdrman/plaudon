@@ -109,7 +109,7 @@ Results land in `docs/benchmarks/encryption-overhead.md`. **No measurement has b
 ### Rationale
 
 1. **Measurement absent.** No overhead measurement exists; shipping encryption without knowing the cost violates spec §12's measurement-before-claim rule.
-2. **Complexity vs. threat coverage.** The threat model shows that application-level encryption does not defend against malware in the user session, a debugger, memory scraping, or a Tauri/WebView compromise. It adds narrow additional protection for offline disk access only in scenarios where FileVault/BitLocker are not enabled or the library is on an unencrypted external volume.
+2. **Complexity vs. threat coverage.** The threat model shows that application-level encryption does not defend against malware in the user session, a debugger, memory scraping, or a compromise of the application process itself. It adds narrow additional protection for offline disk access only in scenarios where FileVault/BitLocker are not enabled or the library is on an unencrypted external volume.
 3. **Portable archive priority.** Spec §13.8's encrypted portable archive provides user-controlled, cross-machine backup encryption. Delivering that first (with measured, tested password-based encryption) satisfies the "encrypt sensitive backups" need without the operational complexity of encrypting the working library.
 4. **Key recovery.** A lost password is unrecoverable; users must understand this before enabling. Encryption adoption requires clear onboarding, backup warnings, and a tested recovery/downgrade path.
 5. **SQLCipher integration.** The `sqlx` ecosystem's SQLCipher support is less mature than mainline SQLite; a full evaluation requires integration testing, schema migration testing, and performance validation.

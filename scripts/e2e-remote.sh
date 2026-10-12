@@ -1,22 +1,18 @@
 #!/usr/bin/env bash
 # Remote UI/e2e test runner.
 #
-# Every suite that drives a real renderer — egui_kittest (software wgpu) and the
-# legacy Playwright/Chromium suite — runs on the MARS Linux runner inside a
-# disposable Docker container, never on a developer workstation. The container
-# is capped (--cpus/--memory), always removed (--rm plus an explicit `docker rm
-# -f`), and the remote working copy is deleted by an EXIT trap.
+# Every suite that drives a real renderer — egui_kittest on software wgpu —
+# runs on the MARS Linux runner inside a disposable Docker container, never on
+# a developer workstation. The container is capped (--cpus/--memory), always
+# removed (--rm plus an explicit `docker rm -f`), and the remote working copy
+# is deleted by an EXIT trap.
 #
 # Usage:
-#   scripts/e2e-remote.sh cargo test -p plaudon-app --test shell_kittest
-#   scripts/e2e-remote.sh playwright [--reporter=line ...]
+#   scripts/e2e-remote.sh cargo test -p plaudon-ui --test shell_kittest
 #   scripts/e2e-remote.sh shell 'cargo xtask something && ls target'
 #
 #   cargo      Rust image + mesa/lavapipe software rendering. Snapshot artifacts
 #              (*.diff.png, *.new.png, any */snapshots/* file) are copied back.
-#   playwright Node image matching the pinned @playwright/test version; runs
-#              `npm ci` then `playwright test`. playwright-report/ and
-#              test-results/ are copied back.
 #   shell      Arbitrary command in the cargo image (same rendering setup).
 #
 # Results land in $PLAUDON_E2E_RESULTS (default: target/e2e-results).
@@ -36,7 +32,7 @@
 #                            local: this machine, same container recipe, capped at 4 cores / 12g
 #                            (the workstation budget is 5 cores / 20 GB across all agents).
 #   PLAUDON_E2E_REMOTE_ROOT  remote scratch parent     (/home/devshell/.plaudon-e2e)
-#   PLAUDON_E2E_IMAGE        docker image for the mode (mode-specific default)
+#   PLAUDON_E2E_IMAGE        docker image              (rust:1-bookworm)
 #   PLAUDON_E2E_CPUS         docker --cpus             (8)
 #   PLAUDON_E2E_MEMORY       docker --memory           (12g)
 #   PLAUDON_E2E_RESULTS      local artifact directory
@@ -95,23 +91,23 @@ rexec() {
 }
 
 usage() {
-  sed -n '2,44p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  sed -n '2,40p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
 }
 
 MODE="${1:-}"
 case "$MODE" in
-  cargo | playwright | shell) shift ;;
+  cargo | shell) shift ;;
   -h | --help | help)
     usage
     exit 0
     ;;
   "")
-    echo "error: missing mode (cargo|playwright|shell)" >&2
+    echo "error: missing mode (cargo|shell)" >&2
     usage >&2
     exit 2
     ;;
   *)
-    echo "error: unknown mode '$MODE' (expected cargo|playwright|shell)" >&2
+    echo "error: unknown mode '$MODE' (expected cargo|shell)" >&2
     exit 2
     ;;
 esac
@@ -154,21 +150,14 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-if [[ "$MODE" == "playwright" ]]; then
-  # The browser build is baked into the image, so it must match the pinned
-  # @playwright/test version exactly or Playwright refuses to launch.
-  pw_version="$(node -p "require('$REPO_ROOT/apps/desktop/package-lock.json').packages['node_modules/@playwright/test'].version")"
-  IMAGE="${PLAUDON_E2E_IMAGE:-mcr.microsoft.com/playwright:v$pw_version-noble}"
-else
-  IMAGE="${PLAUDON_E2E_IMAGE:-rust:1-bookworm}"
-fi
+IMAGE="${PLAUDON_E2E_IMAGE:-rust:1-bookworm}"
 
 echo "==> host=$HOST image=$IMAGE cpus=$CPUS memory=$MEMORY"
 echo "==> remote dir $REMOTE_DIR (removed on exit)"
 
 rexec "mkdir -p $(printf '%q' "$REMOTE_ROOT")"
-rsync_excludes=(--exclude '.git/' --exclude 'target/' --exclude 'node_modules/' --exclude 'dist/'
-  --exclude 'e2e-results/' --exclude 'playwright-report/' --exclude 'test-results/')
+rsync_excludes=(--exclude '.git/' --exclude 'target/' --exclude 'dist/'
+  --exclude 'e2e-results/')
 if [[ "$LOCAL" == 1 ]]; then
   rsync -a --delete "${rsync_excludes[@]}" "$REPO_ROOT/" "$REMOTE_DIR/"
 else
@@ -188,15 +177,6 @@ libx11-6 libxcursor1 libxi6 libxrandr2 fontconfig pkg-config cmake clang \
 libasound2-dev libssl-dev ${PLAUDON_E2E_APT_PACKAGES:-}"
 
 case "$MODE" in
-  playwright)
-    docker_mounts=()
-    root_setup=""
-    payload="cd /work/apps/desktop
-npm ci --no-audit --no-fund
-npx playwright test$quoted_args"
-    docker_env=(-e CI=1 -e PLAUDON_E2E_ALLOW_LOCAL=1 -e HOME="$CONTAINER_HOME"
-      -e npm_config_cache="$CONTAINER_HOME/.npm")
-    ;;
   cargo | shell)
     if [[ "$MODE" == "cargo" ]]; then
       command_line="cargo$quoted_args"
@@ -288,13 +268,9 @@ EOF
 # Artifacts are most valuable exactly when the run failed, so collect them
 # before the trap wipes the remote directory.
 mkdir -p "$RESULTS_DIR"
-if [[ "$MODE" == "playwright" ]]; then
-  find_expr="-path './apps/desktop/playwright-report/*' -o -path './apps/desktop/test-results/*'"
-else
-  # `*/visual/*` is Plaudon's own baseline directory (docs/EGUI_TESTING.md §4);
-  # `*/snapshots/*` is egui_kittest's default, kept for any crate that uses it.
-  find_expr="-name '*.diff.png' -o -name '*.new.png' -o -path '*/snapshots/*' -o -path '*/visual/*'"
-fi
+# `*/visual/*` is Plaudon's own baseline directory (docs/EGUI_TESTING.md §4);
+# `*/snapshots/*` is egui_kittest's default, kept for any crate that uses it.
+find_expr="-name '*.diff.png' -o -name '*.new.png' -o -path '*/snapshots/*' -o -path '*/visual/*'"
 if rexec "
     cd $(printf '%q' "$REMOTE_DIR") &&
     find . -path ./target -prune -o -type f \\( $find_expr \\) -print0 \

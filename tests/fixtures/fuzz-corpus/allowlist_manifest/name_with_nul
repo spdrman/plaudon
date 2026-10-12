@@ -1,1 +1,0 @@
-{"version":1,"commands":[{"name":"ok\u0000exec_shell","windows":["main"],"returns_secret":false,"spec":"s"}],"forbidden_permissions":[],"required_csp":{"a":["b"]},"forbidden_command_patterns":["^exec"],"release_requirements":{"devtools":false,"with_global_tauri":false,"remote_window_urls":false,"dangerous_keys":false}}
