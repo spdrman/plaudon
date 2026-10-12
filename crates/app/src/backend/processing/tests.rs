@@ -612,7 +612,9 @@ async fn concurrent_stage_requests_survive_writer_contention() {
     for index in 0..4 {
         recordings.push(pipeline.import(&format!("stress-{index}.wav")).await);
     }
-    pipeline.prefer(Stage::Transcribe, SCRIPTED_STT_ENGINE).await;
+    pipeline
+        .prefer(Stage::Transcribe, SCRIPTED_STT_ENGINE)
+        .await;
 
     let mut accepted = 0_usize;
     for round in 0..ROUNDS {
@@ -670,7 +672,9 @@ async fn racing_identical_requests_open_exactly_one_job() {
     )
     .await;
     let recording_id = pipeline.import("race.wav").await;
-    pipeline.prefer(Stage::Transcribe, SCRIPTED_STT_ENGINE).await;
+    pipeline
+        .prefer(Stage::Transcribe, SCRIPTED_STT_ENGINE)
+        .await;
 
     let mut calls = Vec::with_capacity(CONCURRENCY);
     for _ in 0..CONCURRENCY {
