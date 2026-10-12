@@ -702,7 +702,7 @@
       "epic": "D",
       "verification": [],
       "status": "planned",
-      "notes": "Planned by docs/specs/VOICE_PROFILES_SPEC.md (VP-110 to VP-113) and ADR-0080. The feature is local-only in and out of Local-only Mode; unlike TranscriptText and AudioBytes, the new payload class is unconsentable by construction, so a future coding mistake that requests the egress is refused structurally rather than by review."
+      "notes": "Planned by docs/specs/VOICE_PROFILES_SPEC.md (VP-110 to VP-113) and ADR-0080. The feature is local-only in and out of Local-only Mode; unlike TranscriptText and AudioBytes, the new payload class is unconsentable by construction, so a future coding mistake that requests the egress is refused structurally rather than by review. The P1.4 change added the voice_embedding shape to the section 6.3A response scanner (crates/security/src/response.rs), so a serialized result carrying an embedding-named field is already refused; the payload class, egress watch and diagnostics redaction remain to be built."
     },
     {
       "id": "TM-045",
@@ -743,7 +743,7 @@
       "epic": "M",
       "verification": [],
       "status": "planned",
-      "notes": "Planned by docs/specs/VOICE_PROFILES_SPEC.md (VP-060 to VP-066, VP-094) and ADR-0082. There is deliberately no auto-assignment tier at any score: measured demographic error disparity in VoxCeleb-trained models makes an auto-assignment threshold a policy about whose records get silently corrupted."
+      "notes": "Planned by docs/specs/VOICE_PROFILES_SPEC.md (VP-060 to VP-066, VP-094) and ADR-0082. There is deliberately no auto-assignment tier at any score: measured demographic error disparity in VoxCeleb-trained models makes an auto-assignment threshold a policy about whose records get silently corrupted. The matching half of the control exists as of the P1.4 change in crates/app-core/src/voice_profiles/matching: suggestion-only bands, speech minima, model-version-mismatch refusal and bounded per-profile calibration, with golden and property tests in crates/app-core/tests/voice_matching.rs. The row stays planned because enrolment, exemplar provenance and remembered rejections still have no implementation and the owner file does not exist yet."
     },
     {
       "id": "TM-048",

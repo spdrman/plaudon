@@ -18,6 +18,33 @@
 //! unavailable vault produces [`VoiceProfileError::StoreLocked`] — ADR-0014's
 //! rule, applied to this feature.
 //!
+//! [`matching`] is the other half: the pure scoring layer of spec §6. It has no
+//! I/O, no model and no state, and three rules hold throughout it.
+//!
+//! * **Off by default (VP-003).** Nothing there runs unless a caller hands it
+//!   embeddings, and embeddings only exist after the consent gate.
+//! * **A match is a suggestion, never an identity (ADR-0082, VP-060).** The
+//!   output is a score and a band. There is no auto-assignment tier at any
+//!   score, so no code path there can change a transcript label.
+//! * **An embedding never leaves the process (VP-002, VP-110).** Vectors are
+//!   carried by [`matching::Embedding`], which deliberately implements neither
+//!   `serde::Serialize` nor `serde::Deserialize` and whose `Debug` prints the
+//!   checkpoint and the dimension only. Everything that *is* serializable —
+//!   scores, bands, person identifiers — is score metadata, which
+//!   `plaudon_security::response::assert_no_secret_in_response` accepts and
+//!   whose `VoiceEmbedding` shape would reject a smuggled vector.
+//!
+//! That last rule is a compile-time one. A match report is serializable:
+//!
+//! ```
+//! use plaudon_app_core::voice_profiles::matching::MatchReport;
+//! fn requires_serialize<T: serde::Serialize>() {}
+//! requires_serialize::<MatchReport>();
+//! ```
+//!
+//! and the same assertion over [`matching::Embedding`] does not compile — see
+//! the two `compile_fail` examples on that type.
+//!
 //! # Honest limits
 //!
 //! Encryption here protects data **at rest**, not data in use: while a match
@@ -27,6 +54,7 @@
 //! plus the fact that the feature is off by default and computes nothing until
 //! a user turns it on.
 
+pub mod matching;
 pub mod store;
 
 pub use store::{
