@@ -221,37 +221,39 @@ if (-not (Test-Path $Installer)) {
 $WindowsInstaller = New-Object -ComObject WindowsInstaller.Installer
 $Database = $WindowsInstaller.OpenDatabase($Installer, 0)
 
-function Invoke-MsiQuery([string]$Sql) {
+# One column at a time, as a flat array of strings. Nested arrays are what a
+# PowerShell pipeline flattens behind your back, and an audit that silently
+# sees nothing is worse than no audit.
+function Get-MsiColumn([string]$Sql) {
     $View = $Database.OpenView($Sql)
     $View.Execute()
-    $Rows = @()
-    while ($null -ne ($Record = $View.Fetch())) {
-        $Row = @()
-        for ($Field = 1; $Field -le $Record.FieldCount; $Field++) {
-            $Row += [string]$Record.StringData($Field)
-        }
-        $Rows += , $Row
+    $Values = New-Object System.Collections.Generic.List[string]
+    while ($true) {
+        $Record = $View.Fetch()
+        if ($null -eq $Record) { break }
+        $Values.Add([string]$Record.StringData(1))
     }
     $View.Close()
-    return , $Rows
+    return , $Values.ToArray()
 }
 
 # Registry root 2 is HKLM and -1 is "whichever hive the install scope picks",
 # which for a package that must never be machine-wide is just as wrong.
-$RegistryRows = Invoke-MsiQuery "SELECT ``Root``, ``Key`` FROM ``Registry``"
-if ($RegistryRows.Count -eq 0) {
+$RegistryRoots = @(Get-MsiColumn "SELECT ``Root`` FROM ``Registry``")
+$RegistryKeys = @(Get-MsiColumn "SELECT ``Key`` FROM ``Registry``")
+if ($RegistryRoots.Count -eq 0) {
     Write-Error "reason=missing_binary: the built package has no Registry rows; the association claim did not make it in"
     exit 1
 }
-foreach ($Row in $RegistryRows) {
-    if ($Row[0] -ne "1") {
-        Write-Error "reason=entitlement_rejected: the built package writes registry root $($Row[0]) at '$($Row[1])'; a per-user install writes HKCU (1) and nothing else"
+for ($Index = 0; $Index -lt $RegistryRoots.Count; $Index++) {
+    if ($RegistryRoots[$Index] -ne "1") {
+        Write-Error "reason=entitlement_rejected: the built package writes registry root $($RegistryRoots[$Index]) at '$($RegistryKeys[$Index])'; a per-user install writes HKCU (1) and nothing else"
         exit 1
     }
 }
-$AllUsers = Invoke-MsiQuery "SELECT ``Value`` FROM ``Property`` WHERE ``Property``='ALLUSERS'"
-if ($AllUsers.Count -ne 0 -and $AllUsers[0][0] -ne "") {
-    Write-Error "reason=entitlement_rejected: ALLUSERS is '$($AllUsers[0][0])'; a per-user install leaves it empty"
+$AllUsers = @(Get-MsiColumn "SELECT ``Value`` FROM ``Property`` WHERE ``Property``='ALLUSERS'")
+if ($AllUsers.Count -ne 0 -and $AllUsers[0] -ne "") {
+    Write-Error "reason=entitlement_rejected: ALLUSERS is '$($AllUsers[0])'; a per-user install leaves it empty"
     exit 1
 }
 # Summary information property 15 is the word count; bit 3 (value 8) is
@@ -261,10 +263,18 @@ if (($WordCount -band 8) -eq 0) {
     Write-Error "reason=entitlement_rejected: the package asks for elevation (word count $WordCount)"
     exit 1
 }
-$RegistryKeyCount = $RegistryRows.Count
-$ShortcutCount = (Invoke-MsiQuery "SELECT ``Shortcut`` FROM ``Shortcut``").Count
-$UpgradeCode = (Invoke-MsiQuery "SELECT ``Value`` FROM ``Property`` WHERE ``Property``='UpgradeCode'")[0][0]
-Write-Host "==> package audit: $RegistryKeyCount HKCU registry rows, $ShortcutCount shortcut, upgrade code $UpgradeCode, no elevation requested"
+$Shortcuts = @(Get-MsiColumn "SELECT ``Shortcut`` FROM ``Shortcut``")
+if ($Shortcuts.Count -ne 1) {
+    Write-Error "reason=entitlement_rejected: the built package carries $($Shortcuts.Count) shortcuts; it installs exactly one, in the Start Menu"
+    exit 1
+}
+$UpgradeCodes = @(Get-MsiColumn "SELECT ``Value`` FROM ``Property`` WHERE ``Property``='UpgradeCode'")
+if ($UpgradeCodes.Count -ne 1) {
+    Write-Error "reason=missing_binary: the built package has no UpgradeCode, so it could never upgrade itself"
+    exit 1
+}
+$UpgradeCode = $UpgradeCodes[0]
+Write-Host "==> package audit: $($RegistryRoots.Count) HKCU registry rows, $($Shortcuts.Count) shortcut, upgrade code $UpgradeCode, no elevation requested"
 [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($Database) | Out-Null
 [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($WindowsInstaller) | Out-Null
 
