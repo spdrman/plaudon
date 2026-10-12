@@ -15,6 +15,7 @@ pub mod duplicate;
 pub mod format;
 pub mod import;
 pub mod list;
+pub mod panels;
 pub mod query;
 pub mod selection;
 pub mod status;
@@ -39,6 +40,8 @@ use list::{RecordingList, Sender};
 use query::{LibraryQuery, QueryAction};
 use table::{BatchOperation, RecordingTable, TableState};
 use toolbar::{toolbar, ToolbarState};
+
+mod screen;
 
 /// The stage `start_processing` is asked for from the library's batch menu.
 const TRANSCRIBE_STAGE: &str = "transcribe";
@@ -105,6 +108,10 @@ impl BatchProgress {
 }
 
 /// The library screen.
+///
+/// It owns the two views that live *inside* Library rather than next to it:
+/// cross-recording search and the recording detail container (§5.1 — detail
+/// is not a top-level destination).
 #[derive(Debug)]
 pub struct LibraryScreen {
     list: RecordingList,
@@ -113,6 +120,9 @@ pub struct LibraryScreen {
     import: ImportSession,
     processing: BatchProgress,
     started: bool,
+    search: crate::screens::search::SearchScreen,
+    detail: crate::screens::recording::RecordingDetailScreen,
+    panels: Box<dyn crate::screens::recording::DetailPanels>,
 }
 
 impl Default for LibraryScreen {
@@ -123,8 +133,18 @@ impl Default for LibraryScreen {
 
 impl LibraryScreen {
     /// A screen that has not fetched anything yet.
+    ///
+    /// The detail view's panels are the ones a host without a player, a
+    /// transcript editor or a review panel can supply; use
+    /// [`LibraryScreen::with_panels`] to plug the real widgets in.
     #[must_use]
     pub fn new() -> Self {
+        Self::with_panels(Box::new(panels::UnbuiltPanels))
+    }
+
+    /// A screen whose detail view hosts `panels`.
+    #[must_use]
+    pub fn with_panels(panels: Box<dyn crate::screens::recording::DetailPanels>) -> Self {
         Self {
             list: RecordingList::new(LibraryQuery::default()),
             table: TableState::default(),
@@ -132,6 +152,9 @@ impl LibraryScreen {
             import: ImportSession::default(),
             processing: BatchProgress::default(),
             started: false,
+            search: crate::screens::search::SearchScreen::new(),
+            detail: crate::screens::recording::RecordingDetailScreen::new(),
+            panels,
         }
     }
 
@@ -151,6 +174,11 @@ impl LibraryScreen {
     #[must_use]
     pub const fn import_session(&self) -> &ImportSession {
         &self.import
+    }
+
+    /// Ask for the next page, as the grid does when it reaches the bottom.
+    pub fn load_more(&mut self, send: Sender<'_>) {
+        self.list.load_more(send);
     }
 
     /// Import paths the host obtained from the OS picker.
