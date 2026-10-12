@@ -1136,9 +1136,7 @@ impl LocalBackend {
             .ensure_speakers(revision.recording_id, speakers)
             .await?;
 
-        let mut tx = self
-            .pool()
-            .begin()
+        let mut tx = plaudon_persistence::begin_write(self.pool())
             .await
             .map_err(|err| storage_error("cannot begin a revision write", &err))?;
 

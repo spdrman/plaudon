@@ -227,7 +227,7 @@ impl TranscriptRepository {
             .as_ref()
             .map_or_else(|| "none".to_string(), super::transcript::profile_label);
 
-        let mut transaction = self.database.pool().begin().await.map_err(storage)?;
+        let mut transaction = self.database.begin_write().await?;
 
         sqlx::query(
             "INSERT INTO transcript_revisions (
@@ -527,7 +527,7 @@ impl TranscriptRepository {
     /// annotations. Leaves no dangling rows (E2E #16).
     pub async fn delete_revisions_for(&self, recording_id: RecordingId) -> PersistenceResult<u64> {
         let ids = self.revisions_for(recording_id).await?;
-        let mut transaction = self.database.pool().begin().await.map_err(storage)?;
+        let mut transaction = self.database.begin_write().await?;
         // Children first: `transcript_revisions.parent_id` is ON DELETE
         // RESTRICT, so the lineage is removed newest-first.
         for id in ids.iter().rev() {

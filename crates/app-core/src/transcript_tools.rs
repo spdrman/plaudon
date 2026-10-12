@@ -98,7 +98,7 @@ impl StudyOutputWriter {
         let segments = self.segments(provenance.transcript_revision_id).await?;
         let mut output_ids = Vec::new();
         let mut evidence_rows = 0;
-        let mut tx = self.db.pool().begin().await?;
+        let mut tx = self.db.begin_write().await?;
 
         let groups: [StudyOutputGroup<'_>; 3] = [
             (

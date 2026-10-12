@@ -48,10 +48,16 @@ honoured once the commit finishes.
 
 ### 2. Single-writer coordinator, concurrent readers
 
-All writes funnel through one serialized task owning a one-connection write
-pool (`synchronous = FULL`); reads use a separate WAL pool. `SQLITE_BUSY`
-cannot arise from our own concurrency, and the serialization gives the event
-sequence allocator a free total order.
+All job-engine writes funnel through one serialized task owning a
+one-connection write pool (`synchronous = FULL`); reads use a separate WAL
+pool, and the serialization gives the event sequence allocator a free total
+order. The desktop application keeps its own pool over the same library file,
+so the write lock is still contended: every write transaction — the engine's
+and the application's — starts with `BEGIN IMMEDIATE`
+(`plaudon_persistence::begin_write`), which takes the write lock where
+`busy_timeout` can absorb the contention. A deferred `BEGIN` cannot: SQLite
+fails the read-snapshot-to-write upgrade with `SQLITE_BUSY` immediately,
+without consulting the busy handler, once another connection has committed.
 
 The coordinator lives in `crates/jobs`, not `crates/persistence`, because the
 post-commit event dispatch it feeds is owned by the job engine and
