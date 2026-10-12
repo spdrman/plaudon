@@ -40,3 +40,38 @@ revision 7b6c134472287db4367fca80bcb498240ba36567) and EffectCraft
 Copyright (c) 2026 ArtCraft Team and their respective contributors, both
 licensed MIT OR Apache-2.0. That attribution is carried here as Apache-2.0 §4(d)
 requires; the full upstream NOTICE is at third_party/craft-ui/NOTICE.
+
+---------------------------------------------------------------------------
+crates/audio-playback and crates/ui/src/player
+---------------------------------------------------------------------------
+
+Adapted from filmcraft (https://github.com/spdrman/filmcraft).
+
+    filmcraft
+    Copyright (c) 2026 the filmcraft authors.
+    Licensed under the MIT License or the Apache License, Version 2.0, at our
+    option; used here under the Apache License, Version 2.0.
+
+Each file below names its origin in its own header.
+
+  crates/audio-playback/src/ring.rs
+      Adapted from filmcraft's `crates/ui-egui/src/play_ahead.rs`. The
+      single-producer/single-consumer ring of atomically stored f32 bit
+      patterns, the lead-buffer mixing thread, and the underrun "play silence
+      and make the mixer skip the same frames" accounting are filmcraft's
+      design and implementation. Renamed types, `tracing` instead of `log`,
+      the `serde_json` statistics export removed, and new tests.
+
+  crates/audio-playback/src/cpal_out.rs
+      Structure follows filmcraft's `CpalOut` (`apps/filmcraft/src/audio.rs`):
+      an atomic played-frame counter as the master clock, `catch_unwind`
+      around the mixer inside the device callback, sample-format conversion
+      with clamping, and a health record fed by cpal's error callback.
+      Rewritten against cpal 0.18; no filmcraft code is copied verbatim.
+
+  crates/ui/src/player/waveform.rs
+      The painting technique — one `egui::Mesh` of one-point-wide coloured
+      rectangles, folded per pixel column from (min, max) buckets — is the one
+      filmcraft uses in its timeline and source-monitor waveforms. The
+      implementation here is new: it reads a multiresolution pyramid rather
+      than a single-resolution bucket list.

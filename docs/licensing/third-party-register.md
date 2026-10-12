@@ -63,6 +63,10 @@ Reviewed on 2026-10-11.
 | whisper.cpp | MIT | bundle (binary we build) | notice file | C++ parsing untrusted audio; sandbox per ADR-0015 | Bundle the binary we build ourselves. |
 | Apple `Speech` / `FoundationModels` | Apple platform frameworks | linked on macOS only, never redistributed | n/a | availability is a runtime probe | Link on macOS; the Windows build links nothing Apple. |
 | FFmpeg | LGPL-2.1+ or GPL depending on build | **excluded for now** | would require source offer and dynamic linking care | large C codebase parsing untrusted input | Not introduced. Symphonia covers WAV, MP3, M4A/AAC and FLAC; see `docs/spikes/A1.4-audio-decoder-coverage.md` for the Opus gap and the options. |
+| `egui` | MIT or Apache-2.0 | bundle | notice file | immediate-mode UI; renders our own data only | Bundle (EPIC O: the Tauri webview is replaced by egui). |
+| `cpal` | Apache-2.0 | bundle | notice file | opens the platform audio output device; no input stream is ever created, so no microphone permission is requested | Bundle. Needed because Rust has no audio output otherwise (EPIC O task O1.5 #203). |
+| `egui_kittest` | MIT or Apache-2.0 | development only | — | drives the UI in tests through AccessKit | Development dependency. |
+| filmcraft (`spdrman/filmcraft`) | MIT or Apache-2.0 | bundle (adapted source) | **`NOTICE`, per file** | `std`-only ring buffer and mixing thread; no `unsafe` | Adapt, not depend: `crates/audio-playback/src/ring.rs` is derived from its `play_ahead.rs`, and `cpal_out.rs` and the waveform mesh follow its structure. Every adapted file names the origin in its header and in `NOTICE`. A git dependency is impossible here — `deny.toml` sets `unknown-git = "deny"` — and the crate is unpublished. |
 
 ## Model weights
 
