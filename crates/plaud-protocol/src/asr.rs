@@ -575,7 +575,10 @@ mod tests {
 
     #[test]
     fn a_forged_length_prefix_cannot_drive_allocation() {
-        let mut bytes = u16::try_from(MAX_PACKET_BYTES + 1).unwrap().to_be_bytes().to_vec();
+        let mut bytes = u16::try_from(MAX_PACKET_BYTES + 1)
+            .unwrap()
+            .to_be_bytes()
+            .to_vec();
         bytes.push(0x50);
         assert_eq!(
             scan(&bytes),

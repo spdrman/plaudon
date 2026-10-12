@@ -152,11 +152,13 @@ fn push_short_string(
         });
     }
     // The bound is <= 255 for every caller, so the cast cannot truncate.
-    out.push(u8::try_from(bytes.len()).map_err(|_| PayloadError::BoundExceeded {
-        field,
-        declared: bytes.len(),
-        bound,
-    })?);
+    out.push(
+        u8::try_from(bytes.len()).map_err(|_| PayloadError::BoundExceeded {
+            field,
+            declared: bytes.len(),
+            bound,
+        })?,
+    );
     out.extend_from_slice(bytes);
     Ok(())
 }
@@ -466,7 +468,10 @@ mod tests {
         let error = encode_authenticate(&LEGACY_NOTE_V0095, &[0xAB; 8]).unwrap_err();
         assert_eq!(error, PayloadError::TokenLength { bytes: 8 });
         let rendered = error.to_string();
-        assert!(!rendered.contains("ab"), "{rendered} must not echo the token");
+        assert!(
+            !rendered.contains("ab"),
+            "{rendered} must not echo the token"
+        );
 
         assert_eq!(
             encode_authenticate(&LEGACY_NOTE_V0095, &[0xAB; 16]).unwrap(),
@@ -583,7 +588,10 @@ mod tests {
             offset: 1024,
             length: 80,
         };
-        assert_eq!(DataRequest::decode(&request.encode().unwrap()).unwrap(), request);
+        assert_eq!(
+            DataRequest::decode(&request.encode().unwrap()).unwrap(),
+            request
+        );
 
         let empty = DataRequest {
             id: String::new(),

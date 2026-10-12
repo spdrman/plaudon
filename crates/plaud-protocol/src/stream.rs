@@ -340,7 +340,10 @@ mod tests {
         let mut assembler = StreamingAssembler::with_declared_length(1_024, 6);
         assembler.accept(&chunk(0, b"abc")).unwrap();
         let step = assembler.accept(&chunk(0, b"abc")).unwrap();
-        assert!(step.ready.is_empty(), "a duplicate must not be written twice");
+        assert!(
+            step.ready.is_empty(),
+            "a duplicate must not be written twice"
+        );
         assert_eq!(assembler.written_bytes(), 3);
     }
 

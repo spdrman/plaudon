@@ -147,7 +147,10 @@ pub fn profile_for(device_model: &str, firmware: &str) -> Option<&'static Protoc
 /// Look a profile up by its stable name, for fixtures and evidence records.
 #[must_use]
 pub fn profile_by_name(name: &str) -> Option<&'static ProtocolProfile> {
-    PROFILES.iter().copied().find(|profile| profile.name == name)
+    PROFILES
+        .iter()
+        .copied()
+        .find(|profile| profile.name == name)
 }
 
 #[cfg(test)]
@@ -160,7 +163,10 @@ mod tests {
             profile_for("Note", "V0095").map(|p| p.name),
             Some("plaud-note-legacy-v0095")
         );
-        assert_eq!(profile_for(" note ", " v0095 ").map(|p| p.name), Some("plaud-note-legacy-v0095"));
+        assert_eq!(
+            profile_for(" note ", " v0095 ").map(|p| p.name),
+            Some("plaud-note-legacy-v0095")
+        );
 
         for (model, firmware) in [
             ("Note", "V0096"),
@@ -216,7 +222,10 @@ mod tests {
     #[test]
     fn profile_names_are_unique_and_resolvable() {
         for profile in PROFILES {
-            assert_eq!(profile_by_name(profile.name).map(|p| p.name), Some(profile.name));
+            assert_eq!(
+                profile_by_name(profile.name).map(|p| p.name),
+                Some(profile.name)
+            );
         }
         assert!(profile_by_name("plaud-note-encrypted").is_none());
     }

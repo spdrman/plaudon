@@ -409,7 +409,10 @@ mod tests {
         let mut ledger = drive(&HAPPY_PATH[..6]);
         ledger.apply(&TransferEvent::Paused).unwrap();
         assert_eq!(ledger.state(), TransferState::Paused);
-        assert_eq!(ledger.apply(&TransferEvent::Resumed).unwrap(), TransferState::Queued);
+        assert_eq!(
+            ledger.apply(&TransferEvent::Resumed).unwrap(),
+            TransferState::Queued
+        );
         assert!(
             !ledger.verified(),
             "a resumed transfer re-verifies from scratch"

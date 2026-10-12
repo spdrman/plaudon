@@ -19,7 +19,9 @@
 use plaudon_plaud_protocol::profile::{profile_for, ProtocolProfile};
 use serde::{Deserialize, Serialize};
 
-use crate::register::{CompatibilityCell, CompatibilityRegister, ProfileKey, Resolution, SupportStatus};
+use crate::register::{
+    CompatibilityCell, CompatibilityRegister, ProfileKey, Resolution, SupportStatus,
+};
 
 /// What a probe established about a device and this host.
 ///
@@ -430,7 +432,7 @@ mod tests {
         };
         assert_eq!(protocol.name, "plaud-note-legacy-v0095");
         assert_eq!(cell.status, SupportStatus::Supported);
-        assert_eq!(decision.ui_label(), "Supported");
+        assert_eq!(decision.ui_label(), SupportStatus::Supported.ui_label());
         assert!(decision.permits_transfer());
     }
 
@@ -448,9 +450,12 @@ mod tests {
             let mut near_miss = probed();
             mutate(&mut near_miss);
             let decision = policy.evaluate(&near_miss);
-            assert!(!decision.permits_transfer(), "{near_miss:?} must fail closed");
+            assert!(
+                !decision.permits_transfer(),
+                "{near_miss:?} must fail closed"
+            );
             assert!(decision.offers_experimental_probe());
-            assert_eq!(decision.ui_label(), "Not evaluated");
+            assert_eq!(decision.ui_label(), SupportStatus::NotEvaluated.ui_label());
         }
     }
 
@@ -474,7 +479,10 @@ mod tests {
         let decision = policy(vec![cell(SupportStatus::KnownUnsupported)]).evaluate(&probed());
         assert!(!decision.permits_transfer());
         assert!(!decision.offers_experimental_probe());
-        assert_eq!(decision.ui_label(), "Known unsupported");
+        assert_eq!(
+            decision.ui_label(),
+            SupportStatus::KnownUnsupported.ui_label()
+        );
         assert!(!decision.known_limitations().is_empty());
     }
 
