@@ -200,6 +200,15 @@ describe("capability check (ADR-0022)", () => {
       await screen.findByRole("button", { name: "Send the test clip and accept the cost" }),
     );
 
+    // §4.4(3): the check uploads audio, so the grant it takes must be a
+    // transcription grant — the one the check itself is then matched against.
+    expect(backend.consents[0]).toMatchObject({
+      model_id: "vendor/catalog-audio-xl",
+      purpose: "transcription",
+      content_type: "audio_bytes",
+      scope_kind: "model_policy",
+    });
+
     await screen.findByText(/Capability check on vendor\/catalog-audio-xl completed/);
     const checked = within(choiceFor("vendor/catalog-audio-xl"));
     expect(checked.getAllByText(/Verified/).length).toBeGreaterThan(0);

@@ -198,7 +198,7 @@ export function ModelPicker({
           <CloudConsentDialog
             open={consentOpen}
             model={checkTarget}
-            purpose="credential_validation"
+            purpose="transcription"
             contentType="audio_bytes"
             recordingId={null}
             estimatedCost={estimateDispatchCost(checkTarget, CAPABILITY_CHECK_CLIP_MS)}

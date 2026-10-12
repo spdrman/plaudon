@@ -8,6 +8,8 @@
  */
 import type {
   CostValue,
+  ConsentContentType,
+  ConsentPurpose,
   ListModelsResponse,
   ModelCard,
   ModelPricing,
@@ -71,6 +73,34 @@ export const STAGE_LABELS: Record<ProcessingStage, string> = {
   structured_extraction: "Structured extraction",
   citation_verification: "Citation verification",
   tool_run: "Transcript tool run",
+};
+
+/**
+ * §4.4(3): the consent purpose follows the content that actually leaves the
+ * device. Anything carrying audio bytes is `transcription`;
+ * `credential_validation` is reserved for a key check that sends no
+ * recording-derived content at all, so no dispatch of user content uses it.
+ */
+export const CONSENT_PURPOSE_BY_STAGE: Record<ProcessingStage, ConsentPurpose> = {
+  transcribe: "transcription",
+  diarize: "transcription",
+  normalize: "summarization",
+  section_summary: "summarization",
+  consolidated_summary: "summarization",
+  structured_extraction: "summarization",
+  citation_verification: "summarization",
+  tool_run: "transcript_tool",
+};
+
+export const CONSENT_CONTENT_TYPE_BY_STAGE: Record<ProcessingStage, ConsentContentType> = {
+  transcribe: "audio_bytes",
+  diarize: "audio_bytes",
+  normalize: "transcript_text",
+  section_summary: "transcript_text",
+  consolidated_summary: "transcript_text",
+  structured_extraction: "transcript_text",
+  citation_verification: "transcript_text",
+  tool_run: "transcript_text",
 };
 
 /**

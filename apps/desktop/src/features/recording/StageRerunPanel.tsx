@@ -21,7 +21,11 @@ import { SelectField } from "../../components/Field";
 import { CloudConsentDialog } from "../cloud/CloudConsentDialog";
 import { CostView } from "../cloud/CostView";
 import { ModelPicker } from "../cloud/ModelPicker";
-import { STAGE_LABELS } from "../cloud/cloudPresentation";
+import {
+  CONSENT_CONTENT_TYPE_BY_STAGE,
+  CONSENT_PURPOSE_BY_STAGE,
+  STAGE_LABELS,
+} from "../cloud/cloudPresentation";
 import { estimateDispatchCost } from "../cloud/money";
 import { CommandErrorNotice } from "./errorNotice";
 
@@ -190,10 +194,8 @@ export function StageRerunPanel({ detail, onQueued }: StageRerunPanelProps) {
         <CloudConsentDialog
           open={consentOpen}
           model={model}
-          purpose={stage === "transcribe" || stage === "diarize" ? "transcription" : "summarization"}
-          contentType={
-            stage === "transcribe" || stage === "diarize" ? "audio_bytes" : "transcript_text"
-          }
+          purpose={CONSENT_PURPOSE_BY_STAGE[stage]}
+          contentType={CONSENT_CONTENT_TYPE_BY_STAGE[stage]}
           recordingId={detail.recording_id}
           estimatedCost={estimate ?? { confidence: "unknown", amount: null }}
           onClose={() => setConsentOpen(false)}

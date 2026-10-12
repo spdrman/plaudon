@@ -35,7 +35,10 @@ import type {
   UsageTotals,
 } from "../ipc/contract";
 import type { Transport, Unlisten } from "../ipc/client";
-import { CAPABILITY_CHECK_CLIP_MS } from "../features/cloud/cloudPresentation";
+import {
+  CAPABILITY_CHECK_CLIP_MS,
+  CONSENT_PURPOSE_BY_STAGE,
+} from "../features/cloud/cloudPresentation";
 import { estimateDispatchCost, parseMicros, usd } from "../features/cloud/money";
 
 export interface FakeRecording extends RecordingDetail {
@@ -1086,7 +1089,10 @@ export class FakeBackend implements Transport {
     if (blocked) {
       throw envelope("BUDGET_EXCEEDED", blocked, { action: "OPEN_SETTINGS" });
     }
-    if (cloud && !this.#consentCovers(model.model_id, rec.recording_id)) {
+    if (
+      cloud &&
+      !this.#consentCovers(model.model_id, rec.recording_id, CONSENT_PURPOSE_BY_STAGE[stage])
+    ) {
       throw envelope(
         "CONSENT_REQUIRED",
         "This run would send content to a cloud provider. Review and approve it first.",
@@ -1118,14 +1124,22 @@ export class FakeBackend implements Transport {
   }
 
   /**
-   * An active grant for this model. `recordingId` is `null` for a dispatch that
-   * belongs to no recording, which only a model-policy grant can cover.
+   * An active grant for this model and purpose. `recordingId` is `null` for a
+   * dispatch that belongs to no recording, which only a model-policy grant can
+   * cover. The purpose follows the content type — anything carrying audio
+   * bytes is `transcription`, never `credential_validation`, which §4.4(3)
+   * reserves for a key check that sends no recording-derived content.
    */
-  #consentCovers(modelId: string, recordingId: string | null): boolean {
+  #consentCovers(
+    modelId: string,
+    recordingId: string | null,
+    purpose: ConsentSummary["purpose"],
+  ): boolean {
     return this.consents.some(
       (grant) =>
         grant.revoked_at === null &&
         grant.model_id === modelId &&
+        grant.purpose === purpose &&
         (grant.scope_kind === "model_policy" ||
           (grant.scope_kind === "recording" &&
             recordingId !== null &&
@@ -1153,7 +1167,7 @@ export class FakeBackend implements Transport {
         { action: "REVIEW_LOCAL_ONLY_MODE" },
       );
     }
-    if (!this.#consentCovers(modelId, null)) {
+    if (!this.#consentCovers(modelId, null, "transcription")) {
       throw envelope(
         "CONSENT_REQUIRED",
         "The capability check sends test audio to this provider. Review and approve it first.",

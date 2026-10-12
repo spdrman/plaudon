@@ -116,7 +116,12 @@ describe("StageRerunPanel", () => {
 
   it("re-runs only the stage that was chosen", async () => {
     const { user, backend, recordingId } = setup((b) => {
-      b.addConsent({ model_id: "acme/summarize-1", scope_kind: "model_policy" });
+      b.addConsent({
+        model_id: "acme/summarize-1",
+        scope_kind: "model_policy",
+        purpose: "summarization",
+        content_type: "transcript_text",
+      });
     });
     await screen.findByRole("radio", { name: /Scribe 2/ });
 
