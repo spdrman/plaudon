@@ -47,6 +47,8 @@ pub use transcription::TranscriptionPanel;
 use plaudon_app::command::AppCommand;
 use plaudon_app::dto::{Capabilities, ExportFormat};
 use plaudon_app::job_presentation::ControlIntent;
+use plaudon_audio_playback::sync::PlayerCommand;
+use plaudon_audio_playback::time::Micros;
 use plaudon_domain::transcript::AlignmentOrigin;
 
 /// A request to move audio playback to a cited position.
@@ -65,6 +67,22 @@ pub struct SeekRequest {
     pub claim_id: Option<String>,
     /// Zero-based transcript segment the anchor points at.
     pub seq_index: u32,
+}
+
+impl SeekRequest {
+    /// The player command that carries out this seek.
+    ///
+    /// The bridge to O1.5's player: the anchor's reported position in
+    /// milliseconds becomes an absolute [`PlayerCommand::Seek`]. Nothing is
+    /// scaled or guessed — a position the backend did not report never
+    /// reaches this function, because the review panel offers no seek control
+    /// for such an anchor.
+    #[must_use]
+    pub fn player_command(&self) -> PlayerCommand {
+        PlayerCommand::Seek(Micros::from_millis(
+            i64::try_from(self.position_ms).unwrap_or(i64::MAX),
+        ))
+    }
 }
 
 /// Something that can move playback: the player widget, or a test double.

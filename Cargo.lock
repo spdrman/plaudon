@@ -6081,9 +6081,11 @@ version = "0.1.0"
 dependencies = [
  "egui",
  "egui_kittest",
+ "plaudon-app",
  "plaudon-audio-playback",
  "plaudon-domain",
  "plaudon-transcript-doc",
+ "plaudon-ui-testkit",
  "tempfile",
 ]
 

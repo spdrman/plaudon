@@ -342,3 +342,19 @@ fn the_outputs_viewer_groups_the_section_nine_two_field_sets() {
     harness.run();
     assert_eq!(harness.state().collected.names, vec!["confirm_speaker"]);
 }
+
+#[test]
+fn a_seek_request_becomes_an_absolute_player_seek() {
+    let request = SeekRequest {
+        recording_id: fx::RECORDING_ID.to_owned(),
+        position_ms: 90_000,
+        claim_id: Some(fx::CLAIM_ID.to_owned()),
+        seq_index: 7,
+    };
+    assert_eq!(
+        request.player_command(),
+        plaudon_audio_playback::sync::PlayerCommand::Seek(
+            plaudon_audio_playback::time::Micros::from_millis(90_000)
+        )
+    );
+}
