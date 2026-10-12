@@ -106,7 +106,7 @@ struct MockCli {
 }
 
 impl MockCli {
-    fn install(script: serde_json::Value) -> Self {
+    fn install(script: &serde_json::Value) -> Self {
         let dir = tempfile::tempdir().expect("tempdir");
         let leaf = if cfg!(windows) { "plaud.exe" } else { "plaud" };
         let program = dir.path().join(leaf);
@@ -425,7 +425,7 @@ fn the_shipped_table_is_not_the_fixture_table() {
     // committed table, the application would claim to support a CLI nobody
     // has run (spec 2.1, 2.5B).
     let committed = CliCompatibilityTable::committed();
-    assert!(committed.usable_versions().is_empty());
+    assert_eq!(committed.usable_versions(), Vec::<&str>::new());
     for row in &fixture_table().versions {
         assert!(
             !committed
@@ -442,7 +442,7 @@ fn the_shipped_table_is_not_the_fixture_table() {
 
 #[tokio::test]
 async fn an_untested_cli_version_blocks_enumeration_and_keeps_manual_import() {
-    let mock = MockCli::install(serde_json::json!({
+    let mock = MockCli::install(&serde_json::json!({
         "version": { "stdout": "plaud/9.9.9\n" },
         "files": { "stdout": "{\"id\":\"rec_1\"}\n" },
         "record_invocations": true,
@@ -478,7 +478,7 @@ async fn an_untested_cli_version_blocks_enumeration_and_keeps_manual_import() {
 
 #[tokio::test]
 async fn a_release_that_was_never_run_is_refused_even_though_it_is_in_the_table() {
-    let mock = MockCli::install(serde_json::json!({
+    let mock = MockCli::install(&serde_json::json!({
         "version": { "stdout": "plaud/2.0.0\n" },
         "record_invocations": true,
     }));
@@ -498,7 +498,7 @@ async fn a_release_that_was_never_run_is_refused_even_though_it_is_in_the_table(
 
 #[tokio::test]
 async fn enumerating_plaud_cloud_recordings_yields_identity_scoped_items() {
-    let mock = MockCli::install(jsonl_script(None));
+    let mock = MockCli::install(&jsonl_script(None));
     let connector = connector(permitted_runner());
     let status = connector
         .connect(Some(&mock.discovered()), &intent())
@@ -552,7 +552,7 @@ async fn enumerating_plaud_cloud_recordings_yields_identity_scoped_items() {
 #[tokio::test]
 async fn pagination_is_followed_only_for_a_release_that_observed_it() {
     let (_, page_one, _) = load_fixture("v1.5.0-jsonarray");
-    let mock = MockCli::install(serde_json::json!({
+    let mock = MockCli::install(&serde_json::json!({
         "version": { "stdout": "plaud/1.5.0\n" },
         "files": { "stdout": page_one },
         "files_page_2": { "stdout": "{\"files\":[{\"id\":\"rec_01HFD000\"}],\"next_cursor\":null}" },
@@ -611,7 +611,7 @@ async fn pagination_is_followed_only_for_a_release_that_observed_it() {
 
 #[tokio::test]
 async fn a_release_without_a_logout_command_never_claims_to_sign_out() {
-    let mock = MockCli::install(jsonl_script(None));
+    let mock = MockCli::install(&jsonl_script(None));
     let connector = connector(permitted_runner());
     connector
         .connect(Some(&mock.discovered()), &intent())
@@ -630,7 +630,7 @@ async fn a_release_without_a_logout_command_never_claims_to_sign_out() {
 
 #[tokio::test]
 async fn local_only_mode_never_launches_the_vendor_tool() {
-    let mock = MockCli::install(jsonl_script(None));
+    let mock = MockCli::install(&jsonl_script(None));
     let connector = connector(local_only_runner());
     let error = connector
         .connect(Some(&mock.discovered()), &intent())
@@ -647,7 +647,7 @@ async fn local_only_mode_never_launches_the_vendor_tool() {
 
 #[tokio::test]
 async fn an_empty_account_gets_region_guidance_rather_than_an_error() {
-    let mock = MockCli::install(serde_json::json!({
+    let mock = MockCli::install(&serde_json::json!({
         "version": { "stdout": "plaud/1.4.2\n" },
         "files": { "stdout": "\n" },
     }));
@@ -657,7 +657,7 @@ async fn an_empty_account_gets_region_guidance_rather_than_an_error() {
         .await
         .expect("connected");
     let listing = connector.enumerate(None, &intent()).await.expect("listed");
-    assert!(listing.page.items.is_empty());
+    assert_eq!(listing.page.items, Vec::new());
     let advisory = listing.empty_account_advisory.expect("advisory");
     assert!(advisory.contains("regional"));
     let lower = advisory.to_ascii_lowercase();
@@ -669,7 +669,7 @@ async fn an_empty_account_gets_region_guidance_rather_than_an_error() {
 
 #[tokio::test]
 async fn a_hostile_listing_is_refused_rather_than_shown_as_complete() {
-    let mock = MockCli::install(serde_json::json!({
+    let mock = MockCli::install(&serde_json::json!({
         "version": { "stdout": "plaud/1.4.2\n" },
         "files": { "stdout": "{\"id\":\"rec_1\"}\n{\"id\":\"rec_1\"}\n" },
     }));
@@ -687,7 +687,7 @@ async fn a_hostile_listing_is_refused_rather_than_shown_as_complete() {
 
 #[tokio::test]
 async fn an_expired_session_moves_the_connector_to_expired_auth() {
-    let mock = MockCli::install(serde_json::json!({
+    let mock = MockCli::install(&serde_json::json!({
         "version": { "stdout": "plaud/1.4.2\n" },
         "files": { "stdout": "", "stderr": "Error: session expired, please re-authenticate\n", "exit_code": 1 },
     }));
@@ -708,7 +708,7 @@ async fn an_expired_session_moves_the_connector_to_expired_auth() {
 
 #[tokio::test]
 async fn an_oversized_listing_is_killed_at_the_output_cap() {
-    let mock = MockCli::install(serde_json::json!({
+    let mock = MockCli::install(&serde_json::json!({
         "version": { "stdout": "plaud/1.4.2\n" },
         "files": { "stdout_filler_kib": 16384 },
     }));
@@ -730,7 +730,7 @@ async fn a_cloud_recording_is_downloaded_verified_and_committed_to_the_archive()
     let audio = wav_bytes(4096);
     let expected_digest = sha256_hex(&audio);
     let host = serve(vec![http_response("200 OK", "audio/wav", &audio)]);
-    let mock = MockCli::install(jsonl_script(Some(host.port)));
+    let mock = MockCli::install(&jsonl_script(Some(host.port)));
     let connector = connector(permitted_runner());
     connector
         .connect(Some(&mock.discovered()), &intent())
@@ -840,7 +840,7 @@ async fn an_expired_download_link_is_retried_once_with_a_fresh_url() {
         http_response("403 Forbidden", "application/xml", b"<Error/>"),
         http_response("200 OK", "audio/wav", &audio),
     ]);
-    let mock = MockCli::install(jsonl_script(Some(host.port)));
+    let mock = MockCli::install(&jsonl_script(Some(host.port)));
     let connector = connector(permitted_runner());
     connector
         .connect(Some(&mock.discovered()), &intent())
@@ -872,7 +872,7 @@ async fn an_error_page_served_as_audio_fails_integrity_and_commits_nothing() {
         "audio/wav",
         b"<html><body>link expired</body></html>",
     )]);
-    let mock = MockCli::install(jsonl_script(Some(host.port)));
+    let mock = MockCli::install(&jsonl_script(Some(host.port)));
     let connector = connector(permitted_runner());
     connector
         .connect(Some(&mock.discovered()), &intent())
@@ -909,7 +909,7 @@ async fn a_short_body_is_an_interrupted_transfer_and_leaves_no_staging_file() {
     .into_bytes();
     response.extend_from_slice(&audio);
     let host = serve(vec![response]);
-    let mock = MockCli::install(jsonl_script(Some(host.port)));
+    let mock = MockCli::install(&jsonl_script(Some(host.port)));
     let connector = connector(permitted_runner());
     connector
         .connect(Some(&mock.discovered()), &intent())
@@ -933,7 +933,7 @@ async fn a_download_url_outside_the_allowlist_is_refused_before_any_byte_is_read
     let mut script = jsonl_script(Some(host.port));
     // A redirect-free but off-allowlist destination.
     script["audio_url_template"] = serde_json::json!("https://attacker.example.com/a.wav");
-    let mock = MockCli::install(script);
+    let mock = MockCli::install(&script);
     let connector = connector(permitted_runner());
     connector
         .connect(Some(&mock.discovered()), &intent())
@@ -955,7 +955,7 @@ async fn a_download_url_outside_the_allowlist_is_refused_before_any_byte_is_read
 async fn a_tool_that_returns_no_url_is_malformed_output() {
     let mut script = jsonl_script(None);
     script["audio"] = serde_json::json!({ "stdout": "Your download is ready.\n" });
-    let mock = MockCli::install(script);
+    let mock = MockCli::install(&script);
     let connector = connector(permitted_runner());
     connector
         .connect(Some(&mock.discovered()), &intent())
