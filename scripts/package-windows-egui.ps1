@@ -233,7 +233,11 @@ function Get-Column([string]$sql) {
     $values = @()
     while ($true) {
         $record = $view.GetType().InvokeMember("Fetch", "InvokeMethod", $null, $view, $null)
-        if (-not $record) { break }
+        # `-not $record` would be asking PowerShell to coerce a COM Record to
+        # a boolean through its default member, which is the record's own
+        # first field: a row whose first field is empty would end the read
+        # early and the audit would see nothing.
+        if ($null -eq $record) { break }
         $values += [string]$record.GetType().InvokeMember(
             "StringData", "GetProperty", $null, $record, @(1))
     }
