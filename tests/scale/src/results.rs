@@ -440,11 +440,18 @@ impl RunReport {
              runner. It is deliberately too coarse to catch a 20% slowdown and deliberately \
              sharp enough to catch a lost index or an N+1 query, which move these numbers by an \
              order of magnitude.\n\
+             - No budget sits below the policy floors — p50 {:.0} ms, p95 {:.0} ms, max {:.0} ms. \
+             An operation measured in hundreds of microseconds cannot be budgeted as a multiple \
+             of its own latency: one preemption on a busy machine moves its tail by an order of \
+             magnitude while its median does not move at all.\n\
              - A single commit may raise one budget by at most {:.0}%. A larger raise needs an \
              ADR explaining what got slower and why that is acceptable.\n\
              - Rule: {}\n",
             self.policy.schema_version,
             self.policy.headroom_ratio * 100.0,
+            self.policy.noise_floor_ms,
+            self.policy.tail_floor_p95_ms,
+            self.policy.tail_floor_max_ms,
             self.policy.max_single_raise_ratio * 100.0,
             self.policy.rule
         );

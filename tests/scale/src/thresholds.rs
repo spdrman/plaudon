@@ -140,8 +140,31 @@ pub struct Policy {
     pub headroom_ratio: f64,
     /// How much a budget may be raised in one commit without an ADR.
     pub max_single_raise_ratio: f64,
+    /// Floor for every p50 budget.
+    ///
+    /// An operation whose reference latency is a few hundred microseconds
+    /// cannot be budgeted as a multiple of its own measurement: one scheduler
+    /// preemption on a busy machine moves it by an order of magnitude while
+    /// nothing in the code has changed.
+    pub noise_floor_ms: f64,
+    /// Floor for every p95 budget.
+    pub tail_floor_p95_ms: f64,
+    /// Floor for every max budget.
+    pub tail_floor_max_ms: f64,
     /// The human rule, reproduced in published results.
     pub rule: String,
+}
+
+impl Policy {
+    /// Whether a budget respects the floors this policy declares.
+    ///
+    /// A budget below the floor is not a stricter guard, it is a flaky test.
+    #[must_use]
+    pub fn respects_floors(&self, budget: Budget) -> bool {
+        budget.p50_ms >= self.noise_floor_ms
+            && budget.p95_ms >= self.tail_floor_p95_ms
+            && budget.max_ms >= self.tail_floor_max_ms
+    }
 }
 
 /// Memory-bound budget for the chunk-window harness.
@@ -319,6 +342,9 @@ impl Thresholds {
             schema_version: self.integer("policy", "schema_version")?,
             headroom_ratio: self.float("policy", "headroom_ratio")?,
             max_single_raise_ratio: self.float("policy", "max_single_raise_ratio")?,
+            noise_floor_ms: self.float("policy", "noise_floor_ms")?,
+            tail_floor_p95_ms: self.float("policy", "tail_floor_p95_ms")?,
+            tail_floor_max_ms: self.float("policy", "tail_floor_max_ms")?,
             rule: self.text("policy", "rule")?,
         })
     }

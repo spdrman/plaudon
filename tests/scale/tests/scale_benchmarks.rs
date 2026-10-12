@@ -612,6 +612,7 @@ fn sample_offsets(pages: u64, count: usize) -> Vec<u64> {
 #[test]
 fn every_benchmark_has_a_budget_in_every_tier() {
     let thresholds = Thresholds::load().unwrap();
+    let policy = thresholds.policy().unwrap();
     let expected = [
         "library_page_offset",
         "library_page_keyset",
@@ -635,6 +636,16 @@ fn every_benchmark_has_a_budget_in_every_tier() {
             assert!(
                 budget.max_ms >= budget.p95_ms,
                 "`{name}` in tier `{tier}` has a max budget below its p95"
+            );
+            // A budget inside the machine's own noise is a flaky test, not a
+            // stricter guard; the floors are part of the committed policy.
+            assert!(
+                policy.respects_floors(budget),
+                "`{name}` in tier `{tier}` is budgeted below the policy floors \
+                 (p50 >= {}, p95 >= {}, max >= {}): {budget:?}",
+                policy.noise_floor_ms,
+                policy.tail_floor_p95_ms,
+                policy.tail_floor_max_ms
             );
         }
     }
