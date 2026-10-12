@@ -1,0 +1,68 @@
+[package]
+name = "plaudon-app"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "The application layer: ports, validated commands, the typed command/event boundary and the owned Tokio runtime. No user-interface dependency."
+
+[lib]
+name = "plaudon_app"
+
+[features]
+# Links the Swift bridge so Apple native AI is actually available in the
+# bundle. Off by default so a Windows or toolchain-free build still produces
+# a working application, with the Apple rows reporting platform_unsupported.
+apple-bridge = ["plaudon-ai-apple/apple-bridge"]
+# The real Bluetooth radio. Off by default so the workspace builds and tests
+# without a Bluetooth stack and CI never touches a radio (spec 18.3A).
+hardware-scan = ["plaudon-plaud-ble/hardware-scan", "dep:btleplug"]
+
+[dependencies]
+plaudon-domain = { workspace = true }
+plaudon-persistence = { workspace = true }
+plaudon-ai-apple = { workspace = true }
+plaudon-ai-contracts = { workspace = true }
+plaudon-app-core = { workspace = true }
+plaudon-ai-diarization = { workspace = true }
+plaudon-export = { workspace = true }
+plaudon-notifications = { workspace = true }
+plaudon-recording-sources = { workspace = true }
+plaudon-security = { workspace = true }
+plaudon-diagnostics = { workspace = true }
+plaudon-source-plaud-cli = { workspace = true }
+plaudon-source-folder = { workspace = true }
+plaudon-ai-openrouter = { workspace = true }
+plaudon-source-plaud-device = { workspace = true }
+plaudon-plaud-ble = { workspace = true }
+plaudon-plaud-protocol = { workspace = true }
+plaudon-updater = { workspace = true }
+tokio-util = { workspace = true }
+btleplug = { version = "0.11", optional = true }
+async-trait = { workspace = true }
+parking_lot = { workspace = true }
+hex = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+sqlx = { workspace = true }
+thiserror = { workspace = true }
+time = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
+dirs = "6"
+sysinfo = "0.37"
+
+[dev-dependencies]
+plaudon-source-plaud-cli = { workspace = true, features = ["test-harness"] }
+plaudon-plaud-ble = { workspace = true, features = ["test-support"] }
+plaudon-security = { workspace = true, features = ["test-support"] }
+tempfile = { workspace = true }
+serde_json = { workspace = true }
+jsonschema = { workspace = true }
+
+[lints]
+workspace = true

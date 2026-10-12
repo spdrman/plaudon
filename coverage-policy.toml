@@ -66,6 +66,18 @@ path_prefix = "apps/desktop"
 reason = "UI adapter and vendor framework glue; covered by the spec 18.6A UI cluster and the E2E suite instead (spec 18.9)"
 
 [[exempt]]
+path_prefix = "apps/plaudon-egui"
+reason = "UI adapter: the egui view layer and its host hooks; covered by the egui_kittest suite instead (spec 18.9, EPIC O)"
+
+[[exempt]]
+path_prefix = "crates/ui-testkit"
+reason = "test harness itself; it has no shipping code path to cover (spec 18.9)"
+
+[[exempt]]
+path_prefix = "third_party"
+reason = "vendored third-party source, carried unmodified except for edition fixes; it ships with its own upstream tests (spec 18.9, ADR-0009)"
+
+[[exempt]]
 path_prefix = "crates/ai-apple/src/ffi.rs"
 reason = "vendor framework FFI shim; exercised by the macOS platform tests, not by host-independent branch coverage (spec 18.4)"
 

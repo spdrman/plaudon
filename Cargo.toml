@@ -3,6 +3,8 @@ resolver = "2"
 members = [
     "crates/*",
     "apps/desktop/src-tauri",
+    "apps/plaudon-egui",
+    "third_party/craft-ui",
     "tests/integration",
     "tests/chaos",
     "tests/hardware",
@@ -25,6 +27,7 @@ repository = "https://github.com/spdrman/plaudon"
 
 [workspace.dependencies]
 plaudon-domain = { path = "crates/domain" }
+plaudon-app = { path = "crates/app" }
 plaudon-app-core = { path = "crates/app-core" }
 plaudon-recording-sources = { path = "crates/recording-sources" }
 plaudon-source-plaud-device = { path = "crates/source-plaud-device" }
@@ -53,11 +56,17 @@ plaudon-eval = { path = "crates/eval" }
 plaudon-updater = { path = "crates/updater" }
 plaudon-extraction-eval = { path = "crates/extraction-eval" }
 plaudon-release-tools = { path = "crates/release-tools" }
+plaudon-ui-testkit = { path = "crates/ui-testkit" }
+plaudon-craft-ui = { path = "third_party/craft-ui" }
 
 argon2 = { version = "0.6", features = ["kdf"] }
 async-trait = "0.1"
 base64 = "0.22"
 clap = { version = "4", features = ["derive"] }
+eframe = { version = "0.36", default-features = false }
+egui = { version = "0.36", default-features = false }
+egui_extras = { version = "0.36", default-features = false }
+egui_kittest = { version = "0.36", default-features = false }
 ed25519-dalek = { version = "2", features = ["rand_core"] }
 fs4 = "1"
 chacha20poly1305 = { version = "0.10", features = ["stream"] }
@@ -70,6 +79,7 @@ parking_lot = "0.12"
 proptest = "1"
 rand = "0.8"
 regex = "1"
+rfd = { version = "0.17", default-features = false }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream", "multipart", "json"] }
 rusqlite = { version = "0.32", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }

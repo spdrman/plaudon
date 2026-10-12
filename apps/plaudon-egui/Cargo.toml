@@ -1,0 +1,44 @@
+[package]
+name = "plaudon-egui"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "The egui/eframe desktop shell for Plaudon (EPIC O spike): window, host hooks and the view over plaudon-app."
+
+[lib]
+name = "plaudon_egui"
+
+[[bin]]
+name = "plaudon-egui"
+path = "src/main.rs"
+
+[features]
+# Links the Swift bridge so Apple native AI is available in the bundle,
+# exactly as `plaudon-desktop` does today.
+apple-bridge = ["plaudon-app/apple-bridge"]
+# The real Bluetooth radio. Off by default so CI never touches a radio.
+hardware-scan = ["plaudon-app/hardware-scan"]
+
+[dependencies]
+plaudon-app = { workspace = true }
+plaudon-craft-ui = { workspace = true }
+plaudon-domain = { workspace = true }
+plaudon-diagnostics = { workspace = true }
+eframe = { workspace = true, features = ["default_fonts", "wgpu", "accesskit"] }
+egui = { workspace = true, features = ["default_fonts"] }
+rfd = { workspace = true, features = ["xdg-portal"] }
+tracing = { workspace = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# Window-system backends are Linux-only features of winit; `default-features`
+# is off, so they have to be named.
+eframe = { workspace = true, features = ["x11", "wayland"] }
+
+[dev-dependencies]
+plaudon-ui-testkit = { workspace = true }
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

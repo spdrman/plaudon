@@ -1,0 +1,21 @@
+[package]
+name = "plaudon-ui-testkit"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Deterministic egui_kittest harness and snapshot policy for Plaudon's user-interface tests."
+
+[lib]
+name = "plaudon_ui_testkit"
+
+[dependencies]
+egui = { workspace = true, features = ["default_fonts"] }
+egui_kittest = { workspace = true, features = ["wgpu", "snapshot"] }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

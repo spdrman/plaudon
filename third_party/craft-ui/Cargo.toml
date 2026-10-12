@@ -1,0 +1,23 @@
+[package]
+name = "plaudon-craft-ui"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+# Upstream is dual-licensed; the vendored copy keeps the upstream terms rather
+# than the workspace licence (see NOTICE and README.md in this directory).
+license = "MIT OR Apache-2.0"
+repository.workspace = true
+description = "Vendored egui split geometry and accessible resize handle, adapted from storytold/craft-libs."
+publish = false
+
+[lib]
+name = "plaudon_craft_ui"
+
+[dependencies]
+egui = { workspace = true }
+
+[dev-dependencies]
+egui = { workspace = true, features = ["default_fonts"] }
+
+[lints]
+workspace = true
