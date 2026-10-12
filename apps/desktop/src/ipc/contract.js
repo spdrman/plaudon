@@ -131,7 +131,15 @@ export const SPEC_COMMANDS = [
 ];
 /** Additions reviewed in ADR-0020 because §15.2 has no read path for them. */
 export const ADR_0020_COMMANDS = ["list_activity", "complete_onboarding"];
-export const ALL_COMMANDS = [...SPEC_COMMANDS, ...ADR_0020_COMMANDS];
+/** EPIC M extensions: cross-recording search (§3.1, §9.8) and speaker labelling (§8.7). */
+export const EPIC_M_COMMANDS = [
+    "search_library",
+    "list_speakers",
+    "rename_speaker",
+    "confirm_speaker",
+    "reset_speaker",
+];
+export const ALL_COMMANDS = [...SPEC_COMMANDS, ...ADR_0020_COMMANDS, ...EPIC_M_COMMANDS];
 /* ----------------------------------------------------------------- events */
 /**
  * §15.3 event names, plus `ui.activation_requested` (ADR-0020) which the Rust
