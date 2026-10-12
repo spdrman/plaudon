@@ -38,6 +38,7 @@ plaudon-plaud-wifi = { path = "crates/plaud-wifi" }
 plaudon-source-plaud-cli = { path = "crates/source-plaud-cli" }
 plaudon-source-folder = { path = "crates/source-folder" }
 plaudon-audio = { path = "crates/audio" }
+plaudon-audio-playback = { path = "crates/audio-playback" }
 plaudon-ai-contracts = { path = "crates/ai-contracts" }
 plaudon-ai-openrouter = { path = "crates/ai-openrouter" }
 plaudon-ai-whisper = { path = "crates/ai-whisper" }
@@ -65,6 +66,7 @@ argon2 = { version = "0.6", features = ["kdf"] }
 async-trait = "0.1"
 base64 = "0.22"
 clap = { version = "4", features = ["derive"] }
+cpal = "0.18"
 eframe = { version = "0.36", default-features = false }
 egui = { version = "0.36", default-features = false }
 egui_extras = { version = "0.36", default-features = false }
