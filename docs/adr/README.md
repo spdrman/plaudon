@@ -4,8 +4,8 @@ Numbers **0001-0012** are reserved by spec §21 and their meanings are fixed
 there; do not reuse them. Later ranges are allocated per work stream so two
 authors never mint the same number: 0013-0019 security and privacy, 0020-0029
 desktop shell, 0030-0039 job engine, 0040-0049 AI adapters, 0050-0059
-direct-device import, 0060-0069 cloud-CLI and folder ingestion, 0070+
-unallocated — claim a range in this file before using it.
+sources and ingestion, 0060-0069 direct-device import, 0070+ unallocated —
+claim a range in this file before using it.
 
 Every record states context, the decision, the alternatives that were rejected
 and why, and the consequences we accept.
@@ -40,7 +40,7 @@ and why, and the consequences we accept.
 
 - [ADR-0030: Job engine durability, idempotency and crash recovery](0030-job-engine-durability.md) — Accepted, 2026-10-11 (spec §14)
 
-## Cloud-CLI and folder ingestion (0060-0069)
+## Sources and ingestion (0050-0059)
 
-- [ADR-0060: The PLAUD Cloud CLI connector is version-locked and ships with an empty compatibility table](ADR-0060-plaud-cli-compatibility-table.md) — Accepted, 2026-10-11 (spec §2.1, §7.1, §7.2, §7.6)
-- [ADR-0061: A filesystem event authorises nothing; a completion barrier and a content digest do](ADR-0061-watched-folder-completion-barrier-and-source-identity.md) — Accepted, 2026-10-11 (spec §4.3, §7.5, §7.10, App. A.2, App. A.4)
+- [ADR-0050: The PLAUD Cloud CLI connector is version-locked and ships with an empty compatibility table](ADR-0050-plaud-cli-compatibility-table.md) — Accepted, 2026-10-11 (spec §2.1, §7.1, §7.2, §7.6)
+- [ADR-0051: A filesystem event authorises nothing; a completion barrier and a content digest do](ADR-0051-watched-folder-completion-barrier-and-source-identity.md) — Accepted, 2026-10-11 (spec §4.3, §7.5, §7.10, App. A.2, App. A.4)

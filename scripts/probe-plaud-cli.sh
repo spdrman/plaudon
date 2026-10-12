@@ -8,7 +8,7 @@
 #   scripts/probe-plaud-cli.sh [output-directory]
 #
 # Output is a capture bundle for `tests/integration/fixtures/plaud-cli/`.
-# Read ADR-0060 before promoting a release into the compatibility table.
+# Read ADR-0050 before promoting a release into the compatibility table.
 
 set -euo pipefail
 

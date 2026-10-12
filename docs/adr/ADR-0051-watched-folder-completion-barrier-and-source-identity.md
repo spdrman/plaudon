@@ -1,4 +1,4 @@
-# ADR-0061: A filesystem event authorises nothing; a completion barrier and a content digest do
+# ADR-0051: A filesystem event authorises nothing; a completion barrier and a content digest do
 
 - **Status:** Accepted
 - **Date:** 2026-10-11
