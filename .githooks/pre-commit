@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Thin hook: everything lives in scripts/pre-commit.sh so it can be run,
+# listed and skipped by hand. Installed by scripts/install-hooks.sh, which
+# points core.hooksPath at this directory.
+#
+# Configure it with the environment, since `git commit` passes no flags:
+#   PLAUDON_PRECOMMIT_SKIP_SLOW=1 git commit -m "…"
+# Skipping is announced loudly by the runner. `git commit --no-verify` is
+# still yours to take.
+set -euo pipefail
+repo_root="$(git rev-parse --show-toplevel)"
+exec "$repo_root/scripts/pre-commit.sh" --hook
