@@ -33,14 +33,15 @@ use plaudon_app::dto::{
     RetryJobRequest, RevokeCloudConsentRequest, SaveTranscriptRevisionRequest,
     SaveTranscriptRevisionResponse, SegmentConfidence, SegmentEdit, SetCloudBudgetRequest,
     SetLocalOnlyModeRequest, SetModelPreferenceRequest, SetModelPreferenceResponse,
-    SetNotificationSettingsRequest, SortDirection, SourceKind, StartProcessingRequest,
-    StartProcessingResponse, StatusResponse, StorageCapability, TranscriptAnnotation,
-    TranscriptPage, TranscriptRevisionRef, TranscriptSegmentDto, TranscriptionStatus, TriState,
-    UiEvent, UsageAttempt, UsageByModel, UsageTotals, VerifyModelRequest, VerifyModelResponse,
+    SetNotificationSettingsRequest, SetSegmentSpeakerRequest, SetSegmentSpeakerResponse,
+    SortDirection, SourceKind, StartProcessingRequest, StartProcessingResponse, StatusResponse,
+    StorageCapability, TranscriptAnnotation, TranscriptPage, TranscriptRevisionRef,
+    TranscriptSegmentDto, TranscriptionStatus, TriState, UiEvent, UsageAttempt, UsageByModel,
+    UsageTotals, VerifyModelRequest, VerifyModelResponse,
 };
 use plaudon_domain::capability::CapabilityStatus;
 use plaudon_domain::error::{AppError, AppErrorCode, DiagnosticLog, ErrorEnvelope};
-use plaudon_domain::ids::{JobId, OutputId, RecordingId, TranscriptRevisionId};
+use plaudon_domain::ids::{JobId, OutputId, RecordingId, SpeakerId, TranscriptRevisionId};
 use plaudon_domain::media::Sha256Digest;
 use plaudon_domain::time::Timestamp;
 use plaudon_domain::transcript::AlignmentOrigin;
@@ -380,6 +381,7 @@ fn every_response_dto_matches_its_schema() {
                     value: -0.2,
                 }),
                 speaker_label: Some("Speaker 1".into()),
+                speaker_id: Some(SpeakerId::new().to_string()),
                 annotations: vec![TranscriptAnnotation {
                     kind: AnnotationKind::LowConfidence,
                     reason: "engine reported low confidence".into(),
@@ -390,6 +392,40 @@ fn every_response_dto_matches_its_schema() {
             }],
             next_cursor: None,
             total_segments: 1,
+        }),
+    );
+
+    let recording_id = RecordingId::new();
+    let revision_id = TranscriptRevisionId::new();
+    let speaker_id = SpeakerId::new();
+    validate(
+        "set_segment_speaker.request",
+        &to_value(&SetSegmentSpeakerRequest {
+            recording_id: recording_id.to_string(),
+            transcript_revision_id: revision_id.to_string(),
+            seq_index: 3,
+            speaker_id: Some(speaker_id.to_string()),
+        }),
+    );
+    // Clearing an attribution is a published shape too: `null` is how a
+    // segment says nobody could be told apart.
+    validate(
+        "set_segment_speaker.request",
+        &to_value(&SetSegmentSpeakerRequest {
+            recording_id: recording_id.to_string(),
+            transcript_revision_id: revision_id.to_string(),
+            seq_index: 3,
+            speaker_id: None,
+        }),
+    );
+    validate(
+        "set_segment_speaker.response",
+        &to_value(&SetSegmentSpeakerResponse {
+            recording_id,
+            transcript_revision_id: revision_id,
+            seq_index: 3,
+            speaker_id: Some(speaker_id),
+            speaker_label: Some("Speaker 1".into()),
         }),
     );
 

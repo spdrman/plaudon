@@ -12,9 +12,11 @@
 //!   bundle renders with, so a transcript on screen and the same transcript
 //!   in a bundle cannot disagree about who was speaking.
 //!
-//! The chip **reads**. Nothing on the wire persists a segment-to-speaker
-//! assignment — `save_transcript_revision` carries `{index, text}` and
-//! nothing else — so the chip offers no reassignment it could not save.
+//! The chip **assigns**. `set_segment_speaker` (spec §4.1, VP-031) persists
+//! one segment's attribution, so the chip offers the recording's speakers and
+//! "no speaker"; what it never offers is a guess — every entry in the list is
+//! a row a human can point at, and nothing is pre-selected on the strength of
+//! a similarity score.
 
 use egui::{Align, Button, Label, Layout, Rect, Response, Ui};
 use plaudon_domain::ids::SpeakerId;
@@ -117,27 +119,107 @@ pub fn timestamp(
 /// Where a speaker's name is changed, said once so the chip and its tests
 /// quote the same sentence.
 pub const SPEAKER_EDIT_HINT: &str =
-    "Speaker names are changed under Speaker identification in the Outputs tab. \
-     Moving one segment to a different speaker is not something this build can save.";
+    "Pick who is speaking in this segment. Speaker names are changed under \
+     Speaker identification in the Outputs tab.";
+
+/// Said instead when the revision is read-only, so the absence of a picker is
+/// explained rather than silent.
+pub const SPEAKER_READ_ONLY_HINT: &str =
+    "This revision is not the newest one, so its speaker attribution is read-only.";
+
+/// The "nobody" entry of the picker.
+///
+/// Clearing an attribution is a first-class answer: overlapping speech and
+/// unattributable audio are what `transcript_segments.speaker_id` NULL means,
+/// and a user has to be able to say so.
+pub const NO_SPEAKER: &str = "No speaker";
+
+/// What a user picked in the speaker chip.
+///
+/// "Nobody" is a decision, not the absence of one, which is why it is a
+/// variant rather than a `None`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SpeakerPick {
+    /// Attribute the segment to this speaker row.
+    Speaker(SpeakerId),
+    /// Clear the attribution: nobody identifiable, or two people at once.
+    Nobody,
+}
+
+impl SpeakerPick {
+    /// The picked row, `None` for [`Self::Nobody`].
+    #[must_use]
+    pub const fn speaker_id(self) -> Option<SpeakerId> {
+        match self {
+            Self::Speaker(id) => Some(id),
+            Self::Nobody => None,
+        }
+    }
+}
 
 /// Draw the speaker chip for one segment.
 ///
-/// Read-only: see the module comment. The chip states who the backend
-/// attributes the segment to, with the qualifier that says whether that is a
-/// claim or a cluster, and points at the control that can actually change it.
-pub fn speaker(ui: &mut Ui, rect: Rect, speaker_id: Option<SpeakerId>, speakers: &[SpeakerChoice]) {
+/// The chip states who the segment is attributed to, with the qualifier that
+/// says whether that is a claim or a cluster. When the revision is editable it
+/// is also the picker: the returned value is the attribution the user chose.
+pub fn speaker(
+    ui: &mut Ui,
+    rect: Rect,
+    speaker_id: Option<SpeakerId>,
+    speakers: &[SpeakerChoice],
+    editable: bool,
+) -> Option<SpeakerPick> {
     let current = speaker_id.and_then(|id| speakers.iter().find(|choice| choice.id == id));
-    let shown = current.map_or_else(|| "No speaker".to_owned(), SpeakerChoice::render);
-    let spoken = current.map_or_else(
-        || "No speaker".to_owned(),
-        SpeakerChoice::render_with_origin,
-    );
+    let shown = current.map_or_else(|| NO_SPEAKER.to_owned(), SpeakerChoice::render);
+    let spoken = current.map_or_else(|| NO_SPEAKER.to_owned(), SpeakerChoice::render_with_origin);
+    let elided = elide(&shown, 24);
 
-    let response: Response = ui.put(rect, Label::new(elide(&shown, 24)).truncate());
+    // Without rows to choose from there is nothing to pick: a transcript whose
+    // recording has no speaker rows gets the label it always had.
+    if !editable || speakers.is_empty() {
+        let response: Response = ui.put(rect, Label::new(elided).truncate());
+        response.widget_info(|| {
+            egui::WidgetInfo::labeled(egui::WidgetType::Label, true, format!("Speaker: {spoken}"))
+        });
+        let hint = if editable {
+            SPEAKER_EDIT_HINT
+        } else {
+            SPEAKER_READ_ONLY_HINT
+        };
+        response.on_hover_text(format!("{spoken}\n\n{hint}"));
+        return None;
+    }
+
+    let response: Response = ui.put(rect, Button::new(elided).truncate());
     response.widget_info(|| {
-        egui::WidgetInfo::labeled(egui::WidgetType::Label, true, format!("Speaker: {spoken}"))
+        egui::WidgetInfo::labeled(egui::WidgetType::Button, true, format!("Speaker: {spoken}"))
     });
-    response.on_hover_text(format!("{spoken}\n\n{SPEAKER_EDIT_HINT}"));
+    let response = response.on_hover_text(format!("{spoken}\n\n{SPEAKER_EDIT_HINT}"));
+
+    let mut chosen = None;
+    egui::Popup::menu(&response).show(|ui| {
+        ui.label("Assign this segment to");
+        for choice in speakers {
+            if ui
+                .selectable_label(Some(choice.id) == speaker_id, choice.render_with_origin())
+                .clicked()
+            {
+                chosen = Some(SpeakerPick::Speaker(choice.id));
+                ui.close();
+            }
+        }
+        if ui
+            .selectable_label(speaker_id.is_none(), NO_SPEAKER)
+            .clicked()
+        {
+            chosen = Some(SpeakerPick::Nobody);
+            ui.close();
+        }
+    });
+
+    // Choosing what is already there is not a change, and must not cost a
+    // write or an undo step.
+    chosen.filter(|picked| picked.speaker_id() != speaker_id)
 }
 
 fn elide(text: &str, max_chars: usize) -> String {

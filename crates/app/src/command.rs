@@ -72,6 +72,7 @@ use crate::dto::{
     InstallModelResponse, ListLocalModelsResponse, RemoveLocalModelRequest,
     RemoveLocalModelResponse, VerifyLocalModelRequest, VerifyLocalModelResponse,
 };
+use crate::dto::{SetSegmentSpeakerRequest, SetSegmentSpeakerResponse};
 use crate::event::{AppEvent, EventSender};
 use crate::settings_presentation::UpdateStatus;
 use crate::shortcuts::ShortcutBindings;
@@ -194,6 +195,7 @@ command_surface! {
         "rename_speaker" => RenameSpeaker: speakers::rename_speaker(RenameSpeakerRequest) -> SpeakerOperationResponse,
         "confirm_speaker" => ConfirmSpeaker: speakers::confirm_speaker(ConfirmSpeakerRequest) -> SpeakerOperationResponse,
         "reset_speaker" => ResetSpeaker: speakers::reset_speaker(ResetSpeakerRequest) -> SpeakerOperationResponse,
+        "set_segment_speaker" => SetSegmentSpeaker: speakers::set_segment_speaker(SetSegmentSpeakerRequest) -> SetSegmentSpeakerResponse,
         "list_activity" => ListActivity: settings::list_activity(ListActivityRequest) -> ActivityPage,
         "complete_onboarding" => CompleteOnboarding: settings::complete_onboarding(CompleteOnboardingRequest) -> Preferences,
         "plaud_connect" => PlaudConnect: sources::plaud_connect(PlaudConnectRequest) -> PlaudConnectorSnapshot,
@@ -408,8 +410,9 @@ mod tests {
         // 54 published by the Tauri shell, plus the eleven EPIC O task O2.4
         // added for settings the React frontend never had, plus the twelve
         // task O2.6 added for transcript tools and templates, plus the one O2.7
-        // added because a native player cannot be handed a URL.
-        assert_eq!(COMMAND_NAMES.len(), 78);
+        // added because a native player cannot be handed a URL, plus
+        // `set_segment_speaker`, the T12 wire leg (spec §4.1, VP-031).
+        assert_eq!(COMMAND_NAMES.len(), 79);
     }
 
     /// Commands the egui screens added (EPIC O tasks O2.4, O2.6 and O2.7).
@@ -444,6 +447,9 @@ mod tests {
         // O2.7: the Tauri shell served media over a custom URI scheme; a
         // native player opens a file instead.
         "resolve_media",
+        // P1.1 (VP-031): per-segment reassignment is an egui-era command; the
+        // React shell never had a control that could ask for it.
+        "set_segment_speaker",
     ];
 
     #[test]

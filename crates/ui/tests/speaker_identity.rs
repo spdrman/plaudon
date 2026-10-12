@@ -18,15 +18,16 @@
 //! * the qualifier is [`plaudon_domain::speaker::display`], the same function
 //!   `plaudon-export` renders a bundle with, so a renamed-but-unconfirmed row
 //!   reads `(inferred cluster)` on screen exactly as it does in an export;
-//! * nothing on the wire persists a segment-to-speaker assignment
-//!   (`SegmentEdit` is `{index, text}`), so the chip offers none.
+//! * a segment-to-speaker assignment is the user's and is persisted by
+//!   `set_segment_speaker` (spec §4.1, VP-031), so the chip offers the
+//!   recording's rows and "no speaker" — and never a guess.
 
 use egui_kittest::kittest::{NodeT as _, Queryable as _};
 use egui_kittest::Harness;
 use plaudon_app::command::{AppCommand, AppResponse, CommandId};
 use plaudon_app::dto::{
-    Capabilities, ListSpeakersResponse, RecordingDetail, SpeakerDto, SpeakerOperationResponse,
-    TranscriptPage, TranscriptSegmentDto,
+    Capabilities, ListSpeakersResponse, RecordingDetail, SetSegmentSpeakerResponse, SpeakerDto,
+    SpeakerOperationResponse, TranscriptPage, TranscriptSegmentDto,
 };
 use plaudon_domain::error::{AppErrorCode, ErrorEnvelope};
 use plaudon_domain::ids::{RecordingId, SpeakerId};
@@ -256,6 +257,9 @@ struct DetailApp {
     panels: LivePanels,
     detail: RecordingDetail,
     names: Vec<&'static str>,
+    /// The commands themselves, for the assertions that are about arguments
+    /// rather than about which command was sent.
+    commands: Vec<AppCommand>,
 }
 
 impl DetailApp {
@@ -284,6 +288,7 @@ impl DetailApp {
         for intent in out.intents {
             if let AiIntent::Command(command) = intent {
                 self.names.push(command.name());
+                self.commands.push(command);
             }
         }
     }
@@ -327,6 +332,9 @@ fn transcript_page(detail: &RecordingDetail) -> TranscriptPage {
             alignment_origin: AlignmentOrigin::Native,
             confidence: None,
             speaker_label: Some(MACHINE_LABEL.to_owned()),
+            // Deliberately absent: this fixture is a page from before VP-030,
+            // so it proves the label fallback still attributes a segment.
+            speaker_id: None,
             annotations: Vec::new(),
         })
         .collect();
@@ -363,6 +371,7 @@ fn opened(
                 panels,
                 detail,
                 names: Vec::new(),
+                commands: Vec::new(),
             },
         );
     harness.run();
@@ -508,6 +517,185 @@ fn a_refused_labelling_command_is_reported_without_leaking_anything() {
     let text = announced(&harness);
     assert!(!text.contains("Diagnostic id"), "{text}");
     assert!(text.contains("Speaker: Dana (confirmed)"), "{text}");
+}
+
+/// A second speaker row of the same recording, so the chip has a choice to
+/// offer that is not the one the segment already has.
+fn second_row(recording_id: RecordingId, speaker_id: SpeakerId) -> SpeakerDto {
+    SpeakerDto {
+        speaker_id,
+        recording_id,
+        label: "Speaker 2".to_owned(),
+        name: None,
+        confirmed: false,
+        original_label: "Speaker 2".to_owned(),
+        renamed_at: None,
+        confirmed_at: None,
+    }
+}
+
+/// The detail view with two speaker rows known, which is the state a picker
+/// is worth drawing in.
+fn opened_with_two_speakers(first: SpeakerId, second: SpeakerId) -> Harness<'static, DetailApp> {
+    let mut harness = opened(first, None, false);
+    let recording_id = harness.state().detail.summary.recording_id;
+    let speakers = Ok(AppResponse::ListSpeakers(ListSpeakersResponse {
+        speakers: vec![
+            row(recording_id, first, None, false),
+            second_row(recording_id, second),
+        ],
+    }));
+    harness.state_mut().answer("list_speakers", &speakers);
+    harness.run();
+    harness
+}
+
+/// Pick `label` out of the first segment's speaker picker.
+fn pick_speaker(harness: &mut Harness<'_, DetailApp>, current: &str, label: &str) {
+    let chip = harness
+        .get_all_by_label(current)
+        .next()
+        .expect("the first segment's chip");
+    chip.click();
+    harness.run();
+    harness.get_by_label(label).click();
+    harness.run();
+}
+
+#[test]
+fn the_segment_chip_offers_the_recordings_speakers_and_asks_for_the_assignment() {
+    let first = SpeakerId::new();
+    let second = SpeakerId::new();
+    let mut harness = opened_with_two_speakers(first, second);
+    let recording_id = harness.state().detail.summary.recording_id;
+    let revision_id = harness.state().detail.revisions[0].revision_id;
+
+    let chip = harness
+        .get_all_by_label("Speaker: Speaker 1 (inferred cluster)")
+        .next()
+        .expect("the first segment's chip");
+    chip.click();
+    harness.run();
+
+    // Every entry is a row of this recording plus the honest "nobody";
+    // nothing is proposed on the strength of a score.
+    let offered = announced(&harness);
+    assert!(
+        offered.contains("Speaker 2 (inferred cluster)"),
+        "{offered}"
+    );
+    assert!(offered.contains("No speaker"), "{offered}");
+
+    harness.get_by_label("Speaker 2 (inferred cluster)").click();
+    harness.run();
+
+    let Some(AppCommand::SetSegmentSpeaker(request)) = harness
+        .state()
+        .commands
+        .iter()
+        .rev()
+        .find(|command| command.name() == "set_segment_speaker")
+    else {
+        panic!(
+            "the chip has to ask for the assignment: {:?}",
+            harness.state().names
+        )
+    };
+    assert_eq!(request.recording_id, recording_id.to_string());
+    assert_eq!(request.transcript_revision_id, revision_id.to_string());
+    assert_eq!(request.seq_index, 0);
+    assert_eq!(
+        request.speaker_id.as_deref(),
+        Some(second.to_string()).as_deref()
+    );
+
+    // The chip shows the new attribution while the write is in flight, and
+    // the second segment is untouched.
+    let text = announced(&harness);
+    assert!(
+        text.contains("Speaker: Speaker 2 (inferred cluster)"),
+        "{text}"
+    );
+    assert!(
+        text.contains("Speaker: Speaker 1 (inferred cluster)"),
+        "{text}"
+    );
+}
+
+#[test]
+fn a_refused_segment_assignment_is_surfaced_and_taken_off_the_chip() {
+    let first = SpeakerId::new();
+    let second = SpeakerId::new();
+    let mut harness = opened_with_two_speakers(first, second);
+
+    pick_speaker(
+        &mut harness,
+        "Speaker: Speaker 1 (inferred cluster)",
+        "Speaker 2 (inferred cluster)",
+    );
+
+    let envelope = fx::envelope(AppErrorCode::InvalidArgument);
+    harness
+        .state_mut()
+        .answer("set_segment_speaker", &Err(envelope.clone()));
+    harness.run();
+
+    let text = announced(&harness);
+    assert!(text.contains("Speaker not changed"), "{text}");
+    assert!(text.contains(&envelope.message), "{text}");
+    assert!(
+        text.contains(&format!("Diagnostic id {}", envelope.diagnostic_id)),
+        "{text}"
+    );
+    // The speaker list names Speaker 2 once; a chip must not be the second
+    // mention, and both chips must read Speaker 1 again.
+    assert_eq!(
+        text.matches("Speaker: Speaker 2 (inferred cluster)")
+            .count(),
+        1,
+        "a refused assignment must not stay on the chip: {text}"
+    );
+    assert_eq!(
+        text.matches("Speaker: Speaker 1 (inferred cluster)")
+            .count(),
+        3,
+        "two chips and the speaker list: {text}"
+    );
+}
+
+#[test]
+fn an_accepted_segment_assignment_stays_on_the_chip() {
+    let first = SpeakerId::new();
+    let second = SpeakerId::new();
+    let mut harness = opened_with_two_speakers(first, second);
+    let recording_id = harness.state().detail.summary.recording_id;
+    let revision_id = harness.state().detail.revisions[0].revision_id;
+
+    pick_speaker(
+        &mut harness,
+        "Speaker: Speaker 1 (inferred cluster)",
+        "Speaker 2 (inferred cluster)",
+    );
+
+    let stored = Ok(AppResponse::SetSegmentSpeaker(SetSegmentSpeakerResponse {
+        recording_id,
+        transcript_revision_id: revision_id,
+        seq_index: 0,
+        speaker_id: Some(second),
+        speaker_label: Some("Speaker 2".to_owned()),
+    }));
+    harness.state_mut().answer("set_segment_speaker", &stored);
+    harness.run();
+
+    let text = announced(&harness);
+    // Two mentions of Speaker 2: the reassigned chip and the speaker list.
+    assert_eq!(
+        text.matches("Speaker: Speaker 2 (inferred cluster)")
+            .count(),
+        2,
+        "{text}"
+    );
+    assert!(!text.contains("Speaker not changed"), "{text}");
 }
 
 #[test]
