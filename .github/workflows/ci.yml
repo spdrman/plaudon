@@ -12,6 +12,13 @@ name: CI
 # Flake policy: a scenario that fails intermittently is quarantined by editing
 # tests/e2e/scenarios.toml, which is reviewable, rather than by adding a retry
 # loop. Nothing in this pipeline retries a failed test.
+#
+# Two desktop shells are built while EPIC O is in flight: `desktop-ui` runs
+# the Tauri/React suites and stays until the cutover deletes apps/desktop,
+# and `egui-desktop` builds, tests (egui_kittest through cargo — no vitest,
+# no Playwright) and packages apps/plaudon-egui on the same native runners.
+# Neither job holds a signing credential, so both packaging steps are
+# expected to report `not_verified` and `publishable: false`.
 
 on:
   push:
@@ -105,6 +112,95 @@ jobs:
           name: build-metadata-${{ matrix.arch }}
           path: ci-artifacts/build-metadata
           retention-days: 30
+
+  egui-desktop:
+    name: egui shell and package (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, windows-2025]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install the pinned toolchain
+        run: rustup show
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: egui-${{ matrix.os }}
+
+      # The icon, version block and side-by-side manifest are linked into the
+      # Windows binary by apps/plaudon-egui/build.rs, which needs a resource
+      # compiler. The Windows SDK ships one; it is not on PATH.
+      - name: Locate the Windows resource compiler
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $rc = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter rc.exe -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -match '\\x64\\' } | Select-Object -First 1
+          if (-not $rc) { Write-Error "no rc.exe in the Windows SDK"; exit 1 }
+          "RC=$($rc.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Install NSIS
+        if: runner.os == 'Windows'
+        run: choco install nsis --no-progress -y
+
+      # egui_kittest through cargo. There is no vitest and no Playwright in
+      # this job, and docs/EGUI_TESTING.md §1 forbids adding one. Pixel
+      # comparison stays off: PLAUDON_VISUAL is only valid on the MARS
+      # renderer, so these legs assert behaviour and the accessibility tree.
+      - name: UI, shell and packaging suites
+        run: >
+          cargo test
+          -p plaudon-egui -p plaudon-ui -p plaudon-ui-testkit
+          -p plaudon-platform -p plaudon-craft-ui
+
+      # Packaging without a credential is expected to exit 3 — "built and
+      # verifiable, NOT publishable". Any other failure is a real one. The
+      # report must agree that it is unsigned: a green job that uploaded an
+      # artifact claiming to be signed is exactly what this checks for.
+      - name: Package the macOS bundle
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set +e
+          scripts/package-macos-egui.sh --evidence ci-artifacts/evidence
+          status=$?
+          set -e
+          if [ "$status" != "3" ] && [ "$status" != "0" ]; then
+            echo "packaging failed with $status" >&2
+            exit "$status"
+          fi
+          report=dist/macos-egui/macos-signing-report.json
+          grep -q '"publishable": false' "$report" || {
+            echo "CI holds no Developer ID; a report claiming publishable is wrong" >&2
+            exit 1
+          }
+          grep -q '"notarization_status": "not_verified"' "$report"
+
+      - name: Package the Windows installer
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          pwsh scripts/package-windows-egui.ps1 -Evidence ci-artifacts/evidence
+          if ($LASTEXITCODE -ne 3 -and $LASTEXITCODE -ne 0) {
+            Write-Error "packaging failed with $LASTEXITCODE"; exit $LASTEXITCODE
+          }
+          $report = Get-Content dist/windows-egui/windows-signing-report.json -Raw | ConvertFrom-Json
+          if ($report.publishable) {
+            Write-Error "CI holds no Authenticode certificate; a report claiming publishable is wrong"
+            exit 1
+          }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: egui-package-${{ matrix.os }}
+          path: |
+            dist/macos-egui/*.zip
+            dist/macos-egui/*.json
+            dist/windows-egui/*.exe
+            dist/windows-egui/*.json
+          if-no-files-found: error
+          retention-days: 14
 
   desktop-ui:
     name: Desktop UI (${{ matrix.os }})

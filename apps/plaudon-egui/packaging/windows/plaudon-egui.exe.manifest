@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!--
+  Side-by-side manifest for plaudon-egui.exe.
+
+  Four claims, and nothing else:
+
+  * `asInvoker` with `uiAccess="false"` — the application is a per-user
+    install under %LOCALAPPDATA% and never needs elevation. Asking for it
+    would be a privilege the product does not use.
+  * Per-monitor-v2 DPI awareness — winit/eframe scale the viewport themselves;
+    without this the window is bitmap-stretched on a mixed-DPI desktop.
+  * Long-path awareness — the library lives under a user-chosen directory and
+    export paths nest; MAX_PATH truncation must not be how that fails.
+  * UTF-8 as the process code page, so the ANSI side of Win32 (used by
+    dependencies we do not control) agrees with Rust's `String`.
+
+  The supportedOS list names Windows 10 and 11 (same GUID) and Windows 8.1,
+  which is what `compatibility.yaml` declares support for; an OS not named
+  here is given Vista-compatible behaviour by the loader, and we would rather
+  be explicit than inherit that.
+-->
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <assemblyIdentity type="win32" name="app.plaudon.desktop" version="0.1.0.0" processorArchitecture="amd64"/>
+  <description>Plaudon</description>
+
+  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
+    <security>
+      <requestedPrivileges>
+        <requestedExecutionLevel level="asInvoker" uiAccess="false"/>
+      </requestedPrivileges>
+    </security>
+  </trustInfo>
+
+  <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
+    <application>
+      <!-- Windows 10 and Windows 11 -->
+      <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}"/>
+      <!-- Windows 8.1 -->
+      <supportedOS Id="{1f676c76-80e1-4239-95bb-83d0f6d0da78}"/>
+    </application>
+  </compatibility>
+
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings>
+      <dpiAware xmlns="http://schemas.microsoft.com/SMI/2005/WindowsSettings">true/pm</dpiAware>
+      <dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">PerMonitorV2</dpiAwareness>
+      <longPathAware xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">true</longPathAware>
+      <activeCodePage xmlns="http://schemas.microsoft.com/SMI/2019/WindowsSettings">UTF-8</activeCodePage>
+    </windowsSettings>
+  </application>
+</assembly>

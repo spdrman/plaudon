@@ -152,7 +152,7 @@ cp docs/release/frozen-thresholds.md "$STAGING/frozen-thresholds/" 2>/dev/null |
 echo "==> signing verification"
 mkdir -p "$STAGING/signing-verification"
 [ -d "$STAGING/signing-verification" ] && [ -z "$(ls -A "$STAGING/signing-verification")" ] && \
-  echo '{"status":"not_verified","reason":"no packaging run fed this bundle; run scripts/package-macos.sh --evidence"}' \
+  echo '{"status":"not_verified","reason":"no packaging run fed this bundle; run scripts/package-macos-egui.sh --evidence (or scripts/package-macos.sh for the Tauri shell)"}' \
     > "$STAGING/signing-verification/missing.json"
 
 echo "==> scenario coverage"

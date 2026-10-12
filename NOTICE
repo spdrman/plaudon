@@ -112,3 +112,18 @@ the disclaimer are reproduced with a binary redistribution; the full licence
 text ships with the crate (`LICENSE`) and is reproduced in the release
 evidence bundle. The Opus format itself is an IETF standard (RFC 6716,
 RFC 7845) and carries no additional notice obligation.
+
+--------------------------------------------------------------------------------
+NSIS installer stub (Windows installer only)
+Present in the bytes of Plaudon-<version>-x64-setup.exe, not in the application.
+--------------------------------------------------------------------------------
+
+Nullsoft Scriptable Install System, Copyright (c) 1995-2009 Contributors.
+
+The Windows installer is produced by NSIS 3 from
+apps/plaudon-egui/packaging/windows/plaudon-egui.nsi, so the installer
+executable contains NSIS's own stub code. NSIS is distributed under the
+zlib/libpng licence, with its compression components (LZMA SDK, bzip2) under
+their own permissive terms; the full texts ship with NSIS and are reproduced
+in the release evidence bundle. Nothing of NSIS is linked into plaudon-egui
+itself, and the macOS bundle contains no installer code at all.
