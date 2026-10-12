@@ -31,7 +31,7 @@ reserved `.invalid` TLD (RFC 6761).
 | Component | Role |
 |---|---|
 | `tests/egress/monitor` | `cdylib` injected into the scenario process; intercepts libc, records every call, refuses every non-loopback internet destination |
-| `tests/egress/scenario` | binary that drives one subsystem through the real `plaudon_security::outbound` gate under Local-only Mode |
+| `tests/egress/scenario` | binary that drives one subsystem through the real `plaudon_security::outbound` gate under Local-only Mode, plus `voice-profile-match`, which repeats its attempts against a second, network-permitted policy |
 | `tests/egress/harness` | builds both, runs each scenario as a child process, parses the trace, applies the acceptance rules, writes the evidence artifact |
 
 The monitor is injected with `DYLD_INSERT_LIBRARIES` (macOS, via
@@ -81,7 +81,18 @@ regression cannot complete a connection, and the attempt is still recorded.
 | `apple-asset-fetch` | Apple model fetch | gate refuses, capability explained |
 | `cloud-cli` | CLI subprocess | launcher refuses **and** no `exec` record exists |
 | `folder-placeholder` | folder placeholder | placeholder recognised without being read; capability disabled and labelled |
+| `voice-profile-match` | Cloud (VP-110, TM-044) | an enrol-and-match flow runs entirely locally and reaches the gate zero times; the same speaker embedding offered to the `OpenRouter` HTTPS dispatch, the telemetry upload and the PLAUD cloud CLI is refused with `voice_biometric_never_egresses` — in Local-only Mode **and** under a permissive network grant |
 | `negative-control` | — | deliberately bypasses the gate; **must** produce recorded attempts |
+
+Each scenario sets `ok` from the deny reason the spec requires of it, and
+`verify_scenario` refuses to certify a run whose scenario exited non-zero or
+reported `ok: false`. So `voice-profile-match` fails if the gate answers with
+any other reason — including `local_only_mode`, which would wrongly imply that
+permitting the network would let the embedding out. Its second half runs
+against a separate `OutboundPolicy::network_permitted` whose grant allows the
+vendor hosts, approves model downloads and opts telemetry in; those decisions
+are recorded in the same `decisions` array, which is why rule 5 below also
+covers them.
 
 ### Acceptance rules
 
@@ -104,7 +115,10 @@ unit test over a synthetic trace that must fail:
    Mode. The negative control's deliberate `plaud` execution is what keeps this
    assertion from being vacuous.
 5. **No authorized decision.** The gate's own decision log must contain no
-   allowed egress while `NetworkMode::LocalOnly` is in force.
+   allowed egress at all: nothing may be authorized while
+   `NetworkMode::LocalOnly` is in force, and the one scenario that also drives
+   a network-permitted policy on purpose (`voice-profile-match`) must record
+   only refusals there too.
 6. **Disabled capabilities are explained**, not silently absent: each hostile
    case must carry a `DisabledCapability` or an `EgressDenied` rendered through
    its §15.4 error envelope (`EGRESS_DENIED`, message, action).

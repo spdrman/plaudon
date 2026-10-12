@@ -84,7 +84,7 @@ or can access voiceprints, and the public privacy documents say so affirmatively
   costs, stated in the docs.
 - The egress gate grows an unconsentable payload class, which is new surface in
   `crates/security/src/outbound.rs` and must keep its refusal tests green forever; threat-model
-  rows TM-044–TM-048 track the planned controls to implementation.
+  rows TM-044–TM-048 track those controls to implementation.
 - Users carry the legal duty to obtain attendee consent; the product's job is to make that duty
   visible, dischargeable (templates, exportable consent records) and bounded (retention
   auto-expiry). This is stated bluntly in-product; it cannot be engineered away.
@@ -101,3 +101,14 @@ or can access voiceprints, and the public privacy documents say so affirmatively
   the feature off, keeping the roster. Retention expiry runs as a journalled, resumable
   maintenance pass. Threat-model row TM-046 is `implemented`; TM-045 and TM-048 record what their
   remaining legs still owe.
+- **Implemented so far (P2.2):** the egress leg exists. `PayloadClass::VoiceBiometric` is refused
+  by `OutboundPolicy::decide` before the network mode, the grant, the subsystem, the purpose or
+  the destination are considered, so the dedicated `DenyReason::VoiceBiometricNeverEgresses` is
+  the answer in Local-only Mode and with the network permitted alike, and the class has no
+  `ContentType`, so no consent grant can name it. Every effective-policy snapshot states the
+  refusal in both modes. Diagnostics gained the embedding shapes (a named field, a long numeric
+  vector, a long opaque blob) and a process-wide display-name registry fed from the roster, so a
+  name, a vector and a sealed blob are scrubbed from the log sink, the crash hook and the
+  notification reducer alike. Threat-model row TM-044 is `implemented`. What this does not claim:
+  the gate governs traffic this process initiates, and redaction cannot recognise a name nobody
+  registered.
