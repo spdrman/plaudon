@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/device_disconnect.request.schema.json",
+  "title": "device_disconnect.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "peripheral_id",
+    "forget_authorization"
+  ],
+  "properties": {
+    "peripheral_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "forget_authorization": {
+      "type": "boolean"
+    }
+  }
+}

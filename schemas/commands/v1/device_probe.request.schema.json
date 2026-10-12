@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/device_probe.request.schema.json",
+  "title": "device_probe.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "peripheral_id",
+    "experimental_probe_approved"
+  ],
+  "properties": {
+    "peripheral_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "experimental_probe_approved": {
+      "type": "boolean"
+    }
+  }
+}

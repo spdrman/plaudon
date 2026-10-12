@@ -13,7 +13,7 @@ export interface Shortcut {
  * implements the handler next to its own component.
  */
 export const SHORTCUTS: Shortcut[] = [
-  { keys: "Mod+1 … Mod+5", description: "Go to Library, Inbox, Jobs, Templates, Settings", group: "Navigation" },
+  { keys: "Mod+1 … Mod+6", description: "Go to Library, Inbox, Jobs, Templates, Settings, Devices", group: "Navigation" },
   { keys: "Tab / Shift+Tab", description: "Move between controls", group: "Navigation" },
   { keys: "Arrow keys", description: "Move within the navigation, lists and transcript", group: "Navigation" },
   { keys: "?", description: "Show this keyboard reference", group: "General" },

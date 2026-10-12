@@ -708,6 +708,15 @@ mod cloud {
                 sources: Arc::clone(&backend) as _,
                 search: Arc::clone(&backend) as _,
                 speakers: Arc::clone(&backend) as _,
+                devices: Arc::new(plaudon_desktop::backend::devices::DevicesBackend::new(
+                    plaudon_desktop::backend::devices::DevicesDeps::production(
+                        backend.store().db().clone(),
+                        backend.store().archive().clone(),
+                        backend.events().clone(),
+                        Arc::new(plaudon_desktop::backend::devices::NoRadio),
+                    )
+                    .expect("device dependencies"),
+                )),
                 secrets,
                 events,
             };

@@ -1,6 +1,6 @@
 [package]
 name = "plaudon-hardware-tests"
-description = "Opt-in tests that require physical hardware or a real platform runtime."
+description = "Opt-in real-hardware and platform-runtime suites, plus the release-evidence emitter for direct PLAUD device import."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -12,19 +12,41 @@ build = "build.rs"
 [lints]
 workspace = true
 
-[dependencies]
-plaudon-ai-apple = { workspace = true }
-plaudon-ai-contracts = { workspace = true }
-plaudon-app-core = { workspace = true }
-plaudon-domain = { workspace = true }
-serde = { workspace = true }
-hex = { workspace = true }
-sha2 = { workspace = true }
-serde_json = { workspace = true }
-tokio = { workspace = true }
-
 [features]
 # Links the Swift bridge so the Apple cells can be measured. Without it the
 # suite still runs and reports every cell as unmeasured, which is the honest
 # answer on a machine with no Swift toolchain.
 apple-bridge = ["plaudon-ai-apple/apple-bridge"]
+# Drive a real BLE radio (macOS CoreBluetooth / Windows WinRT) instead of
+# reading only the operator's observations. Off by default so the suite builds
+# and skips on machines with no Bluetooth stack and never touches a radio in CI.
+radio = ["plaudon-plaud-ble/hardware-scan", "dep:btleplug", "dep:futures"]
+
+[dependencies]
+async-trait = { workspace = true }
+btleplug = { version = "0.11", optional = true }
+futures = { version = "0.3", optional = true }
+hex = { workspace = true }
+plaudon-ai-apple = { workspace = true }
+plaudon-ai-contracts = { workspace = true }
+plaudon-app-core = { workspace = true }
+plaudon-domain = { workspace = true }
+plaudon-plaud-ble = { workspace = true }
+plaudon-plaud-protocol = { workspace = true }
+plaudon-recording-sources = { workspace = true }
+plaudon-security = { workspace = true }
+plaudon-source-plaud-device = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+tempfile = { workspace = true }
+thiserror = { workspace = true }
+time = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+jsonschema = { workspace = true }
+plaudon-plaud-ble = { workspace = true, features = ["test-support"] }
+plaudon-security = { workspace = true, features = ["test-support"] }

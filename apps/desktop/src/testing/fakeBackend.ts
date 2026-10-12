@@ -43,6 +43,7 @@ import {
   CONSENT_PURPOSE_BY_STAGE,
 } from "../features/cloud/cloudPresentation";
 import { estimateDispatchCost, parseMicros, usd } from "../features/cloud/money";
+import { FakeDevices } from "./fakeDevices";
 
 export interface FakeRecording extends RecordingDetail {
   segments: Map<string, TranscriptSegment[]>;
@@ -341,6 +342,11 @@ export class FakeBackend implements Transport {
   };
   /** When true, `start_processing` demands an explicit cost acknowledgement. */
   requireCostAcknowledgement = false;
+  /** Direct PLAUD device lab (`device_*` commands). */
+  devices = new FakeDevices(
+    (kind, partial) => this.emit(kind, partial),
+    (code, message, extra) => envelope(code, message, extra),
+  );
 
   #seq = 0;
   #handlers = new Map<EventKind, Set<(e: UiEvent) => void>>();
@@ -704,6 +710,14 @@ export class FakeBackend implements Transport {
         return this.#startProcessing(request);
       case "verify_model":
         return this.#verifyModel(request);
+      case "list_nearby_devices":
+      case "device_probe":
+      case "device_authorize":
+      case "device_list_recordings":
+      case "device_import":
+      case "device_disconnect":
+      case "device_sync_policy":
+        return this.devices.invoke(command, request);
       default: {
         const never: never = command;
         throw envelope("INTERNAL_ERROR", `No such command: ${String(never)}`);

@@ -259,6 +259,15 @@ impl Harness {
             search: Arc::clone(&backend) as Arc<dyn SearchPort>,
             speakers: Arc::clone(&backend) as Arc<dyn SpeakersPort>,
             cloud: Arc::clone(&backend) as Arc<dyn CloudPort>,
+            devices: Arc::new(plaudon_desktop::backend::devices::DevicesBackend::new(
+                plaudon_desktop::backend::devices::DevicesDeps::production(
+                    backend.store().db().clone(),
+                    backend.store().archive().clone(),
+                    backend.events().clone(),
+                    Arc::new(plaudon_desktop::backend::devices::NoRadio),
+                )
+                .expect("device dependencies"),
+            )),
             secrets,
             events: backend.events().clone(),
         };

@@ -91,6 +91,12 @@ pub const MIGRATIONS: &[Migration] = &[
         name: "cloud_ai",
         sql: include_str!("../migrations/0450_cloud_ai.sql"),
     },
+    // EPIC L direct-device import: firmware history and resume checkpoints.
+    Migration {
+        version: 500,
+        name: "device_import",
+        sql: include_str!("../migrations/0500_device_import.sql"),
+    },
     // 800+ is EPIC K's range: source reconciliation and watched folders.
     Migration {
         version: 800,
@@ -388,6 +394,7 @@ mod tests {
 
         let full = MigrationRunner::new();
         let report = full.run(&db).await.unwrap();
+
         let expected: Vec<i64> = MIGRATIONS.iter().skip(1).map(|m| m.version).collect();
         assert_eq!(report.applied, expected);
         let backup = report.backup_path.expect("an upgrade must back up first");

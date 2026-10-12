@@ -6,7 +6,7 @@ import { DESTINATIONS, DESTINATION_LABELS } from "./router";
 import { expectNoAxeViolations } from "../testing/axe";
 
 describe("AppNav", () => {
-  it("exposes the five top-level destinations as a tab list", async () => {
+  it("exposes the six top-level destinations as a tab list", async () => {
     renderWithApp(<AppNav />);
     const tabs = await screen.findAllByRole("tab");
     expect(tabs.map((t) => t.textContent)).toEqual(

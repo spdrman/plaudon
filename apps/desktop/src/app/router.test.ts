@@ -18,6 +18,8 @@ const ROUTES: Route[] = [
   { name: "settings" },
   { name: "settings.activity" },
   { name: "settings.sources" },
+  { name: "devices" },
+  { name: "devices.device", peripheralId: "hci0/dev_AA:BB" },
 ];
 
 describe("router", () => {

@@ -15,6 +15,7 @@ use plaudon_domain::transcript::AlignmentOrigin;
 use crate::dto::SourceAddFolderRequest;
 use crate::dto::{
     ActivityPage, Capabilities, CloudBudget, CompleteOnboardingRequest, ConsentSummary,
+    DeviceAuthStatusDto, DeviceListingDto, DeviceProbeDto, DeviceScanDto, DeviceSyncPolicyDto,
     DuplicatePolicy, GetUsageResponse, GrantCloudConsentResponse, ImportFilesResponse, JobPage,
     JobSummary, ListModelsResponse, ListSourceArtifactsResponse, LocalOnlyModeResponse,
     NotificationSettings, NotificationSettingsResponse, PlaudConnectorSnapshot,
@@ -23,6 +24,7 @@ use crate::dto::{
     SourceAddFolderResponse, SourceReconcileResponse, SourceSyncResponse, StartProcessingResponse,
     SyncTrigger, TranscriptPage, TranscriptRevisionRef, VerifyModelResponse,
 };
+use crate::secrets::SecretValue;
 use crate::validate::{
     ValidatedBudget, ValidatedConsent, ValidatedExport, ValidatedGetTranscript,
     ValidatedListActivity, ValidatedListJobs, ValidatedListModels, ValidatedListRecordings,
@@ -362,4 +364,60 @@ pub trait CloudPort: Send + Sync {
 
     /// Every consent grant on record, for `get_capabilities`.
     async fn cloud_consents(&self) -> Result<Vec<ConsentSummary>, AppError>;
+}
+
+/// Direct PLAUD device access (spec §15.2 `device_*`, App. B.8).
+///
+/// Every method is read-only toward the device: there is no method that
+/// deletes, clears, controls recording, writes settings or acknowledges a sync
+/// (spec §7.9). Secrets enter through [`SecretValue`] and leave only as
+/// presence flags.
+#[async_trait]
+pub trait DevicesPort: Send + Sync {
+    /// Scan for advertising devices and merge the previously linked ones.
+    ///
+    /// A radio that cannot be used is reported in
+    /// [`DeviceScanDto::radio`], never as an empty device list.
+    async fn list_nearby(&self, timeout_ms: u64) -> Result<DeviceScanDto, AppError>;
+
+    /// Establish model, firmware and authentication mode, then gate them
+    /// against the compatibility register.
+    async fn probe(
+        &self,
+        peripheral_id: &str,
+        experimental_probe_approved: bool,
+    ) -> Result<DeviceProbeDto, AppError>;
+
+    /// Store the device credential in the OS vault. Returns status only.
+    async fn authorize(
+        &self,
+        peripheral_id: &str,
+        token_hex: SecretValue,
+    ) -> Result<DeviceAuthStatusDto, AppError>;
+
+    /// Remove the stored credential and the link.
+    async fn revoke(&self, peripheral_id: &str) -> Result<DeviceAuthStatusDto, AppError>;
+
+    /// The recordings the device lists right now, with transfer states.
+    async fn list_recordings(&self, peripheral_id: &str) -> Result<DeviceListingDto, AppError>;
+
+    /// Start read-only transfers of listed recordings. Returns one transfer
+    /// identifier per recording, in request order.
+    async fn import(
+        &self,
+        peripheral_id: &str,
+        recording_ids: Vec<String>,
+        local_only: bool,
+    ) -> Result<Vec<String>, AppError>;
+
+    /// End the session and cancel transfers in flight. Archived recordings are
+    /// never touched.
+    async fn disconnect(&self, peripheral_id: &str) -> Result<(), AppError>;
+
+    /// Opt in or out of read-only transfer when the device is nearby.
+    async fn sync_policy(
+        &self,
+        peripheral_id: &str,
+        enable_when_nearby: bool,
+    ) -> Result<DeviceSyncPolicyDto, AppError>;
 }

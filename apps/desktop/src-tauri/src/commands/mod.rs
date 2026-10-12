@@ -7,6 +7,7 @@
 //! fails if a handler outside the published list is ever registered.
 
 pub mod cloud;
+pub mod devices;
 pub mod import;
 pub mod jobs;
 pub mod library;
@@ -20,23 +21,26 @@ use tauri::State;
 
 use crate::dto::{
     ActivityPage, CancelJobRequest, Capabilities, CloudBudget, CompleteOnboardingRequest,
-    ConfirmSpeakerRequest, EmptyRequest, ExportRecordingRequest, ExportRecordingResponse,
+    ConfirmSpeakerRequest, DeviceAuthStatusDto, DeviceAuthorizeRequest, DeviceDisconnectDto,
+    DeviceDisconnectRequest, DeviceIdRequest, DeviceImportDto, DeviceImportRequest,
+    DeviceListingDto, DeviceProbeDto, DeviceProbeRequest, DeviceScanDto, DeviceSyncPolicyDto,
+    DeviceSyncPolicyRequest, EmptyRequest, ExportRecordingRequest, ExportRecordingResponse,
     GetRecordingRequest, GetTranscriptRequest, GetUsageRequest, GetUsageResponse,
     GrantCloudConsentRequest, GrantCloudConsentResponse, ImportFilesRequest, ImportFilesResponse,
     JobPage, JobSummary, ListActivityRequest, ListJobsRequest, ListModelsRequest,
-    ListModelsResponse, ListRecordingsRequest, ListSourceArtifactsRequest,
-    ListSourceArtifactsResponse, ListSpeakersRequest, ListSpeakersResponse, LocalOnlyModeResponse,
-    NotificationSettingsResponse, PlaudConnectRequest, PlaudConnectorSnapshot,
-    PlaudDisconnectResponse, PlaudImportRequest, PlaudImportResponse, PlaudListRequest,
-    PlaudListResponse, Preferences, RecordingDetail, RecordingPage, RenameSpeakerRequest,
-    ResetSpeakerRequest, RetryJobRequest, RevokeCloudConsentRequest, SaveTranscriptRevisionRequest,
-    SaveTranscriptRevisionResponse, SearchLibraryRequest, SearchLibraryResponse,
-    SetCloudBudgetRequest, SetLocalOnlyModeRequest, SetModelPreferenceRequest,
-    SetModelPreferenceResponse, SetNotificationSettingsRequest, SetOpenRouterKeyRequest,
-    SourceAddFolderRequest, SourceAddFolderResponse, SourceReconcileRequest,
-    SourceReconcileResponse, SourceSyncRequest, SourceSyncResponse, SpeakerOperationResponse,
-    StartProcessingRequest, StartProcessingResponse, StatusResponse, TranscriptPage,
-    VerifyModelRequest, VerifyModelResponse,
+    ListModelsResponse, ListNearbyDevicesRequest, ListRecordingsRequest,
+    ListSourceArtifactsRequest, ListSourceArtifactsResponse, ListSpeakersRequest,
+    ListSpeakersResponse, LocalOnlyModeResponse, NotificationSettingsResponse, PlaudConnectRequest,
+    PlaudConnectorSnapshot, PlaudDisconnectResponse, PlaudImportRequest, PlaudImportResponse,
+    PlaudListRequest, PlaudListResponse, Preferences, RecordingDetail, RecordingPage,
+    RenameSpeakerRequest, ResetSpeakerRequest, RetryJobRequest, RevokeCloudConsentRequest,
+    SaveTranscriptRevisionRequest, SaveTranscriptRevisionResponse, SearchLibraryRequest,
+    SearchLibraryResponse, SetCloudBudgetRequest, SetLocalOnlyModeRequest,
+    SetModelPreferenceRequest, SetModelPreferenceResponse, SetNotificationSettingsRequest,
+    SetOpenRouterKeyRequest, SourceAddFolderRequest, SourceAddFolderResponse,
+    SourceReconcileRequest, SourceReconcileResponse, SourceSyncRequest, SourceSyncResponse,
+    SpeakerOperationResponse, StartProcessingRequest, StartProcessingResponse, StatusResponse,
+    TranscriptPage, VerifyModelRequest, VerifyModelResponse,
 };
 use crate::error::{to_command_result, CommandResult};
 use crate::AppState;
@@ -83,6 +87,13 @@ pub const COMMAND_ALLOWLIST: &[&str] = &[
     "set_cloud_budget",
     "set_model_preference",
     "verify_model",
+    "list_nearby_devices",
+    "device_probe",
+    "device_authorize",
+    "device_list_recordings",
+    "device_import",
+    "device_disconnect",
+    "device_sync_policy",
 ];
 
 /// Every command of the IPC surface, for [`tauri::Builder::invoke_handler`].
@@ -127,7 +138,14 @@ pub fn handler<R: tauri::Runtime>() -> impl Fn(tauri::ipc::Invoke<R>) -> bool + 
         get_usage,
         set_cloud_budget,
         set_model_preference,
-        verify_model
+        verify_model,
+        list_nearby_devices,
+        device_probe,
+        device_authorize,
+        device_list_recordings,
+        device_import,
+        device_disconnect,
+        device_sync_policy
     ]
 }
 
@@ -433,6 +451,62 @@ pub async fn verify_model(
     request: VerifyModelRequest,
 ) -> CommandResult<VerifyModelResponse> {
     to_command_result(cloud::verify_model(&state.ports, request).await)
+}
+
+#[tauri::command]
+pub async fn list_nearby_devices(
+    state: State<'_, AppState>,
+    request: ListNearbyDevicesRequest,
+) -> CommandResult<DeviceScanDto> {
+    to_command_result(devices::list_nearby_devices(&state.ports, request).await)
+}
+
+#[tauri::command]
+pub async fn device_probe(
+    state: State<'_, AppState>,
+    request: DeviceProbeRequest,
+) -> CommandResult<DeviceProbeDto> {
+    to_command_result(devices::device_probe(&state.ports, request).await)
+}
+
+#[tauri::command]
+pub async fn device_authorize(
+    state: State<'_, AppState>,
+    request: DeviceAuthorizeRequest,
+) -> CommandResult<DeviceAuthStatusDto> {
+    to_command_result(devices::device_authorize(&state.ports, request).await)
+}
+
+#[tauri::command]
+pub async fn device_list_recordings(
+    state: State<'_, AppState>,
+    request: DeviceIdRequest,
+) -> CommandResult<DeviceListingDto> {
+    to_command_result(devices::device_list_recordings(&state.ports, request).await)
+}
+
+#[tauri::command]
+pub async fn device_import(
+    state: State<'_, AppState>,
+    request: DeviceImportRequest,
+) -> CommandResult<DeviceImportDto> {
+    to_command_result(devices::device_import(&state.ports, request).await)
+}
+
+#[tauri::command]
+pub async fn device_disconnect(
+    state: State<'_, AppState>,
+    request: DeviceDisconnectRequest,
+) -> CommandResult<DeviceDisconnectDto> {
+    to_command_result(devices::device_disconnect(&state.ports, request).await)
+}
+
+#[tauri::command]
+pub async fn device_sync_policy(
+    state: State<'_, AppState>,
+    request: DeviceSyncPolicyRequest,
+) -> CommandResult<DeviceSyncPolicyDto> {
+    to_command_result(devices::device_sync_policy(&state.ports, request).await)
 }
 
 #[cfg(test)]

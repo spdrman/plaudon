@@ -3611,6 +3611,7 @@ name = "plaudon-desktop"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "btleplug",
  "dirs 6.0.0",
  "hex",
  "jsonschema",
@@ -3625,10 +3626,13 @@ dependencies = [
  "plaudon-domain",
  "plaudon-notifications",
  "plaudon-persistence",
+ "plaudon-plaud-ble",
+ "plaudon-plaud-protocol",
  "plaudon-recording-sources",
  "plaudon-security",
  "plaudon-source-folder",
  "plaudon-source-plaud-cli",
+ "plaudon-source-plaud-device",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -3641,6 +3645,7 @@ dependencies = [
  "thiserror 2.0.21",
  "time",
  "tokio",
+ "tokio-util",
  "tracing",
  "uuid",
 ]
@@ -3717,15 +3722,29 @@ version = "0.1.0"
 name = "plaudon-hardware-tests"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
+ "btleplug",
+ "futures",
  "hex",
+ "jsonschema",
  "plaudon-ai-apple",
  "plaudon-ai-contracts",
  "plaudon-app-core",
  "plaudon-domain",
+ "plaudon-plaud-ble",
+ "plaudon-plaud-protocol",
+ "plaudon-recording-sources",
+ "plaudon-security",
+ "plaudon-source-plaud-device",
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "tempfile",
+ "thiserror 2.0.21",
+ "time",
  "tokio",
+ "tokio-util",
+ "uuid",
 ]
 
 [[package]]
@@ -3735,6 +3754,7 @@ dependencies = [
  "async-trait",
  "hex",
  "jsonschema",
+ "parking_lot",
  "plaudon-ai-apple",
  "plaudon-ai-contracts",
  "plaudon-ai-openrouter",
@@ -3744,10 +3764,14 @@ dependencies = [
  "plaudon-diagnostics",
  "plaudon-domain",
  "plaudon-persistence",
+ "plaudon-plaud-ble",
+ "plaudon-plaud-protocol",
+ "plaudon-plaud-usb",
  "plaudon-recording-sources",
  "plaudon-security",
  "plaudon-source-folder",
  "plaudon-source-plaud-cli",
+ "plaudon-source-plaud-device",
  "proptest",
  "serde",
  "serde_json",
@@ -3822,6 +3846,7 @@ dependencies = [
 name = "plaudon-plaud-ble"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "btleplug",
  "futures",
  "plaudon-domain",
@@ -3830,8 +3855,10 @@ dependencies = [
  "proptest",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror 2.0.21",
  "tokio",
+ "tokio-util",
  "uuid",
 ]
 
@@ -3850,7 +3877,9 @@ dependencies = [
 name = "plaudon-plaud-usb"
 version = "0.1.0"
 dependencies = [
+ "plaudon-audio",
  "plaudon-domain",
+ "plaudon-plaud-protocol",
  "plaudon-recording-sources",
  "proptest",
  "serde",
@@ -3953,12 +3982,20 @@ version = "0.1.0"
 dependencies = [
  "jsonschema",
  "plaudon-domain",
+ "plaudon-persistence",
+ "plaudon-plaud-ble",
+ "plaudon-plaud-protocol",
  "plaudon-recording-sources",
+ "plaudon-security",
  "proptest",
  "serde",
  "serde_json",
  "serde_norway",
+ "sha2 0.10.9",
+ "sqlx",
+ "tempfile",
  "thiserror 2.0.21",
+ "tokio",
 ]
 
 [[package]]

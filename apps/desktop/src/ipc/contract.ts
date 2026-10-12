@@ -1045,6 +1045,227 @@ export interface VerifyModelResponse {
   provider_request_id: string | null;
 }
 
+/* ----------------------------------------------------------------- devices */
+
+/** App. B.8 list sections. */
+export const DEVICE_SECTIONS = [
+  "nearby",
+  "connected",
+  "needs_authorization",
+  "unsupported_firmware",
+  "previously_linked",
+] as const;
+export type DeviceSection = (typeof DEVICE_SECTIONS)[number];
+
+/** Register status of a probed profile (`plaudon_source_plaud_device::SupportStatus`). */
+export type DeviceSupportStatus =
+  | "not_evaluated"
+  | "experimental"
+  | "supported"
+  | "known_unsupported";
+
+/** `IdentityAssurance`: advertising alone is `unverified` (§4.2A.2). */
+export type DeviceIdentityAssurance = "unverified" | "profile_authenticated";
+
+/** Whether a cloud route was involved in a device operation. */
+export type CloudRoute = "not_used" | "used";
+
+export type RadioState = "scanned" | "permission_denied" | "unavailable_in_build";
+
+export interface RadioStatus {
+  state: RadioState;
+  /** Stable error code when the radio could not be used. */
+  code: ErrorCode | null;
+  message: string;
+}
+
+export interface DeviceCandidate {
+  peripheral_id: string;
+  section: DeviceSection;
+  /** Exactly as advertised; display only, never an identity. */
+  advertised_name: string | null;
+  rssi_dbm: number | null;
+  transport: string;
+  /** Only after a probe established it. */
+  model: string | null;
+  /** Only after a probe established it. */
+  firmware: string | null;
+  support_status: DeviceSupportStatus;
+  /** Register-derived. */
+  status_label: string;
+  identity: DeviceIdentityAssurance;
+  identity_label: string;
+  authorized: boolean;
+  last_contact_at: string | null;
+}
+
+export interface ListNearbyDevicesRequest {
+  timeout_ms: number;
+}
+
+export interface DeviceScan {
+  radio: RadioStatus;
+  devices: DeviceCandidate[];
+  scanned_at: string | null;
+}
+
+export interface DeviceGate {
+  permits_transfer: boolean;
+  experimental_probe_available: boolean;
+  experimental_probe_approved: boolean;
+  refusal_code: string | null;
+}
+
+export type DeviceCapabilityName = "read_only_listing" | "read_only_transfer" | "automatic_sync";
+
+export interface DeviceCapability {
+  capability: DeviceCapabilityName;
+  available: boolean;
+  reason: string | null;
+}
+
+export interface DeviceSyncPolicy {
+  peripheral_id: string;
+  may_advertise: boolean;
+  enabled: boolean;
+  /** Always false: automatic sync never starts on. */
+  default_on: false;
+  audit_code: string;
+  explanation: string;
+}
+
+export interface DeviceProbeRequest {
+  peripheral_id: string;
+  experimental_probe_approved: boolean;
+}
+
+export interface DeviceProbe {
+  peripheral_id: string;
+  advertised_name: string | null;
+  transport: string;
+  model: string | null;
+  /** `null` when it could not be verified; never a guess. */
+  firmware: string | null;
+  auth_mode: string | null;
+  battery_percent: number | null;
+  rssi_dbm: number | null;
+  section: DeviceSection;
+  support_status: DeviceSupportStatus;
+  status_label: string;
+  /** `known_limitations` of the matched register row. */
+  known_limitations: string[];
+  gate: DeviceGate;
+  identity: DeviceIdentityAssurance;
+  identity_label: string;
+  capabilities: DeviceCapability[];
+  /** For example `Device BLE · compressed ASR`. */
+  source_label: string;
+  cloud_route: CloudRoute;
+  /** Radio disclosures the user must read for this profile. */
+  disclosures: string[];
+  provisioning_note: string | null;
+  authorized: boolean;
+  last_contact_at: string | null;
+  sync: DeviceSyncPolicy;
+}
+
+export interface DeviceAuthorizeRequest {
+  peripheral_id: string;
+  /** Transported once, stored in the OS vault, never returned (§15.2). */
+  token_hex: string;
+}
+
+export interface DeviceAuthStatus {
+  peripheral_id: string;
+  credential_stored: boolean;
+  identity: DeviceIdentityAssurance;
+  identity_label: string;
+}
+
+export interface DeviceIdRequest {
+  peripheral_id: string;
+}
+
+export type DeviceTransferState =
+  | "discovered"
+  | "queued"
+  | "connecting"
+  | "authenticating"
+  | "requesting"
+  | "receiving"
+  | "verifying"
+  | "committing"
+  | "imported"
+  | "interrupted"
+  | "waiting_for_device"
+  | "paused"
+  | "cancelled"
+  | "unsupported";
+
+export interface DeviceTransfer {
+  transfer_id: string | null;
+  state: DeviceTransferState;
+  /** `TransferState::ui_label`: `On device`, `Transferred locally`, `Archived`, … */
+  state_label: string;
+  bytes_received: number | null;
+  /** Observed, in bytes per second; `null` until measurable. */
+  observed_bytes_per_sec: number | null;
+  /** An estimate in seconds; `null` when it cannot be estimated. */
+  eta_seconds_estimate: number | null;
+  verified: boolean;
+  source_label: string;
+  cloud_route: CloudRoute;
+}
+
+export interface DeviceRecording {
+  recording_id: string;
+  display_name: string;
+  /** A claim by the device, not a measurement. */
+  declared_byte_length: number;
+  captured_at: string | null;
+  transfer: DeviceTransfer;
+}
+
+export type ListingCompleteness = "unsynced_delta" | "unsynced_delta_truncated" | "unknown";
+
+export interface DeviceListing {
+  peripheral_id: string;
+  items: DeviceRecording[];
+  file_count: number;
+  completeness: ListingCompleteness;
+  completeness_label: string;
+  identity: DeviceIdentityAssurance;
+  identity_label: string;
+}
+
+export interface DeviceImportRequest {
+  peripheral_id: string;
+  recording_ids: string[];
+  local_only: boolean;
+}
+
+export interface DeviceImport {
+  transfer_ids: string[];
+}
+
+export interface DeviceDisconnectRequest {
+  peripheral_id: string;
+  /** Also remove the stored credential and the link. */
+  forget_authorization: boolean;
+}
+
+export interface DeviceDisconnect {
+  peripheral_id: string;
+  /** Always true: archived recordings are never removed. */
+  local_archive_retained: true;
+  authorization_revoked: boolean;
+}
+
+export interface DeviceSyncPolicyRequest {
+  peripheral_id: string;
+  enable_when_nearby: boolean;
+}
+
 /* ------------------------------------------------------------ command map */
 
 export interface CommandMap {
@@ -1092,6 +1313,13 @@ export interface CommandMap {
   set_model_preference: { req: SetModelPreferenceRequest; res: SetModelPreferenceResponse };
   start_processing: { req: StartProcessingRequest; res: StartProcessingResponse };
   verify_model: { req: VerifyModelRequest; res: VerifyModelResponse };
+  list_nearby_devices: { req: ListNearbyDevicesRequest; res: DeviceScan };
+  device_probe: { req: DeviceProbeRequest; res: DeviceProbe };
+  device_authorize: { req: DeviceAuthorizeRequest; res: DeviceAuthStatus };
+  device_list_recordings: { req: DeviceIdRequest; res: DeviceListing };
+  device_import: { req: DeviceImportRequest; res: DeviceImport };
+  device_disconnect: { req: DeviceDisconnectRequest; res: DeviceDisconnect };
+  device_sync_policy: { req: DeviceSyncPolicyRequest; res: DeviceSyncPolicy };
 }
 
 export type CommandName = keyof CommandMap;
@@ -1157,20 +1385,32 @@ export const CLOUD_ADDED_COMMANDS: readonly CommandName[] = [
   "verify_model",
 ];
 
+/** Direct PLAUD device commands, named in the §15.2 table. */
+export const DEVICE_COMMANDS: readonly CommandName[] = [
+  "list_nearby_devices",
+  "device_probe",
+  "device_authorize",
+  "device_list_recordings",
+  "device_import",
+  "device_disconnect",
+  "device_sync_policy",
+];
+
 export const ALL_COMMANDS: readonly CommandName[] = [
   ...SPEC_COMMANDS,
   ...ADR_0020_COMMANDS,
   ...EPIC_K_COMMANDS,
   ...EPIC_M_COMMANDS,
   ...CLOUD_ADDED_COMMANDS,
+  ...DEVICE_COMMANDS,
 ];
 
 /* ----------------------------------------------------------------- events */
 
 /**
- * §15.3 event names, plus `ui.activation_requested` (ADR-0020) which the Rust
- * side emits when the user clicks an OS notification. Payloads carry a
- * monotonically increasing `seq`.
+ * §15.3 event names, `ui.activation_requested` (ADR-0020) which the Rust side
+ * emits when the user clicks an OS notification, and the six `device.*` names
+ * of EPIC L. Payloads carry a monotonically increasing `seq`.
  */
 export const EVENT_KINDS = [
   "job.updated",
@@ -1186,6 +1426,12 @@ export const EVENT_KINDS = [
   "library.changed",
   "activity.added",
   "ui.activation_requested",
+  "device.discovered",
+  "device.connected",
+  "device.compatibility_changed",
+  "device.transfer_progress",
+  "device.transfer_verified",
+  "device.disconnected",
 ] as const;
 export type EventKind = (typeof EVENT_KINDS)[number];
 

@@ -2,9 +2,9 @@
 //!
 //! The shell owns three things and delegates everything else:
 //!
-//! * [`commands`] — narrow IPC commands (spec §15.2, ADR-0020, ADR-0022) that validate
-//!   their arguments in Rust and answer with typed DTOs or the §15.4 error
-//!   envelope;
+//! * [`commands`] — narrow IPC commands (spec §15.2, ADR-0020, ADR-0022) plus
+//!   the seven `device_*` commands of EPIC L, which validate their arguments
+//!   in Rust and answer with typed DTOs or the §15.4 error envelope;
 //! * [`events`] — the §15.3 UI event stream, sequenced after the database
 //!   commit that caused each event;
 //! * [`media`] — the `plaudon-media` scheme, which serves archived audio
@@ -31,11 +31,12 @@ use std::sync::Arc;
 
 use plaudon_domain::error::AppError;
 
+use crate::backend::devices::{DeviceRadio, DevicesBackend, DevicesDeps, NoRadio};
 use crate::backend::LocalBackend;
 use crate::events::{EventSink, TauriEventSink};
 use crate::ports::{
-    ActivityPort, CapabilitiesPort, CloudPort, ExportPort, ImportPort, JobsPort, LibraryPort,
-    SearchPort, SettingsPort, SourcesPort, SpeakersPort, TranscriptPort,
+    ActivityPort, CapabilitiesPort, CloudPort, DevicesPort, ExportPort, ImportPort, JobsPort,
+    LibraryPort, SearchPort, SettingsPort, SourcesPort, SpeakersPort, TranscriptPort,
 };
 use crate::secrets::{KeyringSecretStore, SecretStore};
 
@@ -62,6 +63,8 @@ pub struct AppPorts {
     pub sources: Arc<dyn SourcesPort>,
     /// Cloud AI: catalogue, usage, budget, consent and dispatch.
     pub cloud: Arc<dyn CloudPort>,
+    /// Direct PLAUD device access (read-only).
+    pub devices: Arc<dyn DevicesPort>,
     /// OS keychain storage.
     pub secrets: Arc<dyn SecretStore>,
     /// Cross-recording search.
@@ -88,13 +91,35 @@ pub struct AppState {
 /// Build every port over the library in `app_data_dir`.
 ///
 /// This is the swap point: replacing the job engine or the library backend is
-/// a change to this function and nothing else.
+/// a change to this function and nothing else. The direct-device port gets no
+/// radio here (it reports [`dto::RadioState::UnavailableInBuild`]); a build
+/// with a BLE radio calls [`build_ports_with_radio`].
 pub async fn build_ports(
     app_data_dir: &Path,
     sink: Arc<dyn EventSink>,
     notifications: Arc<plaudon_notifications::Dispatcher>,
     secrets: Arc<dyn SecretStore>,
     approved_roots: Vec<PathBuf>,
+) -> Result<AppPorts, AppError> {
+    build_ports_with_radio(
+        app_data_dir,
+        sink,
+        notifications,
+        secrets,
+        approved_roots,
+        Arc::new(NoRadio),
+    )
+    .await
+}
+
+/// [`build_ports`] with a BLE radio actor for the direct-device port.
+pub async fn build_ports_with_radio(
+    app_data_dir: &Path,
+    sink: Arc<dyn EventSink>,
+    notifications: Arc<plaudon_notifications::Dispatcher>,
+    secrets: Arc<dyn SecretStore>,
+    approved_roots: Vec<PathBuf>,
+    radio: Arc<dyn DeviceRadio>,
 ) -> Result<AppPorts, AppError> {
     let backend = Arc::new(
         LocalBackend::open(
@@ -115,6 +140,20 @@ pub async fn build_ports(
         );
     }
     let events = backend.events().clone();
+    let devices = DevicesBackend::new(DevicesDeps::production(
+        backend.store().db().clone(),
+        backend.store().archive().clone(),
+        events.clone(),
+        radio,
+    )?);
+    // A transfer a previous run left `in_flight` is `interrupted` before the
+    // UI can ask for anything (spec §13.3A).
+    if let Err(err) = devices.recover_interrupted().await {
+        tracing::warn!(
+            code = err.code().as_str(),
+            "device transfers were not reconciled"
+        );
+    }
     Ok(AppPorts {
         capabilities: Arc::clone(&backend) as Arc<dyn CapabilitiesPort>,
         library: Arc::clone(&backend) as Arc<dyn LibraryPort>,
@@ -128,6 +167,7 @@ pub async fn build_ports(
         search: Arc::clone(&backend) as Arc<dyn SearchPort>,
         speakers: Arc::clone(&backend) as Arc<dyn SpeakersPort>,
         cloud: backend as Arc<dyn CloudPort>,
+        devices: Arc::new(devices),
         secrets,
         events,
     })

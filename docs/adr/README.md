@@ -3,10 +3,10 @@
 Numbers **0001-0012** are reserved by spec §21 and their meanings are fixed
 there; do not reuse them. Later ranges are allocated per work stream so two
 authors never mint the same number: 0013-0019 security and privacy, 0020-0029
-desktop shell, 0030-0039 job engine, 0040-0049 AI adapters, 0050-0059
-sources and ingestion, 0060-0069 direct-device import, 0070-0079 export,
-backup and deletion, 0400-0499 transcript tools and automation, everything
-else unallocated — claim a range in this file before using it.
+desktop shell, 0030-0039 job engine, 0040-0049 AI adapters, 0050-0059 sources
+and ingestion, 0060-0069 direct-device import, 0070-0079 export, backup and
+deletion, 0400-0499 transcript tools and automation, everything else
+unallocated — claim a range in this file before using it.
 
 Every record states context, the decision, the alternatives that were rejected
 and why, and the consequences we accept.
@@ -50,6 +50,10 @@ and why, and the consequences we accept.
 
 - [ADR-0050: The PLAUD Cloud CLI connector is version-locked and ships with an empty compatibility table](ADR-0050-plaud-cli-compatibility-table.md) — Accepted, 2026-10-11 (spec §2.1, §7.1, §7.2, §7.6)
 - [ADR-0051: A filesystem event authorises nothing; a completion barrier and a content digest do](ADR-0051-watched-folder-completion-barrier-and-source-identity.md) — Accepted, 2026-10-11 (spec §4.3, §7.5, §7.10, App. A.2, App. A.4)
+
+## Direct-device import (0060-0069)
+
+- [ADR-0060: A device transfer is a replayable wire script, and a derivative is never an original](ADR-0060-a-device-transfer-is-a-replayable-wire-script.md) — Accepted, 2026-10-11 (spec §7.7, §7.9, §17.3A, §18.2A, §18.3A, App. B.3, App. B.4, App. B.6)
 
 ## Transcript tools and automation (0400-0499)
 

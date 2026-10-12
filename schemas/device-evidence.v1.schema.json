@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.local/schemas/device-evidence.v1.schema.json",
+  "title": "Direct-device hardware evidence record v1",
+  "description": "Release evidence for one opt-in real-hardware run (spec 7.9 Hardware shipping gate, 18.3A, 24, App. B.9). `test_run_id` and `recorded_at` are what compatibility.yaml cites as `test_run_id` and `last_verified_at`. A record whose source is `simulator` is valid JSON but can never promote a cell. No field may carry a credential or recording content.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "test_run_id",
+    "recorded_at",
+    "source",
+    "source_type",
+    "vendor",
+    "device_model",
+    "observed_firmware",
+    "host_os",
+    "host_os_build",
+    "transport",
+    "auth_mode",
+    "provisioning_route",
+    "transfer",
+    "non_destructive_scan_observed",
+    "emitted_opcodes",
+    "network_denied_run",
+    "checks"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "test_run_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "recorded_at": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+    "source": { "enum": ["hardware", "simulator"] },
+    "source_type": { "type": "string", "minLength": 1 },
+    "vendor": { "type": "string" },
+    "device_model": { "type": "string", "minLength": 1 },
+    "observed_firmware": { "type": "string", "minLength": 1 },
+    "host_os": { "type": "string", "minLength": 1 },
+    "host_os_build": { "type": "string", "minLength": 1 },
+    "transport": { "type": "string", "minLength": 1 },
+    "auth_mode": { "type": "string", "minLength": 1 },
+    "provisioning_route": { "type": "string", "minLength": 1 },
+    "transfer": {
+      "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/transfer" }]
+    },
+    "non_destructive_scan_observed": { "type": "boolean" },
+    "emitted_opcodes": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1, "maxLength": 64 }
+    },
+    "network_denied_run": { "type": "boolean" },
+    "checks": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/check" },
+      "uniqueItems": true
+    }
+  },
+  "$defs": {
+    "transfer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "device_recording_id",
+        "acquired_mime",
+        "quality_class",
+        "received_bytes",
+        "device_declared_byte_length",
+        "terminal_marker_observed",
+        "sha256_hex",
+        "measured_duration_ms"
+      ],
+      "properties": {
+        "device_recording_id": { "type": "string", "minLength": 1 },
+        "acquired_mime": { "type": "string", "minLength": 1 },
+        "quality_class": { "type": "string", "minLength": 1 },
+        "received_bytes": { "type": "integer", "minimum": 0 },
+        "device_declared_byte_length": { "type": ["integer", "null"], "minimum": 0 },
+        "terminal_marker_observed": { "type": "boolean" },
+        "sha256_hex": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "measured_duration_ms": { "type": ["integer", "null"], "minimum": 0 }
+      }
+    },
+    "check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "outcome", "detail"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+        "outcome": { "enum": ["passed", "failed", "skipped"] },
+        "detail": { "type": "string", "maxLength": 240 }
+      }
+    }
+  }
+}

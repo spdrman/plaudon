@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/device_list_recordings.request.schema.json",
+  "title": "device_list_recordings.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "peripheral_id"
+  ],
+  "properties": {
+    "peripheral_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    }
+  }
+}

@@ -1,0 +1,157 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/device_list_recordings.response.schema.json",
+  "title": "device_list_recordings.response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "peripheral_id",
+    "items",
+    "file_count",
+    "completeness",
+    "completeness_label",
+    "identity",
+    "identity_label"
+  ],
+  "properties": {
+    "peripheral_id": {
+      "type": "string"
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "recording_id",
+          "display_name",
+          "declared_byte_length",
+          "captured_at",
+          "transfer"
+        ],
+        "properties": {
+          "recording_id": {
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "declared_byte_length": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "captured_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "transfer": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "transfer_id",
+              "state",
+              "state_label",
+              "bytes_received",
+              "observed_bytes_per_sec",
+              "eta_seconds_estimate",
+              "verified",
+              "source_label",
+              "cloud_route"
+            ],
+            "properties": {
+              "transfer_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "state": {
+                "type": "string",
+                "enum": [
+                  "discovered",
+                  "queued",
+                  "connecting",
+                  "authenticating",
+                  "requesting",
+                  "receiving",
+                  "verifying",
+                  "committing",
+                  "imported",
+                  "interrupted",
+                  "waiting_for_device",
+                  "paused",
+                  "cancelled",
+                  "unsupported"
+                ]
+              },
+              "state_label": {
+                "type": "string"
+              },
+              "bytes_received": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "observed_bytes_per_sec": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "eta_seconds_estimate": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "verified": {
+                "type": "boolean"
+              },
+              "source_label": {
+                "type": "string"
+              },
+              "cloud_route": {
+                "type": "string",
+                "enum": [
+                  "not_used",
+                  "used"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "file_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "completeness": {
+      "type": "string",
+      "enum": [
+        "unsynced_delta",
+        "unsynced_delta_truncated",
+        "unknown"
+      ]
+    },
+    "completeness_label": {
+      "type": "string"
+    },
+    "identity": {
+      "type": "string",
+      "enum": [
+        "unverified",
+        "profile_authenticated"
+      ]
+    },
+    "identity_label": {
+      "type": "string"
+    }
+  }
+}

@@ -33,9 +33,14 @@ symphonia = { version = "0.5", default-features = false, features = [
 plaudon-app-core = { workspace = true }
 plaudon-diagnostics = { workspace = true }
 plaudon-domain = { workspace = true }
+parking_lot = { workspace = true }
 plaudon-persistence = { workspace = true }
+plaudon-plaud-ble = { workspace = true, features = ["test-support"] }
+plaudon-plaud-protocol = { workspace = true }
+plaudon-security = { workspace = true, features = ["test-support"] }
+plaudon-source-plaud-device = { workspace = true }
+plaudon-plaud-usb = { workspace = true }
 plaudon-recording-sources = { workspace = true }
-plaudon-security = { workspace = true }
 plaudon-source-folder = { workspace = true, features = ["test-harness"] }
 plaudon-source-plaud-cli = { workspace = true, features = ["test-harness"] }
 hex = { workspace = true }

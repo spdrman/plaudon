@@ -32,7 +32,13 @@
         "source.sync_finished",
         "library.changed",
         "activity.added",
-        "ui.activation_requested"
+        "ui.activation_requested",
+        "device.discovered",
+        "device.connected",
+        "device.compatibility_changed",
+        "device.transfer_progress",
+        "device.transfer_verified",
+        "device.disconnected"
       ]
     },
     "occurred_at": {
@@ -52,7 +58,7 @@
     },
     "payload": {
       "type": "object",
-      "description": "Opaque hint payload. For ui.activation_requested it carries {\"target\": {\"kind\": \"recording\"|\"job\"|\"settings\", \"id\": string|null}}."
+      "description": "Opaque hint payload. For ui.activation_requested it carries {\"target\": {\"kind\": \"recording\"|\"job\"|\"settings\", \"id\": string|null}}. Device events carry {\"peripheral_id\": string} and, for transfers, recording_id, transfer_id and state."
     }
   }
 }

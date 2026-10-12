@@ -14,21 +14,28 @@ workspace = true
 # The real radio scanner. Off by default so the workspace builds and tests
 # without a Bluetooth stack, and so CI never touches a radio (spec 18.3A).
 hardware-scan = ["dep:btleplug", "dep:futures", "dep:uuid"]
+# Exposes the deterministic `FakeDevice` to downstream test harnesses. Never a
+# production dependency.
+test-support = ["dep:serde_json"]
 
 [dependencies]
+async-trait = { workspace = true }
 btleplug = { version = "0.11", optional = true }
 futures = { version = "0.3", optional = true }
 plaudon-domain = { workspace = true }
 plaudon-plaud-protocol = { workspace = true }
 plaudon-recording-sources = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true, optional = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
+tokio-util = { workspace = true }
 uuid = { workspace = true, optional = true }
 
 [dev-dependencies]
 proptest = { workspace = true }
 serde_json = { workspace = true }
+tempfile = { workspace = true }
 
 [[bin]]
 name = "plaud-ble-scan"

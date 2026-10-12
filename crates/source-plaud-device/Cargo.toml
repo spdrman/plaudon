@@ -10,14 +10,28 @@ repository.workspace = true
 [lints]
 workspace = true
 
+[features]
+default = []
+# Opt-in checks that touch the real OS credential vault. Never in hermetic CI.
+real-keychain = []
+
 [dependencies]
 plaudon-domain = { workspace = true }
+plaudon-plaud-ble = { workspace = true }
+plaudon-plaud-protocol = { workspace = true }
+plaudon-security = { workspace = true }
+plaudon-persistence = { workspace = true }
 plaudon-recording-sources = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_norway = { workspace = true }
+sha2 = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
 jsonschema = { workspace = true }
+plaudon-security = { workspace = true, features = ["test-support"] }
 proptest = { workspace = true }
+sqlx = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true }
