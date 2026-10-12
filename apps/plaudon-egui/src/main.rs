@@ -59,7 +59,16 @@ fn main() -> ExitCode {
     let result = eframe::run_native(
         "Plaudon",
         options,
-        Box::new(move |_cc| Ok(Box::new(PlaudonShell::new(engine, hooks, state)))),
+        Box::new(move |_cc| {
+            let mut app = PlaudonShell::new(engine, hooks, state);
+            // One line per screen (O1.3's registry contract). A destination
+            // with no screen renders the registry's honest empty state.
+            app.shell_mut()
+                .register(Box::new(plaudon_ui::screens::library::LibraryScreen::new()));
+            app.shell_mut()
+                .register(Box::new(plaudon_ui::screens::inbox::InboxScreen::new()));
+            Ok(Box::new(app))
+        }),
     );
 
     match result {
