@@ -715,7 +715,7 @@ fn problem(code: &str, message: String) -> TemplateProblemDto {
 /* ---------------------------------------------------------------- store */
 
 /// The registry with the built-ins and every user copy on disk.
-fn open_registry(root: &Path) -> Result<TemplateRegistry, AppError> {
+pub(super) fn open_registry(root: &Path) -> Result<TemplateRegistry, AppError> {
     let mut registry = TemplateRegistry::with_builtins();
     registry.load_user_dir(root).map_err(unreadable)?;
     Ok(registry)

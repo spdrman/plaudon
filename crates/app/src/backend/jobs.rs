@@ -481,6 +481,32 @@ impl JobsPort for LocalBackend {
                 current.state.as_str()
             )));
         }
+        if self.is_engine_job(job_id).await {
+            // Cooperative: the request fires the running executor's token and
+            // moves the job to `cancelling`; the worker records `cancelled`
+            // once the engine has actually stopped, so the UI never claims
+            // work ended before it did (§14.7). A queued job that no worker
+            // holds is finished here, in the same call.
+            let ack = self
+                .processing()
+                .engine()
+                .cancel(job_id)
+                .await
+                .map_err(crate::backend::processing::job_error)?;
+            if ack.accepted {
+                crate::backend::processing::write_step(
+                    self,
+                    job_id,
+                    ack.state.as_str(),
+                    Some("cancelling"),
+                    None,
+                )
+                .await?;
+            }
+            let summary = load(self.pool(), job_id).await?;
+            publish_update(self.events(), &summary).await;
+            return Ok(summary);
+        }
         transition(
             self.pool(),
             job_id,
@@ -520,12 +546,9 @@ impl JobsPort for LocalBackend {
             }
         }
 
-        // A cloud transcription re-checks budget, consent and the model before
-        // the job is touched, so a refusal leaves it exactly as it was.
-        let cloud_plan = match current.kind {
-            JobKind::Transcribe => Some(self.plan_cloud_retry(job_id, cost_acknowledged).await?),
-            _ => None,
-        };
+        if self.is_engine_job(job_id).await {
+            return self.retry_engine_job(job_id, &current).await;
+        }
 
         sqlx::query(
             "UPDATE jobs SET state = 'queued', last_error_code = NULL, finished_at = NULL, \
@@ -539,11 +562,6 @@ impl JobsPort for LocalBackend {
         match current.kind {
             JobKind::Import => crate::backend::import::rerun(self, job_id).await?,
             JobKind::Export => crate::backend::export::rerun(self, job_id).await?,
-            JobKind::Transcribe => {
-                if let Some(plan) = cloud_plan {
-                    self.launch_cloud_retry(job_id, plan);
-                }
-            }
             other => {
                 return Err(AppError::new(
                     AppErrorCode::CapabilityUnverified,
