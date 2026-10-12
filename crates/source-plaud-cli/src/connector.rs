@@ -26,7 +26,7 @@ use plaudon_recording_sources::source::{
 use zeroize::Zeroizing;
 
 use crate::acquire::{AcquisitionPipeline, AcquisitionReport, SignedUrlProvider};
-use crate::compatibility::{CliCompatibilityTable, VersionVerdict};
+use crate::compatibility::{CliCompatibilityTable, PaginationEvidence, VersionVerdict};
 use crate::diagnostics::{ConnectorDiagnostics, DisconnectCopy};
 use crate::discovery::{CliDiscovery, DiscoveredCli, DiscoveryError};
 use crate::errors::classify;
@@ -43,6 +43,9 @@ struct Session {
     program: Option<DiscoveredCli>,
     parser: Option<VersionedParser>,
     logout_supported: bool,
+    /// Paging behaviour of the validated release, or `None` while no release
+    /// has been validated.
+    pagination: Option<PaginationEvidence>,
 }
 
 /// The official PLAUD Cloud CLI as a [`RecordingSource`].
@@ -88,6 +91,7 @@ impl PlaudCloudCliConnector {
                 program: None,
                 parser: None,
                 logout_supported: false,
+                pagination: None,
             }),
         }
     }
@@ -197,6 +201,7 @@ impl PlaudCloudCliConnector {
                 session.status.scraping_warning = row.needs_scraping_warning();
                 session.status.listing_possibly_incomplete = row.listing_may_be_incomplete();
                 session.logout_supported = matches!(row.logout_command, Tri::Yes);
+                session.pagination = Some(row.pagination.clone());
                 session.parser = Some(VersionedParser::for_row(row, self.account_scope.clone()));
                 session.status = session
                     .status
@@ -207,6 +212,7 @@ impl PlaudCloudCliConnector {
             VersionVerdict::NotValidated { .. } | VersionVerdict::Unreadable => {
                 session.status.version_validated = false;
                 session.parser = None;
+                session.pagination = None;
                 session.logout_supported = false;
                 session.status = session
                     .status
@@ -258,6 +264,7 @@ impl PlaudCloudCliConnector {
             let mut session = self.lock();
             session.program = None;
             session.parser = None;
+            session.pagination = None;
             session.logout_supported = false;
         }
         self.apply(ConnectorEvent::Disconnected, intent.at_ms);
@@ -272,15 +279,7 @@ impl PlaudCloudCliConnector {
     ) -> Result<ListingResult, SourceError> {
         let program = self.program()?;
         let parser = self.require_validated_version(intent.at_ms)?;
-        let command = match (cursor, self.cursor_flag()) {
-            (Some(cursor), Some(flag)) => CliCommand::files_page(flag, cursor),
-            // A caller that supplies a cursor for a release with no observed
-            // pagination is asking us to guess; spec 7.2 says we do not.
-            (Some(_), None) => {
-                return Err(self.record_error(SourceError::MalformedOutput, intent.at_ms))
-            }
-            (None, _) => CliCommand::files(),
-        };
+        let command = self.files_command(cursor, intent.at_ms)?;
 
         self.apply(ConnectorEvent::EnumerationStarted, intent.at_ms);
         let output = match self
@@ -357,20 +356,43 @@ impl PlaudCloudCliConnector {
         parser.ok_or_else(|| self.record_error(SourceError::CliUnsupported, at_ms))
     }
 
-    fn cursor_flag(&self) -> Option<String> {
-        None.or_else(|| {
-            let version = self.lock().status.detected_version.clone()?;
-            self.table
-                .versions
-                .iter()
-                .find(|row| row.version == version)
-                .and_then(|row| match &row.pagination {
-                    crate::compatibility::PaginationEvidence::Observed { cursor_flag, .. } => {
-                        Some(cursor_flag.clone())
-                    }
-                    crate::compatibility::PaginationEvidence::NotObserved => None,
-                })
-        })
+    /// The `files` call that asks for the requested page.
+    ///
+    /// The shape of the call comes from the validated row, never from the
+    /// caller: a cursor supplied for a release whose paging was never observed
+    /// is a request to guess, and spec 7.2 says we do not.
+    fn files_command(&self, cursor: Option<&str>, at_ms: i64) -> Result<CliCommand, SourceError> {
+        let pagination = self.lock().pagination.clone();
+        let malformed = || self.record_error(SourceError::MalformedOutput, at_ms);
+        match (pagination, cursor) {
+            (Some(PaginationEvidence::Observed { cursor_flag, .. }), Some(cursor)) => {
+                Ok(CliCommand::files_cursor(cursor_flag, cursor))
+            }
+            (
+                Some(PaginationEvidence::PageNumber {
+                    page_flag,
+                    page_size_flag,
+                    page_size,
+                }),
+                cursor,
+            ) => {
+                // Page one is requested with the same explicit page size as
+                // every later page, so a change to the release's default page
+                // size cannot make two pages overlap or skip a recording.
+                let page = match cursor {
+                    None => 1,
+                    Some(cursor) => cursor.trim().parse::<u32>().map_err(|_| malformed())?,
+                };
+                Ok(CliCommand::files_numbered(
+                    page_flag,
+                    page,
+                    page_size_flag,
+                    page_size,
+                ))
+            }
+            (_, Some(_)) => Err(malformed()),
+            (_, None) => Ok(CliCommand::files()),
+        }
     }
 }
 

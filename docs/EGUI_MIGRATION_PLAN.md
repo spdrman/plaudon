@@ -410,9 +410,11 @@ SHA-256 re-validated against a second `stat`). Rules: `ImportOnly`, `ImportAndQu
 `AskBeforeCloud`. **Poll-driven by the caller** (`pump`, `drain_due`, `sync`) — the egui app must
 drive it on a timer, not a render tick.
 
-**PLAUD Cloud CLI** (`source-plaud-cli`): wraps the official vendor CLI (`--version`, `login`,
-`logout`, `files`, `audio <id>`). The app never handles tokens. The committed compatibility table is
-empty, so any real CLI currently resolves to `IncompatibleVersion` — the UI must render that honestly.
+**PLAUD Cloud CLI** (`source-plaud-cli`): wraps the official vendor CLI (`version`, `login`,
+`logout`, `files`, `audio <id>`). The app never handles tokens. The committed compatibility table
+holds exactly one exercised release, `@plaud-ai/cli` 0.3.15 on macOS; every other version resolves
+to `IncompatibleVersion` — the UI must render that honestly. 0.3.15 has no machine-readable output,
+so its listing is scraped under a version lock and the UI keeps showing the compatibility warning.
 
 **Audio** (`plaudon-audio`): `symphonia 0.5` (aac, adpcm, flac, isomp4, mp3, ogg/vorbis, pcm, wav —
 **no Opus feature**), a deterministic in-house polyphase resampler, canonical PCM profiles

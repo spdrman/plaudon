@@ -16,8 +16,8 @@
 //! The signed URL lives in a [`Zeroizing<String>`] for the duration of one
 //! attempt and is never returned, stored, logged or placed in an error.
 //! Resume is not implemented: spec 7.3 forbids it until range semantics and a
-//! strong validator have been verified against the host, and
-//! [`UrlContract::may_resume`] is `false` for every contract this build ships.
+//! strong validator have been verified against the host, and this pipeline
+//! restarts from zero even where a [`UrlContract`] records that they were.
 
 use std::fmt;
 use std::fs::File;

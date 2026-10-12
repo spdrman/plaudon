@@ -141,6 +141,47 @@ impl UrlContract {
     }
 }
 
+/// Hosts observed serving `plaud audio` links.
+///
+/// Observed on `@plaud-ai/cli` 0.3.15, macOS arm64, 2026-10-12: every
+/// `plaud audio <id>` link was an S3 transfer-acceleration URL on this exact
+/// host, pre-signed with SigV4 and fetched without a single redirect. The
+/// entry is an exact host, not a wildcard: a bucket name is part of the host
+/// on S3, so `*.amazonaws.com` would allow every bucket on the platform.
+pub const OBSERVED_AUDIO_HOSTS: &[&str] =
+    &["prod-plaud-content-storage.s3-accelerate.amazonaws.com"];
+
+impl UrlContract {
+    /// The contract observed for `@plaud-ai/cli` 0.3.15 (spec 2.6, 7.3).
+    ///
+    /// Every field here was read off a real `plaud audio` link on macOS arm64
+    /// on 2026-10-12. The declared lifetime is the one the signature carries
+    /// (`X-Amz-Expires=3600`), not the "expires in 24 hours" line the CLI
+    /// prints, because the signature is what the server enforces.
+    #[must_use]
+    pub fn plaud_cli_0_3_15() -> Self {
+        Self {
+            host: OBSERVED_AUDIO_HOSTS[0].to_owned(),
+            scheme: "https".to_owned(),
+            method: "GET".to_owned(),
+            observed_redirect_hops: Some(0),
+            observed_content_type: Some("audio/ogg".to_owned()),
+            content_length_present: Some(true),
+            observed_validator: Some("ETag".to_owned()),
+            // No `x-amz-checksum-*` header was returned, so there is no
+            // server-side digest to compare ours against.
+            observed_checksum_header: None,
+            expiry_seconds: Some(3600),
+            // `Range: bytes=0-0` answered `206 Partial Content` with
+            // `Accept-Ranges: bytes` and a strong `ETag`. The acquisition
+            // pipeline still restarts from zero: it implements no resume at
+            // all, which this record does not change.
+            range_support: RangeSupport::VerifiedWithStrongValidator,
+            observed_on: Some("2026-10-12".to_owned()),
+        }
+    }
+}
+
 /// The fetch policy applied to every signed URL.
 ///
 /// One field is private on purpose: [`DownloadPolicy::loopback_http_allowed`]

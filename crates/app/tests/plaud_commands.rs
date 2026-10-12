@@ -210,8 +210,8 @@ struct Harness {
 }
 
 impl Harness {
-    /// A library with a scripted CLI. `version` is the stdout of `--version`,
-    /// or `None` for an installation with no `plaud` at all.
+    /// A library with a scripted CLI. `version` is the stdout of the `version`
+    /// subcommand, or `None` for an installation with no `plaud` at all.
     async fn new(version: Option<&str>) -> Self {
         let cli = tempfile::tempdir().expect("tempdir");
         let library = tempfile::tempdir().expect("tempdir");
@@ -496,7 +496,7 @@ async fn an_untested_version_blocks_listing_and_keeps_manual_import() {
     assert!(harness
         .invocations()
         .iter()
-        .all(|line| line.starts_with("--version")));
+        .all(|line| line.starts_with("version")));
     harness.assert_no_vendor_text_anywhere(&harness.probe().await);
 }
 
