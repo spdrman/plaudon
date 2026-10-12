@@ -3,21 +3,23 @@
 //! Every mutating statement in the application funnels through one serialized
 //! writer task that owns the only write connection. Readers use a separate
 //! pool and run concurrently against WAL snapshots. Because exactly one
-//! connection ever holds the write lock, `SQLITE_BUSY` cannot arise from our
-//! own concurrency.
+//! connection ever holds the write lock and the writer task executes submitted
+//! work strictly one at a time, `SQLITE_BUSY` cannot arise from our own
+//! concurrency.
 //!
 //! The coordinator lives in `plaudon-jobs` rather than `plaudon-persistence`
 //! because the post-commit event dispatch it feeds (§14.5) is owned by the job
-//! engine, and `plaudon-persistence` must not depend on `plaudon-jobs`. See
-//! `docs/adr/0030-single-writer-coordinator.md`.
+//! engine, and `plaudon-persistence` must not depend on `plaudon-jobs`.
 
 use std::future::Future;
 use std::path::Path;
 use std::pin::Pin;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
+use sqlx::pool::PoolConnection;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous};
-use sqlx::{Sqlite, SqliteConnection, SqlitePool, Transaction};
+use sqlx::{Sqlite, SqlitePool, Transaction};
 use tokio::sync::{mpsc, oneshot};
 
 use crate::error::JobError;
@@ -26,84 +28,77 @@ use crate::error::JobError;
 pub type BoxFut<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 /// A unit of serialized write work.
-type WriteTask = Box<dyn for<'a> FnOnce(&'a mut SqliteConnection) -> BoxFut<'a, ()> + Send>;
+type WriteTask = Box<dyn FnOnce(SqlitePool) -> BoxFut<'static, ()> + Send>;
 
 /// Handle to the single writer task.
 #[derive(Clone)]
 pub struct WriteCoordinator {
     tx: mpsc::Sender<WriteTask>,
-    inner: Arc<WriterInner>,
+    completed: Arc<AtomicU64>,
 }
 
-struct WriterInner {
-    /// Number of write operations completed; used by tests to prove that all
-    /// writes went through this coordinator.
-    completed: std::sync::atomic::AtomicU64,
+impl std::fmt::Debug for WriteCoordinator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WriteCoordinator")
+            .field("completed_writes", &self.completed_writes())
+            .finish()
+    }
 }
 
 impl WriteCoordinator {
     /// Spawn the writer task on the current Tokio runtime.
     ///
-    /// `pool` must be configured with exactly one connection; `Database::open`
+    /// `pool` must be configured with exactly one connection; [`Database::open`]
     /// does this.
     pub fn spawn(pool: SqlitePool, queue_depth: usize) -> Self {
         let (tx, mut rx) = mpsc::channel::<WriteTask>(queue_depth.max(1));
-        let inner = Arc::new(WriterInner {
-            completed: std::sync::atomic::AtomicU64::new(0),
-        });
-        let counter = Arc::clone(&inner);
+        let completed = Arc::new(AtomicU64::new(0));
+        let counter = Arc::clone(&completed);
         tokio::spawn(async move {
-            // One connection, held for the lifetime of the writer. Nothing else
-            // in the process may acquire a write connection.
-            let mut conn = match pool.acquire().await {
-                Ok(conn) => conn,
-                Err(error) => {
-                    tracing::error!(%error, "single-writer coordinator could not acquire its connection");
-                    return;
-                }
-            };
+            // Tasks are awaited one at a time: writes are totally ordered.
             while let Some(task) = rx.recv().await {
-                task(&mut conn).await;
-                counter
-                    .completed
-                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                task(pool.clone()).await;
+                counter.fetch_add(1, Ordering::Relaxed);
             }
         });
-        Self { tx, inner }
+        Self { tx, completed }
     }
 
-    /// Number of completed write operations.
+    /// Number of completed write operations. Used by tests to prove that every
+    /// write went through this coordinator.
     pub fn completed_writes(&self) -> u64 {
-        self.inner
-            .completed
-            .load(std::sync::atomic::Ordering::Relaxed)
+        self.completed.load(Ordering::Relaxed)
     }
 
     /// Run `f` on the single write connection, awaiting its result.
     pub async fn submit<T, F>(&self, f: F) -> Result<T, JobError>
     where
         T: Send + 'static,
-        F: for<'a> FnOnce(&'a mut SqliteConnection) -> BoxFut<'a, Result<T, JobError>>
-            + Send
-            + 'static,
+        F: FnOnce(PoolConnection<Sqlite>) -> BoxFut<'static, Result<T, JobError>> + Send + 'static,
     {
         let (reply_tx, reply_rx) = oneshot::channel();
-        let task: WriteTask = Box::new(move |conn| {
+        let task: WriteTask = Box::new(move |pool: SqlitePool| {
             Box::pin(async move {
-                let result = f(conn).await;
-                // Receiver dropped means the caller gave up; nothing to do.
+                let result = match pool.acquire().await {
+                    Ok(conn) => f(conn).await,
+                    Err(error) => Err(JobError::storage("acquire write connection", error)),
+                };
+                // A dropped receiver means the caller gave up; nothing to do.
                 let _ = reply_tx.send(result);
             })
         });
-        self.tx.send(task).await.map_err(|_| JobError::WriterClosed)?;
+        self.tx
+            .send(task)
+            .await
+            .map_err(|_| JobError::WriterClosed)?;
         reply_rx.await.map_err(|_| JobError::WriterClosed)?
     }
 
     /// Run `f` inside a single transaction on the write connection.
     ///
-    /// The transaction is committed when `f` returns `Ok`, and rolled back on
-    /// `Err` or panic-free early return. Nothing observable escapes a rolled
-    /// back transaction.
+    /// The transaction commits when `f` returns `Ok` and rolls back on `Err`.
+    /// Nothing observable escapes a rolled back transaction, including the
+    /// event sequence counter.
     pub async fn transaction<T, F>(&self, f: F) -> Result<T, JobError>
     where
         T: Send + 'static,
@@ -111,35 +106,49 @@ impl WriteCoordinator {
             + Send
             + 'static,
     {
-        self.submit(move |conn| {
+        let (reply_tx, reply_rx) = oneshot::channel();
+        let task: WriteTask = Box::new(move |pool: SqlitePool| {
             Box::pin(async move {
-                let mut tx = <&mut SqliteConnection as sqlx::Acquire>::begin(conn)
-                    .await
-                    .map_err(|e| JobError::storage("begin transaction", e))?;
-                match f(&mut tx).await {
-                    Ok(value) => {
-                        crate::fault::trip("tx:before_commit");
-                        tx.commit()
-                            .await
-                            .map_err(|e| JobError::storage("commit transaction", e))?;
-                        crate::fault::trip("tx:after_commit");
-                        Ok(value)
-                    }
-                    Err(error) => {
-                        tx.rollback()
-                            .await
-                            .map_err(|e| JobError::storage("rollback transaction", e))?;
-                        Err(error)
-                    }
-                }
+                let result = run_transaction(pool, f).await;
+                let _ = reply_tx.send(result);
             })
-        })
+        });
+        self.tx
+            .send(task)
+            .await
+            .map_err(|_| JobError::WriterClosed)?;
+        reply_rx.await.map_err(|_| JobError::WriterClosed)?
+    }
+}
+
+async fn run_transaction<T, F>(pool: SqlitePool, f: F) -> Result<T, JobError>
+where
+    F: for<'a> FnOnce(&'a mut Transaction<'static, Sqlite>) -> BoxFut<'a, Result<T, JobError>>,
+{
+    let mut tx = pool
+        .begin()
         .await
+        .map_err(|e| JobError::storage("begin transaction", e))?;
+    match f(&mut tx).await {
+        Ok(value) => {
+            crate::fault::trip("tx:before_commit");
+            tx.commit()
+                .await
+                .map_err(|e| JobError::storage("commit transaction", e))?;
+            crate::fault::trip("tx:after_commit");
+            Ok(value)
+        }
+        Err(error) => {
+            tx.rollback()
+                .await
+                .map_err(|e| JobError::storage("rollback transaction", e))?;
+            Err(error)
+        }
     }
 }
 
 /// Concurrent read-only access. Readers never block the writer under WAL.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ReadPool(SqlitePool);
 
 impl ReadPool {
@@ -150,11 +159,12 @@ impl ReadPool {
 }
 
 /// An opened SQLite database with a single writer and a reader pool.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Database {
     writer: WriteCoordinator,
     reader: ReadPool,
     write_pool: SqlitePool,
+    path: std::path::PathBuf,
 }
 
 impl Database {
@@ -164,9 +174,8 @@ impl Database {
     /// `synchronous = FULL` on the writer so a commit is durable before we
     /// report it, and a busy timeout as defence in depth.
     pub async fn open(path: impl AsRef<Path>, max_readers: u32) -> Result<Self, JobError> {
-        let path = path.as_ref();
         let base = SqliteConnectOptions::new()
-            .filename(path)
+            .filename(path.as_ref())
             .create_if_missing(true)
             .foreign_keys(true)
             .journal_mode(SqliteJournalMode::Wal)
@@ -181,7 +190,7 @@ impl Database {
 
         let read_pool = SqlitePoolOptions::new()
             .max_connections(max_readers.max(1))
-            .connect_with(base.read_only(false).synchronous(SqliteSynchronous::Normal))
+            .connect_with(base.synchronous(SqliteSynchronous::Normal))
             .await
             .map_err(|e| JobError::storage("open read pool", e))?;
 
@@ -189,7 +198,13 @@ impl Database {
             writer: WriteCoordinator::spawn(write_pool.clone(), 256),
             reader: ReadPool(read_pool),
             write_pool,
+            path: path.as_ref().to_path_buf(),
         })
+    }
+
+    /// Filesystem path of the database file.
+    pub fn path(&self) -> &Path {
+        &self.path
     }
 
     /// The single-writer handle.

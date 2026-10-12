@@ -178,16 +178,22 @@ impl JobState {
     pub const fn phase(self) -> JobPhase {
         match self {
             JobState::Queued | JobState::Preflight => JobPhase::Pending,
+            // Parked until something external changes. `CloudOutcomeUnknown`
+            // belongs here because only a human can move it on, and
+            // `FailedRetryable` because the engine will requeue it.
             JobState::WaitingForUser
             | JobState::WaitingForNetwork
             | JobState::WaitingForModel
             | JobState::WaitingForSource
             | JobState::WaitingForAuthorization
-            | JobState::CloudOutcomeUnknown => JobPhase::Waiting,
+            | JobState::CloudOutcomeUnknown
+            | JobState::FailedRetryable => JobPhase::Waiting,
             JobState::RunningLocal | JobState::CloudReady | JobState::CloudSending => {
                 JobPhase::Active
             }
-            JobState::Verifying | JobState::Committing | JobState::Cancelling => JobPhase::Finishing,
+            JobState::Verifying | JobState::Committing | JobState::Cancelling => {
+                JobPhase::Finishing
+            }
             JobState::Completed | JobState::FailedTerminal | JobState::Cancelled => {
                 JobPhase::Terminal
             }
@@ -317,7 +323,9 @@ pub enum JobTransitionError {
     RequiresCostAcknowledgement,
     #[error("cloud dispatch requires a verified consent grant for this exact destination")]
     RequiresVerifiedConsent,
-    #[error("a job may only reach Completed once its outputs are committed in the same transaction")]
+    #[error(
+        "a job may only reach Completed once its outputs are committed in the same transaction"
+    )]
     MissingCommittedOutput,
     #[error("expected job to be in state {expected}, found {actual}")]
     StateConflict {
@@ -540,21 +548,28 @@ mod tests {
         let mut seen = std::collections::HashSet::new();
         for t in TRANSITIONS {
             assert_ne!(t.from, t.to, "self edge on {}", t.from);
-            assert!(seen.insert((t.from, t.to)), "duplicate edge {:?}", t);
+            assert!(seen.insert((t.from, t.to)), "duplicate edge {t:?}");
         }
     }
 
     #[test]
-    fn every_non_terminal_state_can_reach_cancellation() {
+    fn every_cancellable_state_can_reach_cancellation() {
         for state in JobState::ALL.iter().copied().filter(|s| !s.is_terminal()) {
-            if state == S::Cancelling {
+            // `Committing` is deliberately not cancellable: the durable commit
+            // of outputs and metadata is the one window where abandoning work
+            // could leave a torn record. A cancel requested during it is
+            // honoured once the commit finishes (§14.7 cooperative
+            // cancellation). `Cancelling` is already cancelling.
+            if matches!(state, S::Cancelling | S::Committing) {
                 continue;
             }
             assert!(
-                is_legal_edge(state, S::Cancelling) || is_legal_edge(state, S::Cancelled),
+                is_legal_edge(state, S::Cancelling),
                 "{state} cannot be cancelled"
             );
         }
+        assert!(!is_legal_edge(S::Committing, S::Cancelling));
+        assert!(!is_legal_edge(S::Committing, S::Cancelled));
     }
 
     #[test]

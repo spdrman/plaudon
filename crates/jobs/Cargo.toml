@@ -1,13 +1,40 @@
 [package]
 name = "plaudon-jobs"
-description = "Persisted job orchestration."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+description = "Persisted job orchestration: state machine, idempotency, checkpoints, scheduling, cancellation, durable events and crash recovery (SPEC v1.3 §14)."
 
 [lints]
 workspace = true
 
+[features]
+default = []
+# Compile-time gated crash/fault injection used by tests/chaos. Release builds
+# contain no crash points (SPEC v1.3 §14.6).
+fault-injection = []
+
 [dependencies]
+plaudon-domain = { workspace = true }
+plaudon-persistence = { workspace = true }
+hex = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+sqlx = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+tempfile = { workspace = true }
+
+[[bin]]
+name = "plaudon-chaos-worker"
+path = "src/bin/chaos_worker.rs"
+required-features = ["fault-injection"]
