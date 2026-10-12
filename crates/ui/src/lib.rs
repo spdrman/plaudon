@@ -11,5 +11,6 @@
 
 #![deny(missing_docs)]
 
+pub mod ai;
 pub mod player;
 pub mod transcript;
