@@ -22,6 +22,7 @@ import { AudioPlayer, usePlayerController, usePlayerShortcuts } from "./AudioPla
 import { TranscriptPane } from "./TranscriptPane";
 import { RevisionSwitcher, revisionLabel } from "./RevisionSwitcher";
 import { CommandErrorNotice } from "./errorNotice";
+import { StageRerunPanel } from "./StageRerunPanel";
 
 const DETAIL_EVENTS = ["transcript.completed", "recording.source_updated", "library.changed"] as const;
 
@@ -273,6 +274,18 @@ export function RecordingDetailScreen({
               body="This recording has not been transcribed, so there is nothing to read or edit here. Start a transcription from the Jobs screen once an engine and model are installed."
             />
           )}
+
+          <StageRerunPanel
+            detail={detail}
+            onQueued={(response) => {
+              void refetch();
+              pushToast({
+                tone: "info",
+                title: "Stage queued",
+                body: `Job ${response.job_id}`,
+              });
+            }}
+          />
         </div>
 
         <DetailPane

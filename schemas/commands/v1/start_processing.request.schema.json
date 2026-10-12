@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/start_processing.request.schema.json",
+  "title": "start_processing.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "recording_id",
+    "stage",
+    "model_override",
+    "cost_acknowledged",
+    "rerun"
+  ],
+  "properties": {
+    "recording_id": {
+      "type": "string"
+    },
+    "stage": {
+      "type": "string",
+      "enum": [
+        "transcribe",
+        "diarize",
+        "normalize",
+        "section_summary",
+        "consolidated_summary",
+        "structured_extraction",
+        "citation_verification",
+        "tool_run"
+      ]
+    },
+    "model_override": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "engine",
+            "model_id"
+          ],
+          "properties": {
+            "engine": {
+              "type": "string"
+            },
+            "model_id": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "cost_acknowledged": {
+      "type": "boolean"
+    },
+    "rerun": {
+      "type": "boolean"
+    }
+  }
+}

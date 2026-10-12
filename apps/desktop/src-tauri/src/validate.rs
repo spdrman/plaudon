@@ -11,12 +11,19 @@ use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
+use plaudon_ai_openrouter::allowlist::ModelTask;
+use plaudon_ai_openrouter::service::usage::money_from_string;
+use plaudon_ai_openrouter::service::{ModelChoice, Stage};
 use plaudon_domain::error::{AppError, AppErrorCode};
 use plaudon_domain::ids::{IdParseError, RecordingId, TranscriptRevisionId};
+use plaudon_domain::money::{Currency, Money};
 use plaudon_domain::time::Timestamp;
+use plaudon_security::consent::{ConsentPurpose, ContentType};
 
 use crate::dto::{
-    ExportFormat, ImportStatus, JobKind, JobState, RecordingSort, SourceKind, TranscriptionStatus,
+    ExportFormat, GrantCloudConsentRequest, ImportStatus, JobKind, JobState, ListModelsRequest,
+    RecordingSort, SetCloudBudgetRequest, SetModelPreferenceRequest, SourceKind,
+    StartProcessingRequest, TranscriptionStatus, VerifyModelRequest,
 };
 use crate::error::invalid_argument;
 
@@ -633,6 +640,382 @@ pub fn source_id(raw: &str) -> Result<uuid::Uuid, AppError> {
     uuid::Uuid::parse_str(raw).map_err(|_| invalid_argument("source_id is not a canonical UUID"))
 }
 
+/* ------------------------------------------------------------------ cloud */
+
+/// Longest accepted model identifier.
+pub const MAX_MODEL_ID_CHARS: usize = 200;
+/// Longest accepted engine identifier.
+pub const MAX_ENGINE_ID_CHARS: usize = 64;
+/// Longest accepted free-text label (disclosure version, provider name).
+pub const MAX_LABEL_CHARS: usize = 120;
+/// Longest range `get_usage` answers, in days.
+pub const MAX_USAGE_RANGE_DAYS: i64 = 400;
+/// Most fractional digits a budget amount may carry.
+const MAX_BUDGET_FRACTION_DIGITS: usize = 6;
+/// Most integer digits a budget amount may carry.
+const MAX_BUDGET_WHOLE_DIGITS: usize = 9;
+
+/// Parse a pipeline stage name.
+pub fn stage(value: &str) -> Result<Stage, AppError> {
+    Stage::parse(value).ok_or_else(|| invalid_argument("stage is not a known pipeline stage"))
+}
+
+/// Parse a model task name.
+pub fn model_task(value: &str) -> Result<ModelTask, AppError> {
+    match value {
+        "transcription" => Ok(ModelTask::Transcription),
+        "text_generation" => Ok(ModelTask::TextGeneration),
+        _ => Err(invalid_argument("task is not a known model task")),
+    }
+}
+
+/// Validate a model identifier: non-empty, bounded, printable.
+pub fn model_id(value: &str) -> Result<String, AppError> {
+    bounded_text("model_id", value, MAX_MODEL_ID_CHARS)
+}
+
+/// Validate an engine identifier.
+pub fn engine_id(value: &str) -> Result<String, AppError> {
+    let text = bounded_text("engine", value, MAX_ENGINE_ID_CHARS)?;
+    if !text
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
+    {
+        return Err(invalid_argument("engine contains unsupported characters"));
+    }
+    Ok(text)
+}
+
+/// Validate a short free-text label.
+pub fn label(field: &'static str, value: &str) -> Result<String, AppError> {
+    bounded_text(field, value, MAX_LABEL_CHARS)
+}
+
+fn bounded_text(field: &'static str, value: &str, max_chars: usize) -> Result<String, AppError> {
+    if value.trim().is_empty() {
+        return Err(invalid_argument(format!("{field} is empty")));
+    }
+    if value.chars().count() > max_chars {
+        return Err(invalid_argument(format!("{field} is too long")));
+    }
+    if value.chars().any(char::is_control) {
+        return Err(invalid_argument(format!(
+            "{field} contains control characters"
+        )));
+    }
+    Ok(value.to_owned())
+}
+
+/// Parse a plain decimal money string (`12`, `0.5`, `0.000001`).
+///
+/// Rejects signs, exponents, `NaN`, `inf`, separators and anything with more
+/// than six fractional digits, so no float ever participates in budgeting.
+pub fn decimal_money(field: &'static str, value: &str) -> Result<Money, AppError> {
+    let (whole, fraction) = value.split_once('.').unwrap_or((value, ""));
+    let digits_only = |part: &str| part.bytes().all(|b| b.is_ascii_digit());
+    let well_formed = !whole.is_empty()
+        && whole.len() <= MAX_BUDGET_WHOLE_DIGITS
+        && digits_only(whole)
+        && fraction.len() <= MAX_BUDGET_FRACTION_DIGITS
+        && digits_only(fraction)
+        && (value.contains('.') != fraction.is_empty());
+    if !well_formed {
+        return Err(invalid_argument(format!(
+            "{field} is not a non-negative decimal amount"
+        )));
+    }
+    money_from_string(value, Currency::USD)
+        .ok_or_else(|| invalid_argument(format!("{field} is not a valid amount")))
+}
+
+/// The only currency V1 budgets are kept in.
+pub fn budget_currency(value: &str) -> Result<Currency, AppError> {
+    if value == "USD" {
+        Ok(Currency::USD)
+    } else {
+        Err(invalid_argument("currency must be USD"))
+    }
+}
+
+/// Parse a consent purpose.
+pub fn consent_purpose(value: &str) -> Result<ConsentPurpose, AppError> {
+    ConsentPurpose::ALL
+        .into_iter()
+        .find(|purpose| purpose.label() == value)
+        .ok_or_else(|| invalid_argument("purpose is not a known consent purpose"))
+}
+
+/// Parse a consent content type.
+pub fn consent_content_type(value: &str) -> Result<ContentType, AppError> {
+    ContentType::ALL
+        .into_iter()
+        .find(|content| content.label() == value)
+        .ok_or_else(|| invalid_argument("content_type is not a known content type"))
+}
+
+/// Scope of a validated consent grant.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ValidatedConsentScope {
+    /// "Ask every time": stored, never authorizes.
+    AskEveryTime,
+    /// One recording.
+    Recording(RecordingId),
+    /// One model route.
+    ModelPolicy,
+}
+
+/// Validated `grant_cloud_consent` arguments.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ValidatedConsent {
+    /// Purpose.
+    pub purpose: ConsentPurpose,
+    /// Content type.
+    pub content_type: ContentType,
+    /// Scope.
+    pub scope: ValidatedConsentScope,
+    /// Model the grant covers.
+    pub model_id: String,
+    /// Downstream provider, when the user saw one.
+    pub downstream_provider: Option<String>,
+    /// Whether documented zero retention is required.
+    pub require_zero_retention: bool,
+    /// Privacy statement version.
+    pub disclosure_version: String,
+}
+
+/// Validate a consent grant request.
+pub fn consent(request: &GrantCloudConsentRequest) -> Result<ValidatedConsent, AppError> {
+    let purpose = consent_purpose(&request.purpose)?;
+    let content_type = consent_content_type(&request.content_type)?;
+    let compatible = match purpose {
+        ConsentPurpose::Transcription => content_type == ContentType::AudioBytes,
+        ConsentPurpose::Summarization | ConsentPurpose::TranscriptTool => {
+            content_type == ContentType::TranscriptText
+        }
+        ConsentPurpose::CredentialValidation => true,
+    };
+    if !compatible {
+        return Err(invalid_argument(
+            "content_type does not match the consent purpose",
+        ));
+    }
+    let scope = match (
+        request.scope.kind.as_str(),
+        request.scope.recording_id.as_deref(),
+    ) {
+        ("ask_every_time", None) => ValidatedConsentScope::AskEveryTime,
+        ("model_policy", None) => ValidatedConsentScope::ModelPolicy,
+        ("recording", Some(id)) => {
+            ValidatedConsentScope::Recording(parse_id::<RecordingId>("scope.recording_id", id)?)
+        }
+        ("recording", None) => {
+            return Err(invalid_argument("a recording scope needs a recording_id"))
+        }
+        ("ask_every_time" | "model_policy", Some(_)) => {
+            return Err(invalid_argument(
+                "only a recording scope carries a recording_id",
+            ))
+        }
+        _ => return Err(invalid_argument("scope.kind is not a known consent scope")),
+    };
+    Ok(ValidatedConsent {
+        purpose,
+        content_type,
+        scope,
+        model_id: model_id(&request.model_id)?,
+        downstream_provider: request
+            .downstream_provider
+            .as_deref()
+            .map(|value| label("downstream_provider", value))
+            .transpose()?,
+        require_zero_retention: request.require_zero_retention,
+        disclosure_version: label("disclosure_version", &request.disclosure_version)?,
+    })
+}
+
+/// Validated `get_usage` range.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ValidatedUsageRange {
+    /// Inclusive start.
+    pub from: Timestamp,
+    /// Exclusive end.
+    pub to: Timestamp,
+}
+
+/// Validate a usage range: `from < to`, at most 400 days.
+pub fn usage_range(from: &str, to: &str) -> Result<ValidatedUsageRange, AppError> {
+    let from = parse_rfc3339("from", from)?;
+    let to = parse_rfc3339("to", to)?;
+    if to <= from {
+        return Err(invalid_argument("to must be after from"));
+    }
+    let span_ms = to.as_millis().saturating_sub(from.as_millis());
+    if span_ms > MAX_USAGE_RANGE_DAYS * 86_400_000 {
+        return Err(invalid_argument(format!(
+            "the range may not exceed {MAX_USAGE_RANGE_DAYS} days"
+        )));
+    }
+    Ok(ValidatedUsageRange { from, to })
+}
+
+/// Validated `set_cloud_budget` arguments.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ValidatedBudget {
+    /// Per-job limit.
+    pub per_job_limit: Option<Money>,
+    /// Monthly limit.
+    pub monthly_limit: Option<Money>,
+}
+
+/// Validate a budget request.
+pub fn budget(request: &SetCloudBudgetRequest) -> Result<ValidatedBudget, AppError> {
+    budget_currency(&request.currency)?;
+    Ok(ValidatedBudget {
+        per_job_limit: request
+            .per_job_limit
+            .as_deref()
+            .map(|value| decimal_money("per_job_limit", value))
+            .transpose()?,
+        monthly_limit: request
+            .monthly_limit
+            .as_deref()
+            .map(|value| decimal_money("monthly_limit", value))
+            .transpose()?,
+    })
+}
+
+/// Scope of a validated preference write.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ValidatedPreferenceScope {
+    /// The per-stage default.
+    Default,
+    /// One recording's override.
+    Recording(RecordingId),
+}
+
+/// Validated `set_model_preference` arguments.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ValidatedPreference {
+    /// Stage.
+    pub stage: Stage,
+    /// Scope.
+    pub scope: ValidatedPreferenceScope,
+    /// Engine.
+    pub engine: String,
+    /// Model; `None` clears a recording override.
+    pub model_id: Option<String>,
+}
+
+/// Validate a preference write.
+///
+/// A default always names a model: clearing is only defined for a recording
+/// override, so a recording write can never be mistaken for clearing the
+/// default.
+pub fn preference(request: &SetModelPreferenceRequest) -> Result<ValidatedPreference, AppError> {
+    let scope = match (
+        request.scope.kind.as_str(),
+        request.scope.recording_id.as_deref(),
+    ) {
+        ("default", None) => ValidatedPreferenceScope::Default,
+        ("recording", Some(id)) => {
+            ValidatedPreferenceScope::Recording(parse_id("scope.recording_id", id)?)
+        }
+        ("recording", None) => {
+            return Err(invalid_argument("a recording scope needs a recording_id"))
+        }
+        ("default", Some(_)) => {
+            return Err(invalid_argument(
+                "a default scope does not carry a recording_id",
+            ))
+        }
+        _ => return Err(invalid_argument("scope.kind is not a known scope")),
+    };
+    let model = request.model_id.as_deref().map(model_id).transpose()?;
+    if model.is_none() && scope == ValidatedPreferenceScope::Default {
+        return Err(invalid_argument("a default preference must name a model"));
+    }
+    Ok(ValidatedPreference {
+        stage: stage(&request.stage)?,
+        scope,
+        engine: engine_id(&request.engine)?,
+        model_id: model,
+    })
+}
+
+/// Validated `list_models` arguments.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ValidatedListModels {
+    /// Stage.
+    pub stage: Stage,
+    /// Engine filter.
+    pub engine: Option<String>,
+}
+
+/// Validate a `list_models` request.
+pub fn list_models(request: &ListModelsRequest) -> Result<ValidatedListModels, AppError> {
+    Ok(ValidatedListModels {
+        stage: stage(&request.stage)?,
+        engine: request.engine.as_deref().map(engine_id).transpose()?,
+    })
+}
+
+/// Validated `start_processing` arguments.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ValidatedStartProcessing {
+    /// Recording.
+    pub recording_id: RecordingId,
+    /// Stage.
+    pub stage: Stage,
+    /// One-shot override.
+    pub model_override: Option<ModelChoice>,
+    /// Cost acknowledgement.
+    pub cost_acknowledged: bool,
+    /// Re-run flag.
+    pub rerun: bool,
+}
+
+/// Validate a `start_processing` request.
+pub fn start_processing(
+    request: &StartProcessingRequest,
+) -> Result<ValidatedStartProcessing, AppError> {
+    Ok(ValidatedStartProcessing {
+        recording_id: parse_id("recording_id", &request.recording_id)?,
+        stage: stage(&request.stage)?,
+        model_override: request
+            .model_override
+            .as_ref()
+            .map(|choice| {
+                Ok::<_, AppError>(ModelChoice::new(
+                    engine_id(&choice.engine)?,
+                    Some(model_id(&choice.model_id)?),
+                ))
+            })
+            .transpose()?,
+        cost_acknowledged: request.cost_acknowledged,
+        rerun: request.rerun,
+    })
+}
+
+/// Validated `verify_model` arguments.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ValidatedVerifyModel {
+    /// Model.
+    pub model_id: String,
+    /// Task.
+    pub task: ModelTask,
+    /// Cost acknowledgement.
+    pub cost_acknowledged: bool,
+}
+
+/// Validate a `verify_model` request.
+pub fn verify_model(request: &VerifyModelRequest) -> Result<ValidatedVerifyModel, AppError> {
+    Ok(ValidatedVerifyModel {
+        model_id: model_id(&request.model_id)?,
+        task: model_task(&request.task)?,
+        cost_acknowledged: request.cost_acknowledged,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use std::fs;
@@ -912,6 +1295,89 @@ mod tests {
             unique_states(&[JobState::Queued]).unwrap(),
             vec![JobState::Queued]
         );
+    }
+
+    #[test]
+    fn money_strings_reject_everything_but_plain_decimals() {
+        for good in ["0", "1", "12.5", "0.000001", "999999999.999999"] {
+            assert!(decimal_money("amount", good).is_ok(), "{good}");
+        }
+        for bad in [
+            "",
+            "NaN",
+            "nan",
+            "inf",
+            "-1",
+            "+1",
+            "1e3",
+            "1,5",
+            ".5",
+            "5.",
+            "0.0000001",
+            " 1",
+            "1 ",
+            "١٢",
+            "1234567890",
+        ] {
+            let err = decimal_money("amount", bad).unwrap_err();
+            assert_eq!(err.code(), AppErrorCode::InvalidArgument, "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn usage_ranges_are_ordered_and_bounded() {
+        assert!(usage_range("2026-01-01T00:00:00Z", "2026-01-02T00:00:00Z").is_ok());
+        assert!(usage_range("2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z").is_err());
+        assert!(usage_range("2026-01-02T00:00:00Z", "2026-01-01T00:00:00Z").is_err());
+        assert!(usage_range("2025-01-01T00:00:00Z", "2026-12-01T00:00:00Z").is_err());
+        assert!(usage_range("2026-01-01T00:00:00Z", "garbage").is_err());
+    }
+
+    #[test]
+    fn model_and_engine_ids_are_bounded_and_printable() {
+        assert!(model_id("openai/whisper-1").is_ok());
+        assert!(model_id("").is_err());
+        assert!(model_id(&"a".repeat(201)).is_err());
+        assert!(model_id("a\nb").is_err());
+        assert!(engine_id("openrouter").is_ok());
+        assert!(engine_id("whisper.cpp").is_ok());
+        assert!(engine_id("a b").is_err());
+        assert!(engine_id("../x").is_err());
+    }
+
+    #[test]
+    fn stages_purposes_and_content_types_are_closed_sets() {
+        assert!(stage("transcribe").is_ok());
+        assert!(stage("tool_run").is_ok());
+        assert!(stage("Transcribe").is_err());
+        assert!(consent_purpose("transcription").is_ok());
+        assert!(consent_purpose("everything").is_err());
+        assert!(consent_content_type("audio_bytes").is_ok());
+        assert!(consent_content_type("video").is_err());
+        assert!(model_task("text_generation").is_ok());
+        assert!(model_task("chat").is_err());
+    }
+
+    #[test]
+    fn a_default_preference_cannot_be_cleared_but_an_override_can() {
+        let request = |kind: &str, recording: Option<String>, model: Option<&str>| {
+            SetModelPreferenceRequest {
+                stage: "transcribe".into(),
+                scope: crate::dto::ModelPreferenceScope {
+                    kind: kind.into(),
+                    recording_id: recording,
+                },
+                engine: "openrouter".into(),
+                model_id: model.map(str::to_owned),
+            }
+        };
+        let id = RecordingId::new().to_string();
+        assert!(preference(&request("default", None, None)).is_err());
+        assert!(preference(&request("default", None, Some("m"))).is_ok());
+        assert!(preference(&request("recording", Some(id.clone()), None)).is_ok());
+        assert!(preference(&request("recording", None, Some("m"))).is_err());
+        assert!(preference(&request("default", Some(id), Some("m"))).is_err());
+        assert!(preference(&request("everywhere", None, Some("m"))).is_err());
     }
 }
 

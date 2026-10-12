@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/verify_model.request.schema.json",
+  "title": "verify_model.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "model_id",
+    "task",
+    "cost_acknowledged"
+  ],
+  "properties": {
+    "model_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "task": {
+      "type": "string",
+      "enum": [
+        "transcription",
+        "text_generation"
+      ]
+    },
+    "cost_acknowledged": {
+      "type": "boolean"
+    }
+  }
+}

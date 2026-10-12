@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "pinned_on": "2026-10-11",
+  "note": "The V1 pinned candidate list (spec 10.1). Being on this list means our contract fixtures cover the wire shape named in `fixture_id` for the family named in `candidate_family`. It does NOT mean the model is Verified: verification requires an observed exchange recorded by the capability smoke test (spec 10.2). Discovery failures degrade to exactly this list.",
+  "transcription": [
+    {
+      "model_id": "openai/whisper-1",
+      "display_name": "OpenAI Whisper v1 (transcriptions endpoint)",
+      "candidate_family": "multipart_stt",
+      "fixture_id": "transcription-success-segments",
+      "notes": "Dedicated transcription endpoint candidate. The public chat catalog does not list it, so nothing about it is assumed beyond the endpoint contract our fixtures cover."
+    },
+    {
+      "model_id": "openai/gpt-4o-mini-transcribe",
+      "display_name": "OpenAI GPT-4o mini transcribe",
+      "candidate_family": "multipart_stt",
+      "fixture_id": "transcription-success-text-only",
+      "notes": "Transcription endpoint candidate observed to return text without offsets in the captured fixture shape."
+    },
+    {
+      "model_id": "openai/gpt-audio",
+      "display_name": "OpenAI GPT Audio",
+      "candidate_family": "audio_chat",
+      "fixture_id": "model-endpoints-gpt-audio",
+      "notes": "Catalog declares audio as an input modality and prices audio input per token; the catalog does not state which endpoint family it implements."
+    },
+    {
+      "model_id": "openai/gpt-audio-mini",
+      "display_name": "OpenAI GPT Audio mini",
+      "candidate_family": "audio_chat",
+      "fixture_id": "model-endpoints-gpt-audio",
+      "notes": "Same family candidate as gpt-audio, cheaper audio input price in the captured catalog."
+    },
+    {
+      "model_id": "google/gemini-2.5-flash",
+      "display_name": "Google Gemini 2.5 Flash",
+      "candidate_family": "audio_chat",
+      "fixture_id": "model-endpoints-gpt-audio",
+      "notes": "Catalog declares audio input and a separate audio price key."
+    },
+    {
+      "model_id": "mistralai/voxtral-small-24b-2507",
+      "display_name": "Mistral Voxtral Small 24B",
+      "candidate_family": "audio_chat",
+      "fixture_id": "model-endpoints-gpt-audio",
+      "notes": "Catalog declares audio input priced per audio token."
+    }
+  ],
+  "text_generation": [
+    {
+      "model_id": "google/gemini-2.5-flash",
+      "display_name": "Google Gemini 2.5 Flash",
+      "candidate_family": "unsupported",
+      "fixture_id": "chat-completion-structured",
+      "notes": "Text generation does not use an audio request family; `unsupported` records that no audio contract applies (App. A.3)."
+    },
+    {
+      "model_id": "google/gemini-2.5-pro",
+      "display_name": "Google Gemini 2.5 Pro",
+      "candidate_family": "unsupported",
+      "fixture_id": "chat-completion-structured",
+      "notes": "Larger context candidate for consolidated summaries."
+    }
+  ]
+}

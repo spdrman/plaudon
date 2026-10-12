@@ -28,6 +28,7 @@ uuid = { workspace = true }
 async-trait = { workspace = true }
 uuid = { workspace = true }
 sqlx = { workspace = true }
+plaudon-ai-contracts = { workspace = true }
 proptest = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true }

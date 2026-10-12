@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/set_cloud_budget.response.schema.json",
+  "title": "set_cloud_budget.response",
+  "$ref": "#/$defs/cloud_budget",
+  "$defs": {
+    "money_amount": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "amount",
+        "currency"
+      ],
+      "properties": {
+        "amount": {
+          "type": "string",
+          "pattern": "^-?\\d+(\\.\\d+)?$"
+        },
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Z]{3}$"
+        }
+      }
+    },
+    "cost_value": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "confidence",
+        "amount"
+      ],
+      "properties": {
+        "confidence": {
+          "type": "string",
+          "enum": [
+            "unknown",
+            "estimated",
+            "finalized"
+          ]
+        },
+        "amount": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/money_amount"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "cloud_budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "per_job_limit",
+        "monthly_limit",
+        "month_to_date",
+        "blocks_dispatch",
+        "enforcement_note"
+      ],
+      "properties": {
+        "per_job_limit": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/money_amount"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "monthly_limit": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/money_amount"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "month_to_date": {
+          "$ref": "#/$defs/cost_value"
+        },
+        "blocks_dispatch": {
+          "type": "boolean"
+        },
+        "enforcement_note": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

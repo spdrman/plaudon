@@ -52,7 +52,8 @@
         "error",
         "cost_acknowledgement_required",
         "provider_request_id",
-        "output_link"
+        "output_link",
+        "cost"
       ],
       "properties": {
         "job_id": {
@@ -171,6 +172,55 @@
                   "type": "string"
                 }
               }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cost": {
+          "$ref": "#/$defs/cost_value"
+        }
+      }
+    },
+    "money_amount": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "amount",
+        "currency"
+      ],
+      "properties": {
+        "amount": {
+          "type": "string",
+          "pattern": "^-?\\d+(\\.\\d+)?$"
+        },
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Z]{3}$"
+        }
+      }
+    },
+    "cost_value": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "confidence",
+        "amount"
+      ],
+      "properties": {
+        "confidence": {
+          "type": "string",
+          "enum": [
+            "unknown",
+            "estimated",
+            "finalized"
+          ]
+        },
+        "amount": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/money_amount"
             },
             {
               "type": "null"

@@ -1,0 +1,19 @@
+{
+  "_shape": "Successful POST /audio/transcriptions response carrying segment and word offsets plus a speaker label.",
+  "status": 200,
+  "headers": { "x-request-id": "req_01HZY8WORDS" },
+  "body": {
+    "text": "Good morning everyone. Let us start.",
+    "language": "en",
+    "duration": 3.52,
+    "segments": [
+      { "id": 0, "start": 0.0, "end": 1.84, "text": "Good morning everyone.", "speaker": "A", "confidence": 0.93 },
+      { "id": 1, "start": 1.84, "end": 3.52, "text": "Let us start.", "speaker": "B", "confidence": 0.88 }
+    ],
+    "words": [
+      { "word": "Good", "start": 0.0, "end": 0.32 },
+      { "word": "morning", "start": 0.32, "end": 0.81 }
+    ],
+    "usage": { "input_audio_seconds": 3.52 }
+  }
+}

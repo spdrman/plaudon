@@ -84,6 +84,13 @@ pub const MIGRATIONS: &[Migration] = &[
         name: "transcript_tools",
         sql: include_str!("../migrations/0400_transcript_tools.sql"),
     },
+    // OpenRouter BYOK: capability registry, model selection and per-route
+    // retention policies. Versions 450-499 are reserved for EPIC G.
+    Migration {
+        version: 450,
+        name: "cloud_ai",
+        sql: include_str!("../migrations/0450_cloud_ai.sql"),
+    },
     // 800+ is EPIC K's range: source reconciliation and watched folders.
     Migration {
         version: 800,

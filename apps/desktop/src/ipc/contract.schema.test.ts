@@ -198,6 +198,93 @@ describe("responses produced by the reference backend satisfy the schemas", () =
     );
   });
 
+  it("validates the cloud commands", async () => {
+    const backend = new FakeBackend({ recordings: 1, segmentsPerTranscript: 2 });
+    backend.enableCloud();
+
+    const modelsRequest = { stage: "transcribe", engine: null };
+    validate("list_models.request.schema.json", modelsRequest);
+    validate("list_models.response.schema.json", await backend.invoke("list_models", modelsRequest));
+
+    const budgetRequest = { per_job_limit: "1.50", monthly_limit: null, currency: "USD" };
+    validate("set_cloud_budget.request.schema.json", budgetRequest);
+    validate(
+      "set_cloud_budget.response.schema.json",
+      await backend.invoke("set_cloud_budget", budgetRequest),
+    );
+
+    const consentRequest = {
+      purpose: "transcription",
+      content_type: "audio_bytes",
+      scope: { kind: "model_policy", recording_id: null },
+      model_id: "acme/scribe-2",
+      downstream_provider: "Acme Speech",
+      require_zero_retention: false,
+      disclosure_version: "2026-02-01",
+    };
+    validate("grant_cloud_consent.request.schema.json", consentRequest);
+    const granted = (await backend.invoke("grant_cloud_consent", consentRequest)) as {
+      consent_id: string;
+    };
+    validate("grant_cloud_consent.response.schema.json", granted);
+    // The grant must now be visible on the capabilities payload.
+    validate("get_capabilities.response.schema.json", await backend.invoke("get_capabilities", {}));
+
+    const preferenceRequest = {
+      stage: "transcribe",
+      scope: { kind: "recording", recording_id: "rec-00001" },
+      engine: "openrouter",
+      model_id: "acme/scribe-mini",
+    };
+    validate("set_model_preference.request.schema.json", preferenceRequest);
+    validate(
+      "set_model_preference.response.schema.json",
+      await backend.invoke("set_model_preference", preferenceRequest),
+    );
+
+    const startRequest = {
+      recording_id: "rec-00001",
+      stage: "transcribe",
+      model_override: { engine: "openrouter", model_id: "acme/scribe-2" },
+      cost_acknowledged: false,
+      rerun: true,
+    };
+    validate("start_processing.request.schema.json", startRequest);
+    validate(
+      "start_processing.response.schema.json",
+      await backend.invoke("start_processing", startRequest),
+    );
+
+    const usageRequest = { from: "2026-02-01T00:00:00Z", to: "2026-03-01T00:00:00Z" };
+    validate("get_usage.request.schema.json", usageRequest);
+    validate("get_usage.response.schema.json", await backend.invoke("get_usage", usageRequest));
+
+    const verifyRequest = {
+      model_id: "vendor/catalog-audio-xl",
+      task: "transcription",
+      cost_acknowledged: true,
+    };
+    validate("verify_model.request.schema.json", verifyRequest);
+    backend.addConsent({ model_id: "vendor/catalog-audio-xl", scope_kind: "model_policy" });
+    validate(
+      "verify_model.response.schema.json",
+      await backend.invoke("verify_model", verifyRequest),
+    );
+
+    const revokeRequest = { consent_id: granted.consent_id };
+    validate("revoke_cloud_consent.request.schema.json", revokeRequest);
+    validate(
+      "revoke_cloud_consent.response.schema.json",
+      await backend.invoke("revoke_cloud_consent", revokeRequest),
+    );
+
+    // `list_jobs` carries the new cost field on every job.
+    validate(
+      "list_jobs.response.schema.json",
+      await backend.invoke("list_jobs", { cursor: null, limit: 50, states: [], kinds: [] }),
+    );
+  });
+
   it("validates emitted events against the event schema", () => {
     const backend = new FakeBackend({ recordings: 1 });
     const event = backend.emit("library.changed", { recording_id: "rec-00001" });

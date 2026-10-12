@@ -10,16 +10,23 @@ import type {
   ActivityEntry,
   ActivityPage,
   Capabilities,
+  CloudBudget,
   CommandName,
+  ConsentSummary,
+  CostValue,
   ErrorEnvelope,
   EventKind,
   ImportOutcome,
   JobSummary,
+  ListModelsResponse,
+  ModelCard,
+  MoneyAmount,
   NotificationSettings,
   PlaudConnectorSnapshot,
   PlaudImportOutcome,
   PlaudListResponse,
   Preferences,
+  ProcessingStage,
   RecordingDetail,
   RecordingPage,
   RecordingSummary,
@@ -27,8 +34,15 @@ import type {
   TranscriptRevisionRef,
   TranscriptSegment,
   UiEvent,
+  UsageAttempt,
+  UsageTotals,
 } from "../ipc/contract";
 import type { Transport, Unlisten } from "../ipc/client";
+import {
+  CAPABILITY_CHECK_CLIP_MS,
+  CONSENT_PURPOSE_BY_STAGE,
+} from "../features/cloud/cloudPresentation";
+import { estimateDispatchCost, parseMicros, usd } from "../features/cloud/money";
 
 export interface FakeRecording extends RecordingDetail {
   segments: Map<string, TranscriptSegment[]>;
@@ -40,6 +54,10 @@ export interface FakeBackendOptions {
   capabilities?: Partial<Capabilities>;
   /** Simulated OS notification permission. */
   osNotificationPermission?: "granted" | "denied" | "not_requested" | "unsupported";
+  /** Replaces the seeded cloud catalogue for the listed stages. */
+  models?: Partial<Record<ProcessingStage, ModelCard[]>>;
+  /** Forces `list_models` to answer from the pinned allowlist (§10.1). */
+  catalogDegradedReason?: ListModelsResponse["degraded_reason"];
 }
 
 const DEFAULT_NOTIFICATIONS: NotificationSettings = {
@@ -51,6 +69,155 @@ const DEFAULT_NOTIFICATIONS: NotificationSettings = {
     cloud_budget_exceeded: true,
   },
 };
+
+/** §10.4: the fixed enforcement note the backend always returns with a budget. */
+export const CLOUD_BUDGET_ENFORCEMENT_NOTE =
+  "Local budgets cannot prevent charges made elsewhere with the same key. Set an OpenRouter-side key limit for hard enforcement.";
+
+/** Version of the privacy statement the seeded consent flow records (§4.4 #5). */
+export const DISCLOSURE_VERSION = "2026-02-01";
+
+/** Used by the seeded catalogue to express sub-cent unit prices exactly. */
+export { parseMicros, usd } from "../features/cloud/money";
+
+function cloudModel(partial: Partial<ModelCard> & Pick<ModelCard, "model_id">): ModelCard {
+  return {
+    display_name: partial.model_id,
+    engine: "openrouter",
+    request_family: "unknown",
+    verification: "not_verified",
+    verification_reason: "catalog_only",
+    fixture_id: null,
+    validated_at: null,
+    features: {
+      segments: "unknown",
+      word_timestamps: "unknown",
+      diarization: "unknown",
+      language_detection: "unknown",
+    },
+    locales: null,
+    max_input_bytes: null,
+    max_duration_ms: null,
+    pricing: { basis: "other", unit_label: "pricing not published", amount_per_unit: null },
+    privacy: {
+      relay: "openrouter",
+      downstream_provider: null,
+      retention: "unknown",
+      retention_days: null,
+      zero_retention_available: false,
+    },
+    selectable: false,
+    ...partial,
+  };
+}
+
+/**
+ * Seeded catalogue. It deliberately mixes a verified, dispatchable model with
+ * models that are catalogue-only or whose privacy route never resolved, so the
+ * picker's honest states are exercised by default.
+ */
+function seedModels(): Partial<Record<ProcessingStage, ModelCard[]>> {
+  const verifiedStt = cloudModel({
+    model_id: "acme/scribe-2",
+    display_name: "Scribe 2",
+    request_family: "multipart_stt",
+    verification: "verified",
+    verification_reason: null,
+    fixture_id: "fixture-stt-001",
+    validated_at: "2026-01-20T08:00:00Z",
+    features: {
+      segments: "yes",
+      word_timestamps: "yes",
+      diarization: "no",
+      language_detection: "yes",
+    },
+    locales: ["en", "de"],
+    max_input_bytes: 26_214_400,
+    max_duration_ms: 3_600_000,
+    pricing: {
+      basis: "per_audio_second",
+      unit_label: "USD per audio second",
+      amount_per_unit: usd(100),
+    },
+    privacy: {
+      relay: "openrouter",
+      downstream_provider: "Acme Speech",
+      retention: "limited_retention",
+      retention_days: 30,
+      zero_retention_available: true,
+    },
+    selectable: true,
+  });
+  const secondStt = cloudModel({
+    model_id: "acme/scribe-mini",
+    display_name: "Scribe Mini",
+    request_family: "multipart_stt",
+    verification: "verified",
+    verification_reason: null,
+    fixture_id: "fixture-stt-002",
+    validated_at: "2026-01-21T08:00:00Z",
+    features: {
+      segments: "yes",
+      word_timestamps: "no",
+      diarization: "no",
+      language_detection: "unknown",
+    },
+    locales: ["en"],
+    max_input_bytes: 10_485_760,
+    max_duration_ms: 1_800_000,
+    pricing: {
+      basis: "per_audio_second",
+      unit_label: "USD per audio second",
+      amount_per_unit: usd(40),
+    },
+    privacy: {
+      relay: "openrouter",
+      downstream_provider: "Acme Speech",
+      retention: "zero_retention",
+      retention_days: null,
+      zero_retention_available: true,
+    },
+    selectable: true,
+  });
+  const unresolvedRoute = cloudModel({
+    model_id: "nimbus/audio-chat-preview",
+    display_name: "Nimbus Audio Chat (preview)",
+    request_family: "audio_chat",
+    verification: "not_verified",
+    verification_reason: "privacy_route_unresolved",
+    pricing: {
+      basis: "per_token",
+      unit_label: "USD per audio input token",
+      amount_per_unit: usd(2),
+    },
+  });
+  const catalogOnly = cloudModel({
+    model_id: "vendor/catalog-audio-xl",
+    display_name: "Catalog Audio XL",
+  });
+  const summarizer = cloudModel({
+    model_id: "acme/summarize-1",
+    display_name: "Summarize 1",
+    request_family: "audio_chat",
+    verification: "verified",
+    verification_reason: null,
+    fixture_id: "fixture-text-001",
+    validated_at: "2026-01-22T08:00:00Z",
+    pricing: { basis: "per_token", unit_label: "USD per output token", amount_per_unit: usd(5) },
+    privacy: {
+      relay: "openrouter",
+      downstream_provider: "Acme Text",
+      retention: "provider_default",
+      retention_days: null,
+      zero_retention_available: false,
+    },
+    selectable: true,
+  });
+  return {
+    transcribe: [verifiedStt, secondStt, unresolvedRoute, catalogOnly],
+    consolidated_summary: [summarizer, catalogOnly],
+  };
+}
 
 export function envelope(
   code: string,
@@ -150,6 +317,31 @@ export class FakeBackend implements Transport {
   /** Overrides the per-ID outcome of `plaud_import`. */
   plaudImportOutcome: ((externalId: string) => PlaudImportOutcome) | null = null;
 
+  /* ------------------------------------------------------- cloud state */
+
+  /** Cloud catalogue per stage; replaceable wholesale by tests. */
+  models: Partial<Record<ProcessingStage, ModelCard[]>> = seedModels();
+  catalogFetchedAt: string | null = "2026-02-01T08:55:00Z";
+  catalogDegradedReason: ListModelsResponse["degraded_reason"] = null;
+  /** Per-task defaults (§10.2); a recording override never writes here. */
+  defaultModelByStage: Partial<Record<ProcessingStage, string>> = {
+    transcribe: "acme/scribe-2",
+    consolidated_summary: "acme/summarize-1",
+  };
+  /** Per-recording overrides keyed `${recording_id}:${stage}`. */
+  recordingModelOverrides = new Map<string, { engine: string; model_id: string }>();
+  consents: ConsentSummary[] = [];
+  attempts: UsageAttempt[] = [];
+  budget: CloudBudget = {
+    per_job_limit: null,
+    monthly_limit: null,
+    month_to_date: { confidence: "unknown", amount: null },
+    blocks_dispatch: false,
+    enforcement_note: CLOUD_BUDGET_ENFORCEMENT_NOTE,
+  };
+  /** When true, `start_processing` demands an explicit cost acknowledgement. */
+  requireCostAcknowledgement = false;
+
   #seq = 0;
   #handlers = new Map<EventKind, Set<(e: UiEvent) => void>>();
   #capabilities: Capabilities;
@@ -222,8 +414,13 @@ export class FakeBackend implements Transport {
       permissions: { notifications: "not_requested", bluetooth: "not_requested" },
       preferences: this.preferences,
       openrouter_key_present: false,
+      cloud_consents: [],
       ...options.capabilities,
     };
+    if (options.models) this.models = { ...this.models, ...options.models };
+    if (options.catalogDegradedReason !== undefined) {
+      this.degradeCatalog(options.catalogDegradedReason);
+    }
     this.seed(options.recordings ?? 0, options.segmentsPerTranscript ?? 0);
   }
 
@@ -307,6 +504,7 @@ export class FakeBackend implements Transport {
       cost_acknowledgement_required: false,
       provider_request_id: null,
       output_link: null,
+      cost: { confidence: "unknown", amount: null },
       ...job,
     };
     this.jobs.push(full);
@@ -366,7 +564,12 @@ export class FakeBackend implements Transport {
     const request = (args ?? {}) as Record<string, any>;
     switch (command) {
       case "get_capabilities":
-        return { ...this.#capabilities, preferences: this.preferences, openrouter_key_present: this.openRouterKeyPresent };
+        return {
+          ...this.#capabilities,
+          preferences: this.preferences,
+          openrouter_key_present: this.openRouterKeyPresent,
+          cloud_consents: this.consents.map((grant) => ({ ...grant })),
+        };
       case "list_recordings":
         return this.#listRecordings(request);
       case "get_recording": {
@@ -485,6 +688,22 @@ export class FakeBackend implements Transport {
         };
       case "list_source_artifacts":
         return { artifacts: [] };
+      case "list_models":
+        return this.#listModels(request);
+      case "get_usage":
+        return this.#getUsage(request);
+      case "set_cloud_budget":
+        return this.#setBudget(request);
+      case "grant_cloud_consent":
+        return this.#grantConsent(request);
+      case "revoke_cloud_consent":
+        return this.#revokeConsent(request);
+      case "set_model_preference":
+        return this.#setModelPreference(request);
+      case "start_processing":
+        return this.#startProcessing(request);
+      case "verify_model":
+        return this.#verifyModel(request);
       default: {
         const never: never = command;
         throw envelope("INTERNAL_ERROR", `No such command: ${String(never)}`);
@@ -702,6 +921,447 @@ export class FakeBackend implements Transport {
     this.emit("job.updated", { job_id: job.job_id });
     return job;
   }
+
+  /* -------------------------------------------------------- cloud knobs */
+
+  setModels(stage: ProcessingStage, models: ModelCard[]): void {
+    this.models = { ...this.models, [stage]: models };
+  }
+
+  addModel(
+    stage: ProcessingStage,
+    partial: Partial<ModelCard> & Pick<ModelCard, "model_id">,
+  ): ModelCard {
+    const card = cloudModel(partial);
+    this.models = { ...this.models, [stage]: [...(this.models[stage] ?? []), card] };
+    return card;
+  }
+
+  /** §10.1: discovery failed, so answers come from the pinned allowlist. */
+  degradeCatalog(reason: ListModelsResponse["degraded_reason"]): void {
+    this.catalogDegradedReason = reason;
+    this.catalogFetchedAt = reason === null ? "2026-02-01T08:55:00Z" : null;
+  }
+
+  /** Turns off local-only mode and records a key, so cloud dispatch is possible. */
+  enableCloud(): void {
+    this.preferences = { ...this.preferences, local_only_mode: false };
+    this.openRouterKeyPresent = true;
+  }
+
+  addConsent(
+    partial: Partial<ConsentSummary> & Pick<ConsentSummary, "model_id">,
+  ): ConsentSummary {
+    this.#idCounter += 1;
+    const grant: ConsentSummary = {
+      consent_id: `consent-${this.#idCounter}`,
+      purpose: "transcription",
+      content_type: "audio_bytes",
+      scope_kind: "model_policy",
+      recording_id: null,
+      downstream_provider: null,
+      required_retention: null,
+      disclosure_version: DISCLOSURE_VERSION,
+      granted_at: this.#stamp(),
+      expires_at: null,
+      revoked_at: null,
+      ...partial,
+    };
+    this.consents.push(grant);
+    return grant;
+  }
+
+  addAttempt(partial: Partial<UsageAttempt> & Pick<UsageAttempt, "model_id">): UsageAttempt {
+    this.#idCounter += 1;
+    const attempt: UsageAttempt = {
+      attempt_id: `attempt-${this.#idCounter}`,
+      job_id: "job-0",
+      request_family: "multipart_stt",
+      dispatch_state: "completed",
+      cost: { confidence: "unknown", amount: null },
+      provider_request_id: null,
+      created_at: this.#stamp(),
+      responded_at: null,
+      possibly_billed: false,
+      ...partial,
+    };
+    this.attempts.push(attempt);
+    return attempt;
+  }
+
+  /* ----------------------------------------------------- cloud handlers */
+
+  #stamp(): string {
+    this.#idCounter += 1;
+    return `2026-02-01T10:${String(Math.floor(this.#idCounter / 60) % 60).padStart(2, "0")}:${String(
+      this.#idCounter % 60,
+    ).padStart(2, "0")}Z`;
+  }
+
+  #modelsFor(stage: ProcessingStage, engine: string | null): ModelCard[] {
+    const all = this.models[stage] ?? [];
+    return engine === null ? all : all.filter((model) => model.engine === engine);
+  }
+
+  #findModel(stage: ProcessingStage, modelId: string): ModelCard | null {
+    return this.#modelsFor(stage, null).find((model) => model.model_id === modelId) ?? null;
+  }
+
+  #anyModel(modelId: string): ModelCard | null {
+    for (const cards of Object.values(this.models)) {
+      const hit = cards?.find((model) => model.model_id === modelId);
+      if (hit) return hit;
+    }
+    return null;
+  }
+
+  #listModels(request: Record<string, any>): ListModelsResponse {
+    const stage = request.stage as ProcessingStage;
+    const degraded = this.catalogDegradedReason;
+    return {
+      models: this.#modelsFor(stage, request.engine ?? null),
+      catalog_source: degraded === null ? "live" : "pinned_allowlist",
+      catalog_fetched_at: degraded === null ? this.catalogFetchedAt : null,
+      degraded_reason: degraded,
+      default_model_id: this.defaultModelByStage[stage] ?? null,
+    };
+  }
+
+  #effectiveModel(stage: ProcessingStage, recordingId: string | null): ModelCard | null {
+    if (recordingId) {
+      const override = this.recordingModelOverrides.get(`${recordingId}:${stage}`);
+      if (override) return this.#findModel(stage, override.model_id);
+    }
+    const fallback = this.defaultModelByStage[stage];
+    return fallback ? this.#findModel(stage, fallback) : null;
+  }
+
+  #budgetSnapshot(): CloudBudget {
+    return { ...this.budget, month_to_date: totalsToCost(usageTotals(this.attempts)) };
+  }
+
+  #setBudget(request: Record<string, any>): CloudBudget {
+    if (request.currency !== "USD") {
+      throw envelope("INVALID_ARGUMENT", "Budgets are only supported in USD in this version.");
+    }
+    const limits: Array<["per_job_limit" | "monthly_limit", MoneyAmount | null]> = [];
+    for (const key of ["per_job_limit", "monthly_limit"] as const) {
+      const raw = request[key];
+      if (raw === null || raw === undefined) {
+        limits.push([key, null]);
+        continue;
+      }
+      const micros = parseMicros(String(raw));
+      if (micros === null) {
+        throw envelope("INVALID_ARGUMENT", "Enter an amount such as 2.50, or leave it empty.");
+      }
+      limits.push([key, usd(micros)]);
+    }
+    const perJob = limits[0]![1];
+    const monthly = limits[1]![1];
+    this.budget = {
+      ...this.budget,
+      per_job_limit: perJob,
+      monthly_limit: monthly,
+      blocks_dispatch: perJob !== null || monthly !== null,
+      enforcement_note: CLOUD_BUDGET_ENFORCEMENT_NOTE,
+    };
+    return this.#budgetSnapshot();
+  }
+
+  #getUsage(request: Record<string, any>) {
+    const from = String(request.from ?? "");
+    const to = String(request.to ?? "");
+    const inRange = this.attempts.filter((a) => a.created_at >= from && a.created_at < to);
+    const ids = [...new Set(inRange.map((a) => a.model_id))].sort();
+    return {
+      from,
+      to,
+      totals: usageTotals(inRange),
+      by_model: ids.map((model_id) => {
+        const rows = inRange.filter((a) => a.model_id === model_id);
+        return { model_id, attempts: rows.length, ...usageTotals(rows) };
+      }),
+      attempts: inRange.map((a) => ({ ...a })),
+      budget: this.#budgetSnapshot(),
+    };
+  }
+
+  #grantConsent(request: Record<string, any>) {
+    const scope = request.scope ?? { kind: "ask_every_time", recording_id: null };
+    if (scope.kind === "recording" && !scope.recording_id) {
+      throw envelope("INVALID_ARGUMENT", "A recording-scoped grant needs a recording.");
+    }
+    const model = this.#anyModel(String(request.model_id));
+    if (request.require_zero_retention === true && !(model?.privacy.zero_retention_available ?? false)) {
+      throw envelope(
+        "POLICY_UNRESOLVED",
+        "Zero retention could not be confirmed for this exact route, so nothing was sent.",
+        { action: "CHOOSE_ANOTHER_MODEL" },
+      );
+    }
+    const grant = this.addConsent({
+      purpose: request.purpose,
+      content_type: request.content_type,
+      scope_kind: scope.kind,
+      recording_id: scope.recording_id ?? null,
+      model_id: String(request.model_id),
+      downstream_provider: request.downstream_provider ?? null,
+      required_retention:
+        request.require_zero_retention === true ? "zero_retention" : model?.privacy.retention ?? null,
+      disclosure_version: String(request.disclosure_version),
+    });
+    return {
+      consent_id: grant.consent_id,
+      scope_kind: grant.scope_kind,
+      granted_at: grant.granted_at,
+      expires_at: grant.expires_at,
+    };
+  }
+
+  #revokeConsent(request: Record<string, any>) {
+    const grant = this.consents.find((c) => c.consent_id === request.consent_id);
+    if (!grant) throw envelope("RECORD_NOT_FOUND", "That consent grant no longer exists.");
+    grant.revoked_at = this.#stamp();
+    return { ok: true };
+  }
+
+  #setModelPreference(request: Record<string, any>) {
+    const stage = request.stage as ProcessingStage;
+    const scope = request.scope ?? { kind: "default", recording_id: null };
+    const modelId: string | null = request.model_id ?? null;
+    if (modelId !== null) {
+      const model = this.#findModel(stage, modelId);
+      if (!model) {
+        throw envelope("MODEL_UNAVAILABLE", "That model is not offered for this stage.", {
+          action: "CHOOSE_ANOTHER_MODEL",
+        });
+      }
+      if (!model.selectable) {
+        throw envelope(
+          "CAPABILITY_UNVERIFIED",
+          "This model has not passed a capability smoke test on the request contract it would use, so it cannot be selected.",
+          { action: "CHOOSE_ANOTHER_MODEL" },
+        );
+      }
+    }
+    if (scope.kind === "recording") {
+      if (!scope.recording_id) {
+        throw envelope("INVALID_ARGUMENT", "A recording override needs a recording.");
+      }
+      this.#requireRecording(scope.recording_id);
+      const key = `${scope.recording_id}:${stage}`;
+      if (modelId === null) this.recordingModelOverrides.delete(key);
+      else this.recordingModelOverrides.set(key, { engine: String(request.engine), model_id: modelId });
+    } else {
+      if (modelId === null) {
+        throw envelope("INVALID_ARGUMENT", "Choose a model; the task default cannot be empty.");
+      }
+      this.defaultModelByStage = { ...this.defaultModelByStage, [stage]: modelId };
+    }
+    return {
+      stage,
+      scope_kind: scope.kind,
+      recording_id: scope.recording_id ?? null,
+      engine: String(request.engine),
+      model_id: modelId,
+      effective_model: this.#effectiveModel(stage, scope.recording_id ?? null),
+    };
+  }
+
+  #startProcessing(request: Record<string, any>) {
+    const rec = this.#requireRecording(request.recording_id);
+    const stage = request.stage as ProcessingStage;
+    const override = request.model_override ?? null;
+    const model = override
+      ? this.#findModel(stage, String(override.model_id))
+      : this.#effectiveModel(stage, rec.recording_id);
+    if (!model) {
+      throw envelope("MODEL_UNAVAILABLE", "No model is selected for this stage.", {
+        action: "CHOOSE_ANOTHER_MODEL",
+      });
+    }
+    if (!model.selectable) {
+      throw envelope(
+        "CAPABILITY_UNVERIFIED",
+        "This model has not passed a capability smoke test, so nothing was dispatched.",
+        { action: "CHOOSE_ANOTHER_MODEL" },
+      );
+    }
+    const cloud = model.engine === "openrouter";
+    if (cloud && this.preferences.local_only_mode) {
+      throw envelope("LOCAL_ONLY_MODE", "Local-only mode is on, so nothing was sent.", {
+        action: "REVIEW_LOCAL_ONLY_MODE",
+      });
+    }
+    const estimate = estimateDispatchCost(model, rec.duration_ms);
+    if (this.requireCostAcknowledgement && request.cost_acknowledged !== true) {
+      throw envelope(
+        "COST_ACKNOWLEDGEMENT_REQUIRED",
+        "A previous attempt may already have been billed. Confirm the cost to run this stage again.",
+        { action: "REVIEW_CONSENT" },
+      );
+    }
+    const blocked = this.#budgetBlock(estimate);
+    if (blocked) {
+      throw envelope("BUDGET_EXCEEDED", blocked, { action: "OPEN_SETTINGS" });
+    }
+    if (
+      cloud &&
+      !this.#consentCovers(model.model_id, rec.recording_id, CONSENT_PURPOSE_BY_STAGE[stage])
+    ) {
+      throw envelope(
+        "CONSENT_REQUIRED",
+        "This run would send content to a cloud provider. Review and approve it first.",
+        { action: "REVIEW_CONSENT" },
+      );
+    }
+    const job = this.addJob({
+      kind: stage === "transcribe" || stage === "diarize" ? "transcribe" : "summarize",
+      state: "queued",
+      stage,
+      label: rec.title,
+      recording_id: rec.recording_id,
+      cost: estimate,
+    });
+    this.addAttempt({
+      job_id: job.job_id,
+      model_id: model.model_id,
+      request_family: model.request_family,
+      dispatch_state: cloud ? "not_sent" : "completed",
+      cost: estimate,
+    });
+    this.emit("job.updated", { job_id: job.job_id, recording_id: rec.recording_id });
+    return {
+      job_id: job.job_id,
+      estimated_cost: estimate,
+      dispatch: "queued" as const,
+      blocked_reason: null,
+    };
+  }
+
+  /**
+   * An active grant for this model and purpose. `recordingId` is `null` for a
+   * dispatch that belongs to no recording, which only a model-policy grant can
+   * cover. The purpose follows the content type — anything carrying audio
+   * bytes is `transcription`, never `credential_validation`, which §4.4(3)
+   * reserves for a key check that sends no recording-derived content.
+   */
+  #consentCovers(
+    modelId: string,
+    recordingId: string | null,
+    purpose: ConsentSummary["purpose"],
+  ): boolean {
+    return this.consents.some(
+      (grant) =>
+        grant.revoked_at === null &&
+        grant.model_id === modelId &&
+        grant.purpose === purpose &&
+        (grant.scope_kind === "model_policy" ||
+          (grant.scope_kind === "recording" &&
+            recordingId !== null &&
+            grant.recording_id === recordingId)),
+    );
+  }
+
+  /**
+   * ADR-0022 capability check: one real bundled-fixture request. It is the only
+   * path that can turn `not_verified` into `verified`, and it is billable, so
+   * it needs consent, budget headroom and an explicit cost acknowledgement.
+   */
+  #verifyModel(request: Record<string, any>) {
+    const modelId = String(request.model_id ?? "");
+    const model = this.#anyModel(modelId);
+    if (!model) {
+      throw envelope("MODEL_UNAVAILABLE", "That model is not in the catalogue.", {
+        action: "CHOOSE_ANOTHER_MODEL",
+      });
+    }
+    if (this.preferences.local_only_mode) {
+      throw envelope(
+        "LOCAL_ONLY_MODE",
+        "Local-only mode is on, so the capability check was not sent.",
+        { action: "REVIEW_LOCAL_ONLY_MODE" },
+      );
+    }
+    if (!this.#consentCovers(modelId, null, "transcription")) {
+      throw envelope(
+        "CONSENT_REQUIRED",
+        "The capability check sends test audio to this provider. Review and approve it first.",
+        { action: "REVIEW_CONSENT" },
+      );
+    }
+    const cost = estimateDispatchCost(model, CAPABILITY_CHECK_CLIP_MS);
+    const blocked = this.#budgetBlock(cost);
+    if (blocked) throw envelope("BUDGET_EXCEEDED", blocked, { action: "OPEN_SETTINGS" });
+    if (request.cost_acknowledged !== true) {
+      throw envelope(
+        "COST_ACKNOWLEDGEMENT_REQUIRED",
+        "The capability check is a billable request. Confirm the cost to run it.",
+        { action: "REVIEW_CONSENT" },
+      );
+    }
+
+    // The exchange happened, so what was observed is now known.
+    const observed: CostValue =
+      cost.amount === null ? { confidence: "unknown", amount: null }
+        : { confidence: "finalized", amount: cost.amount };
+    const providerRequestId = `provider-req-${this.#idCounter + 1}`;
+    const verified: ModelCard = {
+      ...model,
+      verification: "verified",
+      verification_reason: null,
+      fixture_id: `fixture-capability-${modelId.replace(/[^a-z0-9]+/gi, "-")}`,
+      validated_at: this.#stamp(),
+      request_family:
+        model.request_family !== "unknown"
+          ? model.request_family
+          : request.task === "transcription"
+            ? "multipart_stt"
+            : "audio_chat",
+      selectable: true,
+    };
+    this.#replaceModel(modelId, verified);
+    this.addAttempt({
+      model_id: modelId,
+      request_family: verified.request_family,
+      dispatch_state: "completed",
+      cost: observed,
+      provider_request_id: providerRequestId,
+      responded_at: this.#stamp(),
+      possibly_billed: true,
+    });
+    return { model: verified, cost: observed, provider_request_id: providerRequestId };
+  }
+
+  #replaceModel(modelId: string, next: ModelCard): void {
+    const updated: Partial<Record<ProcessingStage, ModelCard[]>> = {};
+    for (const [stage, cards] of Object.entries(this.models) as Array<
+      [ProcessingStage, ModelCard[]]
+    >) {
+      updated[stage] = cards.map((card) => (card.model_id === modelId ? next : card));
+    }
+    this.models = updated;
+  }
+
+  /** Message describing the locally calculable limit this run would breach. */
+  #budgetBlock(estimate: CostValue): string | null {
+    if (estimate.amount === null) return null;
+    const cost = parseMicros(estimate.amount.amount) ?? 0;
+    const perJob = this.budget.per_job_limit;
+    if (perJob !== null && cost > (parseMicros(perJob.amount) ?? 0)) {
+      return `This run is estimated at ${estimate.amount.currency} ${estimate.amount.amount}, above your per-job limit of ${perJob.currency} ${perJob.amount}. Nothing was sent.`;
+    }
+    const monthly = this.budget.monthly_limit;
+    if (monthly !== null) {
+      const mtd = this.#budgetSnapshot().month_to_date.amount;
+      const spent = mtd === null ? 0 : parseMicros(mtd.amount) ?? 0;
+      if (spent + cost > (parseMicros(monthly.amount) ?? 0)) {
+        return `This run would take the month past your limit of ${monthly.currency} ${monthly.amount}. Nothing was sent.`;
+      }
+    }
+    return null;
+  }
 }
 
 function stripSegments(rec: FakeRecording): RecordingSummary {
@@ -774,4 +1434,47 @@ function fakeSha(seed: string): string {
     out += h1.toString(16).padStart(8, "0");
   }
   return out.slice(0, 64);
+}
+
+/**
+ * §10.4: finalized and estimated money are summed separately and attempts with
+ * no derivable cost are counted, never folded into a zero amount.
+ */
+export function usageTotals(attempts: readonly UsageAttempt[]): UsageTotals {
+  let finalized = 0;
+  let estimated = 0;
+  let finalizedSeen = false;
+  let estimatedSeen = false;
+  let unknown = 0;
+  for (const attempt of attempts) {
+    const micros = attempt.cost.amount === null ? null : parseMicros(attempt.cost.amount.amount);
+    if (attempt.cost.confidence === "finalized" && micros !== null) {
+      finalized += micros;
+      finalizedSeen = true;
+    } else if (attempt.cost.confidence === "estimated" && micros !== null) {
+      estimated += micros;
+      estimatedSeen = true;
+    } else {
+      unknown += 1;
+    }
+  }
+  return {
+    finalized: finalizedSeen ? usd(finalized) : null,
+    estimated: estimatedSeen ? usd(estimated) : null,
+    unknown_count: unknown,
+  };
+}
+
+/**
+ * Collapses split totals into the single month-to-date figure the budget
+ * carries. Any estimated component keeps the whole figure an estimate.
+ */
+export function totalsToCost(totals: UsageTotals): CostValue {
+  const finalized = totals.finalized === null ? null : parseMicros(totals.finalized.amount) ?? 0;
+  const estimated = totals.estimated === null ? null : parseMicros(totals.estimated.amount) ?? 0;
+  if (finalized === null && estimated === null) return { confidence: "unknown", amount: null };
+  return {
+    confidence: estimated === null ? "finalized" : "estimated",
+    amount: usd((finalized ?? 0) + (estimated ?? 0)),
+  };
 }

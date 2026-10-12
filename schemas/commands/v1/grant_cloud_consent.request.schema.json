@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/grant_cloud_consent.request.schema.json",
+  "title": "grant_cloud_consent.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "purpose",
+    "content_type",
+    "scope",
+    "model_id",
+    "downstream_provider",
+    "require_zero_retention",
+    "disclosure_version"
+  ],
+  "properties": {
+    "purpose": {
+      "type": "string",
+      "enum": [
+        "transcription",
+        "summarization",
+        "transcript_tool",
+        "credential_validation"
+      ]
+    },
+    "content_type": {
+      "type": "string",
+      "enum": [
+        "audio_bytes",
+        "transcript_text",
+        "metadata_only"
+      ]
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "recording_id"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "ask_every_time",
+            "recording",
+            "model_policy"
+          ]
+        },
+        "recording_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "model_id": {
+      "type": "string"
+    },
+    "downstream_provider": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "require_zero_retention": {
+      "type": "boolean"
+    },
+    "disclosure_version": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

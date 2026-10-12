@@ -16,6 +16,7 @@ plaudon-ai-whisper = { workspace = true }
 plaudon-audio = { workspace = true }
 async-trait = { workspace = true }
 plaudon-ai-contracts = { workspace = true }
+plaudon-ai-openrouter = { workspace = true }
 serde = { workspace = true }
 sha2 = { workspace = true }
 symphonia = { version = "0.5", default-features = false, features = [

@@ -2,7 +2,7 @@
 //!
 //! The shell owns three things and delegates everything else:
 //!
-//! * [`commands`] — narrow IPC commands (spec §15.2) that validate
+//! * [`commands`] — narrow IPC commands (spec §15.2, ADR-0020, ADR-0022) that validate
 //!   their arguments in Rust and answer with typed DTOs or the §15.4 error
 //!   envelope;
 //! * [`events`] — the §15.3 UI event stream, sequenced after the database
@@ -34,8 +34,8 @@ use plaudon_domain::error::AppError;
 use crate::backend::LocalBackend;
 use crate::events::{EventSink, TauriEventSink};
 use crate::ports::{
-    ActivityPort, CapabilitiesPort, ExportPort, ImportPort, JobsPort, LibraryPort, SearchPort,
-    SettingsPort, SourcesPort, SpeakersPort, TranscriptPort,
+    ActivityPort, CapabilitiesPort, CloudPort, ExportPort, ImportPort, JobsPort, LibraryPort,
+    SearchPort, SettingsPort, SourcesPort, SpeakersPort, TranscriptPort,
 };
 use crate::secrets::{KeyringSecretStore, SecretStore};
 
@@ -60,6 +60,8 @@ pub struct AppPorts {
     pub export: Arc<dyn ExportPort>,
     /// The PLAUD cloud connector and watched folders.
     pub sources: Arc<dyn SourcesPort>,
+    /// Cloud AI: catalogue, usage, budget, consent and dispatch.
+    pub cloud: Arc<dyn CloudPort>,
     /// OS keychain storage.
     pub secrets: Arc<dyn SecretStore>,
     /// Cross-recording search.
@@ -124,7 +126,8 @@ pub async fn build_ports(
         sources: Arc::clone(&backend) as Arc<dyn SourcesPort>,
         export: Arc::clone(&backend) as Arc<dyn ExportPort>,
         search: Arc::clone(&backend) as Arc<dyn SearchPort>,
-        speakers: backend as Arc<dyn SpeakersPort>,
+        speakers: Arc::clone(&backend) as Arc<dyn SpeakersPort>,
+        cloud: backend as Arc<dyn CloudPort>,
         secrets,
         events,
     })

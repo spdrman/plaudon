@@ -1,0 +1,25 @@
+{
+  "_shape": "Successful POST /chat/completions response with JSON-schema enforced output and a usage block carrying a provider-reported cost.",
+  "status": 200,
+  "headers": { "x-request-id": "req_01HZY8CONTRACT" },
+  "body": {
+    "id": "gen-01HZY8CONTRACT",
+    "model": "google/gemini-2.5-flash",
+    "provider": "Google",
+    "choices": [
+      {
+        "message": {
+          "role": "assistant",
+          "content": "{\"executive_summary\":\"Two decisions were recorded.\",\"decisions\":[]}"
+        },
+        "finish_reason": "stop"
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 1842,
+      "completion_tokens": 96,
+      "total_tokens": 1938,
+      "cost": 0.00112
+    }
+  }
+}

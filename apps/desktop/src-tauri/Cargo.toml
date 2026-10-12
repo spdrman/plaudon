@@ -38,6 +38,8 @@ plaudon-security = { workspace = true }
 plaudon-diagnostics = { workspace = true }
 plaudon-source-plaud-cli = { workspace = true }
 plaudon-source-folder = { workspace = true }
+plaudon-ai-contracts = { workspace = true }
+plaudon-ai-openrouter = { workspace = true }
 async-trait = { workspace = true }
 hex = { workspace = true }
 serde = { workspace = true }

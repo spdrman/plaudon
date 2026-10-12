@@ -1,0 +1,276 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/get_usage.response.schema.json",
+  "title": "get_usage.response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "from",
+    "to",
+    "totals",
+    "by_model",
+    "attempts",
+    "budget"
+  ],
+  "properties": {
+    "from": {
+      "type": "string"
+    },
+    "to": {
+      "type": "string"
+    },
+    "totals": {
+      "$ref": "#/$defs/usage_totals"
+    },
+    "by_model": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "model_id",
+          "attempts",
+          "finalized",
+          "estimated",
+          "unknown_count"
+        ],
+        "properties": {
+          "model_id": {
+            "type": "string"
+          },
+          "attempts": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "finalized": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/money_amount"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "estimated": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/money_amount"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "unknown_count": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "attempts": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/usage_attempt"
+      }
+    },
+    "budget": {
+      "$ref": "#/$defs/cloud_budget"
+    }
+  },
+  "$defs": {
+    "money_amount": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "amount",
+        "currency"
+      ],
+      "properties": {
+        "amount": {
+          "type": "string",
+          "pattern": "^-?\\d+(\\.\\d+)?$"
+        },
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Z]{3}$"
+        }
+      }
+    },
+    "cost_value": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "confidence",
+        "amount"
+      ],
+      "properties": {
+        "confidence": {
+          "type": "string",
+          "enum": [
+            "unknown",
+            "estimated",
+            "finalized"
+          ]
+        },
+        "amount": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/money_amount"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "usage_totals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "finalized",
+        "estimated",
+        "unknown_count"
+      ],
+      "properties": {
+        "finalized": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/money_amount"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "estimated": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/money_amount"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "unknown_count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "usage_attempt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attempt_id",
+        "job_id",
+        "model_id",
+        "request_family",
+        "dispatch_state",
+        "cost",
+        "provider_request_id",
+        "created_at",
+        "responded_at",
+        "possibly_billed"
+      ],
+      "properties": {
+        "attempt_id": {
+          "type": "string"
+        },
+        "job_id": {
+          "type": "string"
+        },
+        "model_id": {
+          "type": "string"
+        },
+        "request_family": {
+          "type": "string",
+          "enum": [
+            "multipart_stt",
+            "audio_chat",
+            "unsupported",
+            "unknown"
+          ]
+        },
+        "dispatch_state": {
+          "type": "string",
+          "enum": [
+            "not_sent",
+            "sending",
+            "accepted_by_provider",
+            "outcome_unknown",
+            "completed",
+            "failed_before_send"
+          ]
+        },
+        "cost": {
+          "$ref": "#/$defs/cost_value"
+        },
+        "provider_request_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "created_at": {
+          "type": "string"
+        },
+        "responded_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "possibly_billed": {
+          "type": "boolean"
+        }
+      }
+    },
+    "cloud_budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "per_job_limit",
+        "monthly_limit",
+        "month_to_date",
+        "blocks_dispatch",
+        "enforcement_note"
+      ],
+      "properties": {
+        "per_job_limit": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/money_amount"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "monthly_limit": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/money_amount"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "month_to_date": {
+          "$ref": "#/$defs/cost_value"
+        },
+        "blocks_dispatch": {
+          "type": "boolean"
+        },
+        "enforcement_note": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

@@ -4,6 +4,7 @@ import { Button } from "../../components/Button";
 import { Dialog } from "../../components/Dialog";
 import { Progress } from "../../components/Progress";
 import { StatusBadge } from "../../components/StatusBadge";
+import { CostView } from "../cloud/CostView";
 import {
   CANCEL_DISCLOSURE,
   JOB_KIND_LABELS,
@@ -96,6 +97,12 @@ export function JobRow({
         <div className="job-row__fact">
           <dt>Elapsed</dt>
           <dd>{elapsed}</dd>
+        </div>
+        <div className="job-row__fact">
+          <dt>Cost</dt>
+          <dd>
+            <CostView cost={job.cost} />
+          </dd>
         </div>
       </dl>
 
@@ -234,6 +241,9 @@ export function JobRow({
         <p className="job-row__panel-title">
           Provider request id:{" "}
           <span className="job-row__mono">{job.provider_request_id ?? "not reported"}</span>
+        </p>
+        <p className="job-row__panel-title">
+          Cost recorded for the earlier attempt: <CostView cost={job.cost} />
         </p>
         <label className="job-row__check">
           <input

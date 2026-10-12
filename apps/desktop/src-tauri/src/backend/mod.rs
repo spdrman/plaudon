@@ -15,6 +15,8 @@
 
 pub mod activity;
 pub mod capabilities;
+pub mod cloud;
+pub mod consent;
 pub mod export;
 pub mod import;
 pub mod jobs;
@@ -86,6 +88,7 @@ pub struct LocalBackend {
     secrets: Arc<dyn SecretStore>,
     approved_roots: Vec<PathBuf>,
     source_runtime: sources::SourcesRuntime,
+    cloud: cloud::CloudRuntime,
 }
 
 impl LocalBackend {
@@ -99,6 +102,7 @@ impl LocalBackend {
     ) -> Result<Self, AppError> {
         let store = Store::open(root).await?;
         let db: Database = store.db().clone();
+        let cloud = cloud::CloudRuntime::open(&db, store.pool().clone())?;
         let imports = ImportService::new(db.clone(), store.archive().clone());
         let events = EventPublisher::new(store.pool().clone(), sink);
         let notifications = NotificationService::new(notifications, store.pool().clone());
@@ -112,6 +116,7 @@ impl LocalBackend {
             secrets,
             approved_roots,
             source_runtime: sources::SourcesRuntime::production(),
+            cloud,
             store,
         };
         // The dispatcher starts with whatever the user last chose; nothing
@@ -125,6 +130,16 @@ impl LocalBackend {
         Ok(backend)
     }
 
+    /// Replace the cloud HTTPS transport. Tests use this to run hermetically.
+    #[must_use]
+    pub fn with_cloud_transport(
+        mut self,
+        transport: Arc<dyn plaudon_ai_openrouter::transport::AsyncHttpTransport>,
+    ) -> Self {
+        self.cloud = self.cloud.with_transport(transport);
+        self
+    }
+
     /// Reconcile any import interrupted by a crash (spec §13.3A).
     pub async fn reconcile_startup(&self) -> Result<usize, AppError> {
         let outcomes = self
@@ -133,7 +148,10 @@ impl LocalBackend {
             .reconcile(Timestamp::now())
             .await
             .map_err(AppError::from)?;
-        Ok(outcomes.len())
+        // Spec §14.3: a cloud attempt a crash left in flight may have been
+        // billed, so its job is parked rather than requeued.
+        let parked = self.reconcile_cloud_attempts().await?;
+        Ok(outcomes.len() + parked)
     }
 
     /// The connection pool.

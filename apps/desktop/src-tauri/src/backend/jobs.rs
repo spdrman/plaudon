@@ -255,7 +255,14 @@ pub async fn load(pool: &SqlitePool, job_id: JobId) -> Result<JobSummary, AppErr
         .await
         .map_err(|err| storage_error("cannot read a job", &err))?
         .ok_or_else(|| AppError::new(AppErrorCode::RecordNotFound, "no such job"))?;
-    row_to_summary(&row)
+    let summary = row_to_summary(&row)?;
+    with_cost(pool, summary).await
+}
+
+/// Attach the cost derived from the job's ledger attempts.
+async fn with_cost(pool: &SqlitePool, mut summary: JobSummary) -> Result<JobSummary, AppError> {
+    summary.cost = crate::backend::cloud::load_job_cost(pool, &summary.job_id.to_string()).await?;
+    Ok(summary)
 }
 
 /// Read the durable config snapshot of a job.
@@ -340,6 +347,9 @@ pub fn row_to_summary(row: &sqlx::sqlite::SqliteRow) -> Result<JobSummary, AppEr
                 == Some(true),
         provider_request_id: row.get("provider_request_id"),
         output_link,
+        // Replaced by `with_cost`, which reads the ledger; a row alone cannot
+        // know the cost, and unknown is never rendered as zero.
+        cost: crate::dto::CostValue::unknown(),
     })
 }
 
@@ -420,11 +430,10 @@ impl JobsPort for LocalBackend {
             .map_err(|err| storage_error("cannot list jobs", &err))?;
 
         let has_more = rows.len() > query.limit as usize;
-        let items = rows
-            .iter()
-            .take(query.limit as usize)
-            .map(row_to_summary)
-            .collect::<Result<Vec<_>, _>>()?;
+        let mut items = Vec::new();
+        for row in rows.iter().take(query.limit as usize) {
+            items.push(with_cost(self.pool(), row_to_summary(row)?).await?);
+        }
         let next_cursor = has_more
             .then(|| PageCursor::at(query.cursor.offset() + u64::from(query.limit)).encode());
 
@@ -511,6 +520,13 @@ impl JobsPort for LocalBackend {
             }
         }
 
+        // A cloud transcription re-checks budget, consent and the model before
+        // the job is touched, so a refusal leaves it exactly as it was.
+        let cloud_plan = match current.kind {
+            JobKind::Transcribe => Some(self.plan_cloud_retry(job_id, cost_acknowledged).await?),
+            _ => None,
+        };
+
         sqlx::query(
             "UPDATE jobs SET state = 'queued', last_error_code = NULL, finished_at = NULL, \
              retry_count = retry_count + 1 WHERE id = ?1",
@@ -523,6 +539,11 @@ impl JobsPort for LocalBackend {
         match current.kind {
             JobKind::Import => crate::backend::import::rerun(self, job_id).await?,
             JobKind::Export => crate::backend::export::rerun(self, job_id).await?,
+            JobKind::Transcribe => {
+                if let Some(plan) = cloud_plan {
+                    self.launch_cloud_retry(job_id, plan);
+                }
+            }
             other => {
                 return Err(AppError::new(
                     AppErrorCode::CapabilityUnverified,

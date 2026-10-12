@@ -15,7 +15,7 @@ use crate::dto::{
     Capabilities, EngineInventoryEntry, EngineStage, HardwareInfo, InstalledModel, OsInfo,
     PermissionState, Platform, StorageCapability,
 };
-use crate::ports::{CapabilitiesPort, SettingsPort};
+use crate::ports::{CapabilitiesPort, CloudPort, SettingsPort};
 
 /// Reason attached to every engine this build has not validated on this host.
 const NO_EVIDENCE: &str =
@@ -66,6 +66,7 @@ impl CapabilitiesPort for LocalBackend {
             permissions,
             preferences,
             openrouter_key_present,
+            cloud_consents: self.cloud_consents().await?,
         })
     }
 }

@@ -211,6 +211,9 @@ pub struct Capabilities {
     pub preferences: Preferences,
     /// Whether an OpenRouter key is present in the OS keychain.
     pub openrouter_key_present: bool,
+    /// Cloud consent grants on record. Revoked grants stay listed so the
+    /// history is visible (spec §4.4 #6, §16.3).
+    pub cloud_consents: Vec<ConsentSummary>,
 }
 
 /* --------------------------------------------------------------- recording */
@@ -800,6 +803,8 @@ pub struct JobSummary {
     pub provider_request_id: Option<String>,
     /// Navigation target of the produced output.
     pub output_link: Option<OutputLink>,
+    /// Cost carried by the job (spec §10.4). Local jobs are always `unknown`.
+    pub cost: CostValue,
 }
 
 /// `list_jobs` request.
@@ -1380,6 +1385,49 @@ impl WatchedFolderRule {
     }
 }
 
+/* ------------------------------------------------- cloud (OpenRouter BYOK) */
+
+/// Exact decimal money (spec §10.4). The amount is a plain decimal string.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MoneyAmount {
+    /// Decimal digits, never a float.
+    pub amount: String,
+    /// ISO-4217 code, uppercase.
+    pub currency: String,
+}
+
+/// How trustworthy a cost is (spec §10.4).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CostConfidence {
+    /// No cost could be derived. Never rendered as zero.
+    Unknown,
+    /// A pre-dispatch or usage-derived estimate.
+    Estimated,
+    /// A provider-reported amount.
+    Finalized,
+}
+
+/// A cost and its confidence. `amount` is `null` exactly when `unknown`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CostValue {
+    /// Confidence class.
+    pub confidence: CostConfidence,
+    /// Amount, absent when unknown.
+    pub amount: Option<MoneyAmount>,
+}
+
+impl CostValue {
+    /// No derivable cost.
+    #[must_use]
+    pub const fn unknown() -> Self {
+        Self {
+            confidence: CostConfidence::Unknown,
+            amount: None,
+        }
+    }
+}
+
 /// `source_add_folder` request.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SourceAddFolderRequest {
@@ -1658,6 +1706,394 @@ pub struct SpeakerOperationResponse {
     /// Updated speaker.
     pub speaker: SpeakerDto,
 }
+/// Three-valued capability flag.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TriState {
+    /// Observed available.
+    Yes,
+    /// Observed unavailable.
+    No,
+    /// Not observed.
+    Unknown,
+}
+
+/// Observed features of a model.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ModelFeatures {
+    /// Segment offsets.
+    pub segments: TriState,
+    /// Word offsets.
+    pub word_timestamps: TriState,
+    /// Speaker turns.
+    pub diarization: TriState,
+    /// Language detection.
+    pub language_detection: TriState,
+}
+
+/// Pricing of a model as the catalog reports it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ModelPricing {
+    /// Basis: `none`, `per_audio_second`, `per_token`, `per_request`, `other`.
+    pub basis: String,
+    /// Unit text; never invented by the UI.
+    pub unit_label: String,
+    /// Price per unit; `null` means unknown, never zero.
+    pub amount_per_unit: Option<MoneyAmount>,
+}
+
+/// Resolved destination and retention posture of a model route.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ModelPrivacy {
+    /// Relay the request passes through.
+    pub relay: String,
+    /// Downstream provider, `null` when undisclosed.
+    pub downstream_provider: Option<String>,
+    /// `zero_retention`, `limited_retention`, `provider_default` or `unknown`.
+    pub retention: String,
+    /// Days, for `limited_retention` only.
+    pub retention_days: Option<u32>,
+    /// Whether the resolved route documents zero retention.
+    pub zero_retention_available: bool,
+}
+
+/// One model in the picker.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ModelCard {
+    /// Provider-scoped identifier.
+    pub model_id: String,
+    /// Display name.
+    pub display_name: String,
+    /// Engine id.
+    pub engine: String,
+    /// `multipart_stt`, `audio_chat`, `unsupported` or `unknown`.
+    pub request_family: String,
+    /// `verified` or `not_verified`.
+    pub verification: String,
+    /// Stable reason when not verified.
+    pub verification_reason: Option<String>,
+    /// Evidence backing `verified`.
+    pub fixture_id: Option<String>,
+    /// RFC 3339 instant of the evidence.
+    pub validated_at: Option<String>,
+    /// Observed features.
+    pub features: ModelFeatures,
+    /// Declared locales, `null` when unknown.
+    pub locales: Option<Vec<String>>,
+    /// Largest accepted payload.
+    pub max_input_bytes: Option<u64>,
+    /// Longest accepted media.
+    pub max_duration_ms: Option<u64>,
+    /// Pricing.
+    pub pricing: ModelPricing,
+    /// Privacy route.
+    pub privacy: ModelPrivacy,
+    /// Whether the model may be dispatched to right now.
+    pub selectable: bool,
+}
+
+/// `list_models` request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ListModelsRequest {
+    /// Pipeline stage.
+    pub stage: String,
+    /// Engine filter; `null` lists every engine.
+    pub engine: Option<String>,
+}
+
+/// `list_models` response.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ListModelsResponse {
+    /// Cards.
+    pub models: Vec<ModelCard>,
+    /// `live` or `pinned_allowlist`.
+    pub catalog_source: String,
+    /// When the live catalog was fetched.
+    pub catalog_fetched_at: Option<String>,
+    /// `offline`, `local_only_mode`, `no_key`, `catalog_error` or `null`.
+    pub degraded_reason: Option<String>,
+    /// Default model of the stage.
+    pub default_model_id: Option<String>,
+}
+
+/// Spend totals; unknown attempts are counted, never zeroed.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UsageTotals {
+    /// Provider-reported spend.
+    pub finalized: Option<MoneyAmount>,
+    /// Estimated spend.
+    pub estimated: Option<MoneyAmount>,
+    /// Attempts without a derivable cost.
+    pub unknown_count: u32,
+}
+
+/// Spend of one model.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UsageByModel {
+    /// Model.
+    pub model_id: String,
+    /// Attempts.
+    pub attempts: u32,
+    /// Provider-reported spend.
+    pub finalized: Option<MoneyAmount>,
+    /// Estimated spend.
+    pub estimated: Option<MoneyAmount>,
+    /// Attempts without a derivable cost.
+    pub unknown_count: u32,
+}
+
+/// One ledger entry, without payload or secret.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UsageAttempt {
+    /// Attempt id.
+    pub attempt_id: String,
+    /// Owning job.
+    pub job_id: String,
+    /// Model.
+    pub model_id: String,
+    /// Request family.
+    pub request_family: String,
+    /// Dispatch state.
+    pub dispatch_state: String,
+    /// Cost.
+    pub cost: CostValue,
+    /// Vendor request id.
+    pub provider_request_id: Option<String>,
+    /// Creation instant.
+    pub created_at: String,
+    /// Response instant.
+    pub responded_at: Option<String>,
+    /// Whether the attempt may already have been billed.
+    pub possibly_billed: bool,
+}
+
+/// The local spending budget and the month's spend so far.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CloudBudget {
+    /// Per-job limit.
+    pub per_job_limit: Option<MoneyAmount>,
+    /// Monthly limit.
+    pub monthly_limit: Option<MoneyAmount>,
+    /// Finalized plus estimated spend this month.
+    pub month_to_date: CostValue,
+    /// Whether a limit is calculable here and therefore enforced.
+    pub blocks_dispatch: bool,
+    /// Fixed text: local budgets cannot prevent upstream charges.
+    pub enforcement_note: String,
+}
+
+/// `get_usage` request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GetUsageRequest {
+    /// RFC 3339, inclusive.
+    pub from: String,
+    /// RFC 3339, exclusive.
+    pub to: String,
+}
+
+/// `get_usage` response.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GetUsageResponse {
+    /// Echo of the range start.
+    pub from: String,
+    /// Echo of the range end.
+    pub to: String,
+    /// Totals.
+    pub totals: UsageTotals,
+    /// Per-model totals.
+    pub by_model: Vec<UsageByModel>,
+    /// Attempts in range.
+    pub attempts: Vec<UsageAttempt>,
+    /// Current budget.
+    pub budget: CloudBudget,
+}
+
+/// `set_cloud_budget` request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SetCloudBudgetRequest {
+    /// Decimal string; `null` clears the limit.
+    pub per_job_limit: Option<String>,
+    /// Decimal string; `null` clears the limit.
+    pub monthly_limit: Option<String>,
+    /// Must be `USD`.
+    pub currency: String,
+}
+
+/// Scope of a consent grant.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ConsentScopeDto {
+    /// `ask_every_time`, `recording` or `model_policy`.
+    pub kind: String,
+    /// Required for `recording`.
+    pub recording_id: Option<String>,
+}
+
+/// `grant_cloud_consent` request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GrantCloudConsentRequest {
+    /// Purpose.
+    pub purpose: String,
+    /// Content type.
+    pub content_type: String,
+    /// Scope.
+    pub scope: ConsentScopeDto,
+    /// Model the grant covers.
+    pub model_id: String,
+    /// Downstream provider the user saw.
+    pub downstream_provider: Option<String>,
+    /// Whether documented zero retention is required.
+    pub require_zero_retention: bool,
+    /// Version of the privacy statement shown.
+    pub disclosure_version: String,
+}
+
+/// `grant_cloud_consent` response.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GrantCloudConsentResponse {
+    /// Stable grant id.
+    pub consent_id: String,
+    /// Scope kind as stored.
+    pub scope_kind: String,
+    /// Grant instant.
+    pub granted_at: String,
+    /// Expiry, when one applies.
+    pub expires_at: Option<String>,
+}
+
+/// A grant as listed in settings.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ConsentSummary {
+    /// Stable grant id.
+    pub consent_id: String,
+    /// Purpose.
+    pub purpose: String,
+    /// Content type.
+    pub content_type: String,
+    /// Scope kind.
+    pub scope_kind: String,
+    /// Recording, for a recording scope.
+    pub recording_id: Option<String>,
+    /// Model.
+    pub model_id: String,
+    /// Downstream provider.
+    pub downstream_provider: Option<String>,
+    /// Retention the user required.
+    pub required_retention: Option<String>,
+    /// Privacy statement version.
+    pub disclosure_version: String,
+    /// Grant instant.
+    pub granted_at: String,
+    /// Expiry.
+    pub expires_at: Option<String>,
+    /// Revocation instant.
+    pub revoked_at: Option<String>,
+}
+
+/// `revoke_cloud_consent` request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RevokeCloudConsentRequest {
+    /// Grant to revoke.
+    pub consent_id: String,
+}
+
+/// Scope of a model preference.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ModelPreferenceScope {
+    /// `default` or `recording`.
+    pub kind: String,
+    /// Required for `recording`.
+    pub recording_id: Option<String>,
+}
+
+/// `set_model_preference` request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SetModelPreferenceRequest {
+    /// Stage.
+    pub stage: String,
+    /// Scope.
+    pub scope: ModelPreferenceScope,
+    /// Engine.
+    pub engine: String,
+    /// Model; `null` clears a recording override.
+    pub model_id: Option<String>,
+}
+
+/// `set_model_preference` response.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SetModelPreferenceResponse {
+    /// Stage.
+    pub stage: String,
+    /// `default` or `recording`.
+    pub scope_kind: String,
+    /// Recording, for a recording scope.
+    pub recording_id: Option<String>,
+    /// Engine.
+    pub engine: String,
+    /// Stored model.
+    pub model_id: Option<String>,
+    /// The model that would run now after precedence.
+    pub effective_model: Option<ModelCard>,
+}
+
+/// One-shot model override of `start_processing`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ModelOverride {
+    /// Engine.
+    pub engine: String,
+    /// Model.
+    pub model_id: String,
+}
+
+/// `start_processing` request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StartProcessingRequest {
+    /// Recording to process.
+    pub recording_id: String,
+    /// Stage to run.
+    pub stage: String,
+    /// One-shot override; never changes stored preferences.
+    pub model_override: Option<ModelOverride>,
+    /// Acknowledges an unknown cost or a possibly-billed prior attempt.
+    pub cost_acknowledged: bool,
+    /// Re-run even when a result exists.
+    pub rerun: bool,
+}
+
+/// `start_processing` response.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StartProcessingResponse {
+    /// The job that was opened.
+    pub job_id: String,
+    /// Pre-dispatch estimate.
+    pub estimated_cost: CostValue,
+    /// `queued`, `consent_required` or `blocked`.
+    pub dispatch: String,
+    /// Explanation, `null` when queued.
+    pub blocked_reason: Option<String>,
+}
+
+/// `verify_model` request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VerifyModelRequest {
+    /// Model to verify.
+    pub model_id: String,
+    /// `transcription` or `text_generation`.
+    pub task: String,
+    /// Acknowledges an unknown cost.
+    pub cost_acknowledged: bool,
+}
+
+/// `verify_model` response.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VerifyModelResponse {
+    /// The refreshed card.
+    pub model: ModelCard,
+    /// Cost of the smoke test.
+    pub cost: CostValue,
+    /// Vendor request id.
+    pub provider_request_id: Option<String>,
+}
+
 /* ------------------------------------------------------------------ events */
 
 /// §15.3 event names.

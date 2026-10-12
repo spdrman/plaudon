@@ -62,6 +62,12 @@ pub trait SecretStore: Send + Sync {
 
     /// Whether a key is present, without reading its value out of the store.
     fn openrouter_key_present(&self) -> Result<bool, AppError>;
+
+    /// Read the key for one authenticated operation, `None` when absent.
+    ///
+    /// The value is a [`SecretValue`], which cannot be printed, serialized or
+    /// cloned; the cloud clients hold it only for the duration of one request.
+    fn load_openrouter_key(&self) -> Result<Option<SecretValue>, AppError>;
 }
 
 impl std::fmt::Debug for dyn SecretStore {
@@ -129,6 +135,14 @@ impl SecretStore for KeyringSecretStore {
             Err(err) => Err(map_keyring_error(&err)),
         }
     }
+
+    fn load_openrouter_key(&self) -> Result<Option<SecretValue>, AppError> {
+        match self.entry()?.get_password() {
+            Ok(raw) => SecretValue::new(raw).map(Some),
+            Err(keyring::Error::NoEntry) => Ok(None),
+            Err(err) => Err(map_keyring_error(&err)),
+        }
+    }
 }
 
 /// In-memory store used by tests. Never constructed by the shipping binary.
@@ -183,6 +197,10 @@ impl SecretStore for InMemorySecretStore {
 
     fn openrouter_key_present(&self) -> Result<bool, AppError> {
         Ok(self.guard()?.is_some())
+    }
+
+    fn load_openrouter_key(&self) -> Result<Option<SecretValue>, AppError> {
+        self.guard()?.clone().map(SecretValue::new).transpose()
     }
 }
 
