@@ -47,6 +47,16 @@ speaker-embedding implementation exists.
    for any candidate; measuring them is a release gate, and single-machine research measurements
    are not release evidence.
 
+   *Implementation (2026-10-12):* the artifact's shape is
+   `schemas/speaker-match-report.v1.schema.json` and it is produced by
+   `plaudon-eval speaker-match` (`crates/eval/src/speaker/`, documented in
+   [docs/benchmarks/speaker-match-eval.md](../benchmarks/speaker-match-eval.md)). The gate's
+   conditions are *computed* into every artifact as `release_evidence.blockers`, so a document
+   that is not evidence cannot be mistaken for one. No checkpoint has been measured yet: the
+   committed `speaker-match-scripted-synthetic-eer.json` runs on scripted embeddings, lists both
+   the missing model measurement and the missing runtime figures as blockers, and its derived
+   thresholds are explicitly not shippable defaults.
+
 ## Rejected alternatives
 
 - **SpeechBrain ECAPA-TDNN (cleanest licence label).** Rejected for V1: no official ONNX export

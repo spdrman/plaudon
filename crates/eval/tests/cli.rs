@@ -350,3 +350,71 @@ fn an_unknown_option_is_a_usage_error() {
     assert_eq!(unknown.status.code(), Some(2));
     assert!(stderr(&unknown).contains("unknown command `summarise`"));
 }
+
+#[test]
+fn speaker_match_writes_the_artifact_and_says_it_is_not_release_evidence() {
+    let dir = tempfile::tempdir().expect("temp dir");
+    let out = dir.path().join("speaker-match.json");
+    let plan = repo_root().join("tests/fixtures/speaker-eval/harness-plan.json");
+    let output = binary()
+        .args([
+            "speaker-match",
+            "--plan",
+            plan.to_str().expect("utf-8"),
+            "--out",
+            out.to_str().expect("utf-8"),
+        ])
+        .output()
+        .expect("speaker-match");
+    assert!(output.status.success(), "{}", stderr(&output));
+
+    let printed = stdout(&output);
+    assert!(printed.contains("scripted embeddings"), "{printed}");
+    assert!(printed.contains("release evidence: NO"), "{printed}");
+    assert!(printed.contains("T_suggest"), "{printed}");
+
+    let document: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&out).expect("artifact")).expect("JSON");
+    assert_eq!(document["schema_version"], 1);
+    assert_eq!(document["model"]["embedding_source"], "scripted");
+    assert_eq!(document["release_evidence"]["qualifies"], false);
+    assert_eq!(
+        document,
+        serde_json::from_str::<serde_json::Value>(
+            &std::fs::read_to_string(
+                repo_root().join("docs/benchmarks/speaker-match-scripted-synthetic-eer.json")
+            )
+            .expect("committed artifact")
+        )
+        .expect("JSON"),
+        "the committed artifact is the default run of this command"
+    );
+}
+
+#[test]
+fn speaker_match_refuses_a_model_pack_that_is_not_there() {
+    let dir = tempfile::tempdir().expect("temp dir");
+    let plan = repo_root().join("tests/fixtures/speaker-eval/harness-plan.json");
+    let output = binary()
+        .args([
+            "speaker-match",
+            "--plan",
+            plan.to_str().expect("utf-8"),
+            "--out",
+            dir.path().join("out.json").to_str().expect("utf-8"),
+            "--model-pack",
+            dir.path().to_str().expect("utf-8"),
+        ])
+        .output()
+        .expect("speaker-match");
+    assert_eq!(output.status.code(), Some(1));
+    assert!(
+        stderr(&output).contains("eval-embeddings.json"),
+        "{}",
+        stderr(&output)
+    );
+    assert!(
+        !dir.path().join("out.json").exists(),
+        "a refused run writes nothing"
+    );
+}

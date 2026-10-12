@@ -61,3 +61,10 @@ are MIT but **each redistributed conversion must be checked individually**,
 and any conversion whose terms are not clearly MIT is marked not bundlable and
 is user-downloaded only. `ModelManifestEntry::may_bundle` defaults to false
 for exactly that reason.
+
+## Other benchmark artifacts in this directory
+
+| Artifact | Produced by | Status |
+|---|---|---|
+| [`extraction-eval.md`](extraction-eval.md) | `plaudon-extraction-eval` | see that document |
+| [`speaker-match-eval.md`](speaker-match-eval.md) and `speaker-match-scripted-synthetic-eer.json` | `plaudon-eval speaker-match` (VOICE_PROFILES_SPEC §17.2, ADR-0081 §4) | **no model measured**: the committed artifact runs on scripted embeddings and is not release evidence |
