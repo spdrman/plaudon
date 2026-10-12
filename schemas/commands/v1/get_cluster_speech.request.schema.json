@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/get_cluster_speech.request.schema.json",
+  "title": "get_cluster_speech.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "recording_id",
+    "cluster_key"
+  ],
+  "properties": {
+    "recording_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "cluster_key": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    }
+  }
+}

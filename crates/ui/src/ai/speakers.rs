@@ -30,8 +30,9 @@ use std::collections::BTreeSet;
 use egui::{accesskit, Ui};
 use plaudon_app::command::AppCommand;
 use plaudon_app::dto::{
-    AssignClusterPersonRequest, ConfirmSpeakerRequest, ConfirmSpeakerSuggestionRequest,
-    CreatePersonRequest, EnrollPersonVoiceRequest, EnrolmentConsentDto, ListSpeakersResponse,
+    AssignClusterPersonRequest, ClusterSpeechDto, ConfirmSpeakerRequest,
+    ConfirmSpeakerSuggestionRequest, CreatePersonRequest, EnrollPersonVoiceRequest,
+    EnrolmentConsentDto, GetClusterSpeechRequest, ListSpeakersResponse,
     RejectSpeakerSuggestionRequest, RenameSpeakerRequest, ResetSpeakerRequest, SpeakerDto,
     SpeakerSuggestionDto, VoiceEnrollmentDto, VoiceProfileSettingsDto,
 };
@@ -45,10 +46,10 @@ use crate::screens::people::picker::{
 use super::{fact, AiOutput, Badge, RecordingContext};
 
 /// Shortest retention term a profile may carry, in months.
-const MIN_RETENTION_MONTHS: u8 = 1;
+pub const MIN_RETENTION_MONTHS: u8 = 1;
 
 /// Longest retention term a profile may carry, in months (VP-130).
-const MAX_RETENTION_MONTHS: u8 = 12;
+pub const MAX_RETENTION_MONTHS: u8 = 12;
 
 /// Said where enrolment is offered, so the consent duty is stated at the
 /// control and not only in Settings.
@@ -134,6 +135,10 @@ struct Enrolment {
     retention_months: u8,
     /// The user's own note of the consent basis.
     note: String,
+    /// The cluster's clean speech, once `get_cluster_speech` answered. `None`
+    /// is "not measured yet" and is rendered as that, never as a zero that
+    /// would read as "there is no speech".
+    speech: Option<ClusterSpeechDto>,
 }
 
 /// A cluster assignment the application refused, and what it was.
@@ -269,7 +274,7 @@ impl SpeakerPanel {
             }
         }
         self.name_controls(ui, context, speaker, output);
-        self.enrol_control(ui, context, speaker, voice);
+        self.enrol_control(ui, context, speaker, voice, output);
     }
 
     /// The person picker and the scope question it can raise.
@@ -510,6 +515,7 @@ impl SpeakerPanel {
         context: RecordingContext<'_>,
         speaker: &SpeakerDto,
         voice: VoiceContext<'_>,
+        output: &mut AiOutput,
     ) {
         if !voice.matching_on() {
             return;
@@ -535,6 +541,13 @@ impl SpeakerPanel {
                 .iter()
                 .find(|candidate| candidate.id == person_id)
                 .map_or_else(|| "this person".to_owned(), |found| found.name.clone());
+            // The meter is read as the flow opens, not when it is confirmed:
+            // the user decides while looking at how much clean speech there
+            // is, and this read opens no audio and computes nothing (VP-094).
+            output.command(AppCommand::GetClusterSpeech(GetClusterSpeechRequest {
+                recording_id: context.recording_id.to_owned(),
+                cluster_key: cluster_key.clone(),
+            }));
             self.enrolment = Some(Enrolment {
                 person_id,
                 person_name,
@@ -547,6 +560,7 @@ impl SpeakerPanel {
                     settings.disclosure.retention_default_months
                 }),
                 note: String::new(),
+                speech: None,
             });
         }
     }
@@ -575,6 +589,7 @@ impl SpeakerPanel {
                      application refuses it rather than storing a weak voiceprint.",
                     settings.enrol_speech_ms / 1_000
                 ));
+                speech_meter(ui, flow.speech.as_ref());
                 let read = disclosure_body(ui, settings);
                 flow.read |= read;
             } else {
@@ -613,12 +628,24 @@ impl SpeakerPanel {
 
             ui.add_space(12.0);
             ui.horizontal(|ui| {
-                let ready = flow.read && flow.attested;
+                // A measurement that says there is not enough speech disables
+                // the button rather than letting the user send a request the
+                // application is bound to refuse (VP-023, VP-094). A
+                // measurement that has not arrived, or that was refused, does
+                // not block anything: the minimum is enforced where it
+                // matters, in the application.
+                let enough = flow
+                    .speech
+                    .as_ref()
+                    .is_none_or(|speech| speech.meets_enrol_minimum);
+                let ready = flow.read && flow.attested && enough;
                 if ui
                     .add_enabled(ready, egui::Button::new("Enrol this voice"))
-                    .on_disabled_hover_text(
-                        "Read the text and confirm that this person agreed before enrolling.",
-                    )
+                    .on_disabled_hover_text(if enough {
+                        "Read the text and confirm that this person agreed before enrolling."
+                    } else {
+                        "There is not enough clean speech from this speaker yet."
+                    })
                     .clicked()
                 {
                     let version = voice
@@ -730,6 +757,18 @@ impl SpeakerPanel {
                 self.refusal = None;
                 Vec::new()
             }
+            Ok(AppResponse::GetClusterSpeech(speech)) => {
+                // Only the flow that asked for it: a measurement of another
+                // cluster would be a number about the wrong voice.
+                if let Some(flow) = self.enrolment.as_mut() {
+                    if flow.recording_id == speech.recording_id.to_string()
+                        && flow.cluster_key == speech.cluster_key
+                    {
+                        flow.speech = Some(speech.clone());
+                    }
+                }
+                Vec::new()
+            }
             _ => Vec::new(),
         }
     }
@@ -789,7 +828,11 @@ impl SpeakerPanel {
 /// Returns whether the reader has reached the bottom — which is also true for
 /// a text short enough that there is nothing to scroll, because a gate nobody
 /// can satisfy is not a gate.
-fn disclosure_body(ui: &mut Ui, settings: &VoiceProfileSettingsDto) -> bool {
+///
+/// Public because every per-enrolment attestation shows the same text in the
+/// same way: this flow, and the split that attests for the person the speech
+/// turns out to belong to (`screens::people`, §3.5, VP-120 level 3).
+pub fn disclosure_body(ui: &mut Ui, settings: &VoiceProfileSettingsDto) -> bool {
     let disclosure = &settings.disclosure;
     let output = egui::ScrollArea::vertical()
         .max_height(180.0)
@@ -805,6 +848,50 @@ fn disclosure_body(ui: &mut Ui, settings: &VoiceProfileSettingsDto) -> bool {
     let viewport = output.inner_rect.height();
     let content = output.content_size.y;
     output.state.offset.y + viewport >= content - 1.0
+}
+
+/// The clean-speech meter of the enrolment flow (VP-094).
+///
+/// Three states that read as three different things: the measurement has not
+/// arrived, there is enough, there is not enough. The bar is never the only
+/// signal — the badge beside it says the same thing in a glyph and a word,
+/// which is the status rule of `docs/EGUI_DESIGN_SYSTEM.md`.
+fn speech_meter(ui: &mut Ui, speech: Option<&ClusterSpeechDto>) {
+    let Some(speech) = speech else {
+        ui.label("Measuring how much clean speech this speaker has…");
+        return;
+    };
+    let text = speech_meter_text(speech);
+    let fraction = if speech.enrol_speech_ms == 0 {
+        1.0
+    } else {
+        (speech.clean_speech_ms as f32 / speech.enrol_speech_ms as f32).clamp(0.0, 1.0)
+    };
+    ui.add(egui::ProgressBar::new(fraction).text(text.clone()));
+    if speech.meets_enrol_minimum {
+        Badge::new("✓", "enough clean speech", Tone::Success)
+            .description(&text)
+            .ui(ui);
+    } else {
+        let advice = format!(
+            "{text} Assign more of this speaker's turns to them, or enrol them from a recording \
+             where they talk for longer."
+        );
+        Badge::new("!", "not enough clean speech", Tone::Warning)
+            .description(&advice)
+            .ui(ui);
+    }
+}
+
+/// "12 s of 10 s clean speech collected", the sentence VP-094 asks for.
+#[must_use]
+pub fn speech_meter_text(speech: &ClusterSpeechDto) -> String {
+    format!(
+        "{} s of {} s clean speech collected, over {} stretch(es).",
+        speech.clean_speech_ms / 1_000,
+        speech.enrol_speech_ms / 1_000,
+        speech.spans
+    )
 }
 
 /// The warning a cluster assignment shows when segments were set one by one

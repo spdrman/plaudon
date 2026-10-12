@@ -41,6 +41,9 @@ pub enum RosterAction {
     },
     /// Delete an entry.
     Delete(String),
+    /// Split one enrolment's exemplars by provenance onto another person
+    /// (§3.5, VP-091).
+    SplitEnrollment(String),
     /// Delete one person's voiceprint, keeping the person.
     DeleteEnrollment(String),
 }
@@ -187,6 +190,24 @@ fn row(
                 }
             }
         });
+        // A split moves *some* of the exemplars away, so it is offered only
+        // where there is more than one: moving all of them is a merge, and the
+        // application refuses it as one (§3.5).
+        if matching_on
+            && person
+                .voice
+                .as_ref()
+                .is_some_and(|voice| voice.exemplars > 1)
+            && ui
+                .button(format!("Split {}'s voiceprint…", person.display_name))
+                .on_hover_text(
+                    "Some of this voiceprint came from somebody else? Move those recordings' \
+                     exemplars to the person they really belong to.",
+                )
+                .clicked()
+        {
+            action = Some(RosterAction::SplitEnrollment(person.person_id.to_string()));
+        }
         if matching_on
             && person.voice.is_some()
             && ui

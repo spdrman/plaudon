@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/get_cluster_speech.response.schema.json",
+  "title": "get_cluster_speech.response",
+  "description": "How much clean single-speaker speech one cluster offers, read from the stored reconciliation before anything is embedded (VOICE_PROFILES_SPEC VP-094).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "recording_id",
+    "cluster_key",
+    "clean_speech_ms",
+    "spans",
+    "first_span_start_ms",
+    "last_span_end_ms",
+    "enrol_speech_ms",
+    "exemplar_speech_ms",
+    "meets_enrol_minimum",
+    "meets_exemplar_minimum"
+  ],
+  "properties": {
+    "recording_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "cluster_key": {
+      "type": "string"
+    },
+    "clean_speech_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "spans": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "first_span_start_ms": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "last_span_end_ms": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "enrol_speech_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "exemplar_speech_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "meets_enrol_minimum": {
+      "type": "boolean"
+    },
+    "meets_exemplar_minimum": {
+      "type": "boolean"
+    }
+  }
+}

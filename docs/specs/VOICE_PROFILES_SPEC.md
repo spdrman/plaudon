@@ -552,11 +552,13 @@ count bump — the mechanism the guard tests enforce.
 | `delete_person` | removes the roster entry; severs `speakers.person_id` links, name snapshots remain (VP-080) |
 | `assign_cluster_person` | bulk "this cluster is X" in one recording: sets `speakers.name` + `person_id` for that cluster, nothing beyond the recording |
 | `set_segment_speaker` | the T12 wire leg (VP-031); the segment picker offers roster people, "create new person" and "unknown/none" (VP-210) |
-| **Biometric tier (consent-gated, feature-flagged)** | |
+| **Biometric tier (consent-gated, feature-flagged — except the four reads/deletes marked below, which must stay reachable when the gate is shut)** | |
 | `get_voice_profile_settings` / `set_voice_profiles_enabled` | feature gate + consent-gate state (§12.2) |
 | `enroll_person_voice` | attach an enrolment to a roster person from (recording, cluster) after the consent gate |
 | `add_voice_exemplar` | extend an enrolment from another recording's cluster |
 | `split_voice_enrollment` | split an enrolment's exemplars by provenance onto another (new) person |
+| `list_voice_exemplars` | what one enrolment is made of: exemplar ids, provenance and durations — never vectors (drives the split UI, VP-091) |
+| `get_cluster_speech` | a cluster's clean speech before anything is computed, for the enrolment meter (VP-094); ungated, because it reads the stored reconciliation and calls no model |
 | `delete_voice_enrollment` | per-person biometric delete + journal (§12.4); person stays as name-only |
 | `forget_all_voice_profiles` | the "forget everyone" button (VP-095): every enrolment + the key; roster survives |
 | `list_speaker_suggestions` | pending suggestions for a recording, or the global review queue |
@@ -593,9 +595,12 @@ status = glyph plus word never colour alone, 24 pt minimum targets, Escape-close
   assignment count ("in 14 recordings"), enrolment presence badge ("voice: enrolled/none"),
   exemplar count, device-diversity hint, last matched and expiry countdown where enrolled;
   actions: rename, edit aliases/contacts, merge (with affected-recordings disclosure), enrol
-  voice / delete enrolment, split enrolment by provenance, delete person. Dedupe aid: the list
-  surfaces same-name/same-alias groups as merge candidates — never auto-merged. Every control
-  named for AccessKit (`assert_every_control_is_named`, `crates/ui-testkit`).
+  voice / delete enrolment, split enrolment by provenance, delete person. The split dialog is fed
+  by `list_voice_exemplars` (ids, provenance, durations — never vectors) and ticks exemplars by
+  provenance; moving every one is refused as a merge, and the move is attested for the person the
+  speech goes *to*. Dedupe aid: the list surfaces same-name/same-alias groups as merge candidates
+  — never auto-merged. Every control named for AccessKit (`assert_every_control_is_named`,
+  `crates/ui-testkit`).
 - **VP-092.** **Per-recording speaker panel** (extends the mounted T12 surface,
   `plaudon_ui::ai::OutputsViewer` / `LivePanels`): per cluster — neutral label, the **person
   picker** (VP-210), suggestion (if any) with qualitative band + numeric score ("sounds like
@@ -608,7 +613,9 @@ status = glyph plus word never colour alone, 24 pt minimum targets, Escape-close
   announced via `Role::Status`/`Live::Polite` like existing toasts.
 - **VP-094.** Enrolment flow: segment-anchored ("create from this speaker"), shows what audio
   span the exemplars come from, enforces VP-065 minima with a progress meter ("12 s of 10 s clean
-  speech collected"), and ends at the consent gate (§12.2) before anything is computed.
+  speech collected", fed by `get_cluster_speech` as the flow opens, and the enrolment control
+  stays unavailable while the measurement is under the minimum), and ends at the consent gate
+  (§12.2) before anything is computed.
 - **VP-095.** **Forget everyone:** one action destroys every enrolment, exemplar and suggestion,
   destroys the `SecretScope::VoiceProfileKey` entry (cryptographic erasure of every
   `embedding_cipher`, including any copy inside encrypted backups the key never left the device
@@ -1131,6 +1138,7 @@ below. Issue ids follow the house convention (EPIC P, ≤ 2 phases, ≤ 5 tasks 
 | P2.3 | Export/backup/deletion integration: voice namespace (encrypted-only), deletion disclosures, forget-everyone, retention expiry job | plaintext-with-voice unrepresentable; restore re-gates consent; journalled deletes; archive fuzz doc target |
 | P2.4 | Evaluation harness + LibriSpeech/TTS fixture generator + EER/DER reports + threshold calibration | committed benchmark JSON; golden tests pinned to model sha256; cross-device conditions reported |
 | P2.5 | Model-pack tier for the two ONNX artifacts, licence register + NOTICE rows, threat-model row flips, `docs/public` updates, counsel-review evidence item | register tests green; ADR-0400-style conditions documented per artifact; TM-044..048 flipped or re-scoped with named tests |
+| P2.6 | The two reads P2.1 had no command for: `list_voice_exemplars` (ids, provenance, durations — never vectors) behind the split-by-provenance dialog (VP-091), and `get_cluster_speech` behind the enrolment flow's clean-speech meter (VP-094) | schemas + response scan proving no vector; kittest for the split dialog (ticking, "moving everything is a merge", target attestation) and for the meter (unmeasured ≠ zero, under-minimum disables the enrolment) |
 
 Dependency graph (arrows = "needs"):
 

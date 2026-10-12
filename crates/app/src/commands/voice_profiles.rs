@@ -2,7 +2,7 @@
 //! (`VOICE_PROFILES_SPEC` §8, §12.2, VP-003, VP-085, VP-094, VP-095,
 //! VP-120..VP-123, VP-216; ADR-0080, ADR-0082).
 //!
-//! Eleven commands, all consent-gated, deliberately separate from
+//! Thirteen commands, deliberately separate from
 //! [`crate::commands::people`]. The split is the §12.2A boundary made
 //! structural: a roster command cannot reach biometric code because it never
 //! obtains a
@@ -11,11 +11,15 @@
 //! `add_voice_exemplar`, `start_speaker_matching` — all pass through the gate
 //! before any audio is read (VP-011, VP-215).
 //!
-//! Two commands in this module are *not* gated, and that is also deliberate:
+//! Four commands in this module are *not* gated, and that is also deliberate.
 //! `delete_voice_enrollment` and `forget_all_voice_profiles` destroy biometric
-//! data. A user whose disclosure went stale, or who already turned the feature
-//! off, must still be able to delete what was collected (VP-123, VP-095);
+//! data: a user whose disclosure went stale, or who already turned the feature
+//! off, must still be able to delete what was collected (VP-123, VP-095), and
 //! gating deletion behind consent would be the opposite of the right answer.
+//! `list_voice_exemplars` is how they see what there is to destroy or split,
+//! and `get_cluster_speech` is the meter read *while* the enrolment gate is
+//! still open — it measures stored diarization rows, so there is no biometric
+//! work on its path to authorise.
 
 use plaudon_app_core::voice_profiles::{EnrolmentAttestation, ACTIVATION_DISCLOSURE};
 use plaudon_domain::error::AppError;
@@ -23,13 +27,14 @@ use plaudon_domain::ids::{PersonId, RecordingId, SpeakerSuggestionId, VoiceExemp
 
 use crate::backend::voice_profiles::{SUGGESTION_PAGE_DEFAULT, SUGGESTION_PAGE_MAX};
 use crate::dto::{
-    AddVoiceExemplarRequest, ConfirmSpeakerSuggestionRequest, DeleteVoiceEnrollmentRequest,
-    DeleteVoiceEnrollmentResponse, EmptyRequest, EnrollPersonVoiceRequest, EnrolmentConsentDto,
-    ForgetAllVoiceProfilesRequest, ForgetAllVoiceProfilesResponse, ListSpeakerSuggestionsRequest,
-    ListSpeakerSuggestionsResponse, RejectSpeakerSuggestionRequest, SetVoiceProfilesEnabledRequest,
-    SpeakerSuggestionDecisionDto, SplitVoiceEnrollmentRequest, SplitVoiceEnrollmentResponse,
-    StartSpeakerMatchingRequest, StartSpeakerMatchingResponse, VoiceEnrollmentDto,
-    VoiceProfileSettingsDto,
+    AddVoiceExemplarRequest, ClusterSpeechDto, ConfirmSpeakerSuggestionRequest,
+    DeleteVoiceEnrollmentRequest, DeleteVoiceEnrollmentResponse, EmptyRequest,
+    EnrollPersonVoiceRequest, EnrolmentConsentDto, ForgetAllVoiceProfilesRequest,
+    ForgetAllVoiceProfilesResponse, GetClusterSpeechRequest, ListSpeakerSuggestionsRequest,
+    ListSpeakerSuggestionsResponse, ListVoiceExemplarsRequest, ListVoiceExemplarsResponse,
+    RejectSpeakerSuggestionRequest, SetVoiceProfilesEnabledRequest, SpeakerSuggestionDecisionDto,
+    SplitVoiceEnrollmentRequest, SplitVoiceEnrollmentResponse, StartSpeakerMatchingRequest,
+    StartSpeakerMatchingResponse, VoiceEnrollmentDto, VoiceProfileSettingsDto,
 };
 use crate::error::invalid_argument;
 use crate::ports::{EnrolmentRequest, SplitRequest, SplitTarget};
@@ -222,6 +227,39 @@ pub async fn split_voice_enrollment(
             target,
             attestation,
         })
+        .await
+}
+
+/// What one enrolment is made of: exemplar ids, provenance and durations
+/// (VP-091, §3.5).
+///
+/// Ungated for the same reason deletion is: a user whose disclosure went
+/// stale, or who turned the feature off, must still be able to see what was
+/// collected and split or destroy it. The response carries no vector — the
+/// embedding stays sealed in the store (VP-085).
+pub async fn list_voice_exemplars(
+    ports: &AppPorts,
+    request: ListVoiceExemplarsRequest,
+) -> Result<ListVoiceExemplarsResponse, AppError> {
+    let person_id: PersonId = parse_id("person_id", &request.person_id)?;
+    ports.voice_profiles.list_voice_exemplars(person_id).await
+}
+
+/// How much clean speech one cluster offers, for the enrolment meter
+/// (VP-094).
+///
+/// Ungated, because the meter is read *while* the user is deciding whether to
+/// enrol: it answers from the stored reconciliation, opens no audio and calls
+/// no model, so nothing biometric exists on this path to gate.
+pub async fn get_cluster_speech(
+    ports: &AppPorts,
+    request: GetClusterSpeechRequest,
+) -> Result<ClusterSpeechDto, AppError> {
+    let recording_id: RecordingId = parse_id("recording_id", &request.recording_id)?;
+    let cluster_key = cluster_key(&request.cluster_key)?;
+    ports
+        .voice_profiles
+        .cluster_speech(recording_id, &cluster_key)
         .await
 }
 

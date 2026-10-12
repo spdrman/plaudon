@@ -29,13 +29,16 @@ use egui::Ui;
 use plaudon_app::command::{AppCommand, AppResponse};
 use plaudon_app::dto::{
     CreatePersonRequest, DeletePersonRequest, DeletePersonResponse, DeleteVoiceEnrollmentRequest,
-    DeleteVoiceEnrollmentResponse, ListPeopleRequest, ListPeopleResponse,
-    ListSpeakerSuggestionsRequest, ListSpeakerSuggestionsResponse, MergePeopleRequest,
-    MergePeopleResponse, PersonDto, RejectSpeakerSuggestionRequest, UpdatePersonRequest,
-    VoiceProfileSettingsDto,
+    DeleteVoiceEnrollmentResponse, EnrolmentConsentDto, ListPeopleRequest, ListPeopleResponse,
+    ListSpeakerSuggestionsRequest, ListSpeakerSuggestionsResponse, ListVoiceExemplarsRequest,
+    ListVoiceExemplarsResponse, MergePeopleRequest, MergePeopleResponse, PersonDto,
+    RejectSpeakerSuggestionRequest, SplitVoiceEnrollmentRequest, UpdatePersonRequest,
+    VoiceExemplarDto, VoiceProfileSettingsDto,
 };
 use plaudon_domain::error::ErrorEnvelope;
 use plaudon_domain::speaker::MAX_NAME_CHARS;
+
+use crate::ai::speakers::{MAX_RETENTION_MONTHS, MIN_RETENTION_MONTHS};
 
 pub use picker::{PersonPick, PersonPicker, PersonPickerState, PickerPerson, PickerSuggestion};
 pub use review::{ReviewQueue, SuggestionDecision};
@@ -228,6 +231,41 @@ enum Dialog {
         reason: String,
         disclosure: Option<DeleteVoiceEnrollmentResponse>,
     },
+    /// Split an enrolment's exemplars by provenance (§3.5, VP-091).
+    Split {
+        person_id: String,
+        name: String,
+        /// The provenance list, once `list_voice_exemplars` answered.
+        exemplars: Option<ListVoiceExemplarsResponse>,
+        /// Exemplar ids the user ticked, in the order the list shows them.
+        selected: Vec<String>,
+        /// Who the ticked exemplars move to.
+        target: SplitTargetChoice,
+        /// Whether the attestation text has been read to the end.
+        read: bool,
+        /// Whether the user attested that the *target* agreed. Never
+        /// pre-ticked: the speech turned out to be somebody else's, so
+        /// somebody else has to have agreed (VP-120 level 3).
+        attested: bool,
+        /// Retention term for the target's new enrolment.
+        retention_months: u8,
+        /// The user's own note of the consent basis.
+        note: String,
+    },
+}
+
+/// Where a split's exemplars go.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum SplitTargetChoice {
+    /// A roster entry to create with this display name.
+    New(String),
+    /// A roster entry that already exists.
+    Existing {
+        /// Their id.
+        person_id: String,
+        /// Their name, for the attestation sentence.
+        name: String,
+    },
 }
 
 /// The People destination.
@@ -358,6 +396,25 @@ impl PeopleScreen {
                     return self.reread();
                 }
                 Vec::new()
+            }
+            AppResponse::ListVoiceExemplars(list) => {
+                if let Some(Dialog::Split {
+                    person_id,
+                    exemplars,
+                    ..
+                }) = self.dialog.as_mut()
+                {
+                    if *person_id == list.person_id.to_string() {
+                        *exemplars = Some(list.clone());
+                    }
+                }
+                Vec::new()
+            }
+            AppResponse::SplitVoiceEnrollment(_) => {
+                // The split happened: both enrolments changed, so the list
+                // the user is looking at is stale.
+                self.dialog = None;
+                self.reread()
             }
             AppResponse::CreatePerson(created) => {
                 self.dialog = None;
@@ -518,6 +575,29 @@ impl PeopleScreen {
                     loser_person_id: loser,
                     survivor_person_id: survivor,
                     apply: false,
+                }));
+            }
+            Some(roster::RosterAction::SplitEnrollment(person_id)) => {
+                let name = self.name_of(&person_id);
+                self.dialog = Some(Dialog::Split {
+                    person_id: person_id.clone(),
+                    name,
+                    exemplars: None,
+                    selected: Vec::new(),
+                    target: SplitTargetChoice::New(String::new()),
+                    read: false,
+                    attested: false,
+                    retention_months: self
+                        .data
+                        .settings
+                        .as_ref()
+                        .map_or(MAX_RETENTION_MONTHS, |settings| {
+                            settings.disclosure.retention_default_months
+                        }),
+                    note: String::new(),
+                });
+                out.command(AppCommand::ListVoiceExemplars(ListVoiceExemplarsRequest {
+                    person_id,
                 }));
             }
             Some(roster::RosterAction::Delete(person_id)) => {
@@ -833,6 +913,192 @@ impl PeopleScreen {
                     });
                 }
             }
+            Dialog::Split {
+                person_id,
+                name,
+                exemplars,
+                mut selected,
+                mut target,
+                mut read,
+                mut attested,
+                mut retention_months,
+                mut note,
+            } => {
+                let roster: Vec<(String, String)> = self
+                    .data
+                    .people()
+                    .iter()
+                    .filter(|person| {
+                        person.person_id.to_string() != person_id && person.status != "merged"
+                    })
+                    .map(|person| (person.person_id.to_string(), person.display_name.clone()))
+                    .collect();
+                let settings = self.data.settings.clone();
+                let outcome = modal(
+                    ui,
+                    "Split this voiceprint",
+                    "Move the ticked exemplars",
+                    |ui| {
+                        ui.label(format!(
+                            "{name}'s voiceprint is made of separate exemplars, each from one \
+                             recording. Tick the ones that turned out to be somebody else's \
+                             voice; the rest stay with {name}."
+                        ));
+                        let Some(list) = exemplars.as_ref() else {
+                            ui.label("Reading what this voiceprint is made of…");
+                            return false;
+                        };
+                        if list.exemplars.is_empty() {
+                            ui.label("This voiceprint has no exemplars left to move.");
+                            return false;
+                        }
+                        for exemplar in &list.exemplars {
+                            let id = exemplar.exemplar_id.to_string();
+                            let mut ticked = selected.contains(&id);
+                            if ui.checkbox(&mut ticked, exemplar_line(exemplar)).changed() {
+                                if ticked {
+                                    selected.push(id);
+                                } else {
+                                    selected.retain(|held| *held != id);
+                                }
+                            }
+                        }
+                        let moving = u32::try_from(selected.len()).unwrap_or(u32::MAX);
+                        let total = u32::try_from(list.exemplars.len()).unwrap_or(u32::MAX);
+                        ui.label(split_scope(moving, total));
+
+                        ui.separator();
+                        ui.label("Move them to");
+                        if ui
+                            .radio(matches!(target, SplitTargetChoice::New(_)), "a new person")
+                            .clicked()
+                            && !matches!(target, SplitTargetChoice::New(_))
+                        {
+                            target = SplitTargetChoice::New(String::new());
+                        }
+                        if let SplitTargetChoice::New(new_name) = &mut target {
+                            let label = ui.label("Their name");
+                            ui.add(
+                                egui::TextEdit::singleline(new_name)
+                                    .char_limit(MAX_NAME_CHARS)
+                                    .desired_width(260.0),
+                            )
+                            .labelled_by(label.id);
+                        }
+                        ui.menu_button("an existing person…", |ui| {
+                            for (id, display_name) in &roster {
+                                if ui.button(display_name).clicked() {
+                                    target = SplitTargetChoice::Existing {
+                                        person_id: id.clone(),
+                                        name: display_name.clone(),
+                                    };
+                                    ui.close();
+                                }
+                            }
+                        });
+                        if let SplitTargetChoice::Existing {
+                            name: chosen_name, ..
+                        } = &target
+                        {
+                            ui.label(format!("Moving them to {chosen_name}."));
+                        }
+                        let target_name = split_target_name(&target);
+
+                        ui.separator();
+                        ui.label(format!(
+                            "The exemplars are re-sealed under {target_name}'s own key binding, \
+                             so this is a new voiceprint for them — and it needs their consent, \
+                             not {name}'s."
+                        ));
+                        if let Some(settings) = settings.as_ref() {
+                            read |= crate::ai::speakers::disclosure_body(ui, settings);
+                        } else {
+                            ui.label(
+                                "The consent text has not been read from the application yet.",
+                            );
+                        }
+                        ui.add_enabled(
+                            read,
+                            egui::Checkbox::new(
+                                &mut attested,
+                                format!("{target_name} has agreed to this"),
+                            ),
+                        )
+                        .on_disabled_hover_text("Read the text above to the end first.");
+                        ui.horizontal_wrapped(|ui| {
+                            let label = ui.label("Keep their voiceprint for");
+                            let mut months = i32::from(retention_months);
+                            ui.add(
+                                egui::DragValue::new(&mut months)
+                                    .range(
+                                        i32::from(MIN_RETENTION_MONTHS)
+                                            ..=i32::from(MAX_RETENTION_MONTHS),
+                                    )
+                                    .suffix(" months"),
+                            )
+                            .labelled_by(label.id);
+                            retention_months = u8::try_from(months).unwrap_or(MAX_RETENTION_MONTHS);
+                        });
+                        let label =
+                            ui.label("Your note of how they agreed, if you want one recorded");
+                        ui.add(
+                            egui::TextEdit::singleline(&mut note)
+                                .hint_text("for example: agreed at the start of the meeting")
+                                .desired_width(300.0),
+                        )
+                        .labelled_by(label.id);
+
+                        moving > 0 && moving < total && !target_name.is_empty() && read && attested
+                    },
+                );
+                match outcome {
+                    ModalOutcome::Confirmed => {
+                        let version = self
+                            .data
+                            .settings
+                            .as_ref()
+                            .map(|settings| settings.disclosure.version.clone())
+                            .unwrap_or_default();
+                        let (target_person_id, new_person_display_name) = match &target {
+                            SplitTargetChoice::New(new_name) => {
+                                (None, Some(new_name.trim().to_owned()))
+                            }
+                            SplitTargetChoice::Existing { person_id, .. } => {
+                                (Some(person_id.clone()), None)
+                            }
+                        };
+                        out.command(AppCommand::SplitVoiceEnrollment(
+                            SplitVoiceEnrollmentRequest {
+                                person_id: person_id.clone(),
+                                exemplar_ids: selected.clone(),
+                                target_person_id,
+                                new_person_display_name,
+                                consent: EnrolmentConsentDto {
+                                    disclosure_version: version,
+                                    person_attested: attested,
+                                    retention_months: Some(retention_months),
+                                    consent_note: optional(&note),
+                                },
+                            },
+                        ));
+                    }
+                    ModalOutcome::Cancelled => next = None,
+                    ModalOutcome::Pending => {}
+                }
+                if let Some(Dialog::Split { .. }) = next {
+                    next = Some(Dialog::Split {
+                        person_id,
+                        name,
+                        exemplars,
+                        selected,
+                        target,
+                        read,
+                        attested,
+                        retention_months,
+                        note,
+                    });
+                }
+            }
         }
         self.dialog = next;
     }
@@ -845,6 +1111,72 @@ pub fn blast_radius(recordings: u32) -> String {
         0 => "This name is shown in no recording yet.".to_owned(),
         1 => "This name is shown in 1 recording.".to_owned(),
         count => format!("This name is shown in {count} recordings."),
+    }
+}
+
+/// One exemplar's provenance line: where the speech came from and how much of
+/// it there was (VP-091, §3.5).
+///
+/// Provenance and duration only. The vector is not in the DTO and is not
+/// anywhere on this screen; what a user needs to decide whether an exemplar
+/// is somebody else's voice is which recording and which span it came from.
+#[must_use]
+pub fn exemplar_line(exemplar: &VoiceExemplarDto) -> String {
+    let source = exemplar.recording_title.as_deref().map_or_else(
+        || {
+            exemplar.recording_id.map_or_else(
+                || "a deleted recording".to_owned(),
+                |id| format!("recording {id}"),
+            )
+        },
+        ToOwned::to_owned,
+    );
+    let cluster = exemplar.cluster_key.as_deref().map_or_else(
+        || "cluster unknown".to_owned(),
+        |key| format!("cluster {key}"),
+    );
+    let span = match (exemplar.source_start_ms, exemplar.source_end_ms) {
+        (Some(start), Some(end)) => format!("{} to {}", clock(start), clock(end)),
+        _ => "span unknown".to_owned(),
+    };
+    format!(
+        "{source} — {cluster} — {span} — {} s of speech",
+        exemplar.speech_ms / 1_000
+    )
+}
+
+/// A position in a recording, as a transcript reads it.
+fn clock(ms: u64) -> String {
+    let total = ms / 1_000;
+    format!("{}:{:02}", total / 60, total % 60)
+}
+
+/// What the ticked exemplars would do, said before anything moves.
+///
+/// A split that moves everything is a merge, and the application refuses it
+/// as one, so the sentence says that rather than letting the user find out
+/// from an error (§3.5).
+#[must_use]
+pub fn split_scope(moving: u32, total: u32) -> String {
+    if moving == 0 {
+        return "Nothing is ticked yet, so nothing would move.".to_owned();
+    }
+    if moving >= total {
+        return "Every exemplar is ticked. Moving all of them is a merge, not a split — untick \
+                at least one, or merge the two people instead."
+            .to_owned();
+    }
+    format!(
+        "{moving} of {total} exemplar(s) move; {} stay.",
+        total - moving
+    )
+}
+
+/// The name a split's target is attested under.
+fn split_target_name(target: &SplitTargetChoice) -> String {
+    match target {
+        SplitTargetChoice::New(name) => name.trim().to_owned(),
+        SplitTargetChoice::Existing { name, .. } => name.clone(),
     }
 }
 
@@ -916,6 +1248,8 @@ fn is_ours(command: &'static str) -> bool {
             | "confirm_speaker_suggestion"
             | "reject_speaker_suggestion"
             | "delete_voice_enrollment"
+            | "list_voice_exemplars"
+            | "split_voice_enrollment"
     )
 }
 

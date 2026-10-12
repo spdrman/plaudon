@@ -4501,6 +4501,97 @@ pub struct SplitVoiceEnrollmentResponse {
     pub target: PersonDto,
 }
 
+/// Request for `list_voice_exemplars` (VP-091's split-by-provenance list).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ListVoiceExemplarsRequest {
+    /// Enrolled person whose exemplars are listed.
+    pub person_id: String,
+}
+
+/// One stored exemplar as the wire describes it: where the speech came from
+/// and how much of it there was.
+///
+/// **Never the vector.** The embedding is sealed in the store and has no
+/// field here; what a user needs to split an enrolment by provenance is which
+/// recording and which span each exemplar came from (VP-085, §3.5).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VoiceExemplarDto {
+    /// Row identity, which is what a split names.
+    pub exemplar_id: VoiceExemplarId,
+    /// Recording the speech came from, or `None` once it was deleted
+    /// (VP-080: the exemplar survives, its provenance is nulled).
+    pub recording_id: Option<RecordingId>,
+    /// That recording's title, when it still exists.
+    pub recording_title: Option<String>,
+    /// Cluster within that recording's diarization run.
+    pub cluster_key: Option<String>,
+    /// Start of the audio span the exemplar was computed over.
+    pub source_start_ms: Option<u64>,
+    /// End of that span.
+    pub source_end_ms: Option<u64>,
+    /// Clean speech this exemplar was computed from.
+    pub speech_ms: u32,
+    /// Embedding model identity (VP-075).
+    pub model_id: String,
+    /// Embedding model version.
+    pub model_version: String,
+    /// When the exemplar was stored.
+    pub created_at: Timestamp,
+}
+
+/// Response for `list_voice_exemplars`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ListVoiceExemplarsResponse {
+    /// The enrolled person.
+    pub person_id: PersonId,
+    /// Their exemplars, oldest first, which is the order they were collected
+    /// in and the order a provenance list reads in.
+    pub exemplars: Vec<VoiceExemplarDto>,
+    /// Clean speech across all of them.
+    pub total_speech_ms: u32,
+    /// Distinct source recordings, the device-diversity hint of §6.5.
+    pub source_recordings: u32,
+}
+
+/// Request for `get_cluster_speech` (VP-094's meter).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GetClusterSpeechRequest {
+    /// Recording the cluster belongs to.
+    pub recording_id: String,
+    /// Cluster within that recording's latest diarization run.
+    pub cluster_key: String,
+}
+
+/// How much clean speech one cluster offers, before anything is computed.
+///
+/// This is the number the enrolment meter shows while the user is still
+/// reading the consent text: it is read from the stored reconciliation, so
+/// asking for it opens no audio and calls no model (§12.2, VP-094).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ClusterSpeechDto {
+    /// The recording.
+    pub recording_id: RecordingId,
+    /// The cluster.
+    pub cluster_key: String,
+    /// Clean single-speaker speech attributed to this cluster and nobody
+    /// else (VP-022).
+    pub clean_speech_ms: u32,
+    /// How many separate stretches that speech is spread over.
+    pub spans: u32,
+    /// Start of the first stretch.
+    pub first_span_start_ms: Option<u64>,
+    /// End of the last stretch.
+    pub last_span_end_ms: Option<u64>,
+    /// Clean speech a new enrolment needs (VP-065).
+    pub enrol_speech_ms: u32,
+    /// Clean speech an added exemplar needs.
+    pub exemplar_speech_ms: u32,
+    /// Whether there is enough for a new enrolment.
+    pub meets_enrol_minimum: bool,
+    /// Whether there is enough to extend one.
+    pub meets_exemplar_minimum: bool,
+}
+
 /// Request for `delete_voice_enrollment` (§12.4, VP-123).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DeleteVoiceEnrollmentRequest {

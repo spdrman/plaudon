@@ -23,9 +23,9 @@
 
 use async_trait::async_trait;
 use plaudon_app_core::voice_profiles::{
-    authorise_biometric_work, gate_state, ConsentError, ConsentGateState, ConsentProof,
-    DisclosureReason, EnrolError, EnrolmentSource, VoiceEnrolmentService, VoiceProfileEraser,
-    ACTIVATION_DISCLOSURE, ENROL_SPEECH_MS, EXEMPLAR_SPEECH_MS,
+    authorise_biometric_work, cluster_clean_speech, gate_state, ConsentError, ConsentGateState,
+    ConsentProof, DisclosureReason, EnrolError, EnrolmentSource, VoiceEnrolmentService,
+    VoiceProfileEraser, ACTIVATION_DISCLOSURE, ENROL_SPEECH_MS, EXEMPLAR_SPEECH_MS,
 };
 use plaudon_domain::error::{AppError, AppErrorCode};
 use plaudon_domain::ids::{JobId, PersonId, RecordingId, SpeakerSuggestionId};
@@ -38,11 +38,11 @@ use crate::backend::people::people_error;
 use crate::backend::processing::speaker_match::an_embedder_is_installed;
 use crate::backend::LocalBackend;
 use crate::dto::{
-    ActivationDisclosureDto, ConsentGateDto, DeleteVoiceEnrollmentResponse, EventKind,
-    ForgetAllVoiceProfilesResponse, ListSpeakerSuggestionsResponse, PersonRefDto,
-    SpeakerMatchJobDto, SpeakerMatchRefusalDto, SpeakerSuggestionDecisionDto, SpeakerSuggestionDto,
-    SplitVoiceEnrollmentResponse, StartSpeakerMatchingResponse, VoiceEnrollmentDto,
-    VoiceProfileSettingsDto,
+    ActivationDisclosureDto, ClusterSpeechDto, ConsentGateDto, DeleteVoiceEnrollmentResponse,
+    EventKind, ForgetAllVoiceProfilesResponse, ListSpeakerSuggestionsResponse,
+    ListVoiceExemplarsResponse, PersonRefDto, SpeakerMatchJobDto, SpeakerMatchRefusalDto,
+    SpeakerSuggestionDecisionDto, SpeakerSuggestionDto, SplitVoiceEnrollmentResponse,
+    StartSpeakerMatchingResponse, VoiceEnrollmentDto, VoiceExemplarDto, VoiceProfileSettingsDto,
 };
 use crate::events::EventDraft;
 use crate::ports::{EnrolmentRequest, SplitRequest, SplitTarget, VoiceProfilesPort};
@@ -498,6 +498,117 @@ impl VoiceProfilesPort for LocalBackend {
             exemplars_moved: outcome.exemplars_moved,
             exemplars_remaining: outcome.exemplars_remaining,
             target: self.person_dto_by_id(target).await?,
+        })
+    }
+
+    async fn list_voice_exemplars(
+        &self,
+        person_id: PersonId,
+    ) -> Result<ListVoiceExemplarsResponse, AppError> {
+        // Not gated, for the same reason deletion is not (VP-123): seeing
+        // what a stored profile is made of is how a user repairs or destroys
+        // it, and a stale disclosure must not stand between them and that.
+        // Nothing here reaches the embedder, and no response field carries a
+        // vector (VP-085).
+        let voices = self.voices();
+        if voices
+            .enrollment(person_id)
+            .await
+            .map_err(people_error)?
+            .is_none()
+        {
+            return Err(AppError::new(
+                AppErrorCode::RecordNotFound,
+                "this person has no voice enrolment",
+            ));
+        }
+        let rows = voices.exemplars(person_id).await.map_err(people_error)?;
+        let mut recordings: Vec<RecordingId> =
+            rows.iter().filter_map(|row| row.recording_id).collect();
+        recordings.sort_unstable();
+        recordings.dedup();
+
+        let mut titles: Vec<(RecordingId, Option<String>)> = Vec::with_capacity(recordings.len());
+        for recording_id in &recordings {
+            let title: Option<String> = sqlx::query_scalar(
+                "SELECT title FROM recordings WHERE id = ?1 AND deleted_at IS NULL",
+            )
+            .bind(recording_id.to_string())
+            .fetch_optional(self.pool())
+            .await
+            .map_err(|err| crate::backend::store::storage_error("cannot read a recording", &err))?
+            .flatten();
+            titles.push((*recording_id, title));
+        }
+
+        let exemplars: Vec<VoiceExemplarDto> = rows
+            .iter()
+            .map(|row| VoiceExemplarDto {
+                exemplar_id: row.id,
+                recording_id: row.recording_id,
+                recording_title: row.recording_id.and_then(|id| {
+                    titles
+                        .iter()
+                        .find(|(held, _)| *held == id)
+                        .and_then(|(_, title)| title.clone())
+                }),
+                cluster_key: row.cluster_key.clone(),
+                source_start_ms: row.source_start_ms,
+                source_end_ms: row.source_end_ms,
+                speech_ms: u32::try_from(row.speech_ms).unwrap_or(u32::MAX),
+                model_id: row.model_id.clone(),
+                model_version: row.model_version.clone(),
+                created_at: row.created_at,
+            })
+            .collect();
+
+        Ok(ListVoiceExemplarsResponse {
+            person_id,
+            total_speech_ms: exemplars
+                .iter()
+                .map(|exemplar| exemplar.speech_ms)
+                .fold(0u32, u32::saturating_add),
+            source_recordings: u32::try_from(recordings.len()).unwrap_or(u32::MAX),
+            exemplars,
+        })
+    }
+
+    async fn cluster_speech(
+        &self,
+        recording_id: RecordingId,
+        cluster_key: &str,
+    ) -> Result<ClusterSpeechDto, AppError> {
+        // Ungated on purpose: the meter is what the user looks at *while*
+        // deciding whether to enrol, so it has to answer before the gate does
+        // (VP-094). It reads the stored reconciliation — no audio is opened
+        // and no model is called, which is why no `ConsentProof` exists in
+        // this path at all.
+        let run = self
+            .speaker_rows()
+            .latest_run(recording_id)
+            .await
+            .map_err(people_error)?
+            .ok_or_else(|| {
+                AppError::new(
+                    AppErrorCode::RecordNotFound,
+                    "this recording has no diarization run to measure speech in",
+                )
+            })?;
+        let revision = self.domain_revision(recording_id, None).await?;
+        let speech = cluster_clean_speech(&self.speaker_rows(), &revision, run.id, cluster_key)
+            .await
+            .map_err(enrol_error)?;
+        Ok(ClusterSpeechDto {
+            recording_id,
+            cluster_key: speech.cluster_key,
+            clean_speech_ms: speech.clean_speech_ms,
+            spans: u32::try_from(speech.spans.len()).unwrap_or(u32::MAX),
+            first_span_start_ms: speech.spans.first().map(|(start, _)| *start),
+            last_span_end_ms: speech.spans.last().map(|(_, end)| *end),
+            enrol_speech_ms: ENROL_SPEECH_MS,
+            exemplar_speech_ms: EXEMPLAR_SPEECH_MS,
+            meets_enrol_minimum: speech.clean_speech_ms >= ENROL_SPEECH_MS,
+            meets_exemplar_minimum: speech.clean_speech_ms >= EXEMPLAR_SPEECH_MS,
         })
     }
 

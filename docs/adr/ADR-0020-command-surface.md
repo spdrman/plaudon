@@ -135,22 +135,28 @@ arms are all expanded from a single macro table in `crates/app/src/command.rs`,
 so a command cannot be registered in one place and forgotten in another, and
 the generic-execution pattern test (`^exec`, `^run_`, `^shell`, `^http_`,
 `^read_file$`, `^write_file$`) runs against that table rather than against a
-`tauri::generate_handler!` list. The surface is 96 published names, each
+`tauri::generate_handler!` list. The surface is 98 published names, each
 appearing exactly once: the Tauri allowlist listed the six archive commands
-twice, and the duplication was not carried forward. The latest additions are the
-seventeen EPIC P task P1.5 published for the people roster and the
-consent-gated biometric tier (`docs/specs/VOICE_PROFILES_SPEC.md` §8): six
-ungated roster commands (`list_people`, `create_person`, `update_person`,
-`merge_people`, `delete_person`, `assign_cluster_person`) that work with voice
-matching off, and eleven gated ones (`get_voice_profile_settings`,
+twice, and the duplication was not carried forward. EPIC P task P1.5 published
+seventeen for the people roster and the consent-gated biometric tier
+(`docs/specs/VOICE_PROFILES_SPEC.md` §8): six ungated roster commands
+(`list_people`, `create_person`, `update_person`, `merge_people`,
+`delete_person`, `assign_cluster_person`) that work with voice matching off, and
+eleven for the biometric tier (`get_voice_profile_settings`,
 `set_voice_profiles_enabled`, `enroll_person_voice`, `add_voice_exemplar`,
 `split_voice_enrollment`, `delete_voice_enrollment`,
 `forget_all_voice_profiles`, `list_speaker_suggestions`,
 `confirm_speaker_suggestion`, `reject_speaker_suggestion`,
 `start_speaker_matching`). The split is the §12.2A boundary made structural: a
 roster command cannot reach embedding code, because only the gate produces the
-`ConsentProof` that code requires. All seventeen are egui-only and obey the same
-prefix guard.
+`ConsentProof` that code requires. The latest additions are the two of task
+P2.6: `list_voice_exemplars`, which says what one enrolment is made of so the
+People screen can split it by provenance, and `get_cluster_speech`, the
+clean-speech meter the enrolment flow shows while the consent gate is still
+open. Neither is gated and neither can be: one is how a user sees what to
+destroy or repair, the other reads the stored reconciliation and calls no
+model, so there is no biometric work on either path to authorise. All nineteen
+are egui-only and obey the same prefix guard.
 
 **Events.** The §15.3 events, including `ui.activation_requested`, are
 `AppEvent::Ui` values on the same bounded, coalescing channel. The rule they
