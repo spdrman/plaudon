@@ -4439,6 +4439,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.21",
  "tokio",
+ "tokio-util",
  "uuid",
  "zeroize",
 ]
@@ -4506,6 +4507,7 @@ dependencies = [
  "hex",
  "plaudon-ai-apple",
  "plaudon-ai-contracts",
+ "plaudon-ai-diarization",
  "plaudon-ai-openrouter",
  "plaudon-app-core",
  "plaudon-domain",
@@ -4513,6 +4515,7 @@ dependencies = [
  "plaudon-integration-tests",
  "plaudon-jobs",
  "plaudon-persistence",
+ "plaudon-security",
  "serde_json",
  "sha2 0.10.9",
  "sqlx",

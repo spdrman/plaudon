@@ -44,6 +44,11 @@ pub enum ProcessingStage {
     CitationVerification,
     /// A transcript tool run.
     ToolRun,
+    /// Speaker embeddings over a diarized recording
+    /// (`VOICE_PROFILES_SPEC` VP-100).
+    SpeakerEmbed,
+    /// Open-set matching of clusters against enrolled voice profiles (VP-100).
+    SpeakerMatch,
 }
 
 impl ProcessingStage {
@@ -57,6 +62,8 @@ impl ProcessingStage {
         Self::StructuredExtraction,
         Self::CitationVerification,
         Self::ToolRun,
+        Self::SpeakerEmbed,
+        Self::SpeakerMatch,
     ];
 
     /// Stable wire string, as the commands expect it.
@@ -71,6 +78,8 @@ impl ProcessingStage {
             Self::StructuredExtraction => "structured_extraction",
             Self::CitationVerification => "citation_verification",
             Self::ToolRun => "tool_run",
+            Self::SpeakerEmbed => "speaker_embed",
+            Self::SpeakerMatch => "speaker_match",
         }
     }
 
@@ -95,40 +104,57 @@ impl ProcessingStage {
             Self::StructuredExtraction => "Structured extraction",
             Self::CitationVerification => "Citation verification",
             Self::ToolRun => "Transcript tool run",
+            Self::SpeakerEmbed => "Speaker embedding",
+            Self::SpeakerMatch => "Speaker matching",
         }
+    }
+
+    /// Whether this stage can never leave the device.
+    ///
+    /// Voice embeddings are biometric data and have no dispatchable form: no
+    /// network mode, consent grant or model choice can send one (VP-002,
+    /// VP-110, ADR-0080). A local-only stage therefore has no consent purpose,
+    /// no egress content type and no cloud model to verify — the three methods
+    /// below answer `None` rather than naming a grant that could not exist.
+    #[must_use]
+    pub const fn is_local_only(self) -> bool {
+        matches!(self, Self::SpeakerEmbed | Self::SpeakerMatch)
     }
 
     /// §4.4(3): the consent purpose follows the content that actually leaves
     /// the device. `credential_validation` is reserved for a key check that
     /// sends no recording-derived content, so no stage maps to it.
     #[must_use]
-    pub const fn consent_purpose(self) -> ConsentPurpose {
+    pub const fn consent_purpose(self) -> Option<ConsentPurpose> {
         match self {
-            Self::Transcribe | Self::Diarize => ConsentPurpose::Transcription,
+            Self::Transcribe | Self::Diarize => Some(ConsentPurpose::Transcription),
             Self::Normalize
             | Self::SectionSummary
             | Self::ConsolidatedSummary
             | Self::StructuredExtraction
-            | Self::CitationVerification => ConsentPurpose::Summarization,
-            Self::ToolRun => ConsentPurpose::TranscriptTool,
+            | Self::CitationVerification => Some(ConsentPurpose::Summarization),
+            Self::ToolRun => Some(ConsentPurpose::TranscriptTool),
+            Self::SpeakerEmbed | Self::SpeakerMatch => None,
         }
     }
 
     /// What would actually leave the device for this stage.
     #[must_use]
-    pub const fn content_type(self) -> ContentType {
+    pub const fn content_type(self) -> Option<ContentType> {
         match self {
-            Self::Transcribe | Self::Diarize => ContentType::AudioBytes,
-            _ => ContentType::TranscriptText,
+            Self::Transcribe | Self::Diarize => Some(ContentType::AudioBytes),
+            Self::SpeakerEmbed | Self::SpeakerMatch => None,
+            _ => Some(ContentType::TranscriptText),
         }
     }
 
     /// Which capability check applies to a model used for this stage.
     #[must_use]
-    pub const fn verification_task(self) -> &'static str {
+    pub const fn verification_task(self) -> Option<&'static str> {
         match self {
-            Self::Transcribe | Self::Diarize => "transcription",
-            _ => "text_generation",
+            Self::Transcribe | Self::Diarize => Some("transcription"),
+            Self::SpeakerEmbed | Self::SpeakerMatch => None,
+            _ => Some("text_generation"),
         }
     }
 }
@@ -685,31 +711,51 @@ mod tests {
     fn stage_consent_mapping_follows_the_content_that_leaves() {
         assert_eq!(
             ProcessingStage::Transcribe.consent_purpose(),
-            ConsentPurpose::Transcription
+            Some(ConsentPurpose::Transcription)
         );
         assert_eq!(
             ProcessingStage::Transcribe.content_type(),
-            ContentType::AudioBytes
+            Some(ContentType::AudioBytes)
         );
         assert_eq!(
             ProcessingStage::ConsolidatedSummary.consent_purpose(),
-            ConsentPurpose::Summarization
+            Some(ConsentPurpose::Summarization)
         );
         assert_eq!(
             ProcessingStage::ConsolidatedSummary.content_type(),
-            ContentType::TranscriptText
+            Some(ContentType::TranscriptText)
         );
         assert_eq!(
             ProcessingStage::ToolRun.consent_purpose(),
-            ConsentPurpose::TranscriptTool
+            Some(ConsentPurpose::TranscriptTool)
         );
         for stage in ProcessingStage::ALL {
             assert_ne!(
                 stage.consent_purpose(),
-                ConsentPurpose::CredentialValidation,
+                Some(ConsentPurpose::CredentialValidation),
                 "{stage:?} must not use the credential purpose"
             );
             assert_eq!(ProcessingStage::parse(stage.as_str()), Some(*stage));
+        }
+    }
+
+    /// VP-002/VP-110: a voice embedding has no dispatchable form, so the
+    /// local-only stages name no consent purpose, no egress content class and
+    /// no cloud model to verify — there is nothing a user could authorise.
+    #[test]
+    fn the_speaker_stages_are_local_only_and_offer_no_grant() {
+        for stage in [ProcessingStage::SpeakerEmbed, ProcessingStage::SpeakerMatch] {
+            assert!(stage.is_local_only());
+            assert_eq!(stage.consent_purpose(), None);
+            assert_eq!(stage.content_type(), None);
+            assert_eq!(stage.verification_task(), None);
+        }
+        for stage in ProcessingStage::ALL {
+            assert_eq!(
+                stage.consent_purpose().is_none(),
+                stage.is_local_only(),
+                "{stage:?} disagrees about whether it can leave the device"
+            );
         }
     }
 

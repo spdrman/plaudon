@@ -34,7 +34,7 @@ use std::sync::Arc;
 
 use chacha20poly1305::aead::{Aead, KeyInit, Payload};
 use chacha20poly1305::{XChaCha20Poly1305, XNonce};
-use plaudon_domain::ids::PersonId;
+use plaudon_domain::ids::{JobId, PersonId};
 use plaudon_security::secrets::{
     SecretScope, SecretStore, SecretStoreError, SecretString, StoreKind,
 };
@@ -167,12 +167,69 @@ impl ExemplarBinding {
     }
 }
 
+/// What a *transient* cluster ciphertext is bound to (VP-102).
+///
+/// The resumable match job parks one sealed embedding per diarization cluster
+/// so a crash between the embed and match stages resumes instead of
+/// recomputing. That vector belongs to nobody: a cluster is an anonymous
+/// grouping, and binding it to a person would assert the very thing the job
+/// exists to *suggest*. It therefore has its own additional data, under its
+/// own domain separator, so a scratch ciphertext can never be opened as an
+/// exemplar or moved into an enrolment by editing a row.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClusterBinding {
+    /// Job that computed the vector; the scratch dies with it.
+    pub job_id: JobId,
+    /// Diarization run the cluster belongs to.
+    pub diarization_run_id: String,
+    /// Cluster within that run.
+    pub cluster_key: String,
+    /// Embedding model identity.
+    pub model_id: String,
+    /// Embedding model version.
+    pub model_version: String,
+    /// Dimensionality of the vector.
+    pub embedding_dim: u32,
+}
+
+impl ClusterBinding {
+    /// The exact bytes authenticated alongside the ciphertext.
+    ///
+    /// A cluster key is provider-controlled text, so fields are
+    /// length-prefixed rather than merely separated: no two distinct bindings
+    /// can produce the same additional data even if a provider emits a cluster
+    /// name containing the separator byte.
+    fn aad(&self) -> Vec<u8> {
+        let mut aad = Vec::with_capacity(160);
+        aad.extend_from_slice(CLUSTER_AAD_DOMAIN);
+        for field in [
+            self.job_id.to_string(),
+            self.diarization_run_id.clone(),
+            self.cluster_key.clone(),
+            self.model_id.clone(),
+            self.model_version.clone(),
+            self.embedding_dim.to_string(),
+        ] {
+            aad.push(FIELD_SEPARATOR);
+            aad.extend_from_slice(field.len().to_string().as_bytes());
+            aad.push(FIELD_SEPARATOR);
+            aad.extend_from_slice(field.as_bytes());
+        }
+        aad
+    }
+}
+
 /// Domain separator, so a ciphertext from this construction can never verify
 /// under another part of the application.
 const AAD_DOMAIN: &[u8] = b"plaudon.voice-profile.exemplar.v1";
 
 /// Field separator inside the additional data.
 const FIELD_SEPARATOR: u8 = 0x1f;
+
+/// Domain separator of the transient cluster scratch, distinct from the
+/// exemplar one: a scratch ciphertext and an exemplar ciphertext can never be
+/// opened in each other's place.
+const CLUSTER_AAD_DOMAIN: &[u8] = b"plaudon.voice-profile.cluster-scratch.v1";
 
 /// A sealed embedding, exactly as it goes into `voice_exemplars`.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -239,6 +296,32 @@ impl EmbeddingCipher {
         embedding: &[f32],
         binding: &ExemplarBinding,
     ) -> VoiceProfileResult<SealedEmbedding> {
+        self.seal_with_aad(embedding, binding.embedding_dim, &binding.aad())
+    }
+
+    /// Seal one transient cluster embedding of a running match job (VP-102).
+    ///
+    /// Same construction, different additional data: the result is readable
+    /// only through [`EmbeddingCipher::open_cluster`] with the same job, run,
+    /// cluster and checkpoint, and never as somebody's exemplar.
+    ///
+    /// # Errors
+    ///
+    /// As [`EmbeddingCipher::seal`].
+    pub fn seal_cluster(
+        &self,
+        embedding: &[f32],
+        binding: &ClusterBinding,
+    ) -> VoiceProfileResult<SealedEmbedding> {
+        self.seal_with_aad(embedding, binding.embedding_dim, &binding.aad())
+    }
+
+    fn seal_with_aad(
+        &self,
+        embedding: &[f32],
+        bound_dim: u32,
+        aad: &[u8],
+    ) -> VoiceProfileResult<SealedEmbedding> {
         if embedding.is_empty() {
             return Err(VoiceProfileError::Malformed(
                 "an embedding has at least one dimension".to_owned(),
@@ -251,10 +334,9 @@ impl EmbeddingCipher {
             )));
         }
         let dim = u32::try_from(embedding.len()).unwrap_or(u32::MAX);
-        if binding.embedding_dim != dim {
+        if bound_dim != dim {
             return Err(VoiceProfileError::Malformed(format!(
-                "the binding says {} dimensions, the vector has {dim}",
-                binding.embedding_dim
+                "the binding says {bound_dim} dimensions, the vector has {dim}"
             )));
         }
 
@@ -264,13 +346,12 @@ impl EmbeddingCipher {
         rand::rngs::OsRng.fill_bytes(&mut nonce);
 
         let plaintext = Zeroizing::new(encode_vector(embedding));
-        let aad = binding.aad();
         let ciphertext = cipher
             .encrypt(
                 XNonce::from_slice(&nonce),
                 Payload {
                     msg: plaintext.as_slice(),
-                    aad: &aad,
+                    aad,
                 },
             )
             .map_err(|_| VoiceProfileError::Tampered)?;
@@ -295,13 +376,37 @@ impl EmbeddingCipher {
         sealed: &SealedEmbedding,
         binding: &ExemplarBinding,
     ) -> VoiceProfileResult<Zeroizing<Vec<f32>>> {
+        self.open_with_aad(sealed, binding.embedding_dim, &binding.aad())
+    }
+
+    /// Open one transient cluster embedding of a running match job (VP-102).
+    ///
+    /// # Errors
+    ///
+    /// As [`EmbeddingCipher::open`]; a scratch row whose job, run, cluster or
+    /// checkpoint was edited fails the tag check rather than decrypting into a
+    /// plausible wrong vector.
+    pub fn open_cluster(
+        &self,
+        sealed: &SealedEmbedding,
+        binding: &ClusterBinding,
+    ) -> VoiceProfileResult<Zeroizing<Vec<f32>>> {
+        self.open_with_aad(sealed, binding.embedding_dim, &binding.aad())
+    }
+
+    fn open_with_aad(
+        &self,
+        sealed: &SealedEmbedding,
+        bound_dim: u32,
+        aad: &[u8],
+    ) -> VoiceProfileResult<Zeroizing<Vec<f32>>> {
         if sealed.nonce.len() != EMBEDDING_NONCE_BYTES {
             return Err(VoiceProfileError::Malformed(format!(
                 "a nonce is {EMBEDDING_NONCE_BYTES} bytes, got {}",
                 sealed.nonce.len()
             )));
         }
-        if binding.embedding_dim != sealed.embedding_dim {
+        if bound_dim != sealed.embedding_dim {
             return Err(VoiceProfileError::Malformed(
                 "the binding and the stored row disagree about dimensionality".to_owned(),
             ));
@@ -309,14 +414,13 @@ impl EmbeddingCipher {
 
         let key = self.load_key()?.ok_or(VoiceProfileError::Tampered)?;
         let cipher = XChaCha20Poly1305::new(key.as_slice().into());
-        let aad = binding.aad();
         let plaintext = Zeroizing::new(
             cipher
                 .decrypt(
                     XNonce::from_slice(&sealed.nonce),
                     Payload {
                         msg: sealed.cipher.as_slice(),
-                        aad: &aad,
+                        aad,
                     },
                 )
                 .map_err(|_| VoiceProfileError::Tampered)?,

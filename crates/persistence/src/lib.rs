@@ -23,6 +23,7 @@ pub mod migrations;
 pub mod people;
 pub mod repo;
 pub mod search;
+pub mod speaker_match;
 pub mod speakers;
 pub mod tools;
 pub mod transcript;

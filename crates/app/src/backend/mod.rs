@@ -98,6 +98,9 @@ pub struct LocalBackend {
     events: EventPublisher,
     notifications: NotificationService,
     secrets: Arc<dyn SecretStore>,
+    /// The OS vault the voice-profile data key lives in (ADR-0014, VP-071).
+    /// A separate port from `secrets`, which is the OpenRouter-key one.
+    voice_secrets: Arc<dyn plaudon_security::secrets::SecretStore>,
     approved_roots: Vec<PathBuf>,
     source_runtime: sources::SourcesRuntime,
     cloud: cloud::CloudRuntime,
@@ -132,6 +135,7 @@ impl LocalBackend {
             approved_roots,
             source_runtime: sources::SourcesRuntime::production(),
             cloud,
+            voice_secrets: Arc::from(plaudon_security::secrets::os_store()),
             processing,
             store,
         };
@@ -164,6 +168,37 @@ impl LocalBackend {
         engines: Vec<Arc<dyn plaudon_ai_contracts::stt::SpeechToText>>,
     ) -> Self {
         self.processing = self.processing.with_stt_engines(engines);
+        self
+    }
+
+    /// Replace the diarization provider and speaker embedder the matching
+    /// executor would otherwise find absent.
+    ///
+    /// This build ships neither — the ONNX tier is a later phase of EPIC P —
+    /// so without this seam a match job parks in `waiting_for_model` instead
+    /// of pretending a model could run (VP-042).
+    #[must_use]
+    pub fn with_voice_engines(
+        mut self,
+        diarizer: Arc<dyn plaudon_ai_diarization::contract::DiarizationProvider>,
+        embedder: Arc<dyn plaudon_app_core::voice_profiles::embedder::SpeakerEmbedder>,
+    ) -> Self {
+        self.processing = self.processing.with_voice_engines(diarizer, embedder);
+        self
+    }
+
+    /// Replace the OS credential store the voice-profile data key lives in.
+    ///
+    /// Separate from [`LocalBackend::secrets`], which is the application's own
+    /// OpenRouter-key port: the biometric tier needs the
+    /// `plaudon_security::secrets` scope API (ADR-0014, VP-071), and a test
+    /// must be able to run it without touching a real keychain.
+    #[must_use]
+    pub fn with_voice_secrets(
+        mut self,
+        store: Arc<dyn plaudon_security::secrets::SecretStore>,
+    ) -> Self {
+        self.voice_secrets = store;
         self
     }
 
@@ -272,6 +307,12 @@ impl LocalBackend {
     #[must_use]
     pub fn secrets(&self) -> &Arc<dyn SecretStore> {
         &self.secrets
+    }
+
+    /// The credential store holding the voice-profile data key (VP-071).
+    #[must_use]
+    pub fn voice_secrets(&self) -> &Arc<dyn plaudon_security::secrets::SecretStore> {
+        &self.voice_secrets
     }
 
     /// Roots the user has approved for import.
