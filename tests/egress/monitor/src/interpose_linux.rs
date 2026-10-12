@@ -96,26 +96,24 @@ pub unsafe extern "C" fn connect(
         set_errno(libc::EPERM);
         return -1;
     }
-    match real_fn!("connect", ConnectFn) {
+    if let Some(f) = real_fn!("connect", ConnectFn) {
         // SAFETY: arguments are forwarded unchanged.
-        Some(f) => unsafe { f(socket, address, len) },
-        None => {
-            set_errno(libc::ENOSYS);
-            -1
-        }
+        unsafe { f(socket, address, len) }
+    } else {
+        set_errno(libc::ENOSYS);
+        -1
     }
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn socket(domain: c_int, ty: c_int, protocol: c_int) -> c_int {
     record_socket(domain);
-    match real_fn!("socket", SocketFn) {
+    if let Some(f) = real_fn!("socket", SocketFn) {
         // SAFETY: arguments are forwarded unchanged.
-        Some(f) => unsafe { f(domain, ty, protocol) },
-        None => {
-            set_errno(libc::ENOSYS);
-            -1
-        }
+        unsafe { f(domain, ty, protocol) }
+    } else {
+        set_errno(libc::ENOSYS);
+        -1
     }
 }
 
@@ -135,13 +133,12 @@ pub unsafe extern "C" fn sendto(
             return -1;
         }
     }
-    match real_fn!("sendto", SendtoFn) {
+    if let Some(f) = real_fn!("sendto", SendtoFn) {
         // SAFETY: arguments are forwarded unchanged.
-        Some(f) => unsafe { f(socket_fd, buf, length, flags, dest_addr, dest_len) },
-        None => {
-            set_errno(libc::ENOSYS);
-            -1
-        }
+        unsafe { f(socket_fd, buf, length, flags, dest_addr, dest_len) }
+    } else {
+        set_errno(libc::ENOSYS);
+        -1
     }
 }
 
@@ -207,13 +204,12 @@ pub unsafe extern "C" fn execve(
 ) -> c_int {
     // SAFETY: libc contract — NUL-terminated string or null.
     unsafe { record_exec(path) };
-    match real_fn!("execve", ExecveFn) {
+    if let Some(f) = real_fn!("execve", ExecveFn) {
         // SAFETY: arguments are forwarded unchanged.
-        Some(f) => unsafe { f(path, argv, envp) },
-        None => {
-            set_errno(libc::ENOSYS);
-            -1
-        }
+        unsafe { f(path, argv, envp) }
+    } else {
+        set_errno(libc::ENOSYS);
+        -1
     }
 }
 
@@ -221,13 +217,12 @@ pub unsafe extern "C" fn execve(
 pub unsafe extern "C" fn execvp(file: *const c_char, argv: *const *const c_char) -> c_int {
     // SAFETY: libc contract — NUL-terminated string or null.
     unsafe { record_exec(file) };
-    match real_fn!("execvp", ExecvpFn) {
+    if let Some(f) = real_fn!("execvp", ExecvpFn) {
         // SAFETY: arguments are forwarded unchanged.
-        Some(f) => unsafe { f(file, argv) },
-        None => {
-            set_errno(libc::ENOSYS);
-            -1
-        }
+        unsafe { f(file, argv) }
+    } else {
+        set_errno(libc::ENOSYS);
+        -1
     }
 }
 

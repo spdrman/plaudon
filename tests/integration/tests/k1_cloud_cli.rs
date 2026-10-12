@@ -18,7 +18,7 @@ use std::sync::Arc;
 
 use plaudon_app_core::import::{ImportOutcome, ImportRequest, ImportService};
 use plaudon_domain::media::QualityClass;
-use plaudon_domain::source::{SourceAccountScope, SourceKind};
+use plaudon_domain::source::{ExternalRecordingId, SourceAccountScope, SourceKind};
 use plaudon_domain::time::Timestamp;
 use plaudon_persistence::archive::MediaArchive;
 use plaudon_persistence::migrations::MigrationRunner;
@@ -493,7 +493,10 @@ fn the_shipped_table_matches_its_committed_golden_fixtures() {
         assert_eq!(page.items.len(), expected.items.len());
         for (item, want) in page.items.iter().zip(&expected.items) {
             assert_eq!(
-                item.identity.external_id.as_ref().map(|id| id.as_str()),
+                item.identity
+                    .external_id
+                    .as_ref()
+                    .map(ExternalRecordingId::as_str),
                 Some(want.external_id.as_str())
             );
             assert_eq!(item.display_name, want.display_name);
@@ -725,7 +728,7 @@ async fn the_shipped_release_is_enumerated_by_numbered_pages() {
             .identity
             .external_id
             .as_ref()
-            .map(|id| id.as_str()),
+            .map(ExternalRecordingId::as_str),
         Some("of_1a2b3c4d5e6f708192a3b4c5d6e7f801")
     );
     assert_eq!(first.page.items[0].duration_ms, Some(2_467_000));
@@ -740,7 +743,11 @@ async fn the_shipped_release_is_enumerated_by_numbered_pages() {
         .enumerate(Some("2"), &intent())
         .await
         .expect("listed");
-    assert!(second.page.items.is_empty());
+    assert!(
+        second.page.items.is_empty(),
+        "a cursor past the last page lists nothing, got {} item(s)",
+        second.page.items.len()
+    );
     assert_eq!(second.page.next_cursor, None);
 
     let files_calls: Vec<Vec<String>> = mock
