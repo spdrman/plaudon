@@ -525,6 +525,71 @@ pub fn import_paths(paths: &[String]) -> Result<Vec<String>, AppError> {
     Ok(paths.to_vec())
 }
 
+/* ---------------------------------------------------------------- sources */
+
+/// Largest accepted number of recordings in one `plaud_import` request.
+pub const MAX_PLAUD_IMPORT_IDS: usize = 100;
+/// Longest accepted external identifier or listing cursor, in bytes.
+pub const MAX_SOURCE_TOKEN_BYTES: usize = 512;
+
+/// Map the frontend's intent token onto the `&'static str` the process runner
+/// records (spec §7.1: a launch follows an explicit user action).
+pub fn plaud_connect_intent(raw: &str) -> Result<&'static str, AppError> {
+    if raw == crate::dto::PLAUD_CONNECT_INTENT {
+        Ok(crate::dto::PLAUD_CONNECT_INTENT)
+    } else {
+        Err(invalid_argument(
+            "plaud_connect requires the connect_plaud_account user intent",
+        ))
+    }
+}
+
+fn source_token(field: &'static str, raw: &str) -> Result<(), AppError> {
+    if raw.is_empty() {
+        return Err(invalid_argument(format!("{field} is empty")));
+    }
+    if raw.len() > MAX_SOURCE_TOKEN_BYTES {
+        return Err(invalid_argument(format!(
+            "{field} exceeds {MAX_SOURCE_TOKEN_BYTES} bytes"
+        )));
+    }
+    if raw.chars().any(char::is_control) {
+        return Err(invalid_argument(format!(
+            "{field} contains a control character"
+        )));
+    }
+    Ok(())
+}
+
+/// Validate the cursor of `plaud_list`. The cursor is opaque vendor-derived
+/// data, handed back to the connector only as a single argument-vector entry.
+pub fn plaud_cursor(raw: Option<&str>) -> Result<Option<String>, AppError> {
+    raw.map(|cursor| source_token("cursor", cursor).map(|()| cursor.to_owned()))
+        .transpose()
+}
+
+/// Validate the ID list of `plaud_import`: non-empty, bounded, well-formed and
+/// free of duplicates. Membership in the last listing is checked by the
+/// backend, which owns that state.
+pub fn plaud_external_ids(ids: &[String]) -> Result<Vec<String>, AppError> {
+    if ids.is_empty() {
+        return Err(invalid_argument("plaud_import contains no recording IDs"));
+    }
+    if ids.len() > MAX_PLAUD_IMPORT_IDS {
+        return Err(invalid_argument(format!(
+            "plaud_import exceeds {MAX_PLAUD_IMPORT_IDS} recording IDs"
+        )));
+    }
+    let mut seen = std::collections::BTreeSet::new();
+    for id in ids {
+        source_token("external_id", id)?;
+        if !seen.insert(id.as_str()) {
+            return Err(invalid_argument("plaud_import repeats a recording ID"));
+        }
+    }
+    Ok(ids.to_vec())
+}
+
 #[cfg(test)]
 mod tests {
     use std::fs;
@@ -804,5 +869,41 @@ mod tests {
             unique_states(&[JobState::Queued]).unwrap(),
             vec![JobState::Queued]
         );
+    }
+}
+
+#[cfg(test)]
+mod source_tests {
+    use super::*;
+
+    #[test]
+    fn only_the_connect_intent_is_accepted() {
+        assert_eq!(
+            plaud_connect_intent("connect_plaud_account").unwrap(),
+            "connect_plaud_account"
+        );
+        for hostile in ["", "login", "connect_plaud_account ; rm -rf /", "CONNECT"] {
+            assert!(plaud_connect_intent(hostile).is_err(), "{hostile}");
+        }
+    }
+
+    #[test]
+    fn cursors_are_bounded_single_line_tokens() {
+        assert_eq!(plaud_cursor(None).unwrap(), None);
+        assert_eq!(plaud_cursor(Some("abc")).unwrap().as_deref(), Some("abc"));
+        assert!(plaud_cursor(Some("")).is_err());
+        assert!(plaud_cursor(Some("a\nb")).is_err());
+        assert!(plaud_cursor(Some(&"x".repeat(MAX_SOURCE_TOKEN_BYTES + 1))).is_err());
+    }
+
+    #[test]
+    fn import_ids_must_be_present_bounded_and_unique() {
+        let ok = vec!["rec_1".to_owned(), "rec_2".to_owned()];
+        assert_eq!(plaud_external_ids(&ok).unwrap(), ok);
+        assert!(plaud_external_ids(&[]).is_err());
+        assert!(plaud_external_ids(&["rec_1".to_owned(), "rec_1".to_owned()]).is_err());
+        assert!(plaud_external_ids(&["rec\u{0}1".to_owned()]).is_err());
+        let many: Vec<String> = (0..=MAX_PLAUD_IMPORT_IDS).map(|i| format!("r{i}")).collect();
+        assert!(plaud_external_ids(&many).is_err());
     }
 }

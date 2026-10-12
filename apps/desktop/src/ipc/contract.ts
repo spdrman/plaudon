@@ -565,6 +565,8 @@ export const EVENT_KINDS = [
   "tool.completed",
   "model.availability_changed",
   "consent.required",
+  "source.auth_required",
+  "source.sync_finished",
   "library.changed",
   "activity.added",
   "ui.activation_requested",

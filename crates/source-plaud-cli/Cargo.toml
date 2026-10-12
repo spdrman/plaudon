@@ -17,6 +17,10 @@ default = []
 # policy refuses private and loopback destinations outright (spec 7.3), and a
 # unit test asserts that it still does while this feature is on.
 test-harness = []
+# The opt-in capture tool for a real, user-installed vendor CLI. Off by
+# default so CI never launches a vendor binary and the workspace builds
+# without one (spec 18.3, 18.8).
+vendor-cli-probe = []
 
 [dependencies]
 async-trait = { workspace = true }
@@ -40,3 +44,8 @@ zeroize = { workspace = true }
 [dev-dependencies]
 proptest = { workspace = true }
 tempfile = { workspace = true }
+
+[[bin]]
+name = "plaud-cli-probe"
+path = "src/bin/probe.rs"
+required-features = ["vendor-cli-probe"]

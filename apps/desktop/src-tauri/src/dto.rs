@@ -1381,6 +1381,12 @@ pub enum EventKind {
     /// An operation needs consent.
     #[serde(rename = "consent.required")]
     ConsentRequired,
+    /// A source needs the user to sign in again (spec §15.3).
+    #[serde(rename = "source.auth_required")]
+    SourceAuthRequired,
+    /// A source sync, listing or import pass ended (spec §15.3).
+    #[serde(rename = "source.sync_finished")]
+    SourceSyncFinished,
     /// The library listing changed.
     #[serde(rename = "library.changed")]
     LibraryChanged,
@@ -1406,6 +1412,8 @@ impl EventKind {
         Self::ToolCompleted,
         Self::ModelAvailabilityChanged,
         Self::ConsentRequired,
+        Self::SourceAuthRequired,
+        Self::SourceSyncFinished,
         Self::LibraryChanged,
         Self::ActivityAdded,
         Self::ActivationRequested,
@@ -1423,6 +1431,8 @@ impl EventKind {
             Self::ToolCompleted => "tool.completed",
             Self::ModelAvailabilityChanged => "model.availability_changed",
             Self::ConsentRequired => "consent.required",
+            Self::SourceAuthRequired => "source.auth_required",
+            Self::SourceSyncFinished => "source.sync_finished",
             Self::LibraryChanged => "library.changed",
             Self::ActivityAdded => "activity.added",
             Self::ActivationRequested => "ui.activation_requested",
@@ -1495,8 +1505,9 @@ mod tests {
             let json = serde_json::to_string(kind).unwrap();
             assert_eq!(json, format!("\"{}\"", kind.as_str()));
         }
-        // The ten §15.3 names plus the ADR-0020 activation event.
-        assert_eq!(EventKind::ALL.len(), 11);
+        // The twelve §15.3 names this build emits plus the ADR-0020
+        // activation event.
+        assert_eq!(EventKind::ALL.len(), 13);
     }
 
     #[test]
