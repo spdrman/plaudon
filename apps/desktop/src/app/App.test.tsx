@@ -24,9 +24,9 @@ describe("App shell", () => {
     expect(screen.queryByRole("button", { name: /Import audio$/ })).not.toBeInTheDocument();
   });
 
-  it("renders the five destinations and the persistent import control once onboarded", async () => {
+  it("renders the six destinations and the persistent import control once onboarded", async () => {
     renderWithApp(<App />, { backend: onboarded() });
-    for (const name of ["Library", "Inbox", "Jobs", "Templates", "Settings"]) {
+    for (const name of ["Library", "Inbox", "Jobs", "Templates", "Settings", "Devices"]) {
       expect(await screen.findByRole("tab", { name: new RegExp(name) })).toBeInTheDocument();
     }
     expect(screen.getByRole("button", { name: /Import audio/ })).toBeInTheDocument();

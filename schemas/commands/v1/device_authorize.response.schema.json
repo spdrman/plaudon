@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/device_authorize.response.schema.json",
+  "title": "device_authorize.response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "peripheral_id",
+    "credential_stored",
+    "identity",
+    "identity_label"
+  ],
+  "properties": {
+    "peripheral_id": {
+      "type": "string"
+    },
+    "credential_stored": {
+      "type": "boolean"
+    },
+    "identity": {
+      "type": "string",
+      "enum": [
+        "unverified",
+        "profile_authenticated"
+      ]
+    },
+    "identity_label": {
+      "type": "string"
+    }
+  }
+}

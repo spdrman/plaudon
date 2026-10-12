@@ -1,6 +1,6 @@
 import { auditPage, expect, gotoApp, test } from "./fixtures";
 /**
- * E1.1 / E1.5 / E2.5: the shell launches, renders the five destinations,
+ * E1.1 / E1.5 / E2.5: the shell launches, renders the six destinations,
  * follows the OS appearance, is keyboard-complete and makes no network
  * request of its own.
  */
@@ -14,7 +14,7 @@ test.describe("application shell", () => {
     test("reaches every destination with the keyboard only", async ({ page }) => {
         await gotoApp(page, { recordings: 5 });
         await page.getByRole("tab", { name: /Library/ }).focus();
-        const expected = ["Inbox", "Jobs", "Templates", "Settings"];
+        const expected = ["Inbox", "Jobs", "Templates", "Settings", "Devices"];
         for (const name of expected) {
             await page.keyboard.press("ArrowDown");
             await expect(page.getByRole("tab", { name: new RegExp(name) })).toHaveAttribute("aria-selected", "true");

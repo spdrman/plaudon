@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/device_sync_policy.response.schema.json",
+  "title": "device_sync_policy.response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "peripheral_id",
+    "may_advertise",
+    "enabled",
+    "default_on",
+    "audit_code",
+    "explanation"
+  ],
+  "properties": {
+    "peripheral_id": {
+      "type": "string"
+    },
+    "may_advertise": {
+      "type": "boolean"
+    },
+    "enabled": {
+      "type": "boolean"
+    },
+    "default_on": {
+      "const": false
+    },
+    "audit_code": {
+      "type": "string"
+    },
+    "explanation": {
+      "type": "string"
+    }
+  }
+}

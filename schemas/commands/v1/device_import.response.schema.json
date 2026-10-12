@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/device_import.response.schema.json",
+  "title": "device_import.response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "transfer_ids"
+  ],
+  "properties": {
+    "transfer_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

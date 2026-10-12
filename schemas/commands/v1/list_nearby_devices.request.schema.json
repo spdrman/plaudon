@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/list_nearby_devices.request.schema.json",
+  "title": "list_nearby_devices.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "timeout_ms"
+  ],
+  "properties": {
+    "timeout_ms": {
+      "type": "integer",
+      "minimum": 1000,
+      "maximum": 30000
+    }
+  }
+}

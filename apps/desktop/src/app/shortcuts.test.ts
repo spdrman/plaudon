@@ -17,15 +17,16 @@ const event = (over: Partial<Parameters<typeof destinationForEvent>[0]>) => ({
 });
 
 describe("shortcuts", () => {
-  it("maps Mod+1..5 to the five destinations", () => {
+  it("maps Mod+1..6 to the six destinations", () => {
     expect(destinationForEvent(event({ metaKey: true, key: "1" }))).toBe("library");
     expect(destinationForEvent(event({ ctrlKey: true, key: "3" }))).toBe("jobs");
     expect(destinationForEvent(event({ metaKey: true, key: "5" }))).toBe("settings");
+    expect(destinationForEvent(event({ metaKey: true, key: "6" }))).toBe("devices");
   });
 
   it("ignores unmodified, out-of-range and chorded keys", () => {
     expect(destinationForEvent(event({ key: "1" }))).toBeNull();
-    expect(destinationForEvent(event({ metaKey: true, key: "6" }))).toBeNull();
+    expect(destinationForEvent(event({ metaKey: true, key: "7" }))).toBeNull();
     expect(destinationForEvent(event({ metaKey: true, key: "1", shiftKey: true }))).toBeNull();
     expect(destinationForEvent(event({ metaKey: true, key: "x" }))).toBeNull();
   });

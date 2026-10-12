@@ -8,6 +8,7 @@ const GLYPHS: Record<Destination, string> = {
   jobs: "J",
   templates: "T",
   settings: "S",
+  devices: "D",
 };
 
 /**
