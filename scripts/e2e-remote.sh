@@ -220,6 +220,11 @@ $command_line"
       -e XDG_RUNTIME_DIR=/tmp
       -e RUST_BACKTRACE=1
     )
+    # gcc 12 on aarch64 rejects ggml's fp16 NEON intrinsics (whisper.cpp build);
+    # clang accepts them. The local fallback is arm64, so use clang there.
+    if [[ "$LOCAL" == 1 && "$(uname -m)" =~ ^(arm64|aarch64)$ ]]; then
+      docker_env+=(-e CC=clang -e CXX=clang++)
+    fi
     if [[ "${PLAUDON_E2E_NO_CACHE:-0}" == "1" ]]; then
       docker_mounts=()
       docker_env+=(-e CARGO_HOME=/work/.cargo-home -e CARGO_TARGET_DIR=/work/target)
