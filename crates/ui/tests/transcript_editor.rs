@@ -492,6 +492,42 @@ fn dragging_across_a_segment_selects_the_text_between_the_two_points() {
 }
 
 #[test]
+fn clicking_inside_a_segment_puts_the_caret_under_the_pointer() {
+    // The floor every pointer test above stands on. Placing a caret from a
+    // screen position is pure text geometry: `Galley::cursor_from_pos` can
+    // only answer it when the glyphs were laid out with a real font. A test
+    // build without egui's `default_fonts` lays out every segment with zero
+    // glyphs, every position then resolves to offset 0, and a drag selects
+    // nothing while still looking like a drag to the widget. This test fails
+    // loudly in that case instead of letting the rest pass vacuously.
+    let session = EditSession::new(document_with(&["we will not pay the invoice"]));
+    let mut harness = harness(EditorApp::new(session));
+    harness.run();
+
+    let row = harness.get_by_label("Segment 1").rect();
+    let inside = egui::pos2(row.left() + 60.0, row.center().y);
+    harness.hover_at(inside);
+    harness.run();
+    harness.drag_at(inside);
+    harness.run();
+    harness.drop_at(inside);
+    harness.run();
+
+    harness.get_by_label("Segment 1").type_text("!");
+    harness.run();
+
+    let text = harness.state().text(0);
+    let typed = text
+        .find('!')
+        .expect("the typed character is in the segment");
+    assert!(
+        typed > 0 && typed < "we will not pay the invoice".len(),
+        "a click 60 points into the row must leave the caret inside the text, \
+         not at either end; got {text:?}"
+    );
+}
+
+#[test]
 fn a_three_hour_transcript_stays_inside_a_frame_budget() {
     use std::time::{Duration, Instant};
 
