@@ -50,6 +50,11 @@ pub const MIGRATIONS: &[Migration] = &[
         name: "core",
         sql: include_str!("../migrations/0002_core.sql"),
     },
+    Migration {
+        version: 3,
+        name: "source_reconciliation",
+        sql: include_str!("../migrations/0003_source_reconciliation.sql"),
+    },
 ];
 
 /// An applied migration as recorded in the database.

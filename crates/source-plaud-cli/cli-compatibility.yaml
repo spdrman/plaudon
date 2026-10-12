@@ -1,0 +1,37 @@
+# Official PLAUD Cloud CLI version compatibility table (spec 7.1, 7.2, 2.1).
+#
+# This file is the ONLY source of truth for which `@plaud-ai/cli` releases this
+# build is willing to drive. It is compiled into the binary with `include_str!`,
+# so the shipped table is always the table the tests validated.
+#
+# Fail-closed rule, enforced by `CliCompatibilityTable::verdict`:
+#   a reported version that does not match a row here yields
+#   `INCOMPATIBLE_VERSION`. Enumeration and download are blocked; manual file
+#   import is unaffected.
+#
+# Promotion rules, enforced by `CliCompatibilityRow::validate`:
+#   * `version` must be an exact release string as the CLI prints it, never a
+#     range and never a prefix. Spec 7.2 forbids reusing a neighbouring
+#     version's parser.
+#   * `listing_format` must name a format that was actually captured from that
+#     exact release, and `fixture_id` must name a golden fixture directory
+#     under `tests/integration/fixtures/plaud-cli/<fixture_id>/` whose
+#     `files.stdout` hashes to `fixture_sha256`. The golden test fails if the
+#     fixture, the hash or the parser drift apart.
+#   * `pagination: observed` requires a cursor flag and a page size that were
+#     seen in a real session. Spec 7.2: pagination behaviour is never guessed.
+#   * `vendor_artifacts` and `logout_command` default to `unknown`; `yes`
+#     requires an officially documented, exercised command (spec 7.5, 4.2.7).
+#   * `evidence_level: observed_on_identified_release` requires `verified_on`
+#     and a non-empty `host_os` list.
+#
+# As of 2026-10-11 the list is empty. No release of the official CLI has been
+# installed against this build: the npm package listing declares no license, so
+# we neither bundle nor redistribute it, and spec 2.1 forbids assuming its
+# output contract. That is a recorded finding, not an omission — see
+# docs/adr/ADR-0031-plaud-cli-compatibility-table.md for how to add a row.
+
+schema_version: 1
+updated_at: "2026-10-11"
+
+versions: []
