@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/validate_template.response.schema.json",
+  "title": "validate_template.response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["valid", "problems"],
+  "properties": {
+    "valid": {
+      "type": "boolean"
+    },
+    "problems": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/template_problem"
+      }
+    }
+  },
+  "$defs": {
+    "template_problem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message"],
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

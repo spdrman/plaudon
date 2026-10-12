@@ -5442,6 +5442,7 @@ dependencies = [
  "plaudon-ai-contracts",
  "plaudon-ai-diarization",
  "plaudon-ai-openrouter",
+ "plaudon-ai-tools",
  "plaudon-app-core",
  "plaudon-diagnostics",
  "plaudon-domain",

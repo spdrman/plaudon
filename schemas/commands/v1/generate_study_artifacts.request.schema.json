@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/generate_study_artifacts.request.schema.json",
+  "title": "generate_study_artifacts.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "recording_id",
+    "tool_id",
+    "revision_id",
+    "model_override",
+    "cost_acknowledged"
+  ],
+  "properties": {
+    "recording_id": {"type": "string"},
+    "tool_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[a-z0-9_]+$"
+    },
+    "revision_id": {
+      "anyOf": [
+        {"type": "string"},
+        {"type": "null"}
+      ]
+    },
+    "model_override": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["engine", "model_id"],
+          "properties": {
+            "engine": {"type": "string"},
+            "model_id": {"type": "string"}
+          }
+        },
+        {"type": "null"}
+      ]
+    },
+    "cost_acknowledged": {"type": "boolean"}
+  }
+}

@@ -1121,6 +1121,162 @@ pub fn verify_model(request: &VerifyModelRequest) -> Result<ValidatedVerifyModel
     })
 }
 
+/* ------------------------------------------------ transcript tools (A11) */
+
+/// Longest accepted question, in characters.
+///
+/// A question is retrieval input, not content: anything longer is a pasted
+/// transcript, which has its own command.
+pub const MAX_QUESTION_CHARS: usize = 2_000;
+/// Longest accepted tool identifier.
+pub const MAX_TOOL_ID_CHARS: usize = 64;
+
+/// Validate a tool identifier: a lowercase identifier, bounded.
+pub fn tool_id(value: &str) -> Result<String, AppError> {
+    let text = bounded_text("tool_id", value, MAX_TOOL_ID_CHARS)?;
+    if !text
+        .chars()
+        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
+    {
+        return Err(invalid_argument(
+            "tool_id must be a lowercase identifier of letters, digits and underscores",
+        ));
+    }
+    Ok(text)
+}
+
+fn model_choice(
+    choice: Option<&crate::dto::ModelOverride>,
+) -> Result<Option<ModelChoice>, AppError> {
+    choice
+        .map(|choice| {
+            Ok::<_, AppError>(ModelChoice::new(
+                engine_id(&choice.engine)?,
+                Some(model_id(&choice.model_id)?),
+            ))
+        })
+        .transpose()
+}
+
+/// Validated `ask_recording` arguments.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ValidatedAskRecording {
+    /// Recording the question is about.
+    pub recording_id: RecordingId,
+    /// The question, trimmed.
+    pub question: String,
+    /// Revision to answer from; the head revision when absent.
+    pub revision_id: Option<TranscriptRevisionId>,
+    /// One-shot model override.
+    pub model_override: Option<ModelChoice>,
+    /// Cost acknowledgement.
+    pub cost_acknowledged: bool,
+}
+
+/// Validate an `ask_recording` request.
+pub fn ask_recording(
+    request: &crate::dto::AskRecordingRequest,
+) -> Result<ValidatedAskRecording, AppError> {
+    Ok(ValidatedAskRecording {
+        recording_id: parse_id("recording_id", &request.recording_id)?,
+        question: bounded_text("question", &request.question, MAX_QUESTION_CHARS)?,
+        revision_id: request
+            .revision_id
+            .as_deref()
+            .map(|value| parse_id("revision_id", value))
+            .transpose()?,
+        model_override: model_choice(request.model_override.as_ref())?,
+        cost_acknowledged: request.cost_acknowledged,
+    })
+}
+
+/// Validated `generate_study_artifacts` arguments.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ValidatedGenerateStudyArtifacts {
+    /// Recording to study.
+    pub recording_id: RecordingId,
+    /// Tool to run.
+    pub tool_id: String,
+    /// Revision to generate from; the head revision when absent.
+    pub revision_id: Option<TranscriptRevisionId>,
+    /// One-shot model override.
+    pub model_override: Option<ModelChoice>,
+    /// Cost acknowledgement.
+    pub cost_acknowledged: bool,
+}
+
+/// Validate a `generate_study_artifacts` request.
+pub fn generate_study_artifacts(
+    request: &crate::dto::GenerateStudyArtifactsRequest,
+) -> Result<ValidatedGenerateStudyArtifacts, AppError> {
+    Ok(ValidatedGenerateStudyArtifacts {
+        recording_id: parse_id("recording_id", &request.recording_id)?,
+        tool_id: tool_id(&request.tool_id)?,
+        revision_id: request
+            .revision_id
+            .as_deref()
+            .map(|value| parse_id("revision_id", value))
+            .transpose()?,
+        model_override: model_choice(request.model_override.as_ref())?,
+        cost_acknowledged: request.cost_acknowledged,
+    })
+}
+
+/* ------------------------------------------------------- templates (A12) */
+
+/// Longest accepted template identifier.
+pub const MAX_TEMPLATE_ID_CHARS: usize = 64;
+/// Largest accepted template document, in bytes.
+///
+/// A template is instructions, field declarations and an optional inline
+/// schema. A quarter of a megabyte is already far more than any shipped
+/// built-in, and the ceiling keeps a paste of something else out of the
+/// template store.
+pub const MAX_TEMPLATE_DOCUMENT_BYTES: usize = 256 * 1024;
+
+/// Validate a template identifier: a lowercase identifier, bounded.
+pub fn template_id(value: &str) -> Result<String, AppError> {
+    let text = bounded_text("template_id", value, MAX_TEMPLATE_ID_CHARS)?;
+    if !text
+        .chars()
+        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
+    {
+        return Err(invalid_argument(
+            "template_id must be a lowercase identifier of letters, digits and underscores",
+        ));
+    }
+    Ok(text)
+}
+
+/// Validate a template version label.
+pub fn template_version(value: &str) -> Result<String, AppError> {
+    let text = label("version", value)?;
+    if !text
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_' | '+'))
+    {
+        return Err(invalid_argument("version contains unsupported characters"));
+    }
+    Ok(text)
+}
+
+/// Validate a template document: non-empty and bounded.
+///
+/// Structural validation belongs to
+/// [`plaudon_ai_contracts::template::OutputTemplate::validate`]; this check is
+/// only the size and emptiness gate the command boundary owes the store.
+pub fn template_document(value: &str) -> Result<String, AppError> {
+    if value.trim().is_empty() {
+        return Err(invalid_argument("document must not be empty"));
+    }
+    if value.len() > MAX_TEMPLATE_DOCUMENT_BYTES {
+        return Err(invalid_argument(
+            "document is larger than a template document may be",
+        ));
+    }
+    Ok(value.to_owned())
+}
+
 #[cfg(test)]
 mod tests {
     use std::fs;

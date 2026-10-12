@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/list_conversations.request.schema.json",
+  "title": "list_conversations.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "recording_id"
+  ],
+  "properties": {
+    "recording_id": {"type": "string"}
+  }
+}

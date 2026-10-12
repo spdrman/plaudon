@@ -629,8 +629,8 @@ unchanged Rust; **N** = genuinely new code. Issue numbers are the EPIC O tasks t
 | A8 | Spending: finalized vs estimated vs unknown, month-to-date, per-job and monthly caps | `get_usage`, `set_cloud_budget` | same section | `plaudon-ui::screens::settings::budget` | R | O2.2 |
 | A9 | Consent grants listed with the facts they were given under; revocation recorded and never claimed to recall sent content | `revoke_cloud_consent` | same | same | R | O2.2 |
 | A10 | Outputs / claims / review panel — *commands exist, no UI* | `list_outputs`, `review_claim`, `regenerate_output` | build the review panel: claims, anchors, stale markers, regenerate | `plaudon-ui::screens::review` | **N** | O2.2 |
-| A11 | Transcript tools and study artifacts — *no UI* | `ai-tools` | out of scope for EPIC O unless a command exists | — | — | — |
-| A12 | Templates screen is a placeholder | `TemplatesScreen.tsx` | keep the honest placeholder until a backend exists | `plaudon-ui::screens::templates` | R | O2.2 |
+| A11 | Transcript tools, ask-about-recording and study artifacts — *was: no command, no UI* | `list_transcript_tools`, `ask_recording`, `list_conversations`, `run_study_tool`, `list_study_artifacts`, `list_tool_runs` (new, over `ai-tools`) | ask-recording chat with verified anchors and seek, study viewer with exports, tool-run provenance | `plaudon-ui::ai::tools` | **N** | O2.6 |
+| A12 | Templates screen is a placeholder | `list_templates`, `get_template`, `create_template_copy`, `save_template`, `validate_template`, `list_template_versions` (new, over `TemplateRegistry`) | real manager and editor: built-ins, user copies, validation problems, version history | `plaudon-ui::screens::templates` | **N** | O2.6 |
 | A13 | Local model install with progress and approval | `InstallObserver` | new UI over the existing observer | `plaudon-ui::screens::settings::models` | **N** | O2.4 |
 | A14 | Transcript export TXT/MD/JSON/SRT/VTT; SRT/VTT disabled without alignment | `export_recording` | mount the full `ExportMenu` (today only txt/md/json are reachable) | `plaudon-ui::screens::recording::export` | R (mount) | O2.2 |
 
@@ -873,6 +873,15 @@ delete `apps/desktop` (React, `src-tauri`, Node), `desktop-ui.yml`, `ui-test.sh`
 `audit-tauri.sh`, `scripts/security/tauri-command-allowlist.json`, `crates/security/src/tauri_guard`
 and the `plaudon-tauri-audit` binary; and write `EGUI_ARCHITECTURE`, `EGUI_BUILD`, `EGUI_TESTING`,
 `EGUI_DESIGN_SYSTEM`, `EGUI_MIGRATION_REPORT`.
+
+**O2.6 (#224) — transcript tools and templates.** The two AI-workflow rows that had no command at
+all: twelve new commands in `plaudon-app` over `crates/ai-tools` (the `TranscriptTool` contract,
+`ask_recording` with anchor-verified answers and its `not_supported_by_recording` /
+`insufficient_evidence` outcomes, the study template, `ToolRunRecord`, per-recording conversations)
+and over `plaudon_app_core::templates::TemplateRegistry` (built-ins, user copies with versioning,
+validation), plus the user interface over them: the ask-recording chat with anchors and seek, the
+study viewer with exports, the tool-run provenance list, and the Templates manager and editor that
+replaces the placeholder. Rows A11 and A12.
 
 ### Cutover checklist (O2.5)
 

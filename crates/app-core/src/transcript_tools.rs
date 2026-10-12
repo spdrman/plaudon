@@ -44,6 +44,10 @@ pub struct StoredStudyOutput {
     pub evidence_rows: usize,
 }
 
+/// One `ai_outputs` row to write: its `output_type`, its body and the cited
+/// items, each named by the JSON Pointer the evidence rows record.
+type StudyOutputGroup<'a> = (&'a str, serde_json::Value, Vec<(String, Vec<SourceAnchor>)>);
+
 /// Persists study artifacts in the generic output tables.
 #[derive(Debug, Clone)]
 pub struct StudyOutputWriter {
@@ -96,7 +100,7 @@ impl StudyOutputWriter {
         let mut evidence_rows = 0;
         let mut tx = self.db.pool().begin().await?;
 
-        let groups: [(&str, serde_json::Value, Vec<(String, Vec<SourceAnchor>)>); 3] = [
+        let groups: [StudyOutputGroup<'_>; 3] = [
             (
                 "flashcards",
                 serde_json::json!({ "flashcards": artifacts.flashcards }),
@@ -284,19 +288,69 @@ pub enum ConversationError {
     Persistence(#[from] PersistenceError),
 }
 
+/// Stable wire label of a request family, as `tool_runs.request_family`
+/// stores it. Kept next to its only writer so the stored vocabulary and the
+/// enum cannot drift apart.
+const fn family_label(family: RequestFamily) -> &'static str {
+    match family {
+        RequestFamily::MultipartStt => "multipart_stt",
+        RequestFamily::AudioChat => "audio_chat",
+        RequestFamily::Unsupported => "unsupported",
+        RequestFamily::Unknown => "unknown",
+    }
+}
+
 /// Runs questions and records them against their exact transcript revision.
 #[derive(Debug, Clone)]
 pub struct ConversationService {
     repository: ToolRepository,
+    request_family: RequestFamily,
+    consent_policy: ConsentPolicySnapshot,
+    consent_id: Option<String>,
 }
 
 impl ConversationService {
     /// Open the service.
+    ///
+    /// The dispatch posture defaults to an on-device run, which is what a run
+    /// against a local engine actually is. A caller that routes the question
+    /// through a provider must say so with [`Self::with_consent_policy`], so
+    /// the recorded posture describes the dispatch that happened rather than
+    /// the one this constructor assumed.
     #[must_use]
     pub fn new(db: Database) -> Self {
         Self {
             repository: ToolRepository::new(db),
+            request_family: RequestFamily::AudioChat,
+            consent_policy: ConsentPolicySnapshot::on_device(false),
+            consent_id: None,
         }
+    }
+
+    /// Record the run under the request contract that was actually used.
+    #[must_use]
+    pub const fn with_request_family(mut self, family: RequestFamily) -> Self {
+        self.request_family = family;
+        self
+    }
+
+    /// Name the grant that authorized the dispatch.
+    ///
+    /// Stored as text rather than taken from the posture snapshot because a
+    /// grant identity is an opaque string the consent store issued, not a bare
+    /// UUID, and `tool_runs.consent_id` is the foreign key to it.
+    #[must_use]
+    pub fn with_consent_id(mut self, consent_id: Option<String>) -> Self {
+        self.consent_id = consent_id;
+        self
+    }
+
+    /// Record the run under the consent and routing posture that authorized
+    /// it.
+    #[must_use]
+    pub fn with_consent_policy(mut self, policy: ConsentPolicySnapshot) -> Self {
+        self.consent_policy = policy;
+        self
     }
 
     /// Ask a question about one recording and persist the exchange.
@@ -310,6 +364,13 @@ impl ConversationService {
     ///
     /// Propagates the tool refusal or the persistence failure. Nothing is
     /// written when the model refuses.
+    // Every argument is a distinct dependency of one exchange: the model and
+    // its capabilities, the definition that ran and the row it resolves to,
+    // the recording, the exact revision, the question, the cancellation
+    // context and the clock. Bundling them into a struct would hide which of
+    // them a caller may vary per question, which is the thing this signature
+    // is for.
+    #[allow(clippy::too_many_arguments)]
     pub async fn ask(
         &self,
         model: &dyn TextModel,
@@ -340,9 +401,9 @@ impl ConversationService {
                     recording_id,
                     transcript_revision_id: revision.id,
                     model: capabilities.model.clone(),
-                    request_family: RequestFamily::AudioChat,
+                    request_family: self.request_family,
                     prompt_text: execution.prompt_text.clone(),
-                    consent_policy: ConsentPolicySnapshot::on_device(false),
+                    consent_policy: self.consent_policy.clone(),
                     estimated_cost: MoneyEstimate::Unknown,
                     created_at: now,
                 },
@@ -364,13 +425,16 @@ impl ConversationService {
                     engine: capabilities.engine_id.as_str().to_string(),
                     model_id: capabilities.model.model_id.clone(),
                     model_version: capabilities.model.model_version.clone(),
-                    request_family: "audio_chat".to_string(),
+                    request_family: family_label(self.request_family).to_string(),
                     prompt_version: tool.prompt_version.clone(),
                     schema_version: tool.output_schema_version.clone(),
                     input_sha256: run.input_sha256.clone(),
                     output_sha256,
                     status: status.as_str().to_string(),
-                    consent_id: None,
+                    consent_id: self
+                        .consent_id
+                        .clone()
+                        .or_else(|| self.consent_policy.consent_id.map(|id| id.to_string())),
                     consent_policy_json: serde_json::to_string(&run.consent_policy)
                         .unwrap_or_else(|_| "{}".to_string()),
                     cost: MoneyEstimate::Unknown,

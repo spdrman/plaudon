@@ -3387,6 +3387,580 @@ pub struct VerifyLocalModelResponse {
     pub detail: String,
 }
 
+/* ------------------------------------------------- transcript tools (A11) */
+
+/// One registered transcript tool at one version (spec §9.7).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TranscriptToolDto {
+    /// Stable tool identity.
+    pub tool_id: String,
+    /// Version of this definition. A definition is immutable; an edit appends.
+    pub version: u32,
+    /// What the tool produces, as a stable wire string.
+    pub kind: String,
+    /// Name shown to the user.
+    pub display_name: String,
+    /// The task instruction the tool dispatches. Transcript text is never part
+    /// of it (spec §9.6).
+    pub instruction: String,
+    /// Version label of the instruction, recorded on every run.
+    pub prompt_version: String,
+    /// Version label of the output schema, recorded on every run.
+    pub output_schema_version: String,
+    /// Where the definition came from: `built_in` or `user_edit`.
+    pub origin: String,
+    /// Whether the tool is outside the default meeting product (spec §9.2).
+    pub optional: bool,
+    /// Whether the resolved text model satisfies this tool's requirements.
+    pub offerable: bool,
+    /// Why it is not offerable, when it is not. `None` when it is.
+    pub unavailable_reason: Option<String>,
+}
+
+/// The text model a tool run would use, as resolved right now.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TextRouteDto {
+    /// Engine identifier.
+    pub engine: String,
+    /// Model identifier, absent when the engine names no model.
+    pub model_id: Option<String>,
+    /// Whether running this route sends content off the device.
+    pub is_cloud: bool,
+    /// Whether the route can run at all right now.
+    pub available: bool,
+    /// Why it cannot, when it cannot.
+    pub unavailable_reason: Option<String>,
+}
+
+/// `list_transcript_tools` request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ListTranscriptToolsRequest {
+    /// Recording whose per-recording model override applies, when one exists.
+    pub recording_id: Option<String>,
+}
+
+/// `list_transcript_tools` response.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ListTranscriptToolsResponse {
+    /// Every tool at its highest version.
+    pub tools: Vec<TranscriptToolDto>,
+    /// The text route these tools would run on, when one resolves.
+    pub text_model: Option<TextRouteDto>,
+}
+
+/// An anchor the model produced that did not verify against the revision.
+///
+/// Surfaced rather than hidden: a grounding failure the user cannot see is a
+/// grounding failure that looks like success (spec §9.6).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RejectedAnchorDto {
+    /// Zero-based segment index the anchor claimed.
+    pub seq_index: u32,
+    /// Claimed start offset, in Unicode scalar values.
+    pub char_start: u32,
+    /// Claimed end offset, in Unicode scalar values.
+    pub char_end: u32,
+    /// The excerpt the model quoted.
+    pub excerpt: String,
+    /// Stable rejection discriminator, e.g. `excerpt_mismatch`.
+    pub rejection_code: String,
+}
+
+/// `ask_recording` request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AskRecordingRequest {
+    /// Recording the question is about.
+    pub recording_id: String,
+    /// The user's question.
+    pub question: String,
+    /// Transcript revision to answer from; the head revision when absent.
+    pub revision_id: Option<String>,
+    /// Per-run model override, with the same meaning as `start_processing`'s.
+    pub model_override: Option<ModelOverride>,
+    /// Explicit acknowledgement that the charge cannot be estimated (§10.4).
+    pub cost_acknowledged: bool,
+}
+
+/// `ask_recording` response.
+///
+/// The three outcomes of spec §9.8 are data, not errors: a question the
+/// recording cannot answer is a legitimate answer the user must be able to
+/// read.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AskRecordingResponse {
+    /// Conversation the exchange was recorded in.
+    pub conversation_id: String,
+    /// Revision the answer is pinned to.
+    pub transcript_revision_id: String,
+    /// `answered`, `insufficient_evidence` or `not_supported_by_recording`.
+    pub outcome: String,
+    /// The answer text.
+    pub text: String,
+    /// Anchors that verified against the pinned revision.
+    pub anchors: Vec<AnchorDto>,
+    /// Anchors that did not verify, with the reason.
+    pub rejected_anchors: Vec<RejectedAnchorDto>,
+    /// Segment indices that were retrieved and dispatched.
+    pub retrieved_segments: Vec<u32>,
+    /// Whether anything left this device for this question.
+    pub dispatched: bool,
+    /// The run that produced the answer, when a model was dispatched to.
+    pub tool_run_id: Option<String>,
+    /// Tool identity that answered.
+    pub tool_id: String,
+    /// Tool version that answered.
+    pub tool_version: u32,
+}
+
+/// `list_conversations` request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ListConversationsRequest {
+    /// Recording whose conversations are requested.
+    pub recording_id: String,
+}
+
+/// One recorded turn of a conversation.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ConversationTurnDto {
+    /// Message identity.
+    pub message_id: String,
+    /// Position in the conversation.
+    pub seq_index: u32,
+    /// `user` or `assistant`.
+    pub role: String,
+    /// Message text.
+    pub text: String,
+    /// Outcome of an assistant turn; absent on a user turn.
+    pub outcome: Option<String>,
+    /// Verified anchors of an assistant turn.
+    pub anchors: Vec<AnchorDto>,
+    /// Run that produced an assistant turn, when one was dispatched.
+    pub tool_run_id: Option<String>,
+    /// When the turn was recorded.
+    pub created_at: String,
+}
+
+/// One per-recording conversation, pinned to one transcript revision.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ConversationDto {
+    /// Conversation identity.
+    pub conversation_id: String,
+    /// Recording it belongs to.
+    pub recording_id: String,
+    /// Revision every answer in it was produced from.
+    pub transcript_revision_id: String,
+    /// Whether that revision is still the head revision.
+    pub revision_is_current: bool,
+    /// When the conversation was opened.
+    pub created_at: String,
+    /// Turns in order.
+    pub turns: Vec<ConversationTurnDto>,
+}
+
+/// `list_conversations` response.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ListConversationsResponse {
+    /// Conversations, newest first.
+    pub conversations: Vec<ConversationDto>,
+}
+
+/// One flashcard of a study artifact set (spec §9.3).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FlashcardDto {
+    /// Prompt side.
+    pub front: String,
+    /// Answer side.
+    pub back: String,
+    /// Citations into the pinned revision.
+    pub anchors: Vec<AnchorDto>,
+}
+
+/// One quiz item with its answer key.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct QuizItemDto {
+    /// The question.
+    pub question: String,
+    /// Offered answers.
+    pub options: Vec<String>,
+    /// Zero-based index of the correct option.
+    pub answer_index: u32,
+    /// Citations into the pinned revision.
+    pub anchors: Vec<AnchorDto>,
+}
+
+/// One term and the definition the recording gives for it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DefinitionDto {
+    /// The term.
+    pub term: String,
+    /// The definition as the recording states it.
+    pub definition: String,
+    /// Citations into the pinned revision.
+    pub anchors: Vec<AnchorDto>,
+}
+
+/// A validated set of study artifacts.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StudyArtifactsDto {
+    /// Flashcards.
+    pub flashcards: Vec<FlashcardDto>,
+    /// Quiz items.
+    pub quiz: Vec<QuizItemDto>,
+    /// Definitions.
+    pub definitions: Vec<DefinitionDto>,
+}
+
+/// An item that was refused, named by its JSON Pointer path.
+///
+/// Spec §9.5 refuses a malformed item rather than dropping it quietly, so the
+/// path and the reason travel to the interface.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RejectedStudyItemDto {
+    /// JSON Pointer of the refused item.
+    pub path: String,
+    /// Stable reason discriminator.
+    pub reason: String,
+    /// What was wrong, in the user's terms.
+    pub detail: String,
+}
+
+/// `generate_study_artifacts` request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GenerateStudyArtifactsRequest {
+    /// Recording to study.
+    pub recording_id: String,
+    /// Tool to run: one of the optional study tools.
+    pub tool_id: String,
+    /// Revision to generate from; the head revision when absent.
+    pub revision_id: Option<String>,
+    /// Per-run model override.
+    pub model_override: Option<ModelOverride>,
+    /// Explicit acknowledgement of an unknown charge (§10.4).
+    pub cost_acknowledged: bool,
+}
+
+/// `generate_study_artifacts` response.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GenerateStudyArtifactsResponse {
+    /// Tool identity that ran.
+    pub tool_id: String,
+    /// Tool version that ran.
+    pub tool_version: u32,
+    /// Revision the artifacts are pinned to.
+    pub transcript_revision_id: String,
+    /// Accepted artifacts.
+    pub artifacts: StudyArtifactsDto,
+    /// Items that were refused, with their paths.
+    pub rejected: Vec<RejectedStudyItemDto>,
+    /// Stored `ai_outputs` rows, one per artifact kind that had items.
+    pub output_ids: Vec<String>,
+    /// The run that produced them.
+    pub tool_run_id: Option<String>,
+    /// Whether anything left this device.
+    pub dispatched: bool,
+}
+
+/// `list_study_artifacts` request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ListStudyArtifactsRequest {
+    /// Recording whose stored study artifacts are requested.
+    pub recording_id: String,
+}
+
+/// One stored set of study artifacts.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StudyArtifactSetDto {
+    /// Output row the set was stored as.
+    pub output_id: String,
+    /// Tool that produced it.
+    pub tool_id: String,
+    /// Version of that tool.
+    pub tool_version: u32,
+    /// Revision the citations resolve against.
+    pub transcript_revision_id: String,
+    /// Whether that revision is still the head revision.
+    pub revision_is_current: bool,
+    /// When it was produced.
+    pub created_at: String,
+    /// The artifacts themselves.
+    pub artifacts: StudyArtifactsDto,
+}
+
+/// `list_study_artifacts` response.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ListStudyArtifactsResponse {
+    /// Stored sets, newest first.
+    pub sets: Vec<StudyArtifactSetDto>,
+}
+
+/// The consent and routing posture a run happened under.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ConsentPolicyDto {
+    /// Whether this run was permitted to leave the device.
+    pub egress_allowed: bool,
+    /// Privacy class of the route, as a stable wire string.
+    pub privacy_class: String,
+    /// Consent grant the run was authorised by, when a grant applied.
+    pub consent_id: Option<String>,
+}
+
+/// One recorded tool run (spec §9.7, §13.3).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ToolRunDto {
+    /// Run identity.
+    pub run_id: String,
+    /// Recording the run belongs to.
+    pub recording_id: String,
+    /// Revision the run read.
+    pub transcript_revision_id: String,
+    /// Tool identity.
+    pub tool_id: String,
+    /// Tool version, which resolves to the exact definition that ran.
+    pub tool_version: u32,
+    /// Engine that executed it.
+    pub engine: String,
+    /// Model identity.
+    pub model_id: String,
+    /// Model version, when the engine reported one.
+    pub model_version: Option<String>,
+    /// Request contract used.
+    pub request_family: String,
+    /// Prompt version recorded with the run.
+    pub prompt_version: String,
+    /// Output schema version recorded with the run.
+    pub schema_version: String,
+    /// Hash of the dispatched input.
+    pub input_sha256: String,
+    /// Hash of the accepted output, when the run produced one.
+    pub output_sha256: Option<String>,
+    /// `succeeded`, `rejected`, `failed` or `canceled`.
+    pub status: String,
+    /// Consent posture at dispatch time.
+    pub consent_policy: ConsentPolicyDto,
+    /// Cost, with unknown never rendered as zero (§13.2).
+    pub cost: CostValue,
+    /// When the run opened.
+    pub created_at: String,
+    /// When it finished, when it did.
+    pub finished_at: Option<String>,
+}
+
+/// `list_tool_runs` request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ListToolRunsRequest {
+    /// Recording whose runs are requested.
+    pub recording_id: String,
+}
+
+/// `list_tool_runs` response.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ListToolRunsResponse {
+    /// Runs, newest first.
+    pub runs: Vec<ToolRunDto>,
+}
+
+/* ------------------------------------------------------- templates (A12) */
+
+/// One template, as the Templates screen lists it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TemplateSummaryDto {
+    /// Template identity.
+    pub template_id: String,
+    /// Current version.
+    pub version: String,
+    /// Name shown to the user.
+    pub display_name: String,
+    /// What the template is for.
+    pub purpose: String,
+    /// Whether it ships with the application and cannot be edited in place.
+    pub built_in: bool,
+    /// Built-in a user copy derives from.
+    pub base_id: Option<String>,
+    /// Version of that built-in at the time of the copy.
+    pub base_version: Option<String>,
+    /// Number of extraction fields it declares.
+    pub field_count: u32,
+    /// How many stored versions exist, including the current one.
+    pub version_count: u32,
+}
+
+/// One extraction field of a template.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TemplateFieldDto {
+    /// Field key inside the output body.
+    pub key: String,
+    /// Claim kind items of this field produce.
+    pub kind: String,
+    /// Heading shown in the UI and in exports.
+    pub heading: String,
+    /// Minimum resolving anchors per item; zero means anchors are optional.
+    pub min_anchors: u32,
+    /// Maximum anchors an item may carry.
+    pub max_anchors: u32,
+    /// Maximum items the model may return.
+    pub max_items: u32,
+    /// Maximum length of any single string of an item.
+    pub max_text_chars: u32,
+}
+
+/// The stage instructions of a template.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TemplateInstructionsDto {
+    /// Role and refusal rules shared by every stage.
+    pub system: String,
+    /// Instruction for summarizing one section.
+    pub section_summary: String,
+    /// Instruction for consolidating section summaries.
+    pub synthesis: String,
+    /// Instruction for structured extraction.
+    pub extraction: String,
+}
+
+/// How a template's output is rendered.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TemplateRenderingDto {
+    /// Field keys in presentation order.
+    pub order: Vec<String>,
+    /// Text shown when a field has no items.
+    pub empty_placeholder: String,
+    /// Whether the renderer shows an anchor chip per item.
+    pub show_anchors: bool,
+}
+
+/// One template in full, including the document the editor edits.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TemplateDocumentDto {
+    /// Template identity.
+    pub template_id: String,
+    /// Version of this document.
+    pub version: String,
+    /// Name shown to the user.
+    pub display_name: String,
+    /// What the template is for.
+    pub purpose: String,
+    /// Whether it ships with the application.
+    pub built_in: bool,
+    /// Built-in a user copy derives from.
+    pub base_id: Option<String>,
+    /// Version of that built-in at the time of the copy.
+    pub base_version: Option<String>,
+    /// Prompt version recorded on every output.
+    pub prompt_version: String,
+    /// Output schema version recorded on every output.
+    pub output_schema_version: String,
+    /// Stage instructions.
+    pub instructions: TemplateInstructionsDto,
+    /// Extraction fields in declaration order.
+    pub fields: Vec<TemplateFieldDto>,
+    /// Rendering rules.
+    pub rendering: TemplateRenderingDto,
+    /// The canonical JSON document, which the editor edits and `save_template`
+    /// accepts back.
+    pub document: String,
+}
+
+/// `list_templates` response.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ListTemplatesResponse {
+    /// Built-ins first, then user copies, each in identity order.
+    pub templates: Vec<TemplateSummaryDto>,
+}
+
+/// `get_template` request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GetTemplateRequest {
+    /// Template to read.
+    pub template_id: String,
+    /// Stored version to read; the current one when absent.
+    pub version: Option<String>,
+}
+
+/// `create_template_copy` request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CreateTemplateCopyRequest {
+    /// Built-in the copy derives from.
+    pub base_id: String,
+    /// Identity of the new copy: a lowercase identifier.
+    pub new_id: String,
+    /// Name for the copy; the base's name with a suffix when absent.
+    pub display_name: Option<String>,
+}
+
+/// `save_template` request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SaveTemplateRequest {
+    /// Template being edited. Must be a user copy.
+    pub template_id: String,
+    /// The edited document.
+    pub document: String,
+    /// Version the editor started from, for conflict detection.
+    pub expected_version: Option<String>,
+}
+
+/// `save_template` response.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SaveTemplateResponse {
+    /// The saved document at its new version.
+    pub template: TemplateDocumentDto,
+    /// Version that was superseded, when there was one.
+    pub previous_version: Option<String>,
+}
+
+/// One problem found in a template document.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TemplateProblemDto {
+    /// Stable problem discriminator.
+    pub code: String,
+    /// What is wrong, in the user's terms. Never echoes the document.
+    pub message: String,
+}
+
+/// `validate_template` request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ValidateTemplateRequest {
+    /// Document to check. Nothing is stored.
+    pub document: String,
+}
+
+/// `validate_template` response.
+///
+/// A document that fails validation is data, not an error: the editor lists
+/// every problem next to the field that caused it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ValidateTemplateResponse {
+    /// Whether the document would be accepted by `save_template`.
+    pub valid: bool,
+    /// Problems, in the order they were found.
+    pub problems: Vec<TemplateProblemDto>,
+}
+
+/// `list_template_versions` request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ListTemplateVersionsRequest {
+    /// Template whose history is requested.
+    pub template_id: String,
+}
+
+/// One stored version of a template.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TemplateVersionDto {
+    /// Version label.
+    pub version: String,
+    /// When it was stored, for a version that exists as a file. A built-in is
+    /// compiled into the binary and has no stored time, so this is `None`
+    /// rather than a fabricated instant.
+    pub created_at: Option<String>,
+    /// Whether it is the version the template resolves to now.
+    pub is_current: bool,
+}
+
+/// `list_template_versions` response.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ListTemplateVersionsResponse {
+    /// Versions, newest first.
+    pub versions: Vec<TemplateVersionDto>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

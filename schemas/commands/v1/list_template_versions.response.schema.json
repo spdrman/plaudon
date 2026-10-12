@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/list_template_versions.response.schema.json",
+  "title": "list_template_versions.response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["versions"],
+  "properties": {
+    "versions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/template_version"
+      }
+    }
+  },
+  "$defs": {
+    "template_version": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "created_at", "is_current"],
+      "properties": {
+        "version": {
+          "type": "string"
+        },
+        "created_at": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "is_current": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}
