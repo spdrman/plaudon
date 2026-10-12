@@ -6,6 +6,11 @@
 //! platform data directory, and eframe is handed the shell with its host
 //! hooks.
 
+// A release build must not flash a console window on Windows. Debug builds
+// keep the console: it is where the `eprintln!` calls below go when the
+// library cannot be opened, and a developer needs to see that.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 use std::path::PathBuf;
 use std::process::ExitCode;
 use std::sync::Arc;
