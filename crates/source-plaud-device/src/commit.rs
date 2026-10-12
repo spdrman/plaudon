@@ -17,7 +17,7 @@ use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
 
-use plaudon_domain::ids::{DeviceId, ImportIntentId, JobId, RecordingId, TransferId};
+use plaudon_domain::ids::{ImportIntentId, JobId, RecordingId, TransferId};
 use plaudon_domain::media::{MediaIdentity, QualityClass};
 use plaudon_domain::time::Timestamp;
 use plaudon_persistence::archive::sanitize_extension;
