@@ -453,7 +453,7 @@ Formatting and lints: [`scripts/fmt.sh`](scripts/fmt.sh), [`scripts/clippy.sh`](
 
 ## Licence and attribution
 
-Plaudon is licensed under the **Apache License, Version 2.0** — see [LICENSE](LICENSE).
+Plaudon is licensed under the **MIT License** — see [LICENSE](LICENSE).
 
 Third-party material bundled in this repository is recorded in [NOTICE](NOTICE), and build-time
 dependencies in [`docs/licensing/third-party-register.md`](docs/licensing/third-party-register.md).

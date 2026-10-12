@@ -21,7 +21,7 @@ exclude = ["fuzz", "tests/fixtures/ci-selftest"]
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.90"
-license = "Apache-2.0"
+license = "MIT"
 repository = "https://github.com/spdrman/plaudon"
 # Nothing here is published to crates.io: the deliverables are the
 # `plaudon-egui` application bundle and the `plaudon` CLI binary. Saying so

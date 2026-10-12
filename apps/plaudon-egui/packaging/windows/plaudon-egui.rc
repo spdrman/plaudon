@@ -41,7 +41,7 @@ FILETYPE 0x1L         // VFT_APP
       VALUE "OriginalFilename", "plaudon-egui.exe"
       VALUE "ProductName",      "Plaudon"
       VALUE "ProductVersion",   PLAUDON_VERSION
-      VALUE "LegalCopyright",   "Licensed under the Apache License, Version 2.0"
+      VALUE "LegalCopyright",   "Licensed under the MIT License"
     }
   }
   BLOCK "VarFileInfo"

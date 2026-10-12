@@ -66,7 +66,7 @@ VIAddVersionKey "ProductName" "${PRODUCT}"
 VIAddVersionKey "FileDescription" "Plaudon installer"
 VIAddVersionKey "FileVersion" "${PLAUDON_VERSION}"
 VIAddVersionKey "ProductVersion" "${PLAUDON_VERSION}"
-VIAddVersionKey "LegalCopyright" "Licensed under the Apache License, Version 2.0"
+VIAddVersionKey "LegalCopyright" "Licensed under the MIT License"
 
 !include "MUI2.nsh"
 !define MUI_ICON "plaudon.ico"
