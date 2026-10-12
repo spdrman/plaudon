@@ -25,6 +25,7 @@
 //! reader of [`event::EventReceiver`], and nothing else.
 
 pub mod backend;
+pub mod cloud_presentation;
 pub mod command;
 pub mod commands;
 pub mod dto;
@@ -32,12 +33,14 @@ pub mod error;
 pub mod event;
 pub mod events;
 pub mod folder_pump;
+pub mod job_presentation;
 pub mod media;
 pub mod notify;
 pub mod ports;
 pub mod runtime;
 pub mod secrets;
 pub mod shell_state;
+pub mod tone;
 pub mod updater;
 pub mod validate;
 
