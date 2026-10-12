@@ -12,5 +12,7 @@
 #![deny(missing_docs)]
 
 pub mod screens;
+pub mod shell;
+pub mod theme;
 pub mod transcript;
 pub mod widgets;
