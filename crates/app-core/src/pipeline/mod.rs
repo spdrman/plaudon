@@ -211,13 +211,15 @@ impl PipelineRequest {
             self.capabilities.model.model_id.clone(),
         );
         key.transcript_revision = Some(self.revision.id.to_string());
-        key.model_version = self.capabilities.model.model_version.clone();
+        key.model_version
+            .clone_from(&self.capabilities.model.model_version);
         key.normalization_config = normalization;
         key.prompt_template_version = Some(format!(
             "{}@{}+prompt:{}",
             self.template.id, self.template.version, self.template.prompt_version
         ));
-        key.privacy_policy_snapshot = self.privacy_policy_snapshot.clone();
+        key.privacy_policy_snapshot
+            .clone_from(&self.privacy_policy_snapshot);
         key
     }
 }
@@ -441,12 +443,12 @@ impl SummarizationPipeline {
             None,
             started,
         ));
-        self.guard_cancel(ctx)?;
+        Self::guard_cancel(ctx)?;
 
         // --------------------------------------------- section summaries
         let mut budget =
             ContextBudget::from_capabilities(&request.capabilities, &request.chunk_policy)?;
-        let mut plan = self.plan(&request, &budget)?;
+        let mut plan = Self::plan(&request, &budget)?;
         let mut shrinks = 0_u8;
         let (sections, section_stages) = loop {
             match self
@@ -459,20 +461,20 @@ impl SummarizationPipeline {
                 {
                     shrinks += 1;
                     budget = budget.shrunk(budget.context_tokens / 2);
-                    plan = self.plan(&request, &budget)?;
+                    plan = Self::plan(&request, &budget)?;
                 }
                 Err(error) => return Err(error),
             }
         };
         stages.extend(section_stages);
-        self.guard_cancel(ctx)?;
+        Self::guard_cancel(ctx)?;
 
         // ------------------------------------------- consolidated summary
         let (consolidated, consolidate_stage) = self
             .consolidate(&request, &sections, compatibility_mode, ctx, stages.len())
             .await?;
         stages.push(consolidate_stage);
-        self.guard_cancel(ctx)?;
+        Self::guard_cancel(ctx)?;
 
         // --------------------------------------------------- extraction
         let (report, extraction_stage) = self
@@ -485,7 +487,7 @@ impl SummarizationPipeline {
             )
             .await?;
         stages.push(extraction_stage);
-        self.guard_cancel(ctx)?;
+        Self::guard_cancel(ctx)?;
 
         // ------------------------------------------ citation verification
         let verification_started = self.clock.now();
@@ -545,11 +547,7 @@ impl SummarizationPipeline {
         })
     }
 
-    fn plan(
-        &self,
-        request: &PipelineRequest,
-        budget: &ContextBudget,
-    ) -> Result<ChunkPlan, PipelineError> {
+    fn plan(request: &PipelineRequest, budget: &ContextBudget) -> Result<ChunkPlan, PipelineError> {
         let plan = plan_chunks_for_revision(&request.revision, budget)?;
         match &plan.coverage {
             Coverage::Full => Ok(plan),
@@ -571,7 +569,7 @@ impl SummarizationPipeline {
         let mut provenance = Vec::with_capacity(plan.chunks.len());
 
         for chunk in &plan.chunks {
-            self.guard_cancel(ctx)?;
+            Self::guard_cancel(ctx)?;
             let started = self.clock.now();
             let segments: Vec<_> = request
                 .revision
@@ -759,7 +757,7 @@ impl SummarizationPipeline {
         let mut instructions = request.template.instructions.extraction.clone();
         let mut last_body;
         let report = loop {
-            self.guard_cancel(ctx)?;
+            Self::guard_cancel(ctx)?;
             let assembled = prompt::assemble_over_text(
                 &request.template.instructions.system,
                 &instructions,
@@ -819,7 +817,7 @@ impl SummarizationPipeline {
         schema: &serde_json::Value,
         ctx: &JobContext,
     ) -> Result<plaudon_ai_contracts::text::StructuredResponse, PipelineError> {
-        self.guard_cancel(ctx)?;
+        Self::guard_cancel(ctx)?;
         let structured = StructuredRequest {
             prompt_version: format!(
                 "{}+{}",
@@ -834,11 +832,11 @@ impl SummarizationPipeline {
             .model
             .generate_structured(structured, ctx.clone())
             .await?;
-        self.guard_cancel(ctx)?;
+        Self::guard_cancel(ctx)?;
         Ok(response)
     }
 
-    fn guard_cancel(&self, ctx: &JobContext) -> Result<(), PipelineError> {
+    fn guard_cancel(ctx: &JobContext) -> Result<(), PipelineError> {
         if ctx.is_cancelled() {
             Err(PipelineError::Cancelled)
         } else {

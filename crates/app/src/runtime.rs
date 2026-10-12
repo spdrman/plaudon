@@ -331,27 +331,24 @@ impl AppEngine {
         // then travels the ordinary event stream instead of focusing a window
         // the application layer knows nothing about.
         let publisher: Arc<Mutex<Option<EventPublisher>>> = Arc::new(Mutex::new(None));
-        let notifier = match config.notifier {
-            Some(notifier) => notifier,
-            None => {
-                let activation_publisher = Arc::clone(&publisher);
-                let handle = runtime.handle().clone();
-                let on_activated: notify::ActivationHandler = Arc::new(move |target| {
-                    let Some(target) = target else {
-                        return;
-                    };
-                    let events = activation_publisher.lock().clone();
-                    let Some(events) = events else {
-                        tracing::debug!("notification activated before the library was open");
-                        return;
-                    };
-                    handle.spawn(async move {
-                        notify::publish_activation(&events, target).await;
-                    });
+        let notifier = config.notifier.unwrap_or_else(|| {
+            let activation_publisher = Arc::clone(&publisher);
+            let handle = runtime.handle().clone();
+            let on_activated: notify::ActivationHandler = Arc::new(move |target| {
+                let Some(target) = target else {
+                    return;
+                };
+                let events = activation_publisher.lock().clone();
+                let Some(events) = events else {
+                    tracing::debug!("notification activated before the library was open");
+                    return;
+                };
+                handle.spawn(async move {
+                    notify::publish_activation(&events, target).await;
                 });
-                notify::platform_notifier(on_activated)
-            }
-        };
+            });
+            notify::platform_notifier(on_activated)
+        });
         // Preferences are loaded by the backend; the dispatcher starts
         // disabled so nothing can be delivered before they are applied.
         let notifications = Arc::new(NotificationDispatcher::new(
@@ -609,7 +606,9 @@ mod tests {
                 assert_eq!(answered, id);
                 assert_eq!(command, "list_recordings");
                 match (*result).expect("an empty library lists successfully") {
-                    AppResponse::ListRecordings(page) => assert!(page.items.is_empty()),
+                    AppResponse::ListRecordings(page) => {
+                        assert!(page.items.is_empty(), "an empty library lists no items");
+                    }
                     other => panic!("unexpected {other:?}"),
                 }
             }

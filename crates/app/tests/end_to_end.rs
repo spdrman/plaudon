@@ -754,7 +754,7 @@ mod cloud {
                 // case below polls for the transport call. One worker keeps
                 // that polling deterministic.
                 processing: plaudon_app::backend::processing::ProcessingHandle::start(
-                    Arc::clone(&backend),
+                    &backend,
                     Some(1),
                 ),
             };

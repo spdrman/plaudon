@@ -272,16 +272,13 @@ async fn process(db: &Database, args: &ProcessArgs, now_ms: i64) -> Envelope {
         model.clone(),
     );
 
-    let store = match JobStore::open_at(db.path()).await {
-        Ok(store) => store,
-        Err(_) => {
-            return Envelope::error(
-                "process",
-                "STORAGE_UNAVAILABLE",
-                "the job store could not be opened",
-                true,
-            )
-        }
+    let Ok(store) = JobStore::open_at(db.path()).await else {
+        return Envelope::error(
+            "process",
+            "STORAGE_UNAVAILABLE",
+            "the job store could not be opened",
+            true,
+        );
     };
 
     let mut request = EnqueueRequest::new(
@@ -337,16 +334,13 @@ const fn resource_class(destination: Destination) -> ResourceClass {
 async fn jobs(db: &Database, command: &JobsCommand) -> Envelope {
     let JobsCommand::Status { recording, limit } = command;
 
-    let store = match JobStore::open_at(db.path()).await {
-        Ok(store) => store,
-        Err(_) => {
-            return Envelope::error(
-                "jobs",
-                "STORAGE_UNAVAILABLE",
-                "the job store could not be opened",
-                true,
-            )
-        }
+    let Ok(store) = JobStore::open_at(db.path()).await else {
+        return Envelope::error(
+            "jobs",
+            "STORAGE_UNAVAILABLE",
+            "the job store could not be opened",
+            true,
+        );
     };
     let history = JobHistory::new(store.read_pool().clone());
 

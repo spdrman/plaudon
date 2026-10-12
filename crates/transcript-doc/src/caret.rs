@@ -276,7 +276,7 @@ mod tests {
         assert_eq!(start, Position::new(ids[0], 2));
         assert_eq!(end, Position::new(ids[1], 1));
         assert!(backwards.spans_segments());
-        assert!(!backwards.is_empty());
+        assert!(!backwards.is_empty(), "expected backwards to be non-empty");
     }
 
     #[test]

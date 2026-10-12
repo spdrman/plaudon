@@ -215,7 +215,9 @@ impl OutputsViewer {
         {
             if self.speaker_edits[index].seeded_from.as_deref() != stored {
                 self.speaker_edits[index].seeded_from = stored.map(ToOwned::to_owned);
-                self.speaker_edits[index].text = stored.unwrap_or_default().to_owned();
+                stored
+                    .unwrap_or_default()
+                    .clone_into(&mut self.speaker_edits[index].text);
             }
             return index;
         }

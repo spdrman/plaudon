@@ -267,7 +267,10 @@ mod tests {
     #[test]
     fn an_empty_band_answers_every_query() {
         let regions = SpeakerRegions::default();
-        assert!(regions.is_empty());
+        assert!(
+            regions.is_empty(),
+            "expected regions to be empty, got {regions:?}"
+        );
         assert!(regions.at(Micros::ZERO).is_none());
         assert_eq!(
             regions.overlapping(TimeSpan::new(Micros::ZERO, Micros::from_secs(1))),

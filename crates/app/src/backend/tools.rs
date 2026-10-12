@@ -860,7 +860,7 @@ impl LocalBackend {
         .map_err(|err| storage_error("cannot read a transcript revision", &err))?
         .ok_or_else(|| AppError::new(AppErrorCode::RecordNotFound, "no such revision"))?;
 
-        let owner: String = row.try_get("recording_id").map_err(row_error)?;
+        let owner: String = row.try_get("recording_id").map_err(|err| row_error(&err))?;
         if owner != recording_id.to_string() {
             return Err(AppError::new(
                 AppErrorCode::RecordNotFound,
@@ -870,13 +870,16 @@ impl LocalBackend {
 
         let alignment = parse_alignment(
             &row.try_get::<String, _>("alignment_origin")
-                .map_err(row_error)?,
+                .map_err(|err| row_error(&err))?,
         );
-        let digest: String = row.try_get("input_sha256").map_err(row_error)?;
-        let parent: Option<String> = row.try_get("parent_id").map_err(row_error)?;
-        let engine: String = row.try_get("engine").map_err(row_error)?;
-        let model_id: String = row.try_get("model_id").map_err(row_error)?;
-        let origin = parse_origin(&row.try_get::<String, _>("origin").map_err(row_error)?);
+        let digest: String = row.try_get("input_sha256").map_err(|err| row_error(&err))?;
+        let parent: Option<String> = row.try_get("parent_id").map_err(|err| row_error(&err))?;
+        let engine: String = row.try_get("engine").map_err(|err| row_error(&err))?;
+        let model_id: String = row.try_get("model_id").map_err(|err| row_error(&err))?;
+        let origin = parse_origin(
+            &row.try_get::<String, _>("origin")
+                .map_err(|err| row_error(&err))?,
+        );
 
         let segments = self.domain_segments(revision_id, alignment).await?;
         let draft = TranscriptRevisionDraft {
@@ -889,13 +892,19 @@ impl LocalBackend {
             locale: None,
             alignment_origin: alignment,
             status: RevisionStatus::Complete,
-            normalization_profile: row.try_get("normalization_profile").map_err(row_error)?,
-            chunking_strategy: row.try_get("chunking_strategy").map_err(row_error)?,
+            normalization_profile: row
+                .try_get("normalization_profile")
+                .map_err(|err| row_error(&err))?,
+            chunking_strategy: row
+                .try_get("chunking_strategy")
+                .map_err(|err| row_error(&err))?,
             duration_ms: row
                 .try_get::<Option<i64>, _>("duration_ms")
-                .map_err(row_error)?
+                .map_err(|err| row_error(&err))?
                 .and_then(|value| u64::try_from(value).ok()),
-            created_at: Timestamp::from_millis(row.try_get("created_at").map_err(row_error)?),
+            created_at: Timestamp::from_millis(
+                row.try_get("created_at").map_err(|err| row_error(&err))?,
+            ),
             segments: segments.clone(),
         };
 
@@ -935,10 +944,13 @@ impl LocalBackend {
 
         rows.iter()
             .map(|row| {
-                let seq_index = as_u32("seq_index", row.try_get("seq_index").map_err(row_error)?)?;
-                let text: String = row.try_get("text").map_err(row_error)?;
-                let start: Option<i64> = row.try_get("start_ms").map_err(row_error)?;
-                let end: Option<i64> = row.try_get("end_ms").map_err(row_error)?;
+                let seq_index = as_u32(
+                    "seq_index",
+                    row.try_get("seq_index").map_err(|err| row_error(&err))?,
+                )?;
+                let text: String = row.try_get("text").map_err(|err| row_error(&err))?;
+                let start: Option<i64> = row.try_get("start_ms").map_err(|err| row_error(&err))?;
+                let end: Option<i64> = row.try_get("end_ms").map_err(|err| row_error(&err))?;
                 Ok(match (alignment.permits_times(), start, end) {
                     (true, Some(start), Some(end)) => TranscriptSegment::timed(
                         seq_index,
@@ -1001,8 +1013,8 @@ impl LocalBackend {
 }
 
 /// Map a column read failure that the schema should have made impossible.
-fn row_error(err: sqlx::Error) -> AppError {
-    storage_error("cannot read a stored column", &err)
+fn row_error(err: &sqlx::Error) -> AppError {
+    storage_error("cannot read a stored column", err)
 }
 
 /// Parse a stored alignment origin, defaulting to "no times at all".
@@ -1167,9 +1179,11 @@ impl ToolsPort for LocalBackend {
 
         let mut headers = Vec::with_capacity(rows.len());
         for row in &rows {
-            let id: String = row.try_get("id").map_err(row_error)?;
-            let revision: String = row.try_get("transcript_revision_id").map_err(row_error)?;
-            let created_at: i64 = row.try_get("created_at").map_err(row_error)?;
+            let id: String = row.try_get("id").map_err(|err| row_error(&err))?;
+            let revision: String = row
+                .try_get("transcript_revision_id")
+                .map_err(|err| row_error(&err))?;
+            let created_at: i64 = row.try_get("created_at").map_err(|err| row_error(&err))?;
             let id: uuid::Uuid = id
                 .parse()
                 .map_err(|_| internal("a stored conversation id is not a uuid"))?;
@@ -1300,7 +1314,9 @@ impl ToolsPort for LocalBackend {
         let head = self.head_revision(recording_id).await?;
         let mut ids = Vec::with_capacity(rows.len());
         for row in &rows {
-            let raw: String = row.try_get("transcript_revision_id").map_err(row_error)?;
+            let raw: String = row
+                .try_get("transcript_revision_id")
+                .map_err(|err| row_error(&err))?;
             if let Ok(id) = raw.parse::<TranscriptRevisionId>() {
                 ids.push(id);
             }
@@ -1309,13 +1325,19 @@ impl ToolsPort for LocalBackend {
 
         let mut sets = Vec::with_capacity(rows.len());
         for row in &rows {
-            let output_id: String = row.try_get("id").map_err(row_error)?;
-            let output_type: String = row.try_get("output_type").map_err(row_error)?;
-            let revision_raw: String = row.try_get("transcript_revision_id").map_err(row_error)?;
-            let prompt_version: String = row.try_get("prompt_version").map_err(row_error)?;
-            let schema_version: String = row.try_get("schema_version").map_err(row_error)?;
-            let body: String = row.try_get("body_json").map_err(row_error)?;
-            let created_at: i64 = row.try_get("created_at").map_err(row_error)?;
+            let output_id: String = row.try_get("id").map_err(|err| row_error(&err))?;
+            let output_type: String = row.try_get("output_type").map_err(|err| row_error(&err))?;
+            let revision_raw: String = row
+                .try_get("transcript_revision_id")
+                .map_err(|err| row_error(&err))?;
+            let prompt_version: String = row
+                .try_get("prompt_version")
+                .map_err(|err| row_error(&err))?;
+            let schema_version: String = row
+                .try_get("schema_version")
+                .map_err(|err| row_error(&err))?;
+            let body: String = row.try_get("body_json").map_err(|err| row_error(&err))?;
+            let created_at: i64 = row.try_get("created_at").map_err(|err| row_error(&err))?;
 
             let revision_id: TranscriptRevisionId = revision_raw
                 .parse()
@@ -1363,9 +1385,13 @@ impl ToolsPort for LocalBackend {
         .map_err(|err| storage_error("cannot read tool runs", &err))?;
         let mut extra: BTreeMap<String, (Option<String>, String)> = BTreeMap::new();
         for row in &rows {
-            let id: String = row.try_get("id").map_err(row_error)?;
-            let model_version: Option<String> = row.try_get("model_version").map_err(row_error)?;
-            let policy: String = row.try_get("consent_policy_json").map_err(row_error)?;
+            let id: String = row.try_get("id").map_err(|err| row_error(&err))?;
+            let model_version: Option<String> = row
+                .try_get("model_version")
+                .map_err(|err| row_error(&err))?;
+            let policy: String = row
+                .try_get("consent_policy_json")
+                .map_err(|err| row_error(&err))?;
             extra.insert(id, (model_version, policy));
         }
 
@@ -1623,14 +1649,26 @@ impl LocalBackend {
 
         let mut grouped: BTreeMap<String, Vec<SourceAnchor>> = BTreeMap::new();
         for row in &rows {
-            let item_path: String = row.try_get("item_path").map_err(row_error)?;
-            let cited: String = row.try_get("cited_revision_id").map_err(row_error)?;
+            let item_path: String = row.try_get("item_path").map_err(|err| row_error(&err))?;
+            let cited: String = row
+                .try_get("cited_revision_id")
+                .map_err(|err| row_error(&err))?;
             let anchor = SourceAnchor::new(
                 cited.parse().unwrap_or(revision_id),
-                as_u32("seq_index", row.try_get("seq_index").map_err(row_error)?)?,
-                as_u32("char_start", row.try_get("char_start").map_err(row_error)?)?,
-                as_u32("char_end", row.try_get("char_end").map_err(row_error)?)?,
-                row.try_get::<String, _>("quote").map_err(row_error)?,
+                as_u32(
+                    "seq_index",
+                    row.try_get("seq_index").map_err(|err| row_error(&err))?,
+                )?,
+                as_u32(
+                    "char_start",
+                    row.try_get("char_start").map_err(|err| row_error(&err))?,
+                )?,
+                as_u32(
+                    "char_end",
+                    row.try_get("char_end").map_err(|err| row_error(&err))?,
+                )?,
+                row.try_get::<String, _>("quote")
+                    .map_err(|err| row_error(&err))?,
             );
             grouped.entry(item_path).or_default().push(anchor);
         }
@@ -2019,15 +2057,19 @@ mod tests {
         assert_eq!(answer.outcome, "not_supported_by_recording");
         assert!(!answer.dispatched);
         assert_eq!(answer.tool_run_id, None);
-        assert!(answer.anchors.is_empty());
+        assert!(
+            answer.anchors.is_empty(),
+            "expected answer.anchors to be empty, got {:?}",
+            answer.anchors
+        );
         assert_eq!(answer.retrieved_segments, Vec::<u32>::new());
         assert_eq!(model.prompt_count(), 0, "nothing may be dispatched");
-        assert!(backend
+        let runs = backend
             .list_tool_runs(recording_id)
             .await
             .expect("runs list")
-            .runs
-            .is_empty());
+            .runs;
+        assert!(runs.is_empty(), "no tool run may be recorded: {runs:?}");
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -2052,7 +2094,11 @@ mod tests {
 
         assert_eq!(answer.outcome, "insufficient_evidence");
         assert!(!answer.text.contains("four million"));
-        assert!(answer.anchors.is_empty());
+        assert!(
+            answer.anchors.is_empty(),
+            "expected answer.anchors to be empty, got {:?}",
+            answer.anchors
+        );
         assert_eq!(answer.rejected_anchors.len(), 1);
         assert_eq!(
             answer.rejected_anchors[0].rejection_code,

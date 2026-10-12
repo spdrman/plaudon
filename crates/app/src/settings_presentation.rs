@@ -779,7 +779,11 @@ mod tests {
 
     #[test]
     fn no_policy_is_rendered_before_the_gate_has_answered() {
-        assert!(enforced_policy_lines(None).is_empty());
+        assert!(
+            enforced_policy_lines(None).is_empty(),
+            "expected enforced_policy_lines(None) to be empty, got {:?}",
+            enforced_policy_lines(None)
+        );
     }
 
     #[test]
@@ -839,7 +843,11 @@ mod tests {
         assert_eq!(facts.len(), 3);
         assert_eq!(facts[0].label, "Library location");
         assert_eq!(facts[1].value, "42 GB");
-        assert!(storage_facts(None).is_empty());
+        assert!(
+            storage_facts(None).is_empty(),
+            "expected storage_facts(None) to be empty, got {:?}",
+            storage_facts(None)
+        );
     }
 
     #[test]
@@ -1025,7 +1033,11 @@ mod tests {
 
     #[test]
     fn a_satisfiable_install_has_no_blockers() {
-        assert!(gate().blockers(true, 2000, 8000, false).is_empty());
+        assert!(
+            gate().blockers(true, 2000, 8000, false).is_empty(),
+            "expected gate().blockers(true, 2000, 8000, false) to be empty, got {:?}",
+            gate().blockers(true, 2000, 8000, false)
+        );
     }
 
     #[test]

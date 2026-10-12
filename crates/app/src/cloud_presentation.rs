@@ -709,7 +709,7 @@ mod tests {
                 ConsentPurpose::CredentialValidation,
                 "{stage:?} must not use the credential purpose"
             );
-            assert!(ProcessingStage::parse(stage.as_str()) == Some(*stage));
+            assert_eq!(ProcessingStage::parse(stage.as_str()), Some(*stage));
         }
     }
 

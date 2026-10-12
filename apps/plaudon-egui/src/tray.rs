@@ -283,7 +283,10 @@ mod tests {
             error,
             plaudon_platform::tray::TrayError::Unsupported { .. }
         ));
-        assert!(tray.poll_events().is_empty());
+        assert!(
+            tray.poll_events().is_empty(),
+            "polling an idle tray yields no event"
+        );
     }
 
     #[cfg(any(target_os = "macos", target_os = "windows"))]

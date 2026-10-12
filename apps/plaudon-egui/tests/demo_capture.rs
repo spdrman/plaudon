@@ -30,6 +30,7 @@
 
 mod support;
 
+use std::fmt::Write as _;
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -125,11 +126,7 @@ const TRANSCRIPT: [(&str, u64, u64); 3] = [
 /// sweep, so a capture never lands in the working tree by accident.
 fn frames_dir() -> PathBuf {
     std::env::var_os("PLAUDON_DEMO_FRAMES").map_or_else(
-        || {
-            Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../../target/demo-frames")
-                .to_path_buf()
-        },
+        || Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/demo-frames"),
         PathBuf::from,
     )
 }
@@ -165,10 +162,12 @@ impl Recorder {
         frame
             .save(self.dir.join(&name))
             .expect("the frame is written");
-        self.manifest.push_str(&format!(
+        write!(
+            self.manifest,
             "file {name}\nduration {:.3}\n",
             f64::from(hold_ms) / 1000.0
-        ));
+        )
+        .expect("writing to a String never fails");
         self.last = name;
         self.index += 1;
     }
@@ -186,7 +185,7 @@ impl Recorder {
     /// needs it to flush the final entry, and ffmpeg ignores the repeat.
     fn finish(mut self) -> (usize, f64) {
         assert!(self.index > 0, "the demo recorded no frame at all");
-        self.manifest.push_str(&format!("file {}\n", self.last));
+        writeln!(self.manifest, "file {}", self.last).expect("writing to a String never fails");
         let path = self.dir.join("frames.txt");
         let mut file = std::fs::File::create(&path).expect("the manifest is created");
         file.write_all(self.manifest.as_bytes())

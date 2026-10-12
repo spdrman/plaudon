@@ -308,13 +308,13 @@ impl ImportSession {
     ///
     /// Requests are chunked at the command's documented maximum so that a
     /// large drop is imported rather than rejected wholesale.
-    pub fn start(&mut self, paths: Vec<String>, policy: DuplicatePolicy, send: Sender<'_>) {
+    pub fn start(&mut self, paths: &[String], policy: DuplicatePolicy, send: Sender<'_>) {
         if paths.is_empty() {
             return;
         }
         self.error = None;
         self.decide_later = false;
-        for path in &paths {
+        for path in paths {
             if !self.batch.contains(path) {
                 self.batch.push(path.clone());
             }
@@ -351,7 +351,7 @@ impl ImportSession {
             } if candidate == path => Some(*existing_recording_id),
             _ => None,
         });
-        self.start(vec![path.to_owned()], choice.policy(), send);
+        self.start(&[path.to_owned()], choice.policy(), send);
         match choice {
             DuplicateChoice::OpenExisting => existing,
             _ => None,
@@ -615,7 +615,7 @@ mod tests {
         let mut session = ImportSession::default();
         let mut recorder = Recorder::default();
         session.start(
-            vec!["/tmp/a.wav".to_owned(), "/tmp/notes.txt".to_owned()],
+            &["/tmp/a.wav".to_owned(), "/tmp/notes.txt".to_owned()],
             DuplicatePolicy::Ask,
             &mut recorder.send(),
         );
@@ -634,7 +634,7 @@ mod tests {
         let paths: Vec<String> = (0..MAX_IMPORT_PATHS + 3)
             .map(|index| format!("/tmp/{index}.wav"))
             .collect();
-        session.start(paths, DuplicatePolicy::Ask, &mut recorder.send());
+        session.start(&paths, DuplicatePolicy::Ask, &mut recorder.send());
         let requests = recorder.requests();
         assert_eq!(requests.len(), 2);
         assert_eq!(requests[0].paths.len(), MAX_IMPORT_PATHS);
@@ -646,7 +646,7 @@ mod tests {
         let mut session = ImportSession::default();
         let mut recorder = Recorder::default();
         session.start(
-            vec!["/tmp/a.wav".to_owned(), "/tmp/b.txt".to_owned()],
+            &["/tmp/a.wav".to_owned(), "/tmp/b.txt".to_owned()],
             DuplicatePolicy::Ask,
             &mut recorder.send(),
         );
@@ -691,7 +691,7 @@ mod tests {
         let mut session = ImportSession::default();
         let mut recorder = Recorder::default();
         session.start(
-            vec!["/tmp/a.wav".to_owned()],
+            &["/tmp/a.wav".to_owned()],
             DuplicatePolicy::Ask,
             &mut recorder.send(),
         );
@@ -716,7 +716,7 @@ mod tests {
         let mut session = ImportSession::default();
         let mut recorder = Recorder::default();
         session.start(
-            vec!["/tmp/a.wav".to_owned()],
+            &["/tmp/a.wav".to_owned()],
             DuplicatePolicy::Ask,
             &mut recorder.send(),
         );
@@ -742,7 +742,7 @@ mod tests {
         let mut session = ImportSession::default();
         let mut recorder = Recorder::default();
         session.start(
-            vec!["/tmp/a.wav".to_owned()],
+            &["/tmp/a.wav".to_owned()],
             DuplicatePolicy::Ask,
             &mut recorder.send(),
         );
@@ -774,7 +774,7 @@ mod tests {
         let mut session = ImportSession::default();
         let mut recorder = Recorder::default();
         session.start(
-            vec!["/tmp/a.wav".to_owned()],
+            &["/tmp/a.wav".to_owned()],
             DuplicatePolicy::Ask,
             &mut recorder.send(),
         );
