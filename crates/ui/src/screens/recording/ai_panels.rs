@@ -316,6 +316,11 @@ impl AiBinding {
                 // screen is stale (VP-213e).
                 return true;
             }
+            Ok(AppResponse::GetClusterSpeech(_)) => {
+                // The clean-speech measurement of the enrolment meter; the
+                // panel has already taken it (VP-094).
+                return true;
+            }
             _ => {}
         }
         match result {
@@ -580,6 +585,7 @@ fn is_ours(command: &'static str) -> bool {
             | "confirm_speaker_suggestion"
             | "reject_speaker_suggestion"
             | "enroll_person_voice"
+            | "get_cluster_speech"
             | "export_recording"
             | "start_processing"
             | "review_claim"

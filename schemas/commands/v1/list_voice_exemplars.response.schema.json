@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/list_voice_exemplars.response.schema.json",
+  "title": "list_voice_exemplars.response",
+  "description": "What one enrolment is made of. Provenance and durations only: no field here carries an embedding or any part of one (VOICE_PROFILES_SPEC VP-085).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "person_id",
+    "exemplars",
+    "total_speech_ms",
+    "source_recordings"
+  ],
+  "properties": {
+    "person_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "exemplars": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/exemplar"
+      }
+    },
+    "total_speech_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "source_recordings": {
+      "type": "integer",
+      "minimum": 0
+    }
+  },
+  "$defs": {
+    "exemplar": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "exemplar_id",
+        "recording_id",
+        "recording_title",
+        "cluster_key",
+        "source_start_ms",
+        "source_end_ms",
+        "speech_ms",
+        "model_id",
+        "model_version",
+        "created_at"
+      ],
+      "properties": {
+        "exemplar_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "recording_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid"
+        },
+        "recording_title": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "cluster_key": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source_start_ms": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "source_end_ms": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "speech_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "model_id": {
+          "type": "string"
+        },
+        "model_version": {
+          "type": "string"
+        },
+        "created_at": {
+          "type": "integer"
+        }
+      }
+    }
+  }
+}

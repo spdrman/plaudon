@@ -15,8 +15,9 @@ use egui_kittest::kittest::Queryable as _;
 use egui_kittest::Harness;
 use plaudon_app::command::{AppCommand, AppResponse};
 use plaudon_app::dto::{
-    ActivationDisclosureDto, AssignClusterPersonResponse, ConsentGateDto, ListSpeakersResponse,
-    PersonRefDto, PersonResponse, SpeakerDto, SpeakerSuggestionDto, VoiceProfileSettingsDto,
+    ActivationDisclosureDto, AssignClusterPersonResponse, ClusterSpeechDto, ConsentGateDto,
+    ListSpeakersResponse, PersonRefDto, PersonResponse, SpeakerDto, SpeakerSuggestionDto,
+    VoiceProfileSettingsDto,
 };
 use plaudon_domain::ids::{PersonId, RecordingId, SpeakerId, SpeakerSuggestionId};
 use plaudon_domain::time::Timestamp;
@@ -607,4 +608,146 @@ fn every_control_of_the_enrolment_flow_is_named() {
     harness.run();
     activate(&mut harness, "Enrol this speaker's voice…");
     plaudon_ui_testkit::a11y::assert_every_control_is_named(&harness, "the enrolment flow", &[]);
+}
+
+/* ------------------------------------------- the clean-speech meter (VP-094) */
+
+/// Open the enrolment flow over an assigned cluster, and report the harness.
+fn open_enrolment() -> Harness<'static, PanelApp> {
+    let mut harness = panel(true, false);
+    let person_id = harness.state().people[0].id.clone();
+    harness.state_mut().speakers.speakers[0].person_id =
+        Some(person_id.parse().expect("a person id"));
+    harness.run();
+    activate(&mut harness, "Enrol this speaker's voice…");
+    harness
+}
+
+/// A measurement of the open flow's cluster.
+fn measurement(harness: &Harness<'_, PanelApp>, clean_speech_ms: u32) -> ClusterSpeechDto {
+    ClusterSpeechDto {
+        recording_id: harness.state().recording_id,
+        cluster_key: "S1".to_owned(),
+        clean_speech_ms,
+        spans: 3,
+        first_span_start_ms: Some(12_000),
+        last_span_end_ms: Some(96_000),
+        enrol_speech_ms: 10_000,
+        exemplar_speech_ms: 5_000,
+        meets_enrol_minimum: clean_speech_ms >= 10_000,
+        meets_exemplar_minimum: clean_speech_ms >= 5_000,
+    }
+}
+
+#[test]
+fn opening_the_flow_measures_the_cluster_before_anything_is_computed() {
+    let harness = open_enrolment();
+    assert!(
+        harness.state().sent("get_cluster_speech"),
+        "the flow did not ask how much clean speech there is; sent {:?}",
+        harness.state().names()
+    );
+    assert!(
+        !harness.state().sent("enroll_person_voice"),
+        "the measurement must not enrol anything"
+    );
+    let AppCommand::GetClusterSpeech(request) = harness.state().last("get_cluster_speech") else {
+        panic!("the flow measures the cluster");
+    };
+    assert_eq!(request.cluster_key, "S1");
+    assert_eq!(
+        request.recording_id,
+        harness.state().recording_id.to_string()
+    );
+    assert!(
+        says(&harness, "Measuring how much clean speech"),
+        "an unanswered measurement must not read as a number: {:?}",
+        labels(&harness)
+    );
+}
+
+#[test]
+fn the_meter_quotes_what_was_collected_against_what_is_required() {
+    let mut harness = open_enrolment();
+    let answer = measurement(&harness, 12_000);
+    harness.state_mut().panel.on_response(
+        "get_cluster_speech",
+        &Ok(AppResponse::GetClusterSpeech(answer)),
+    );
+    harness.run();
+    assert!(
+        says(&harness, "12 s of 10 s clean speech collected"),
+        "{:?}",
+        labels(&harness)
+    );
+    assert!(
+        says(&harness, "enough clean speech"),
+        "the state is a glyph plus a word, never a bar alone: {:?}",
+        labels(&harness)
+    );
+
+    activate(&mut harness, "Priya has agreed to this");
+    activate(&mut harness, "Enrol this voice");
+    assert!(
+        harness.state().sent("enroll_person_voice"),
+        "an enrolment over the minimum was not offered"
+    );
+}
+
+#[test]
+fn too_little_clean_speech_says_so_and_does_not_send_a_doomed_enrolment() {
+    let mut harness = open_enrolment();
+    let answer = measurement(&harness, 4_000);
+    harness.state_mut().panel.on_response(
+        "get_cluster_speech",
+        &Ok(AppResponse::GetClusterSpeech(answer)),
+    );
+    harness.run();
+    assert!(
+        says(&harness, "4 s of 10 s clean speech collected"),
+        "{:?}",
+        labels(&harness)
+    );
+    assert!(
+        says(&harness, "not enough clean speech"),
+        "{:?}",
+        labels(&harness)
+    );
+
+    activate(&mut harness, "Priya has agreed to this");
+    activate(&mut harness, "Enrol this voice");
+    assert!(
+        !harness.state().sent("enroll_person_voice"),
+        "an enrolment the application is bound to refuse was sent anyway"
+    );
+}
+
+#[test]
+fn a_measurement_of_another_cluster_is_not_shown_as_this_one() {
+    let mut harness = open_enrolment();
+    let mut answer = measurement(&harness, 42_000);
+    answer.cluster_key = "S2".to_owned();
+    harness.state_mut().panel.on_response(
+        "get_cluster_speech",
+        &Ok(AppResponse::GetClusterSpeech(answer)),
+    );
+    harness.run();
+    assert!(
+        !says(&harness, "42 s of 10 s clean speech collected"),
+        "another cluster's speech was shown as this speaker's: {:?}",
+        labels(&harness)
+    );
+    assert!(says(&harness, "Measuring how much clean speech"));
+}
+
+#[test]
+fn every_control_of_the_measured_enrolment_flow_is_named() {
+    let mut harness = open_enrolment();
+    let answer = measurement(&harness, 12_000);
+    harness.state_mut().panel.on_response(
+        "get_cluster_speech",
+        &Ok(AppResponse::GetClusterSpeech(answer)),
+    );
+    harness.run();
+    plaudon_ui_testkit::a11y::assert_every_control_is_named(&harness, "the enrolment meter", &[]);
 }

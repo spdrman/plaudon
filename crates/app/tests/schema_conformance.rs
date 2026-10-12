@@ -1031,15 +1031,16 @@ fn the_roster_commands_match_their_schemas() {
 #[test]
 fn the_voice_profile_commands_match_their_schemas() {
     use plaudon_app::dto::{
-        ActivationDisclosureDto, AddVoiceExemplarRequest, ConfirmSpeakerSuggestionRequest,
-        ConsentGateDto, DeleteVoiceEnrollmentRequest, DeleteVoiceEnrollmentResponse, EmptyRequest,
-        EnrollPersonVoiceRequest, EnrolmentConsentDto, ForgetAllVoiceProfilesRequest,
-        ForgetAllVoiceProfilesResponse, ListSpeakerSuggestionsRequest,
-        ListSpeakerSuggestionsResponse, PersonRefDto, RejectSpeakerSuggestionRequest,
+        ActivationDisclosureDto, AddVoiceExemplarRequest, ClusterSpeechDto,
+        ConfirmSpeakerSuggestionRequest, ConsentGateDto, DeleteVoiceEnrollmentRequest,
+        DeleteVoiceEnrollmentResponse, EmptyRequest, EnrollPersonVoiceRequest, EnrolmentConsentDto,
+        ForgetAllVoiceProfilesRequest, ForgetAllVoiceProfilesResponse, GetClusterSpeechRequest,
+        ListSpeakerSuggestionsRequest, ListSpeakerSuggestionsResponse, ListVoiceExemplarsRequest,
+        ListVoiceExemplarsResponse, PersonRefDto, RejectSpeakerSuggestionRequest,
         SetVoiceProfilesEnabledRequest, SpeakerMatchJobDto, SpeakerMatchRefusalDto,
         SpeakerSuggestionDecisionDto, SpeakerSuggestionDto, SplitVoiceEnrollmentRequest,
         SplitVoiceEnrollmentResponse, StartSpeakerMatchingRequest, StartSpeakerMatchingResponse,
-        VoiceEnrollmentDto, VoiceProfileSettingsDto,
+        VoiceEnrollmentDto, VoiceExemplarDto, VoiceProfileSettingsDto,
     };
 
     let person = person_dto();
@@ -1151,6 +1152,72 @@ fn the_voice_profile_commands_match_their_schemas() {
             exemplars_moved: 1,
             exemplars_remaining: 1,
             target: person.clone(),
+        }),
+    );
+    validate(
+        "list_voice_exemplars.request",
+        &to_value(&ListVoiceExemplarsRequest {
+            person_id: person.person_id.to_string(),
+        }),
+    );
+    let exemplars = ListVoiceExemplarsResponse {
+        person_id: person.person_id,
+        exemplars: vec![
+            VoiceExemplarDto {
+                exemplar_id: plaudon_domain::ids::VoiceExemplarId::new(),
+                recording_id: Some(RecordingId::new()),
+                recording_title: Some("Monday stand-up".into()),
+                cluster_key: Some("S1".into()),
+                source_start_ms: Some(12_000),
+                source_end_ms: Some(96_000),
+                speech_ms: 24_000,
+                model_id: "ecapa".into(),
+                model_version: "1".into(),
+                created_at: Timestamp::from_millis(1_770_000_000_000),
+            },
+            // A deleted recording nulls the provenance and keeps the
+            // exemplar (VP-080), so the schema has to accept that shape too.
+            VoiceExemplarDto {
+                exemplar_id: plaudon_domain::ids::VoiceExemplarId::new(),
+                recording_id: None,
+                recording_title: None,
+                cluster_key: None,
+                source_start_ms: None,
+                source_end_ms: None,
+                speech_ms: 18_000,
+                model_id: "ecapa".into(),
+                model_version: "1".into(),
+                created_at: Timestamp::from_millis(1_770_000_000_000),
+            },
+        ],
+        total_speech_ms: 42_000,
+        source_recordings: 1,
+    };
+    assert!(
+        !to_value(&exemplars).to_string().contains("embedding"),
+        "an exemplar listing must never carry a vector (VP-085)"
+    );
+    validate("list_voice_exemplars.response", &to_value(&exemplars));
+    validate(
+        "get_cluster_speech.request",
+        &to_value(&GetClusterSpeechRequest {
+            recording_id: RecordingId::new().to_string(),
+            cluster_key: "S1".into(),
+        }),
+    );
+    validate(
+        "get_cluster_speech.response",
+        &to_value(&ClusterSpeechDto {
+            recording_id: RecordingId::new(),
+            cluster_key: "S1".into(),
+            clean_speech_ms: 12_000,
+            spans: 3,
+            first_span_start_ms: Some(12_000),
+            last_span_end_ms: Some(96_000),
+            enrol_speech_ms: 10_000,
+            exemplar_speech_ms: 3_000,
+            meets_enrol_minimum: true,
+            meets_exemplar_minimum: true,
         }),
     );
     validate(

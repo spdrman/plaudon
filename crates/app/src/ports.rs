@@ -30,10 +30,11 @@ use crate::dto::{
     TranscriptPage, TranscriptRevisionRef, VerifyLocalModelResponse, VerifyModelResponse,
 };
 use crate::dto::{
-    AssignClusterPersonResponse, DeletePersonResponse, DeleteVoiceEnrollmentResponse,
-    ForgetAllVoiceProfilesResponse, ListPeopleResponse, ListSpeakerSuggestionsResponse,
-    MergePeopleResponse, PersonDto, SpeakerSuggestionDecisionDto, SplitVoiceEnrollmentResponse,
-    StartSpeakerMatchingResponse, VoiceEnrollmentDto, VoiceProfileSettingsDto,
+    AssignClusterPersonResponse, ClusterSpeechDto, DeletePersonResponse,
+    DeleteVoiceEnrollmentResponse, ForgetAllVoiceProfilesResponse, ListPeopleResponse,
+    ListSpeakerSuggestionsResponse, ListVoiceExemplarsResponse, MergePeopleResponse, PersonDto,
+    SpeakerSuggestionDecisionDto, SplitVoiceEnrollmentResponse, StartSpeakerMatchingResponse,
+    VoiceEnrollmentDto, VoiceProfileSettingsDto,
 };
 use crate::secrets::SecretValue;
 use crate::settings_presentation::UpdateStatus;
@@ -933,6 +934,21 @@ pub trait VoiceProfilesPort: Send + Sync {
         &self,
         request: &SplitRequest,
     ) -> Result<SplitVoiceEnrollmentResponse, AppError>;
+
+    /// One enrolment's exemplars: ids, provenance and durations, never the
+    /// vectors, so a user can see what a profile is made of and split it
+    /// (VP-091, §3.5).
+    async fn list_voice_exemplars(
+        &self,
+        person_id: plaudon_domain::ids::PersonId,
+    ) -> Result<ListVoiceExemplarsResponse, AppError>;
+
+    /// The clean speech one cluster offers, for the enrolment meter (VP-094).
+    async fn cluster_speech(
+        &self,
+        recording_id: RecordingId,
+        cluster_key: &str,
+    ) -> Result<ClusterSpeechDto, AppError>;
 
     /// Delete one person's voiceprint, or disclose what that destroys. The
     /// roster entry stays (VP-080, VP-123).
