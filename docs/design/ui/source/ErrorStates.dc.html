@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Error and offline states</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Source+Code+Pro:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#0a4fe0}a:hover{color:#0841b8}
+</style>
+</helmet>
+<div style="width: 1280px; height: {{rootH}}px; background: {{t.canvas}}; font-family: Inter, system-ui, sans-serif; color: {{t.text}}; display: flex; flex-direction: column; overflow: hidden">
+  <div style="width: 1280px; height: 820px; flex-shrink: 0; box-sizing: border-box; padding: 24px 28px; display: flex; flex-direction: column; gap: 14px">
+    <div style="display: flex; align-items: baseline; gap: 12px"><h1 style="margin: 0; font-size: 24px; font-weight: 700">Error, offline and unavailable states</h1><span style="font-size: 13px; color: {{t.text2}}">Each panel is what the main region shows in that state.</span></div>
+    <div style="flex: 1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 16px">
+
+      <section style="background: {{t.surface}}; border: 1px solid {{t.border}}; border-radius: 10px; display: flex; flex-direction: column; overflow: hidden">
+        <div style="padding: 8px 12px; font-size: 11px; font-weight: 600; color: {{t.text2}}; border-bottom: 1px solid {{t.border}}; background: {{t.canvas}}">STARTUP · capabilities failed</div>
+        <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 16px; text-align: center">
+          <img src="{{t.mono}}" alt="" style="height: 40px">
+          <h2 style="margin: 0; font-size: 19px; font-weight: 600">Plaudon could not start</h2>
+          <div style="font-size: 13px; color: {{t.text2}}; line-height: 1.5">[the envelope's message, as the backend wrote it]</div>
+          <div style="font-size: 12px; color: {{t.text2}}; font-family: 'Source Code Pro', ui-monospace, monospace">Diagnostic id [id]</div>
+          <button style="height: 30px; padding: 0 14px; border-radius: 6px; border: 1px solid {{t.accent}}; background: {{t.accent}}; color: {{t.accentText}}; font: inherit; font-size: 13px; font-weight: 600">Try again</button>
+        </div>
+      </section>
+
+      <section style="background: {{t.surface}}; border: 1px solid {{t.border}}; border-radius: 10px; display: flex; flex-direction: column; overflow: hidden">
+        <div style="padding: 8px 12px; font-size: 11px; font-weight: 600; color: {{t.text2}}; border-bottom: 1px solid {{t.border}}; background: {{t.canvas}}">STARTUP · loading</div>
+        <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px">
+          <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><circle cx="14" cy="14" r="11" fill="none" stroke="{{t.hover}}" stroke-width="3"></circle><path d="M14 3a11 11 0 0 1 11 11" fill="none" stroke="{{t.accent}}" stroke-width="3" stroke-linecap="round"></path></svg>
+          <div role="status" style="font-size: 13px">Loading your library…</div>
+          <div style="font-size: 12px; color: {{t.text2}}">The spinner is the only continuous animation and stops with the work.</div>
+        </div>
+      </section>
+
+      <section style="background: {{t.surface}}; border: 1px solid {{t.border}}; border-radius: 10px; display: flex; flex-direction: column; overflow: hidden">
+        <div style="padding: 8px 12px; font-size: 11px; font-weight: 600; color: {{t.text2}}; border-bottom: 1px solid {{t.border}}; background: {{t.canvas}}">LIBRARY · load failed (error notice)</div>
+        <div style="flex: 1; padding: 16px; display: flex; flex-direction: column; gap: 10px">
+          <h2 style="margin: 0; font-size: 19px; font-weight: 700">Recordings</h2>
+          <div role="alert" style="border-radius: 6px; background: {{t.tDanger}}; padding: 12px; display: flex; flex-direction: column; gap: 8px">
+            <div style="font-size: 13px; font-weight: 600; color: {{t.danger}}">✕ Recordings could not be loaded.</div>
+            <div style="font-size: 13px; color: {{t.text}}; line-height: 1.5">[message from the error envelope]</div>
+            <div style="font-size: 12px; color: {{t.text2}}; font-family: 'Source Code Pro', ui-monospace, monospace">Diagnostic id: [id]</div>
+            <div style="display: flex; gap: 8px">
+              <button style="height: 28px; padding: 0 12px; border-radius: 6px; border: 1px solid {{t.accent}}; background: {{t.accent}}; color: {{t.accentText}}; font: inherit; font-size: 12px; font-weight: 600">Retry</button>
+              <button style="height: 28px; padding: 0 12px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; color: {{t.text}}; font: inherit; font-size: 12px">Open diagnostics</button>
+            </div>
+          </div>
+          <div style="font-size: 12px; color: {{t.text2}}; line-height: 1.5">The second control comes from the envelope's action: Open settings, Open storage settings, Review cloud consent and so on.</div>
+        </div>
+      </section>
+
+      <section style="background: {{t.surface}}; border: 1px solid {{t.border}}; border-radius: 10px; display: flex; flex-direction: column; overflow: hidden">
+        <div style="padding: 8px 12px; font-size: 11px; font-weight: 600; color: {{t.text2}}; border-bottom: 1px solid {{t.border}}; background: {{t.canvas}}">OFFLINE · cloud run refused by Local-only mode</div>
+        <div style="flex: 1; padding: 16px; display: flex; flex-direction: column; gap: 10px">
+          <div style="display: flex; gap: 8px; align-items: center"><span style="font-size: 13px; font-weight: 600">Summarize</span><span style="padding: 0 7px; border-radius: 3px; background: {{t.tWarning}}; color: {{t.warning}}; font-size: 12px; font-weight: 600; line-height: 20px">⊘ Blocked by Local-only Mode</span></div>
+          <div role="alert" style="border-radius: 6px; background: {{t.tWarning}}; padding: 12px; display: flex; flex-direction: column; gap: 8px">
+            <div style="font-size: 13px; font-weight: 600; color: {{t.warning}}">! You are offline</div>
+            <div style="font-size: 13px; line-height: 1.5">Local-only mode is on, so choosing it will not make a request: Plaudon refuses outbound network access until you turn Local-only mode off.</div>
+            <div style="display: flex; gap: 8px">
+              <button style="height: 28px; padding: 0 12px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; color: {{t.text}}; font: inherit; font-size: 12px">Review Local-only Mode</button>
+              <button style="height: 28px; padding: 0 12px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; color: {{t.text}}; font: inherit; font-size: 12px">Choose local engine</button>
+            </div>
+          </div>
+          <div style="font-size: 12px; color: {{t.text2}}; line-height: 1.5">Nothing was sent. The gate refused the request in Rust; this notice reports it.</div>
+        </div>
+      </section>
+
+      <section style="background: {{t.surface}}; border: 1px solid {{t.border}}; border-radius: 10px; display: flex; flex-direction: column; overflow: hidden">
+        <div style="padding: 8px 12px; font-size: 11px; font-weight: 600; color: {{t.text2}}; border-bottom: 1px solid {{t.border}}; background: {{t.canvas}}">DEVICES · no radio in this build</div>
+        <div style="flex: 1; padding: 16px; display: flex; flex-direction: column; gap: 8px">
+          <div style="border-radius: 6px; background: {{t.tNeutral}}; padding: 10px 12px; font-size: 13px; font-weight: 600; color: {{t.neutral}}">– This build cannot scan for Bluetooth devices</div>
+          <sc-for list="{{radioSections}}" as="s" hint-placeholder-count="4">
+            <div style="display: flex; flex-direction: column; gap: 1px; padding: 4px 0; border-bottom: 1px solid {{t.hover}}"><span style="font-size: 12px; font-weight: 600">{{s}}</span><span style="font-size: 12px; color: {{t.text2}}">Not checked: the radio could not be used for this scan.</span></div>
+          </sc-for>
+          <div style="font-size: 12px; color: {{t.text2}}">Never "No devices nearby". Previously linked still lists what is stored.</div>
+        </div>
+      </section>
+
+      <section style="background: {{t.surface}}; border: 1px solid {{t.border}}; border-radius: 10px; display: flex; flex-direction: column; overflow: hidden">
+        <div style="padding: 8px 12px; font-size: 11px; font-weight: 600; color: {{t.text2}}; border-bottom: 1px solid {{t.border}}; background: {{t.canvas}}">DEVICES · permission denied · PLAYER · no output</div>
+        <div style="flex: 1; padding: 16px; display: flex; flex-direction: column; gap: 10px">
+          <div role="alert" style="border-radius: 6px; background: {{t.tDanger}}; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px">
+            <div style="font-size: 13px; font-weight: 600; color: {{t.danger}}">✕ Bluetooth access is not permitted</div>
+            <div style="font-size: 12px; line-height: 1.5">Check that Bluetooth permission is allowed for Plaudon in your system settings.</div>
+            <button style="align-self: flex-start; height: 26px; padding: 0 10px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; color: {{t.text}}; font: inherit; font-size: 12px">Open permission settings</button>
+          </div>
+          <div style="border: 1px solid {{t.border}}; border-radius: 6px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px">
+            <div style="font-size: 12px; font-weight: 600">Playback</div>
+            <div style="display: flex; gap: 8px; align-items: center"><button disabled aria-label="Play" style="width: 30px; height: 26px; border-radius: 6px; border: 1px solid {{t.border}}; background: {{t.surface}}; opacity: 0.5"></button><span style="font-size: 12px; color: {{t.text2}}">Duration unknown</span></div>
+            <div style="font-size: 12px; color: {{t.text2}}">this build was started without an audio output device</div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+  <sc-if value="{{notesOn}}" hint-placeholder-val="{{ true }}">
+    <div style="height: 280px; box-sizing: border-box; border-top: 1px solid {{t.border}}; background: {{t.surface}}; padding: 18px 24px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 22px; font-size: 12px; line-height: 1.5; color: {{t.text2}}">
+      <div style="display: flex; flex-direction: column; gap: 6px"><strong style="color: {{t.text}}; font-size: 13px">egui mapping: error notice</strong>
+        <div>widgets::error_notice is one Frame: tint_danger fill (tint_warning for a guided condition), status glyph and title in the tone colour, the envelope message in text_primary, the diagnostic id in monospace, then the controls ErrorAction implies.</div>
+        <div>It renders the envelope; it never classifies or rewrites the failure.</div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px"><strong style="color: {{t.text}}; font-size: 13px">Startup states, as built</strong>
+        <div>Before the shell paints: a centred Spinner with "Loading your library…", or "Plaudon could not start" with Try again. Both use ui.vertical_centered in a CentralPanel, no rail.</div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px"><strong style="color: {{t.text}}; font-size: 13px">Offline guidance, as built</strong>
+        <div>job_presentation::error_guidance maps LocalOnlyMode to "You are offline" with Review Local-only Mode, StorageFull to "Not enough space", BudgetExceeded to "Provider credits exhausted", OutcomeUnknown to "Cloud request outcome unknown".</div>
+        <div>The body sentence on the offline panel is the engines section's own copy.</div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px"><strong style="color: {{t.text}}; font-size: 13px">Unavailable, not empty</strong>
+        <div>RadioState::UnavailableInBuild and a denied radio each get their own sentence; neither looks like an empty scan. A missing audio device hides the slider and says so in the backend's words.</div>
+        <div>Disabled controls draw at 0.5 alpha and stay in the AccessKit tree with their names.</div>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light"},"notes":{"editor":"enum","options":["on","off"],"default":"on"},"$preview":{"width":1280,"height":1100}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const THEMES = {
+      light: { canvas: '#f4f6fa', surface: '#ffffff', hover: '#edf1f7', text: '#172544', text2: '#4d5873', border: '#d9dfea', borderStrong: '#6b7690', accent: '#0a4fe0', accentText: '#ffffff', neutral: '#4d5873', warning: '#8a4b00', danger: '#a1121f', tNeutral: '#edeef1', tWarning: '#f3ede6', tDanger: '#f6e7e9', mono: './assets/plaudon-mono-blue-light.svg' },
+      dark: { canvas: '#0b1220', surface: '#111a2c', hover: '#1a2540', text: '#f2f6ff', text2: '#a9b4d0', border: '#27334d', borderStrong: '#6d7a99', accent: '#6ea8ff', accentText: '#0b1220', neutral: '#a9b4d0', warning: '#e8a35c', danger: '#f08a92', tNeutral: '#293346', tWarning: '#333034', tDanger: '#352c3c', mono: './assets/plaudon-mono-blue-dark.svg' }
+    };
+    const t = THEMES[this.props.theme === 'dark' ? 'dark' : 'light'];
+    const notesOn = this.props.notes !== 'off';
+    const radioSections = ['Nearby', 'Connected', 'Needs authorization', 'Unsupported firmware'];
+    return { t, notesOn, rootH: notesOn ? 1100 : 820, radioSections };
+  }
+}
+</script>
+</body>
+</html>

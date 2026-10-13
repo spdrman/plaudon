@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Library</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Source+Code+Pro:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#0a4fe0}a:hover{color:#0841b8}
+</style>
+</helmet>
+<div style="width: 1280px; height: {{rootH}}px; background: {{t.canvas}}; font-family: Inter, system-ui, sans-serif; color: {{t.text}}; display: flex; flex-direction: column; overflow: hidden">
+  <div style="width: 1280px; height: 820px; display: flex; flex-direction: column; flex-shrink: 0; position: relative">
+    <div style="height: 28px; display: flex; align-items: center; gap: 18px; padding: 0 16px; font-size: 13px; border-bottom: 1px solid {{t.border}}; background: {{t.canvas}}">
+      <span>File</span><span>View</span><span>Go</span><span>Help</span>
+    </div>
+    <div style="height: 44px; display: flex; align-items: center; gap: 8px; padding: 0 16px; border-bottom: 1px solid {{t.border}}; background: {{t.canvas}}">
+      <button style="height: 28px; padding: 0 12px; border-radius: 6px; border: 1px solid {{t.accent}}; background: {{t.accent}}; color: {{t.accentText}}; font: inherit; font-size: 13px; font-weight: 600">Import audio…</button>
+      <button style="height: 28px; padding: 0 12px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; color: {{t.text}}; font: inherit; font-size: 13px">Search recordings</button>
+      <button style="height: 28px; padding: 0 12px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; color: {{t.text}}; font: inherit; font-size: 13px; display: flex; align-items: center; gap: 8px">Command palette <span style="font-size: 11px; color: {{t.text2}}">Ctrl+K</span></button>
+      <button style="height: 28px; padding: 0 12px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; color: {{t.text}}; font: inherit; font-size: 13px">Refresh</button>
+      <div style="flex: 1"></div>
+      <button aria-label="Activity: 2 unread notifications" style="height: 28px; padding: 0 10px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; color: {{t.text}}; font: inherit; font-size: 13px; display: flex; align-items: center; gap: 6px">Activity <span style="min-width: 18px; height: 18px; border-radius: 9px; background: {{t.accent}}; color: {{t.accentText}}; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center">2</span></button>
+      <span style="font-size: 15px; font-weight: 600; margin-left: 8px">Library</span>
+    </div>
+    <div style="height: 722px; display: flex">
+      <nav aria-label="Primary" style="width: 216px; flex-shrink: 0; background: {{t.canvas}}; border-right: 1px solid {{t.border}}; padding: 12px 10px; box-sizing: border-box; display: flex; flex-direction: column; gap: 2px">
+        <div style="display: flex; align-items: center; gap: 10px; padding: 4px 8px 10px">
+          <img src="{{t.mark}}" alt="" style="height: 26px">
+          <span style="font-size: 15px; font-weight: 700; letter-spacing: -0.01em">Plaudon</span>
+        </div>
+        <a href="#main" style="font-size: 12px; color: {{t.text2}}; padding: 2px 8px 8px; text-decoration: none">Skip to main content</a>
+        <sc-for list="{{nav}}" as="n" hint-placeholder-count="7">
+          <button style="height: 32px; display: flex; align-items: center; gap: 10px; padding: 0 8px; border: none; border-radius: 6px; background: {{n.bg}}; color: {{t.text}}; font: inherit; font-size: 13px; font-weight: {{n.weight}}; text-align: left">
+            <span style="width: 20px; height: 20px; border-radius: 3px; background: {{n.tileBg}}; color: {{n.tileFg}}; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center">{{n.g}}</span>
+            <span style="flex: 1">{{n.l}}</span>
+            <span style="font-size: 11px; color: {{t.text2}}; font-weight: 400">{{n.k}}</span>
+          </button>
+        </sc-for>
+      </nav>
+      <main id="main" style="flex: 1; min-width: 0; padding: 20px 24px; box-sizing: border-box; display: flex; flex-direction: column; gap: 14px">
+        <div style="display: flex; align-items: flex-end; justify-content: space-between">
+          <div style="display: flex; flex-direction: column; gap: 2px">
+            <h1 style="margin: 0; font-size: 24px; font-weight: 700">Recordings</h1>
+            <div style="font-size: 12px; color: {{t.text2}}">Showing 100 of 1,284 recordings (snapshot at query time)</div>
+          </div>
+          <div role="status" style="display: flex; align-items: center; gap: 8px">
+            <span style="font-size: 13px; font-weight: 600">2 selected</span>
+            <button style="height: 28px; padding: 0 12px; border-radius: 6px; border: 1px solid {{t.accent}}; background: {{t.accent}}; color: {{t.accentText}}; font: inherit; font-size: 13px; font-weight: 600">Transcribe selected</button>
+            <button style="height: 28px; padding: 0 12px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; color: {{t.text}}; font: inherit; font-size: 13px">Clear selection</button>
+          </div>
+        </div>
+
+        <div style="background: {{t.surface}}; border: 1px solid {{t.border}}; border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px">
+          <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap">
+            <label style="font-size: 12px; color: {{t.text2}}; display: flex; align-items: center; gap: 6px">Search recordings
+              <span style="width: 230px; height: 26px; border-radius: 6px; border: 2px solid {{t.focus}}; background: {{t.surface}}; display: flex; align-items: center; padding: 0 8px; box-sizing: border-box; font-size: 13px; color: {{t.text}}">sync<span style="width: 1px; height: 15px; background: {{t.text}}; margin-left: 1px"></span></span>
+            </label>
+            <sc-for list="{{combos}}" as="c" hint-placeholder-count="4">
+              <label style="font-size: 12px; color: {{t.text2}}; display: flex; align-items: center; gap: 6px">{{c.label}}
+                <span style="height: 26px; min-width: 150px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; display: flex; align-items: center; justify-content: space-between; padding: 0 8px; box-sizing: border-box; font-size: 13px; color: {{t.text}}">{{c.value}}<svg width="10" height="6" viewBox="0 0 10 6" aria-hidden="true"><path d="M1 1l4 4 4-4" fill="none" stroke="{{t.text2}}" stroke-width="1.5"></path></svg></span>
+              </label>
+            </sc-for>
+          </div>
+          <div style="display: flex; align-items: center; gap: 10px">
+            <label style="font-size: 12px; color: {{t.text2}}; display: flex; align-items: center; gap: 6px">From date (YYYY-MM-DD)<span style="width: 110px; height: 26px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; display: flex; align-items: center; padding: 0 8px; box-sizing: border-box; font-size: 13px; color: {{t.text2}}">2026-03-12</span></label>
+            <label style="font-size: 12px; color: {{t.text2}}; display: flex; align-items: center; gap: 6px">To date (YYYY-MM-DD)<span style="width: 110px; height: 26px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; display: flex; align-items: center; padding: 0 8px; box-sizing: border-box; font-size: 13px; color: {{t.text2}}">2026-03-12</span></label>
+            <button style="height: 26px; padding: 0 6px; border: none; background: transparent; color: {{t.accent}}; font: inherit; font-size: 13px; text-decoration: underline">Clear filters</button>
+            <div style="flex: 1"></div>
+            <button style="height: 26px; padding: 0 12px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; color: {{t.text}}; font: inherit; font-size: 13px">Search across all recordings</button>
+          </div>
+        </div>
+
+        <div role="grid" aria-rowcount="1284" style="flex: 1; min-height: 0; background: {{t.surface}}; border: 1px solid {{t.border}}; border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; position: relative">
+          <div style="display: grid; grid-template-columns: {{cols}}; height: 32px; align-items: center; font-size: 12px; font-weight: 600; color: {{t.text2}}; border-bottom: 1px solid {{t.border}}; padding: 0 8px">
+            <span style="padding: 0 8px; color: {{t.text}}">Title ▼</span><span style="padding: 0 8px">Recorded</span><span style="padding: 0 8px">Imported</span><span style="padding: 0 8px">Duration</span><span style="padding: 0 8px">Source</span><span style="padding: 0 8px">Import status</span><span style="padding: 0 8px">Transcription</span><span style="padding: 0 8px">Engine</span><span style="padding: 0 8px">Tags</span>
+          </div>
+          <sc-for list="{{rows}}" as="r" hint-placeholder-count="12">
+            <div style="display: grid; grid-template-columns: {{cols}}; height: 32px; align-items: center; font-size: 13px; padding: 0 8px; background: {{r.bg}}; box-shadow: {{r.ring}}; border-bottom: 1px solid {{t.hover}}">
+              <span style="padding: 0 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: {{r.weight}}">{{r.title}}</span>
+              <span style="padding: 0 8px; color: {{t.text2}}; white-space: nowrap">{{r.rec}}</span>
+              <span style="padding: 0 8px; color: {{t.text2}}; white-space: nowrap">{{r.imp}}</span>
+              <span style="padding: 0 8px; font-family: 'Source Code Pro', ui-monospace, monospace; font-size: 12px; color: {{r.durColor}}">{{r.dur}}</span>
+              <span style="padding: 0 8px; color: {{t.text2}}; white-space: nowrap">{{r.src}}</span>
+              <span style="padding: 0 8px; color: {{r.iColor}}; white-space: nowrap"><span style="display: inline-block; width: 14px; font-weight: 700">{{r.iGlyph}}</span>{{r.iWord}}</span>
+              <span style="padding: 0 8px; color: {{r.tColor}}; white-space: nowrap"><span style="display: inline-block; width: 14px; font-weight: 700">{{r.tGlyph}}</span>{{r.tWord}}</span>
+              <span style="padding: 0 8px; color: {{t.text2}}">{{r.engine}}</span>
+              <span style="padding: 0 8px; color: {{t.text2}}">{{r.tags}}</span>
+            </div>
+          </sc-for>
+          <div style="flex: 1"></div>
+          <div style="height: 40px; display: flex; align-items: center; justify-content: center; border-top: 1px solid {{t.border}}">
+            <button style="height: 28px; padding: 0 12px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; color: {{t.text}}; font: inherit; font-size: 13px">Load more recordings</button>
+          </div>
+          <div role="menu" style="position: absolute; left: 230px; top: 186px; width: 230px; background: {{t.raised}}; border: 1px solid {{t.border}}; border-radius: 6px; box-shadow: {{t.shadow}}; padding: 4px; display: flex; flex-direction: column">
+            <button role="menuitem" style="height: 28px; text-align: left; padding: 0 10px; border: none; border-radius: 3px; background: {{t.hover}}; color: {{t.text}}; font: inherit; font-size: 13px">Open recording</button>
+            <button role="menuitem" style="height: 28px; text-align: left; padding: 0 10px; border: none; background: transparent; color: {{t.text}}; font: inherit; font-size: 13px">Remove from selection</button>
+            <button role="menuitem" style="height: 28px; text-align: left; padding: 0 10px; border: none; background: transparent; color: {{t.text}}; font: inherit; font-size: 13px">Transcribe selected</button>
+            <div style="height: 1px; background: {{t.border}}; margin: 4px 6px"></div>
+            <button role="menuitem" style="height: 28px; text-align: left; padding: 0 10px; border: none; background: transparent; color: {{t.text}}; font: inherit; font-size: 13px">Copy recording identities</button>
+          </div>
+        </div>
+      </main>
+    </div>
+    <div role="status" style="height: 26px; display: flex; align-items: center; gap: 12px; padding: 0 16px; font-size: 12px; color: {{t.text2}}; border-top: 1px solid {{t.border}}; background: {{t.canvas}}">
+      <span>Ready</span>
+      <div style="flex: 1"></div>
+      <span>2 tasks running</span>
+      <span style="display: flex; align-items: center; gap: 6px; padding: 1px 8px; border-radius: 3px; background: {{t.tSuccess}}; color: {{t.success}}; font-weight: 600">✓ Local only</span>
+      <span style="font-size: 10px; font-weight: 700; padding: 0 5px; border-radius: 3px; border: 1px solid {{t.warning}}; color: {{t.warning}}">PROPOSED</span>
+    </div>
+  </div>
+
+  <sc-if value="{{notesOn}}" hint-placeholder-val="{{ true }}">
+    <div style="height: 280px; box-sizing: border-box; border-top: 1px solid {{t.border}}; background: {{t.surface}}; padding: 18px 24px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 22px; font-size: 12px; line-height: 1.5; color: {{t.text2}}">
+      <div style="display: flex; flex-direction: column; gap: 6px"><strong style="color: {{t.text}}; font-size: 13px">egui mapping: shell</strong>
+        <div>TopBottomPanel::top("menu"), drawn from menu_model(); hidden at run time on macOS where the NSMenu takes over.</div>
+        <div>TopBottomPanel::top("toolbar") height 44, toolbar::fit moves overflow into "More actions". Primary button fill = accent.</div>
+        <div>SidePanel::left("nav") 216 pt through craft_ui ResizeHandle; below 1040 pt it shows glyph tiles only. TopBottomPanel::bottom("status") 26 pt, Role::Status.</div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px"><strong style="color: {{t.text}}; font-size: 13px">Filter bar</strong>
+        <div>Frame::new().fill(bg_surface).stroke(border_subtle).corner_radius(radius.large) around ui.horizontal_wrapped.</div>
+        <div>TextEdit::singleline with hint_text "Title contains…", 200 ms debounce as today. ComboBox::from_label per filter; field edges use border_strong (4.55:1). Clear filters is Button::new().frame(false) in accent.</div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px"><strong style="color: {{t.text}}; font-size: 13px">Table</strong>
+        <div>egui_extras::TableBuilder, header(32), body.rows(32, total, …) so only visible rows build. Row fill painted with painter().rect_filled: bg_selected for selected, bg_hover for hovered. Focused row adds rect_stroke(focus_ring, 2 pt).</div>
+        <div>Status cells: a painted glyph plus the word in status_* colour. Context menu is response.context_menu() on the row.</div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px"><strong style="color: {{t.text}}; font-size: 13px">Keyboard, as built</strong>
+        <div>Up/Down/Home/End move, Enter opens, Space toggles, Shift extends, Ctrl+A selects loaded rows. Ctrl+1 to Ctrl+7, Ctrl+K palette, Ctrl+O import, Ctrl+R refresh, Ctrl+Shift+F search.</div>
+        <div><strong style="color: {{t.warning}}">Proposed:</strong> the status-bar Local-only badge, fed by the gate's enforced policy. Status glyphs drawn with the painter, because ✓ ✕ ◷ and ← render as empty boxes in today's snapshots.</div>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light"},"notes":{"editor":"enum","options":["on","off"],"default":"on"},"$preview":{"width":1280,"height":1100}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const THEMES = {
+      light: { canvas: '#f4f6fa', surface: '#ffffff', raised: '#ffffff', selected: '#e2ebff', hover: '#edf1f7', text: '#172544', text2: '#4d5873', inverse: '#ffffff', border: '#d9dfea', borderStrong: '#6b7690', accent: '#0a4fe0', accentText: '#ffffff', accentHover: '#0841b8', neutral: '#4d5873', running: '#0a4fe0', waiting: '#7a4a00', success: '#0f6b3f', warning: '#8a4b00', danger: '#a1121f', focus: '#0b57ff', overlay: 'rgba(11,18,32,0.45)', waveRem: '#7c869e', tNeutral: '#edeef1', tRunning: '#e6edfc', tWaiting: '#f2ede6', tSuccess: '#e7f0ec', tWarning: '#f3ede6', tDanger: '#f6e7e9', shadow: '0 8px 24px rgba(23,37,68,0.16)', mark: './assets/plaudon-mark-light.svg', lockup: './assets/plaudon-lockup-light.svg' },
+      dark: { canvas: '#0b1220', surface: '#111a2c', raised: '#18233a', selected: '#1c3366', hover: '#1a2540', text: '#f2f6ff', text2: '#a9b4d0', inverse: '#0b1220', border: '#27334d', borderStrong: '#6d7a99', accent: '#6ea8ff', accentText: '#0b1220', accentHover: '#8cbaff', neutral: '#a9b4d0', running: '#6ea8ff', waiting: '#e3b667', success: '#67c391', warning: '#e8a35c', danger: '#f08a92', focus: '#8fc2ff', overlay: 'rgba(0,0,0,0.6)', waveRem: '#66739a', tNeutral: '#293346', tRunning: '#20314e', tWaiting: '#333335', tSuccess: '#1f353c', tWarning: '#333034', tDanger: '#352c3c', shadow: '0 8px 24px rgba(0,0,0,0.5)', mark: './assets/plaudon-mark-dark.svg', lockup: './assets/plaudon-lockup-dark.svg' }
+    };
+    const t = THEMES[this.props.theme === 'dark' ? 'dark' : 'light'];
+    const notesOn = this.props.notes !== 'off';
+    const NAV = [['L', 'Library', 'Ctrl+1'], ['I', 'Inbox', 'Ctrl+2'], ['J', 'Jobs', 'Ctrl+3'], ['T', 'Templates', 'Ctrl+4'], ['S', 'Settings', 'Ctrl+5'], ['D', 'Devices', 'Ctrl+6'], ['P', 'People', 'Ctrl+7']];
+    const active = 0;
+    const nav = NAV.map(([g, l, k], i) => ({ g, l, k, bg: i === active ? t.selected : 'transparent', weight: i === active ? 600 : 400, tileBg: i === active ? t.accent : t.hover, tileFg: i === active ? t.accentText : t.text2 }));
+    const tone = { ok: [t.success, '✓'], run: [t.running, '⟳'], wait: [t.neutral, '◷'], fail: [t.danger, '✕'], none: [t.neutral, '–'], stale: [t.warning, '!'] };
+    const R = (title, rec, imp, dur, src, i, iWord, tr, tWord, engine, tags, state) => ({
+      title, rec, imp, dur, src, iWord, tWord, engine, tags,
+      iColor: tone[i][0], iGlyph: tone[i][1], tColor: tone[tr][0], tGlyph: tone[tr][1],
+      durColor: dur === 'Unknown' ? t.text2 : t.text,
+      bg: state === 'sel' || state === 'selfocus' ? t.selected : state === 'hover' ? t.hover : 'transparent',
+      ring: state === 'selfocus' ? 'inset 0 0 0 2px ' + t.focus : 'none',
+      weight: state === 'sel' || state === 'selfocus' ? 600 : 400
+    });
+    const rows = [
+      R('Weekly sync, platform team', '6 Oct 2026, 09:02 UTC', '6 Oct 2026, 11:40 UTC', '48:12', 'Watched folder', 'ok', 'Imported', 'ok', 'Transcribed', 'whisper.cpp', 'work, weekly', ''),
+      R('Sync notes, design review', '5 Oct 2026, 14:30 UTC', '5 Oct 2026, 15:02 UTC', '31:47', 'Manual import', 'ok', 'Imported', 'run', 'Transcribing', 'whisper.cpp', 'work', 'hover'),
+      R('Interview, research participant 4', '3 Oct 2026, 10:15 UTC', '3 Oct 2026, 10:51 UTC', '1:02:09', 'Manual import', 'ok', 'Imported', 'stale', 'Stale', 'whisper.cpp', 'research', ''),
+      R('Lecture 7, signal processing', '2 Oct 2026, 13:00 UTC', '2 Oct 2026, 16:20 UTC', '1:21:30', 'Watched folder', 'ok', 'Imported', 'wait', 'Queued', 'Not set', 'course', 'selfocus'),
+      R('Voice memo', 'Unknown', '1 Oct 2026, 08:04 UTC', 'Unknown', 'Manual import', 'ok', 'Imported', 'none', 'Not transcribed', 'Not set', 'None', 'sel'),
+      R('Kitchen renovation call', '29 Sep 2026, 17:45 UTC', '30 Sep 2026, 09:10 UTC', '22:05', 'Watched folder', 'fail', 'Import failed', 'none', 'Not transcribed', 'Not set', 'home', ''),
+      R('Standup, mobile', '29 Sep 2026, 09:30 UTC', '29 Sep 2026, 09:58 UTC', '12:40', 'Watched folder', 'ok', 'Imported', 'fail', 'Transcription failed', 'whisper.cpp', 'work', ''),
+      R('Book club, chapter 3', '27 Sep 2026, 19:00 UTC', '28 Sep 2026, 08:15 UTC', '55:18', 'Manual import', 'ok', 'Imported', 'ok', 'Transcribed', 'whisper.cpp', 'personal', ''),
+      R('Podcast draft, episode 12', '25 Sep 2026, 11:20 UTC', '25 Sep 2026, 12:00 UTC', '38:51', 'Manual import', 'run', 'Importing', 'none', 'Not transcribed', 'Not set', 'None', ''),
+      R('Planning, Q4 roadmap', '24 Sep 2026, 15:00 UTC', '24 Sep 2026, 16:31 UTC', '1:04:22', 'Watched folder', 'ok', 'Imported', 'ok', 'Transcribed', 'whisper.cpp', 'work', ''),
+      R('Field recording, river', '20 Sep 2026, 06:40 UTC', '21 Sep 2026, 10:02 UTC', '9:12', 'Manual import', 'wait', 'Pending', 'none', 'Not transcribed', 'Not set', 'None', ''),
+      R('Retro, sprint 41', '19 Sep 2026, 16:00 UTC', '19 Sep 2026, 16:45 UTC', '41:03', 'Watched folder', 'ok', 'Imported', 'ok', 'Transcribed', 'whisper.cpp', 'work, weekly', '')
+    ];
+    const combos = [
+      { label: 'Import status', value: 'All import states' },
+      { label: 'Transcription status', value: 'All transcription states' },
+      { label: 'Source', value: 'All sources' },
+      { label: 'Tag', value: 'All tags' }
+    ];
+    return { t, notesOn, rootH: notesOn ? 1100 : 820, nav, rows, combos, cols: '1.7fr 1.25fr 1.25fr 0.62fr 0.95fr 1fr 1.25fr 0.8fr 0.8fr' };
+  }
+}
+</script>
+</body>
+</html>

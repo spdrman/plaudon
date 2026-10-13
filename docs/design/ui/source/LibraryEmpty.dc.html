@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Empty library and import</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Source+Code+Pro:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#0a4fe0}a:hover{color:#0841b8}
+</style>
+</helmet>
+<div style="width: 1280px; height: {{rootH}}px; background: {{t.canvas}}; font-family: Inter, system-ui, sans-serif; color: {{t.text}}; display: flex; flex-direction: column; overflow: hidden">
+  <div style="width: 1280px; height: 820px; display: flex; flex-direction: column; flex-shrink: 0; position: relative">
+    <div style="height: 28px; display: flex; align-items: center; gap: 18px; padding: 0 16px; font-size: 13px; border-bottom: 1px solid {{t.border}}">
+      <span>File</span><span>View</span><span>Go</span><span>Help</span>
+    </div>
+    <div style="height: 44px; display: flex; align-items: center; gap: 8px; padding: 0 16px; border-bottom: 1px solid {{t.border}}">
+      <button style="height: 28px; padding: 0 12px; border-radius: 6px; border: 1px solid {{t.accent}}; background: {{t.accent}}; color: {{t.accentText}}; font: inherit; font-size: 13px; font-weight: 600">Import audio…</button>
+      <button style="height: 28px; padding: 0 12px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; color: {{t.text}}; font: inherit; font-size: 13px">Search recordings</button>
+      <button style="height: 28px; padding: 0 12px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; color: {{t.text}}; font: inherit; font-size: 13px; display: flex; align-items: center; gap: 8px">Command palette <span style="font-size: 11px; color: {{t.text2}}">Ctrl+K</span></button>
+      <button style="height: 28px; padding: 0 12px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; color: {{t.text}}; font: inherit; font-size: 13px">Refresh</button>
+      <div style="flex: 1"></div>
+      <button aria-label="Activity: no unread notifications" style="height: 28px; padding: 0 10px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; color: {{t.text}}; font: inherit; font-size: 13px">Activity</button>
+      <span style="font-size: 15px; font-weight: 600; margin-left: 8px">Library</span>
+    </div>
+    <div style="height: 722px; display: flex">
+      <nav aria-label="Primary" style="width: 216px; flex-shrink: 0; border-right: 1px solid {{t.border}}; padding: 12px 10px; box-sizing: border-box; display: flex; flex-direction: column; gap: 2px">
+        <div style="display: flex; align-items: center; gap: 10px; padding: 4px 8px 10px"><img src="{{t.mark}}" alt="" style="height: 26px"><span style="font-size: 15px; font-weight: 700">Plaudon</span></div>
+        <a href="#main" style="font-size: 12px; color: {{t.text2}}; padding: 2px 8px 8px; text-decoration: none">Skip to main content</a>
+        <sc-for list="{{nav}}" as="n" hint-placeholder-count="7">
+          <button style="height: 32px; display: flex; align-items: center; gap: 10px; padding: 0 8px; border: none; border-radius: 6px; background: {{n.bg}}; color: {{t.text}}; font: inherit; font-size: 13px; font-weight: {{n.weight}}; text-align: left">
+            <span style="width: 20px; height: 20px; border-radius: 3px; background: {{n.tileBg}}; color: {{n.tileFg}}; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center">{{n.g}}</span>
+            <span style="flex: 1">{{n.l}}</span><span style="font-size: 11px; color: {{t.text2}}; font-weight: 400">{{n.k}}</span>
+          </button>
+        </sc-for>
+      </nav>
+      <main id="main" style="flex: 1; min-width: 0; padding: 20px 24px; box-sizing: border-box; display: flex; flex-direction: column; gap: 14px; position: relative">
+        <div style="display: flex; flex-direction: column; gap: 2px">
+          <h1 style="margin: 0; font-size: 24px; font-weight: 700">Recordings</h1>
+          <div style="font-size: 12px; color: {{t.text2}}">Your library is empty.</div>
+        </div>
+        <div style="flex: 1; border: 2px dashed {{t.accent}}; border-radius: 10px; background: {{t.surface}}; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px">
+          <img src="{{t.mono}}" alt="" style="height: 56px">
+          <h2 style="margin: 0; font-size: 19px; font-weight: 600">No recordings</h2>
+          <p style="margin: 0; max-width: 560px; text-align: center; font-size: 13px; line-height: 1.5; color: {{t.text2}}">Import audio from this computer to get started. Direct PLAUD device import is not part of this build; Settings lists the sources that are supported.</p>
+          <div style="display: flex; gap: 8px">
+            <button style="height: 32px; padding: 0 14px; border-radius: 6px; border: 1px solid {{t.accent}}; background: {{t.accent}}; color: {{t.accentText}}; font: inherit; font-size: 13px; font-weight: 600; box-shadow: 0 0 0 2px {{t.surface}}, 0 0 0 4px {{t.focus}}">Import an audio file</button>
+            <button style="height: 32px; padding: 0 14px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; color: {{t.text}}; font: inherit; font-size: 13px">Connect PLAUD</button>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px; margin-top: 18px; padding: 8px 14px; border-radius: 6px; background: {{t.tRunning}}; color: {{t.running}}; font-size: 13px; font-weight: 600">⤓ Drop audio files to import</div>
+          <div style="font-size: 12px; color: {{t.text2}}">An import copies your file. It never moves, changes or deletes the original.</div>
+        </div>
+        <div role="status" aria-live="polite" style="position: absolute; right: 24px; bottom: 20px; width: 340px; display: flex; flex-direction: column; gap: 8px">
+          <div style="background: {{t.raised}}; border: 1px solid {{t.border}}; border-radius: 10px; box-shadow: {{t.shadow}}; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px">
+            <div style="display: flex; align-items: center; gap: 8px">
+              <span style="width: 22px; height: 22px; border-radius: 3px; background: {{t.tRunning}}; color: {{t.running}}; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center">i</span>
+              <span style="font-size: 13px; font-weight: 600; flex: 1">Importing files</span>
+              <button style="height: 24px; padding: 0 8px; border: none; border-radius: 3px; background: transparent; color: {{t.text2}}; font: inherit; font-size: 12px">Dismiss</button>
+            </div>
+            <div style="font-size: 13px; color: {{t.text2}}">Importing 3 files.</div>
+            <div style="height: 6px; border-radius: 3px; background: {{t.hover}}; overflow: hidden"><div style="width: 38%; height: 6px; border-radius: 3px; background: {{t.accent}}; margin-left: 22%"></div></div>
+          </div>
+          <div style="background: {{t.raised}}; border: 1px solid {{t.border}}; border-radius: 10px; box-shadow: {{t.shadow}}; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px">
+            <div style="display: flex; align-items: center; gap: 8px">
+              <span style="width: 22px; height: 22px; border-radius: 3px; background: {{t.tWarning}}; color: {{t.warning}}; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center">!</span>
+              <span style="font-size: 13px; font-weight: 600; flex: 1">Import finished with decisions to make</span>
+            </div>
+            <div style="font-size: 13px; color: {{t.text2}}">2 imported, 1 duplicate</div>
+            <div style="display: flex; gap: 8px"><button style="height: 26px; padding: 0 10px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; color: {{t.text}}; font: inherit; font-size: 12px">Open the recording you already have</button><button style="height: 26px; padding: 0 8px; border: none; background: transparent; color: {{t.text2}}; font: inherit; font-size: 12px">Dismiss</button></div>
+          </div>
+        </div>
+      </main>
+    </div>
+    <div role="status" style="height: 26px; display: flex; align-items: center; gap: 12px; padding: 0 16px; font-size: 12px; color: {{t.text2}}; border-top: 1px solid {{t.border}}">
+      <span>Importing 3 file(s)…</span><div style="flex: 1"></div><span>1 task running</span>
+      <span style="padding: 1px 8px; border-radius: 3px; background: {{t.tSuccess}}; color: {{t.success}}; font-weight: 600">✓ Local only</span>
+    </div>
+  </div>
+  <sc-if value="{{notesOn}}" hint-placeholder-val="{{ true }}">
+    <div style="height: 280px; box-sizing: border-box; border-top: 1px solid {{t.border}}; background: {{t.surface}}; padding: 18px 24px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 22px; font-size: 12px; line-height: 1.5; color: {{t.text2}}">
+      <div style="display: flex; flex-direction: column; gap: 6px"><strong style="color: {{t.text}}; font-size: 13px">egui mapping: empty state</strong>
+        <div>ui.vertical_centered inside a Frame (bg_surface, radius.large). Heading at text.xl, body at text.md in text_secondary, max width 560 via ui.set_max_width.</div>
+        <div>Buttons: primary Button fill accent; secondary uses inactive visuals with border_strong. The focused primary shows the 2 pt focus_ring, offset 2 pt.</div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px"><strong style="color: {{t.text}}; font-size: 13px">Drag and drop</strong>
+        <div>While ctx.input(|i| !i.raw.hovered_files.is_empty()), the main region draws Shape::dashed_line round its rect in accent and the "⤓ Drop audio files to import" pill in tint_running. On drop, i.raw.dropped_files go through dragdrop::classify as today.</div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px"><strong style="color: {{t.text}}; font-size: 13px">Toasts</strong>
+        <div>widgets::toast stack in an Area anchored RIGHT_BOTTOM, Frame fill bg_raised, stroke border_subtle, window_shadow. Tone tile shows the text glyph (i, OK, !, X) on a tint so tone never rides on colour alone. Manual dismiss only, polite live region.</div>
+        <div>Indeterminate progress: ProgressBar::new(..).animate(true) only while the import runs.</div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px"><strong style="color: {{t.text}}; font-size: 13px">Copy and behaviour</strong>
+        <div>Every string here is the app's own. "Connect PLAUD" opens the setup wizard with its three honest options; the direct and cloud routes read Unsupported there.</div>
+        <div><strong style="color: {{t.warning}}">Proposed:</strong> the monochrome mark in the empty state and the one-line copy note under the drop pill.</div>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light"},"notes":{"editor":"enum","options":["on","off"],"default":"on"},"$preview":{"width":1280,"height":1100}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const THEMES = {
+      light: { canvas: '#f4f6fa', surface: '#ffffff', raised: '#ffffff', selected: '#e2ebff', hover: '#edf1f7', text: '#172544', text2: '#4d5873', inverse: '#ffffff', border: '#d9dfea', borderStrong: '#6b7690', accent: '#0a4fe0', accentText: '#ffffff', accentHover: '#0841b8', neutral: '#4d5873', running: '#0a4fe0', waiting: '#7a4a00', success: '#0f6b3f', warning: '#8a4b00', danger: '#a1121f', focus: '#0b57ff', overlay: 'rgba(11,18,32,0.45)', waveRem: '#7c869e', tNeutral: '#edeef1', tRunning: '#e6edfc', tWaiting: '#f2ede6', tSuccess: '#e7f0ec', tWarning: '#f3ede6', tDanger: '#f6e7e9', shadow: '0 8px 24px rgba(23,37,68,0.16)', mark: './assets/plaudon-mark-light.svg', mono: './assets/plaudon-mono-blue-light.svg' },
+      dark: { canvas: '#0b1220', surface: '#111a2c', raised: '#18233a', selected: '#1c3366', hover: '#1a2540', text: '#f2f6ff', text2: '#a9b4d0', inverse: '#0b1220', border: '#27334d', borderStrong: '#6d7a99', accent: '#6ea8ff', accentText: '#0b1220', accentHover: '#8cbaff', neutral: '#a9b4d0', running: '#6ea8ff', waiting: '#e3b667', success: '#67c391', warning: '#e8a35c', danger: '#f08a92', focus: '#8fc2ff', overlay: 'rgba(0,0,0,0.6)', waveRem: '#66739a', tNeutral: '#293346', tRunning: '#20314e', tWaiting: '#333335', tSuccess: '#1f353c', tWarning: '#333034', tDanger: '#352c3c', shadow: '0 8px 24px rgba(0,0,0,0.5)', mark: './assets/plaudon-mark-dark.svg', mono: './assets/plaudon-mono-blue-dark.svg' }
+    };
+    const t = THEMES[this.props.theme === 'dark' ? 'dark' : 'light'];
+    const notesOn = this.props.notes !== 'off';
+    const NAV = [['L', 'Library', 'Ctrl+1'], ['I', 'Inbox', 'Ctrl+2'], ['J', 'Jobs', 'Ctrl+3'], ['T', 'Templates', 'Ctrl+4'], ['S', 'Settings', 'Ctrl+5'], ['D', 'Devices', 'Ctrl+6'], ['P', 'People', 'Ctrl+7']];
+    const active = 0;
+    const nav = NAV.map(([g, l, k], i) => ({ g, l, k, bg: i === active ? t.selected : 'transparent', weight: i === active ? 600 : 400, tileBg: i === active ? t.accent : t.hover, tileFg: i === active ? t.accentText : t.text2 }));
+    return { t, notesOn, rootH: notesOn ? 1100 : 820, nav };
+  }
+}
+</script>
+</body>
+</html>

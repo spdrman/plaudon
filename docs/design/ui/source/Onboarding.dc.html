@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>First-run setup</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Source+Code+Pro:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#0a4fe0}a:hover{color:#0841b8}
+</style>
+</helmet>
+<div style="width: 1280px; height: {{rootH}}px; background: {{t.canvas}}; font-family: Inter, system-ui, sans-serif; color: {{t.text}}; display: flex; flex-direction: column; overflow: hidden">
+  <div style="width: 1280px; height: 820px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-sizing: border-box">
+    <main style="width: 880px; height: 640px; background: {{t.surface}}; border: 1px solid {{t.border}}; border-radius: 10px; display: flex; overflow: hidden">
+      <div style="width: 250px; flex-shrink: 0; background: {{t.canvas}}; border-right: 1px solid {{t.border}}; padding: 24px 20px; box-sizing: border-box; display: flex; flex-direction: column; gap: 18px">
+        <img src="{{t.lockup}}" alt="Plaudon: private audio, searchable knowledge" style="width: 190px">
+        <div style="display: flex; align-items: center; gap: 6px"><span style="font-size: 12px; color: {{t.text2}}">Steps</span><span style="font-size: 9px; font-weight: 700; padding: 0 4px; border-radius: 3px; border: 1px solid {{t.warning}}; color: {{t.warning}}">PROPOSED</span></div>
+        <ol style="margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px">
+          <sc-for list="{{steps}}" as="s" hint-placeholder-count="6">
+            <li style="display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 6px; background: {{s.bg}}">
+              <span style="width: 22px; height: 22px; border-radius: 11px; background: {{s.dotBg}}; color: {{s.dotFg}}; border: {{s.dotBorder}}; box-sizing: border-box; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center">{{s.mark}}</span>
+              <span style="font-size: 13px; font-weight: {{s.weight}}; color: {{s.color}}">{{s.label}}</span>
+            </li>
+          </sc-for>
+        </ol>
+        <div style="flex: 1"></div>
+        <div style="font-size: 12px; line-height: 1.5; color: {{t.text2}}">Plaudon asks for no network access and no operating-system permission during setup.</div>
+      </div>
+      <div style="flex: 1; padding: 28px 32px; box-sizing: border-box; display: flex; flex-direction: column; gap: 14px">
+        <div style="font-size: 12px; color: {{t.text2}}">Set up Plaudon · step 2 of 6</div>
+        <h1 style="margin: 0; font-size: 24px; font-weight: 700">Network policy</h1>
+        <p style="margin: 0; font-size: 13px; line-height: 1.5; color: {{t.text2}}">Your recordings, transcripts and summaries stay on this computer unless you explicitly choose a cloud AI provider. Cloud processing is opt-in, per purpose, and never turned on for you.</p>
+        <fieldset style="border: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px">
+          <legend style="font-size: 13px; font-weight: 600; padding: 0; margin-bottom: 8px">Network policy</legend>
+          <label style="display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border-radius: 10px; border: 2px solid {{t.focus}}; background: {{t.selected}}">
+            <span style="width: 16px; height: 16px; border-radius: 8px; border: 5px solid {{t.accent}}; box-sizing: border-box; flex-shrink: 0; margin-top: 2px"></span>
+            <span style="display: flex; flex-direction: column; gap: 4px"><span style="font-size: 13px; font-weight: 600">Local only (recommended) — all outbound network access is refused by the backend.</span><span style="font-size: 12px; color: {{t.success}}; font-weight: 600">✓ No update check, no model download, no telemetry, no cloud inference</span></span>
+          </label>
+          <label style="display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border-radius: 10px; border: 1px solid {{t.border}}; background: {{t.surface}}">
+            <span style="width: 16px; height: 16px; border-radius: 8px; border: 1px solid {{t.borderStrong}}; box-sizing: border-box; flex-shrink: 0; margin-top: 2px"></span>
+            <span style="font-size: 13px; line-height: 1.5">Allow cloud AI later — choosing this now grants nothing by itself. No request is ever sent until you pick a provider and consent for that purpose.</span>
+          </label>
+        </fieldset>
+        <div style="border: 1px solid {{t.border}}; border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; background: {{t.canvas}}">
+          <div style="display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M1 3l4 4 4-4" fill="none" stroke="{{t.text2}}" stroke-width="1.5"></path></svg>What would leave this machine if you opt in later</div>
+          <ul style="margin: 0; padding-left: 34px; font-size: 12px; line-height: 1.6; color: {{t.text}}">
+            <li>Transcript text you send to a cloud text model, for that request only.</li>
+            <li>The model and provider you chose, so the request can be routed.</li>
+            <li>Never: audio files, file paths, your API key, or anything you did not select.</li>
+          </ul>
+        </div>
+        <div style="flex: 1"></div>
+        <div style="display: flex; align-items: center; gap: 8px; border-top: 1px solid {{t.border}}; padding-top: 14px">
+          <button style="height: 32px; padding: 0 14px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; color: {{t.text}}; font: inherit; font-size: 13px">Back</button>
+          <div style="flex: 1"></div>
+          <button style="height: 32px; padding: 0 18px; border-radius: 6px; border: 1px solid {{t.accent}}; background: {{t.accent}}; color: {{t.accentText}}; font: inherit; font-size: 13px; font-weight: 600">Next</button>
+        </div>
+      </div>
+    </main>
+  </div>
+  <sc-if value="{{notesOn}}" hint-placeholder-val="{{ true }}">
+    <div style="height: 280px; box-sizing: border-box; border-top: 1px solid {{t.border}}; background: {{t.surface}}; padding: 18px 24px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 22px; font-size: 12px; line-height: 1.5; color: {{t.text2}}">
+      <div style="display: flex; flex-direction: column; gap: 6px"><strong style="color: {{t.text}}; font-size: 13px">egui mapping: first run</strong>
+        <div>The onboarding gate replaces the shell until onboarding_completed. CentralPanel with a centred Frame 880 by 640 (radius.large, bg_surface); inside, SidePanel-like left column via ui.horizontal with a fixed-width vertical strip.</div>
+        <div>Lockup image (light or dark variant) at 190 pt wide.</div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px"><strong style="color: {{t.text}}; font-size: 13px">Steps, as built</strong>
+        <div>Privacy, Network policy, Speech to text, OpenRouter key, Sources, Finish. The key and account steps can be skipped ("Skip this step") and Finish lists "Steps you skipped". No model download is offered in Local-only mode.</div>
+        <div><strong style="color: {{t.warning}}">Proposed:</strong> the visible step list on the left, the "step 2 of 6" line, and the green summary under Local only (worded from the privacy disclosure).</div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px"><strong style="color: {{t.text}}; font-size: 13px">Choices</strong>
+        <div>Network policy is two radio_value rows drawn as selectable Frames: the chosen one gets bg_selected plus the 2 pt focus stroke while focused. Local only is preselected, matching the gate's first-launch state.</div>
+        <div>The disclosure is a CollapsingHeader with three bullets.</div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px"><strong style="color: {{t.text}}; font-size: 13px">Keys</strong>
+        <div>Tab walks the radio rows, the disclosure, Back and Next. Enter on Next advances; Escape does nothing here because there is no overlay to close. The key step's field is TextEdit::password and shows "Key saved to the system keychain." after hand-over.</div>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light"},"notes":{"editor":"enum","options":["on","off"],"default":"on"},"$preview":{"width":1280,"height":1100}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const THEMES = {
+      light: { canvas: '#f4f6fa', surface: '#ffffff', selected: '#e2ebff', text: '#172544', text2: '#4d5873', border: '#d9dfea', borderStrong: '#6b7690', accent: '#0a4fe0', accentText: '#ffffff', success: '#0f6b3f', warning: '#8a4b00', focus: '#0b57ff', tSuccess: '#e7f0ec', lockup: './assets/plaudon-lockup-light.svg' },
+      dark: { canvas: '#0b1220', surface: '#111a2c', selected: '#1c3366', text: '#f2f6ff', text2: '#a9b4d0', border: '#27334d', borderStrong: '#6d7a99', accent: '#6ea8ff', accentText: '#0b1220', success: '#67c391', warning: '#e8a35c', focus: '#8fc2ff', tSuccess: '#1f353c', lockup: './assets/plaudon-lockup-dark.svg' }
+    };
+    const t = THEMES[this.props.theme === 'dark' ? 'dark' : 'light'];
+    const notesOn = this.props.notes !== 'off';
+    const LABELS = ['Privacy', 'Network policy', 'Speech to text', 'OpenRouter key', 'Sources', 'Finish'];
+    const cur = 1;
+    const steps = LABELS.map((label, i) => {
+      const done = i < cur, on = i === cur;
+      return {
+        label, mark: done ? '✓' : String(i + 1),
+        bg: on ? t.selected : 'transparent',
+        dotBg: done ? t.tSuccess : on ? t.accent : 'transparent',
+        dotFg: done ? t.success : on ? t.accentText : t.text2,
+        dotBorder: done || on ? 'none' : '1px solid ' + t.borderStrong,
+        weight: on ? 600 : 400, color: on || done ? t.text : t.text2
+      };
+    });
+    return { t, notesOn, rootH: notesOn ? 1100 : 820, steps };
+  }
+}
+</script>
+</body>
+</html>

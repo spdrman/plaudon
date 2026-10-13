@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Component sheet</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Source+Code+Pro:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#0a4fe0}a:hover{color:#0841b8}
+</style>
+</helmet>
+<div style="width: 1280px; height: 2000px; box-sizing: border-box; background: {{t.canvas}}; font-family: Inter, system-ui, sans-serif; color: {{t.text}}; padding: 32px 40px; display: flex; flex-direction: column; gap: 18px; overflow: hidden">
+  <div style="display: flex; align-items: baseline; gap: 12px"><h1 style="margin: 0; font-size: 24px; font-weight: 700">Components</h1><span style="font-size: 13px; color: {{t.text2}}">{{themeName}} theme. Every state is a token, every note names the egui call.</span></div>
+
+  <section style="background: {{t.surface}}; border: 1px solid {{t.border}}; border-radius: 10px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px">
+    <h2 style="margin: 0; font-size: 15px; font-weight: 600">Buttons</h2>
+    <div style="display: grid; grid-template-columns: 110px repeat(5, minmax(0, 1fr)); gap: 10px 14px; align-items: center">
+      <span></span><span style="font-size: 11px; color: {{t.text2}}">Default</span><span style="font-size: 11px; color: {{t.text2}}">Hovered</span><span style="font-size: 11px; color: {{t.text2}}">Pressed</span><span style="font-size: 11px; color: {{t.text2}}">Keyboard focus</span><span style="font-size: 11px; color: {{t.text2}}">Disabled</span>
+      <sc-for list="{{buttonRows}}" as="row" hint-placeholder-count="4">
+        <span style="font-size: 12px; color: {{t.text2}}">{{row.name}}</span>
+        <sc-for list="{{row.cells}}" as="c" hint-placeholder-count="5">
+          <span><button style="height: 28px; padding: 0 12px; border-radius: 6px; border: 1px solid {{c.border}}; background: {{c.bg}}; color: {{c.fg}}; opacity: {{c.op}}; box-shadow: {{c.ring}}; font: inherit; font-size: 13px; font-weight: {{c.weight}}; text-decoration: {{c.deco}}">{{row.label}}</button></span>
+        </sc-for>
+      </sc-for>
+    </div>
+    <div style="font-size: 12px; line-height: 1.5; color: {{t.text2}}">egui: Button::new(text).fill(accent) for primary with RichText color accent_text; secondary uses inactive visuals (bg_surface, border_strong 1 pt). Hovered swaps to bg_hover, or accent_hover on primary. Pressed is bg_selected. Focus is widgets.active.bg_stroke = focus_ring 2 pt; <strong style="color: {{t.warning}}">proposed</strong>: paint it 2 pt outside the rect (rect_stroke on rect.expand(4)) so the ring never sits on the accent fill. Disabled: add_enabled(false, …), 0.5 alpha. Min height 24 pt; screens use 28.</div>
+  </section>
+
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px">
+    <section style="background: {{t.surface}}; border: 1px solid {{t.border}}; border-radius: 10px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px">
+      <h2 style="margin: 0; font-size: 15px; font-weight: 600">Text inputs</h2>
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+        <label style="font-size: 12px; color: {{t.text2}}; display: flex; flex-direction: column; gap: 4px">Default<span style="height: 28px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; display: flex; align-items: center; padding: 0 8px; font-size: 13px; color: {{t.text2}}">Title contains…</span></label>
+        <label style="font-size: 12px; color: {{t.text2}}; display: flex; flex-direction: column; gap: 4px">Hovered<span style="height: 28px; border-radius: 6px; border: 1px solid {{t.text2}}; background: {{t.hover}}; display: flex; align-items: center; padding: 0 8px; font-size: 13px; color: {{t.text2}}">Title contains…</span></label>
+        <label style="font-size: 12px; color: {{t.text2}}; display: flex; flex-direction: column; gap: 4px">Focused<span style="height: 28px; border-radius: 6px; border: 2px solid {{t.focus}}; background: {{t.surface}}; display: flex; align-items: center; padding: 0 7px; font-size: 13px; color: {{t.text}}">weekly sync<span style="width: 1px; height: 15px; background: {{t.text}}; margin-left: 1px"></span></span></label>
+        <label style="font-size: 12px; color: {{t.text2}}; display: flex; flex-direction: column; gap: 4px">Disabled<span style="height: 28px; border-radius: 6px; border: 1px solid {{t.border}}; background: {{t.canvas}}; display: flex; align-items: center; padding: 0 8px; font-size: 13px; color: {{t.text2}}; opacity: 0.6">Not editable</span></label>
+        <label style="font-size: 12px; color: {{t.text2}}; display: flex; flex-direction: column; gap: 4px">With an error<span style="height: 28px; border-radius: 6px; border: 2px solid {{t.danger}}; background: {{t.surface}}; display: flex; align-items: center; padding: 0 7px; font-size: 13px; color: {{t.text}}">2026-13-40</span><span style="font-size: 12px; color: {{t.danger}}">✕ Use YYYY-MM-DD</span></label>
+        <label style="font-size: 12px; color: {{t.text2}}; display: flex; flex-direction: column; gap: 4px">Password (key hand-over)<span style="height: 28px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; display: flex; align-items: center; padding: 0 8px; font-size: 13px; letter-spacing: 2px">••••••••••</span></label>
+      </div>
+      <div style="font-size: 12px; line-height: 1.5; color: {{t.text2}}">egui: TextEdit::singleline(&amp;mut s).hint_text(…).desired_width(…); stroke border_strong (4.55 and 4.05:1), focused 2 pt focus_ring. Error is a danger stroke plus a glyph-and-word line under it, never colour alone. Password: .password(true). Every field carries a visible label; hint text is not a name.</div>
+    </section>
+
+    <section style="background: {{t.surface}}; border: 1px solid {{t.border}}; border-radius: 10px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px">
+      <h2 style="margin: 0; font-size: 15px; font-weight: 600">Choice controls</h2>
+      <div style="display: flex; gap: 22px; align-items: flex-start">
+        <div style="display: flex; flex-direction: column; gap: 4px; position: relative">
+          <span style="font-size: 12px; color: {{t.text2}}">ComboBox, open</span>
+          <span style="height: 28px; width: 190px; border-radius: 6px; border: 2px solid {{t.focus}}; display: flex; align-items: center; justify-content: space-between; padding: 0 8px; box-sizing: border-box; font-size: 13px">All import states<svg width="10" height="6" viewBox="0 0 10 6" aria-hidden="true"><path d="M1 5l4-4 4 4" fill="none" stroke="{{t.text2}}" stroke-width="1.5"></path></svg></span>
+          <div style="width: 190px; background: {{t.raised}}; border: 1px solid {{t.border}}; border-radius: 6px; box-shadow: {{t.shadow}}; padding: 4px; box-sizing: border-box; display: flex; flex-direction: column; font-size: 13px">
+            <span style="padding: 5px 8px; border-radius: 3px; background: {{t.selected}}; font-weight: 600">All import states</span><span style="padding: 5px 8px; background: {{t.hover}}; border-radius: 3px">Pending</span><span style="padding: 5px 8px">Importing</span><span style="padding: 5px 8px">Imported</span><span style="padding: 5px 8px">Import failed</span>
+          </div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px; font-size: 13px">
+          <span style="font-size: 12px; color: {{t.text2}}">Checkbox</span>
+          <label style="display: flex; gap: 8px; align-items: center"><span style="width: 16px; height: 16px; border-radius: 3px; border: 1px solid {{t.borderStrong}}; box-sizing: border-box; background: {{t.surface}}"></span>Off</label>
+          <label style="display: flex; gap: 8px; align-items: center"><span style="width: 16px; height: 16px; border-radius: 3px; background: {{t.accent}}; display: flex; align-items: center; justify-content: center"><svg width="10" height="8" viewBox="0 0 10 8" aria-hidden="true"><path d="M1 4l3 3 5-6" fill="none" stroke="{{t.accentText}}" stroke-width="1.8"></path></svg></span>On</label>
+          <label style="display: flex; gap: 8px; align-items: center"><span style="width: 16px; height: 16px; border-radius: 3px; background: {{t.accent}}; box-shadow: 0 0 0 2px {{t.surface}}, 0 0 0 4px {{t.focus}}; display: flex; align-items: center; justify-content: center"><svg width="10" height="8" viewBox="0 0 10 8" aria-hidden="true"><path d="M1 4l3 3 5-6" fill="none" stroke="{{t.accentText}}" stroke-width="1.8"></path></svg></span>Focused</label>
+          <label style="display: flex; gap: 8px; align-items: center; opacity: 0.5"><span style="width: 16px; height: 16px; border-radius: 3px; border: 1px solid {{t.borderStrong}}; box-sizing: border-box"></span>Disabled</label>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px; font-size: 13px">
+          <span style="font-size: 12px; color: {{t.text2}}">Radio</span>
+          <label style="display: flex; gap: 8px; align-items: center"><span style="width: 16px; height: 16px; border-radius: 8px; border: 5px solid {{t.accent}}; box-sizing: border-box"></span>Local only</label>
+          <label style="display: flex; gap: 8px; align-items: center"><span style="width: 16px; height: 16px; border-radius: 8px; border: 1px solid {{t.borderStrong}}; box-sizing: border-box"></span>Allow cloud AI later</label>
+          <span style="font-size: 12px; color: {{t.text2}}; margin-top: 8px">Slider</span>
+          <span style="position: relative; width: 140px; height: 4px; border-radius: 2px; background: {{t.waveRem}}; margin-top: 6px"><span style="position: absolute; left: 0; top: 0; width: 90px; height: 4px; border-radius: 2px; background: {{t.accent}}"></span><span style="position: absolute; left: 83px; top: -6px; width: 16px; height: 16px; border-radius: 8px; background: {{t.surface}}; border: 1px solid {{t.borderStrong}}; box-sizing: border-box; box-shadow: 0 0 0 2px {{t.surface}}, 0 0 0 4px {{t.focus}}"></span></span>
+        </div>
+      </div>
+      <div style="font-size: 12px; line-height: 1.5; color: {{t.text2}}">egui: ComboBox::from_label, popup uses window_fill bg_raised and popup_shadow; current item bg_selected, hovered bg_hover. Checkbox and radio_value read widgets.inactive/hovered/active; the checked fill is accent with an accent_text tick. Slider track: accent before the handle, wave_remaining after.</div>
+    </section>
+  </div>
+
+  <div style="display: grid; grid-template-columns: 1.3fr 1fr; gap: 18px">
+    <section style="background: {{t.surface}}; border: 1px solid {{t.border}}; border-radius: 10px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px">
+      <h2 style="margin: 0; font-size: 15px; font-weight: 600">Table rows</h2>
+      <div style="border: 1px solid {{t.border}}; border-radius: 6px; overflow: hidden; font-size: 13px">
+        <div style="display: grid; grid-template-columns: 1.6fr 1fr 1fr; height: 30px; align-items: center; padding: 0 10px; font-size: 12px; font-weight: 600; color: {{t.text2}}; border-bottom: 1px solid {{t.border}}"><span style="color: {{t.text}}">Title ▼</span><span>Import status</span><span>Row state</span></div>
+        <sc-for list="{{tableRows}}" as="r" hint-placeholder-count="4">
+          <div style="display: grid; grid-template-columns: 1.6fr 1fr 1fr; height: 32px; align-items: center; padding: 0 10px; background: {{r.bg}}; box-shadow: {{r.ring}}; border-bottom: 1px solid {{t.hover}}"><span style="font-weight: {{r.weight}}">{{r.title}}</span><span style="color: {{r.c}}">{{r.status}}</span><span style="font-size: 12px; color: {{t.text2}}">{{r.state}}</span></div>
+        </sc-for>
+      </div>
+      <div style="font-size: 12px; line-height: 1.5; color: {{t.text2}}">egui_extras::TableBuilder, row height 32, header 30. Only the sorted column shows ▼ or ▲ and carries aria-sort. Row fills painted per state; text stays text_primary in every state (12.68:1 on selected light, 11.31:1 dark).</div>
+    </section>
+    <section style="background: {{t.surface}}; border: 1px solid {{t.border}}; border-radius: 10px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px">
+      <h2 style="margin: 0; font-size: 15px; font-weight: 600">Tabs and navigation</h2>
+      <div role="tablist" style="display: flex; gap: 4px; border-bottom: 1px solid {{t.border}}">
+        <span style="height: 28px; padding: 0 8px; border-bottom: 2px solid {{t.accent}}; font-size: 12px; font-weight: 600; display: flex; align-items: center">Transcription</span>
+        <span style="height: 28px; padding: 0 8px; font-size: 12px; color: {{t.text2}}; display: flex; align-items: center; background: {{t.hover}}; border-radius: 3px 3px 0 0">Summarize</span>
+        <span style="height: 26px; padding: 0 8px; font-size: 12px; color: {{t.text}}; display: flex; align-items: center; border-radius: 3px; box-shadow: inset 0 0 0 2px {{t.focus}}">Outputs</span>
+        <span style="height: 28px; padding: 0 8px; font-size: 12px; color: {{t.text2}}; display: flex; align-items: center">Review</span>
+      </div>
+      <div style="display: flex; gap: 14px; align-items: flex-start">
+        <div style="width: 200px; display: flex; flex-direction: column; gap: 2px">
+          <sc-for list="{{navStates}}" as="n" hint-placeholder-count="3">
+            <span style="height: 32px; display: flex; align-items: center; gap: 10px; padding: 0 8px; border-radius: 6px; background: {{n.bg}}; box-shadow: {{n.ring}}; font-size: 13px; font-weight: {{n.weight}}"><span style="width: 20px; height: 20px; border-radius: 3px; background: {{n.tileBg}}; color: {{n.tileFg}}; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center">{{n.g}}</span><span style="flex: 1">{{n.l}}</span><span style="font-size: 11px; color: {{t.text2}}">{{n.state}}</span></span>
+          </sc-for>
+        </div>
+        <div style="width: 52px; display: flex; flex-direction: column; gap: 4px; align-items: center; padding: 6px 0; border: 1px solid {{t.border}}; border-radius: 6px">
+          <img src="{{t.mark}}" alt="" style="height: 20px; margin-bottom: 4px">
+          <span style="width: 32px; height: 32px; border-radius: 6px; background: {{t.selected}}; display: flex; align-items: center; justify-content: center"><span style="width: 20px; height: 20px; border-radius: 3px; background: {{t.accent}}; color: {{t.accentText}}; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center">L</span></span>
+          <span style="width: 20px; height: 20px; border-radius: 3px; background: {{t.hover}}; color: {{t.text2}}; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; margin: 6px 0">I</span>
+          <span style="width: 20px; height: 20px; border-radius: 3px; background: {{t.hover}}; color: {{t.text2}}; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; margin: 6px 0">J</span>
+        </div>
+      </div>
+      <div style="font-size: 12px; line-height: 1.5; color: {{t.text2}}">Tabs: selectable_label with a painted 2 pt accent rule under the current one, Role::Tab, arrow keys move. Rail: Role::Tab in the Navigation landmark, Home and End, full label kept in the AccessKit name when collapsed to glyphs below 1040 pt (right).</div>
+    </section>
+  </div>
+
+  <section style="background: {{t.surface}}; border: 1px solid {{t.border}}; border-radius: 10px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px">
+    <h2 style="margin: 0; font-size: 15px; font-weight: 600">Badges</h2>
+    <div style="display: flex; flex-wrap: wrap; gap: 8px">
+      <sc-for list="{{badges}}" as="b" hint-placeholder-count="14"><span style="padding: 0 8px; border-radius: 3px; background: {{b.tint}}; color: {{b.tone}}; font-size: 12px; font-weight: 600; line-height: 22px">{{b.text}}</span></sc-for>
+    </div>
+    <div style="font-size: 12px; line-height: 1.5; color: {{t.text2}}">egui: Frame::new().fill(tint_*).corner_radius(radius.small).inner_margin(Margin::symmetric(8, 2)) holding RichText glyph and word in status_*. Measured: text on its own tint 5.41 to 6.70:1 in both themes. Register words (Supported, Experimental, Not evaluated, Unsupported) come from the claim register, never from the UI. <strong style="color: {{t.warning}}">Proposed</strong>: draw ✓ ✕ ◷ ⊘ with the painter, because the built-in fonts render them as empty boxes in today's snapshots.</div>
+  </section>
+
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 18px">
+    <section style="background: {{t.surface}}; border: 1px solid {{t.border}}; border-radius: 10px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px">
+      <h2 style="margin: 0; font-size: 15px; font-weight: 600">Toasts</h2>
+      <sc-for list="{{toasts}}" as="ts" hint-placeholder-count="4">
+        <div style="background: {{t.raised}}; border: 1px solid {{t.border}}; border-radius: 10px; box-shadow: {{t.shadow}}; padding: 10px 12px; display: flex; align-items: flex-start; gap: 10px">
+          <span style="min-width: 22px; height: 22px; padding: 0 3px; box-sizing: border-box; border-radius: 3px; background: {{ts.tint}}; color: {{ts.tone}}; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center">{{ts.glyph}}</span>
+          <span style="display: flex; flex-direction: column; gap: 2px; flex: 1"><span style="font-size: 13px; font-weight: 600">{{ts.title}}</span><span style="font-size: 12px; color: {{t.text2}}">{{ts.body}}</span></span>
+          <button style="height: 22px; padding: 0 6px; border: none; background: transparent; color: {{t.text2}}; font: inherit; font-size: 12px">Dismiss</button>
+        </div>
+      </sc-for>
+      <div style="font-size: 12px; line-height: 1.5; color: {{t.text2}}">widgets::toast: Area anchored RIGHT_BOTTOM, Role::Status, Live::Polite, never takes focus, manual dismiss only. Glyphs i, OK, !, X are the shipped ToastTone glyphs.</div>
+    </section>
+    <section style="background: {{t.surface}}; border: 1px solid {{t.border}}; border-radius: 10px; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px">
+      <h2 style="margin: 0; font-size: 15px; font-weight: 600">Progress and notices</h2>
+      <div style="display: flex; flex-direction: column; gap: 4px"><span style="font-size: 12px; color: {{t.text2}}">Determinate</span><div style="position: relative; height: 18px; border-radius: 3px; background: {{t.hover}}; overflow: hidden"><div style="width: 62%; height: 18px; background: {{t.accent}}"></div><span style="position: absolute; left: 8px; top: 0; line-height: 18px; font-size: 11px; font-weight: 600; color: {{t.accentText}}">Running locally: 62% complete</span></div></div>
+      <div style="display: flex; flex-direction: column; gap: 4px"><span style="font-size: 12px; color: {{t.text2}}">Indeterminate</span><div style="position: relative; height: 18px; border-radius: 3px; background: {{t.hover}}; overflow: hidden"><div style="position: absolute; left: 30%; width: 24%; height: 18px; background: {{t.accent}}"></div><span style="position: absolute; left: 8px; top: 0; line-height: 18px; font-size: 11px; font-weight: 600; color: {{t.text}}">Preflight: progress not reported</span></div></div>
+      <div style="display: flex; align-items: center; gap: 10px"><svg width="20" height="20" viewBox="0 0 28 28" aria-hidden="true"><circle cx="14" cy="14" r="11" fill="none" stroke="{{t.hover}}" stroke-width="3"></circle><path d="M14 3a11 11 0 0 1 11 11" fill="none" stroke="{{t.accent}}" stroke-width="3" stroke-linecap="round"></path></svg><span style="font-size: 13px">Spinner, only while work runs</span></div>
+      <div role="alert" style="border-radius: 6px; background: {{t.tDanger}}; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px"><span style="font-size: 13px; font-weight: 600; color: {{t.danger}}">✕ The import failed.</span><span style="font-size: 12px; font-family: 'Source Code Pro', ui-monospace, monospace; color: {{t.text2}}">Diagnostic id: [id]</span><button style="align-self: flex-start; height: 24px; padding: 0 10px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; color: {{t.text}}; font: inherit; font-size: 12px">Retry import</button></div>
+      <div style="font-size: 12px; line-height: 1.5; color: {{t.text2}}">ProgressBar::new(f).text(…) and .animate(true) when unknown. Label colour switches to accent_text over the fill (6.55 and 7.76:1). Error notice: widgets::error_notice.</div>
+    </section>
+  </div>
+
+  <section style="background: {{t.surface}}; border: 1px solid {{t.border}}; border-radius: 10px; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px">
+    <h2 style="margin: 0; font-size: 15px; font-weight: 600">Dialogs</h2>
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; padding: 16px; border-radius: 6px; background: {{t.overlay}}">
+      <div role="dialog" style="background: {{t.raised}}; border: 1px solid {{t.border}}; border-radius: 10px; box-shadow: {{t.shadow}}; padding: 16px; display: flex; flex-direction: column; gap: 10px">
+        <h3 style="margin: 0; font-size: 15px; font-weight: 700">Cancel this job?</h3>
+        <p style="margin: 0; font-size: 12px; line-height: 1.5; color: {{t.text2}}">Stopping our remaining work and discarding incomplete output. Work already sent to a provider cannot be recalled.</p>
+        <div style="display: flex; gap: 8px; justify-content: flex-end"><button style="height: 28px; padding: 0 10px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.raised}}; color: {{t.text}}; font: inherit; font-size: 12px">Keep running</button><button style="height: 28px; padding: 0 10px; border-radius: 6px; border: 1px solid {{t.danger}}; background: {{t.danger}}; color: {{t.inverse}}; font: inherit; font-size: 12px; font-weight: 600">Cancel the job</button></div>
+      </div>
+      <div role="dialog" style="background: {{t.raised}}; border: 1px solid {{t.border}}; border-radius: 10px; box-shadow: {{t.shadow}}; padding: 16px; display: flex; flex-direction: column; gap: 8px">
+        <h3 style="margin: 0; font-size: 15px; font-weight: 700">Delete “Voice memo”?</h3>
+        <p style="margin: 0; font-size: 12px; line-height: 1.5; color: {{t.text2}}">This permanently deletes “Voice memo” from this library. It cannot be undone.</p>
+        <div style="font-size: 12px; font-weight: 600">What will be removed</div>
+        <div style="font-size: 12px; line-height: 1.5; color: {{t.text2}}">1 audio file removed · transcript and outputs · Storage freed: 4.2 MB</div>
+        <div style="font-size: 12px; font-weight: 600">What deleting cannot do</div>
+        <div style="font-size: 12px; line-height: 1.5; color: {{t.text2}}">[the five DELETION_LIMITS sentences, verbatim]</div>
+        <div style="display: flex; gap: 8px; justify-content: flex-end"><button style="height: 28px; padding: 0 10px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.raised}}; color: {{t.text}}; font: inherit; font-size: 12px">Cancel</button><button style="height: 28px; padding: 0 10px; border-radius: 6px; border: 1px solid {{t.danger}}; background: {{t.danger}}; color: {{t.inverse}}; font: inherit; font-size: 12px; font-weight: 600">Delete permanently</button></div>
+      </div>
+      <div role="dialog" style="background: {{t.raised}}; border: 1px solid {{t.border}}; border-radius: 10px; box-shadow: {{t.shadow}}; padding: 16px; display: flex; flex-direction: column; gap: 8px">
+        <h3 style="margin: 0; font-size: 15px; font-weight: 700">This audio is already in your library</h3>
+        <p style="margin: 0; font-size: 12px; line-height: 1.5; color: {{t.text2}}">Matches Weekly sync, platform team · content hash 3f9a1c0e2b7d</p>
+        <button style="height: 28px; border-radius: 6px; border: 1px solid {{t.accent}}; background: {{t.accent}}; color: {{t.accentText}}; font: inherit; font-size: 12px; font-weight: 600">Open existing recording</button>
+        <button style="height: 28px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.raised}}; color: {{t.text}}; font: inherit; font-size: 12px">Import anyway as a separate recording</button>
+        <div style="display: flex; gap: 8px"><button style="flex: 1; height: 28px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.raised}}; color: {{t.text}}; font: inherit; font-size: 12px">Skip</button><button style="flex: 1; height: 28px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.raised}}; color: {{t.text}}; font: inherit; font-size: 12px">Decide later</button></div>
+      </div>
+    </div>
+    <div style="font-size: 12px; line-height: 1.5; color: {{t.text2}}">egui::Modal with backdrop_color(overlay), Frame bg_raised, radius.large, window_shadow (offset 0 8, blur 24). Destructive confirm is a danger fill with text_inverse (white on #a1121f 8.01:1, #0b1220 on #f08a92 7.81:1). Escape is close_overlay and maps to the safe choice. Focus starts on the safe button, stays inside, returns to the opener on close. The cancel body sentence after the job description is my placeholder for the §14.7 disclosure.</div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light"},"$preview":{"width":1280,"height":2000}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const THEMES = {
+      light: { canvas: '#f4f6fa', surface: '#ffffff', raised: '#ffffff', selected: '#e2ebff', hover: '#edf1f7', text: '#172544', text2: '#4d5873', inverse: '#ffffff', border: '#d9dfea', borderStrong: '#6b7690', accent: '#0a4fe0', accentText: '#ffffff', accentHover: '#0841b8', neutral: '#4d5873', running: '#0a4fe0', waiting: '#7a4a00', success: '#0f6b3f', warning: '#8a4b00', danger: '#a1121f', focus: '#0b57ff', overlay: 'rgba(11,18,32,0.45)', waveRem: '#7c869e', tNeutral: '#edeef1', tRunning: '#e6edfc', tWaiting: '#f2ede6', tSuccess: '#e7f0ec', tWarning: '#f3ede6', tDanger: '#f6e7e9', shadow: '0 8px 24px rgba(23,37,68,0.16)', mark: './assets/plaudon-mark-light.svg' },
+      dark: { canvas: '#0b1220', surface: '#111a2c', raised: '#18233a', selected: '#1c3366', hover: '#1a2540', text: '#f2f6ff', text2: '#a9b4d0', inverse: '#0b1220', border: '#27334d', borderStrong: '#6d7a99', accent: '#6ea8ff', accentText: '#0b1220', accentHover: '#8cbaff', neutral: '#a9b4d0', running: '#6ea8ff', waiting: '#e3b667', success: '#67c391', warning: '#e8a35c', danger: '#f08a92', focus: '#8fc2ff', overlay: 'rgba(0,0,0,0.6)', waveRem: '#66739a', tNeutral: '#293346', tRunning: '#20314e', tWaiting: '#333335', tSuccess: '#1f353c', tWarning: '#333034', tDanger: '#352c3c', shadow: '0 8px 24px rgba(0,0,0,0.5)', mark: './assets/plaudon-mark-dark.svg' }
+    };
+    const dark = this.props.theme === 'dark';
+    const t = THEMES[dark ? 'dark' : 'light'];
+    const ring = '0 0 0 2px ' + t.surface + ', 0 0 0 4px ' + t.focus;
+    const cell = (bg, fg, border, extra) => Object.assign({ bg, fg, border, op: 1, ring: 'none', weight: 400, deco: 'none' }, extra || {});
+    const buttonRows = [
+      { name: 'Primary', label: 'Import audio…', cells: [cell(t.accent, t.accentText, t.accent, { weight: 600 }), cell(t.accentHover, t.accentText, t.accentHover, { weight: 600 }), cell(t.accentHover, t.accentText, t.accentHover, { weight: 600 }), cell(t.accent, t.accentText, t.accent, { weight: 600, ring }), cell(t.accent, t.accentText, t.accent, { weight: 600, op: 0.5 })] },
+      { name: 'Secondary', label: 'Refresh', cells: [cell(t.surface, t.text, t.borderStrong), cell(t.hover, t.text, t.borderStrong), cell(t.selected, t.text, t.borderStrong), cell(t.surface, t.text, t.borderStrong, { ring }), cell(t.surface, t.text2, t.border, { op: 0.5 })] },
+      { name: 'Destructive', label: 'Delete recording…', cells: [cell(t.surface, t.danger, t.danger), cell(t.tDanger, t.danger, t.danger), cell(t.tDanger, t.danger, t.danger, { weight: 600 }), cell(t.surface, t.danger, t.danger, { ring }), cell(t.surface, t.danger, t.danger, { op: 0.5 })] },
+      { name: 'Link', label: 'Clear filters', cells: [cell('transparent', t.accent, 'transparent'), cell('transparent', t.accent, 'transparent', { deco: 'underline' }), cell(t.hover, t.accent, 'transparent', { deco: 'underline' }), cell('transparent', t.accent, 'transparent', { ring }), cell('transparent', t.accent, 'transparent', { op: 0.5 })] }
+    ];
+    const tableRows = [
+      { title: 'Weekly sync, platform team', status: '✓ Imported', c: t.success, state: 'Default', bg: 'transparent', ring: 'none', weight: 400 },
+      { title: 'Sync notes, design review', status: '⟳ Importing', c: t.running, state: 'Hovered', bg: t.hover, ring: 'none', weight: 400 },
+      { title: 'Lecture 7, signal processing', status: '◷ Pending', c: t.neutral, state: 'Selected + focus', bg: t.selected, ring: 'inset 0 0 0 2px ' + t.focus, weight: 600 },
+      { title: 'Kitchen renovation call', status: '✕ Import failed', c: t.danger, state: 'Selected', bg: t.selected, ring: 'none', weight: 600 }
+    ];
+    const navStates = [
+      { g: 'L', l: 'Library', state: 'current', bg: t.selected, ring: 'none', weight: 600, tileBg: t.accent, tileFg: t.accentText },
+      { g: 'I', l: 'Inbox', state: 'hovered', bg: t.hover, ring: 'none', weight: 400, tileBg: t.surface, tileFg: t.text2 },
+      { g: 'J', l: 'Jobs', state: 'focused', bg: 'transparent', ring: 'inset 0 0 0 2px ' + t.focus, weight: 400, tileBg: t.hover, tileFg: t.text2 }
+    ];
+    const b = (text, tone) => ({ text, tone: t[tone], tint: t['t' + tone.charAt(0).toUpperCase() + tone.slice(1)] });
+    const badges = [b('✓ Local only', 'success'), b('! Network allowed for providers you enable', 'warning'), b('✓ Imported', 'success'), b('⟳ Transcribing', 'running'), b('◷ Queued', 'neutral'), b('– Not transcribed', 'neutral'), b('! Stale', 'warning'), b('✕ Transcription failed', 'danger'), b('✓ Supported', 'success'), b('! Experimental', 'warning'), b('? Not evaluated', 'neutral'), b('× Unsupported', 'danger'), b('✓ Source linked', 'success'), b('! Review required', 'warning'), b('! Waiting for you', 'waiting')];
+    const toasts = [
+      { glyph: 'i', title: 'Importing files', body: 'Importing 3 files.', tone: t.running, tint: t.tRunning },
+      { glyph: 'OK', title: 'Import finished', body: '3 imported', tone: t.success, tint: t.tSuccess },
+      { glyph: '!', title: 'Import finished with decisions to make', body: '2 imported, 1 duplicate', tone: t.warning, tint: t.tWarning },
+      { glyph: 'X', title: 'The import failed.', body: 'Diagnostic id [id]', tone: t.danger, tint: t.tDanger }
+    ];
+    return { t, themeName: dark ? 'Dark' : 'Light', buttonRows, tableRows, navStates, badges, toasts };
+  }
+}
+</script>
+</body>
+</html>
