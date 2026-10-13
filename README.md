@@ -142,6 +142,33 @@ and [`docs/threat-model/README.md`](docs/threat-model/README.md). In summary:
 
 ---
 
+## No warranty / use at your own risk
+
+Plaudon is free and open-source software, licensed under the **MIT License** and provided
+**"AS IS", without warranty of any kind**, express or implied. That disclaimer is not a
+formality: the project makes **no guarantee of legal compliance** of any sort, and the authors
+and contributors accept no liability for how the software is used.
+
+* **Recording and consent are your responsibility.** Laws on recording conversations, on
+  processing voice as biometric data (BIPA, CUBI, Washington's My Health My Data, GDPR Art. 9
+  and their equivalents elsewhere), and on retaining such data differ by jurisdiction and change
+  over time. Determining which of them apply to you, obtaining whatever consent they require from
+  the people you record, and honouring their rights is yours to do — the software cannot do it
+  for you and does not claim to.
+* **No legal review gates this project**, and nothing in this repository is legal advice. Where
+  the documentation discusses statutes or case law it is engineering context with its sources
+  cited and its uncertainties marked `CONTESTED`; the owner has accepted that uncertainty rather
+  than resolving it, and the no-warranty terms above are the reason that is possible.
+* **The voice-profile (speaker-recognition) feature is off by default**, is additionally absent
+  from default builds, is local-only, and requires an explicit consent gate before it will
+  compute anything. Voiceprints never leave your machine and are never sent to us. These are
+  engineering safeguards, not a compliance claim.
+* The retention, deletion and disclosure behaviour the product does implement is described in
+  [`docs/public/privacy-disclosure.md`](docs/public/privacy-disclosure.md), and the threat model
+  states its own limits in [`docs/threat-model/open-findings.md`](docs/threat-model/open-findings.md).
+
+---
+
 ## Requirements
 
 | | |

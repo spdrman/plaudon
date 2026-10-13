@@ -124,6 +124,8 @@ The §4 gate is **not** passed, and the feature flag therefore stays off. What n
 `docs/benchmarks/speaker-match-wespeaker-resnet34-lm-eer.json` — WeSpeaker ResNet34-LM over
 LibriSpeech `test-clean`-derived fixtures on macOS arm64, pooled **EER 0.61%** (240 target / 2 640
 non-target trials), startup **481 ms**, RTF **0.0124**, peak RSS **214 MiB**. What does not:
-Windows x64 figures of any kind, a real diarization provider's DER, out-of-process inference, and
-the privacy-counsel review. Each is an item with an owner and a next step in
-[docs/release/voice-profiles-evidence.md](../release/voice-profiles-evidence.md).
+Windows x64 figures of any kind, a real diarization provider's DER, and out-of-process inference
+on Windows. Each is an item with an owner and a next step in
+[docs/release/voice-profiles-evidence.md](../release/voice-profiles-evidence.md). Legal review is
+not among them: the software ships under the MIT licence, "AS IS", with no warranty of legal
+compliance, and is used at the user's own risk.
