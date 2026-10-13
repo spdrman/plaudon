@@ -1,0 +1,2976 @@
+{
+  "schema_version": 1,
+  "corpus": "LibriSpeech test-clean",
+  "corpus_licence": "CC-BY-4.0",
+  "attribution": "LibriSpeech (Panayotov et al., openslr.org/12), CC-BY-4.0, derived from public-domain LibriVox recordings; used as test material only",
+  "sample_rate_hz": 16000,
+  "recipe": {
+    "clean": "LibriSpeech test-clean FLAC, decoded to 16 kHz mono by plaudon-audio, consecutive utterances of one reader concatenated and trimmed to the plan's utterance length",
+    "opus_low_bitrate": "ffmpeg -i <wav> -c:a libopus -b:a 12k -ar 16000 -ac 1 <ogg>, decoded back to 16 kHz mono PCM by the same binary",
+    "room_impulse_response": "image-source impulse response of a 5.0 x 4.0 x 2.7 m room, wall reflection 0.6, source (1.2, 1.0, 1.5) m, receiver (3.4, 2.6, 1.2) m, 12 image orders, convolved and peak-normalised in this tool",
+    "telephone_bandpass": "two-pole RBJ high-pass at 300 Hz followed by a two-pole RBJ low-pass at 3400 Hz, Q = 0.7071, applied in this tool"
+  },
+  "speaker_assignment": {
+    "cohort-01": "1995",
+    "cohort-02": "2094",
+    "cohort-03": "2300",
+    "cohort-04": "2830",
+    "cohort-05": "2961",
+    "cohort-06": "3570",
+    "cohort-07": "3575",
+    "cohort-08": "3729",
+    "cohort-09": "4077",
+    "cohort-10": "4446",
+    "cohort-11": "4507",
+    "cohort-12": "4970",
+    "cohort-13": "4992",
+    "cohort-14": "5105",
+    "cohort-15": "5142",
+    "cohort-16": "5639",
+    "cohort-17": "5683",
+    "cohort-18": "6829",
+    "cohort-19": "6930",
+    "cohort-20": "7021",
+    "cohort-21": "7127",
+    "cohort-22": "7176",
+    "cohort-23": "7729",
+    "cohort-24": "8224",
+    "roster-01": "61",
+    "roster-02": "121",
+    "roster-03": "237",
+    "roster-04": "260",
+    "roster-05": "672",
+    "roster-06": "908",
+    "roster-07": "1089",
+    "roster-08": "1188",
+    "roster-09": "1221",
+    "roster-10": "1284",
+    "roster-11": "1320",
+    "roster-12": "1580"
+  },
+  "fixtures": [
+    {
+      "token": "roster-01/0/clean",
+      "path": "roster-01/0/clean.wav",
+      "sha256": "8b81cb72db711fac95fbe10f54ad2dfe2c71b321ae1f1a4c1a0fb8b0cfcad01b",
+      "duration_ms": 3000,
+      "sources": [
+        "61-70968-0000.flac"
+      ]
+    },
+    {
+      "token": "roster-01/1/clean",
+      "path": "roster-01/1/clean.wav",
+      "sha256": "f62dc44fa96b4301ecd91820d73528fb12a287cc1fcbb41b1864d8a91661b84b",
+      "duration_ms": 3000,
+      "sources": [
+        "61-70968-0000.flac",
+        "61-70968-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-01/2/clean",
+      "path": "roster-01/2/clean.wav",
+      "sha256": "6ce92147d0ba6897ae744d514db0b73d2420310824a5133270b886be017dbbfa",
+      "duration_ms": 3000,
+      "sources": [
+        "61-70968-0001.flac",
+        "61-70968-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-01/3/clean",
+      "path": "roster-01/3/clean.wav",
+      "sha256": "441eb7bb2776d7c4bd53c0254fdfeb97cae65dab8dd420e6e4eda08a9964592d",
+      "duration_ms": 3000,
+      "sources": [
+        "61-70968-0002.flac",
+        "61-70968-0003.flac"
+      ]
+    },
+    {
+      "token": "roster-01/4/clean",
+      "path": "roster-01/4/clean.wav",
+      "sha256": "e50004bc0ae85f8e75704685ae2b98ba34d0282ee570d1c95a04416ce77bbb98",
+      "duration_ms": 3000,
+      "sources": [
+        "61-70968-0003.flac"
+      ]
+    },
+    {
+      "token": "roster-01/4/telephone_bandpass",
+      "path": "roster-01/4/telephone_bandpass.wav",
+      "sha256": "4acfe57a17f20fa024000ef861809a39ad265e8b6d1b485e685de8fe7cb090e7",
+      "duration_ms": 3000,
+      "sources": [
+        "61-70968-0003.flac"
+      ]
+    },
+    {
+      "token": "roster-01/4/opus_low_bitrate",
+      "path": "roster-01/4/opus_low_bitrate.wav",
+      "sha256": "389d58102be4608c239d2ae59ed57b0c23ae0f60210751a671bc9a34abb5bf9b",
+      "duration_ms": 3000,
+      "sources": [
+        "61-70968-0003.flac"
+      ]
+    },
+    {
+      "token": "roster-01/4/room_impulse_response",
+      "path": "roster-01/4/room_impulse_response.wav",
+      "sha256": "abfefd3d7b851ddf9fc06096c08eb2271cd821cc8a21d62b4fda11d693caac0c",
+      "duration_ms": 3000,
+      "sources": [
+        "61-70968-0003.flac"
+      ]
+    },
+    {
+      "token": "roster-01/5/clean",
+      "path": "roster-01/5/clean.wav",
+      "sha256": "2ad88b6a869a4cb6595d4f686e429c9d2eb2ba98ed42071c0d0dd6a9eb0f8870",
+      "duration_ms": 3000,
+      "sources": [
+        "61-70968-0003.flac",
+        "61-70968-0004.flac"
+      ]
+    },
+    {
+      "token": "roster-01/5/telephone_bandpass",
+      "path": "roster-01/5/telephone_bandpass.wav",
+      "sha256": "076a71f1661ce70e402330db39c12bc78a06d6c4538b7bb08cdc13f66c07c432",
+      "duration_ms": 3000,
+      "sources": [
+        "61-70968-0003.flac",
+        "61-70968-0004.flac"
+      ]
+    },
+    {
+      "token": "roster-01/5/opus_low_bitrate",
+      "path": "roster-01/5/opus_low_bitrate.wav",
+      "sha256": "7a595f73674a7f26a79f7f319be4b52a35a1f2f607796e38f0e49c7825debb7e",
+      "duration_ms": 3000,
+      "sources": [
+        "61-70968-0003.flac",
+        "61-70968-0004.flac"
+      ]
+    },
+    {
+      "token": "roster-01/5/room_impulse_response",
+      "path": "roster-01/5/room_impulse_response.wav",
+      "sha256": "cdd8dac660b868d085ae93558a34a17afe5fc68e725c72c8c0030e317f2af6d4",
+      "duration_ms": 3000,
+      "sources": [
+        "61-70968-0003.flac",
+        "61-70968-0004.flac"
+      ]
+    },
+    {
+      "token": "roster-01/6/clean",
+      "path": "roster-01/6/clean.wav",
+      "sha256": "cac3787e9f936cd530ced007257b0c4f4da99cfa609b8b05ddd428627515fbbd",
+      "duration_ms": 3000,
+      "sources": [
+        "61-70968-0004.flac",
+        "61-70968-0005.flac"
+      ]
+    },
+    {
+      "token": "roster-01/6/telephone_bandpass",
+      "path": "roster-01/6/telephone_bandpass.wav",
+      "sha256": "c98ddf70f5beb33b1da2fdf90fc21c68bbfefa8fb180c9577ce1a917d8d90853",
+      "duration_ms": 3000,
+      "sources": [
+        "61-70968-0004.flac",
+        "61-70968-0005.flac"
+      ]
+    },
+    {
+      "token": "roster-01/6/opus_low_bitrate",
+      "path": "roster-01/6/opus_low_bitrate.wav",
+      "sha256": "1962b3ebbde02c76ed888d6932daf3ff080fe1bd6f950d73670840dddde43af0",
+      "duration_ms": 3000,
+      "sources": [
+        "61-70968-0004.flac",
+        "61-70968-0005.flac"
+      ]
+    },
+    {
+      "token": "roster-01/6/room_impulse_response",
+      "path": "roster-01/6/room_impulse_response.wav",
+      "sha256": "22a644fbb4ea26f036c890f4d695258c96a6d3fcce29eae0984ba0e425ccaaf0",
+      "duration_ms": 3000,
+      "sources": [
+        "61-70968-0004.flac",
+        "61-70968-0005.flac"
+      ]
+    },
+    {
+      "token": "roster-01/7/clean",
+      "path": "roster-01/7/clean.wav",
+      "sha256": "2b6098539511fccbb2fa55dfdec8306568c3bd3fc4e62283cce9715aac22c497",
+      "duration_ms": 3000,
+      "sources": [
+        "61-70968-0005.flac"
+      ]
+    },
+    {
+      "token": "roster-01/7/telephone_bandpass",
+      "path": "roster-01/7/telephone_bandpass.wav",
+      "sha256": "b2803c115933f34dc5898283639e2d3b228a5d154746a63029c506a3004168ae",
+      "duration_ms": 3000,
+      "sources": [
+        "61-70968-0005.flac"
+      ]
+    },
+    {
+      "token": "roster-01/7/opus_low_bitrate",
+      "path": "roster-01/7/opus_low_bitrate.wav",
+      "sha256": "824b1c7730210e6db6b558b44726bc5485b945727563de8e3d4ab99bf060ea56",
+      "duration_ms": 3000,
+      "sources": [
+        "61-70968-0005.flac"
+      ]
+    },
+    {
+      "token": "roster-01/7/room_impulse_response",
+      "path": "roster-01/7/room_impulse_response.wav",
+      "sha256": "6622d4f588ee786e3aad3d451ab4f9fafa040c72170fc2c916869e6023ff8889",
+      "duration_ms": 3000,
+      "sources": [
+        "61-70968-0005.flac"
+      ]
+    },
+    {
+      "token": "roster-01/8/clean",
+      "path": "roster-01/8/clean.wav",
+      "sha256": "548e2c45f67d19d43705a07ac0c2a6bdde9da637cba748e537ba29e57fbe7f9f",
+      "duration_ms": 3000,
+      "sources": [
+        "61-70968-0005.flac",
+        "61-70968-0006.flac"
+      ]
+    },
+    {
+      "token": "roster-01/8/telephone_bandpass",
+      "path": "roster-01/8/telephone_bandpass.wav",
+      "sha256": "6b4078474439a7af11db4cf428eabd2f472d5594f9541c2dfd3685b90fa3acb1",
+      "duration_ms": 3000,
+      "sources": [
+        "61-70968-0005.flac",
+        "61-70968-0006.flac"
+      ]
+    },
+    {
+      "token": "roster-01/8/opus_low_bitrate",
+      "path": "roster-01/8/opus_low_bitrate.wav",
+      "sha256": "0a7219260fee57eb2e6caba6bdf7f0a1653a1741c3620371e798334c12cad2f9",
+      "duration_ms": 3000,
+      "sources": [
+        "61-70968-0005.flac",
+        "61-70968-0006.flac"
+      ]
+    },
+    {
+      "token": "roster-01/8/room_impulse_response",
+      "path": "roster-01/8/room_impulse_response.wav",
+      "sha256": "2adeebfcaabad6a5cd1c2174ce7a4185b3037c72e1dad1c6d6f39c18482d7ab5",
+      "duration_ms": 3000,
+      "sources": [
+        "61-70968-0005.flac",
+        "61-70968-0006.flac"
+      ]
+    },
+    {
+      "token": "roster-02/0/clean",
+      "path": "roster-02/0/clean.wav",
+      "sha256": "ff4b3b1f9cab71d61a8a53d188a11737c0f53f06966a3f6257872ce509141461",
+      "duration_ms": 3000,
+      "sources": [
+        "121-121726-0000.flac"
+      ]
+    },
+    {
+      "token": "roster-02/1/clean",
+      "path": "roster-02/1/clean.wav",
+      "sha256": "dcba2d552e0a0ffb95c91ef1d1d32ee9da469841e10ebfee829055e054f14800",
+      "duration_ms": 3000,
+      "sources": [
+        "121-121726-0000.flac"
+      ]
+    },
+    {
+      "token": "roster-02/2/clean",
+      "path": "roster-02/2/clean.wav",
+      "sha256": "3793c7622c618f42331f0b93d9b7101b9078605eefd48bba298ac81889f69212",
+      "duration_ms": 3000,
+      "sources": [
+        "121-121726-0000.flac",
+        "121-121726-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-02/3/clean",
+      "path": "roster-02/3/clean.wav",
+      "sha256": "c355f31be274eb24fc1e1d8f3e7be4adb8eced4503080a082994b9a91ae7a079",
+      "duration_ms": 3000,
+      "sources": [
+        "121-121726-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-02/4/clean",
+      "path": "roster-02/4/clean.wav",
+      "sha256": "1ca5d8ae6d7e3ec2f180053e6878bbc768ac00ba1923fd1fcb93dfce9f6b1f55",
+      "duration_ms": 3000,
+      "sources": [
+        "121-121726-0001.flac",
+        "121-121726-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-02/4/telephone_bandpass",
+      "path": "roster-02/4/telephone_bandpass.wav",
+      "sha256": "cb86689865d0669eac9985cd3f24e498b25e646dae6d6eb485279171a0db202f",
+      "duration_ms": 3000,
+      "sources": [
+        "121-121726-0001.flac",
+        "121-121726-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-02/4/opus_low_bitrate",
+      "path": "roster-02/4/opus_low_bitrate.wav",
+      "sha256": "b4f4b104e06d39a698ee30ba09655bc389ab7fde30eb951ce048bca7a551ea8c",
+      "duration_ms": 3000,
+      "sources": [
+        "121-121726-0001.flac",
+        "121-121726-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-02/4/room_impulse_response",
+      "path": "roster-02/4/room_impulse_response.wav",
+      "sha256": "39e5af2224e4fe91e436f2f66b7ef3b6ea1ae542487930be00116a9e37d4245a",
+      "duration_ms": 3000,
+      "sources": [
+        "121-121726-0001.flac",
+        "121-121726-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-02/5/clean",
+      "path": "roster-02/5/clean.wav",
+      "sha256": "dda30de06af025f709510efb728d583c630ce18c9f068782014f6b2279dd3068",
+      "duration_ms": 3000,
+      "sources": [
+        "121-121726-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-02/5/telephone_bandpass",
+      "path": "roster-02/5/telephone_bandpass.wav",
+      "sha256": "2c9bf01dc90d571d5f57837c24afd3a3a0bf6ee1303cf696fa6b9c04107f1bed",
+      "duration_ms": 3000,
+      "sources": [
+        "121-121726-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-02/5/opus_low_bitrate",
+      "path": "roster-02/5/opus_low_bitrate.wav",
+      "sha256": "00231499fedce71f871ca625ef5b7663bfd2790b87891fc5ab6534c3a8f843cd",
+      "duration_ms": 3000,
+      "sources": [
+        "121-121726-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-02/5/room_impulse_response",
+      "path": "roster-02/5/room_impulse_response.wav",
+      "sha256": "f35eb7a52f182fcd6cdd38ef5fe4f209e63abce6aeb9a33e8b6bd3ecc78255c4",
+      "duration_ms": 3000,
+      "sources": [
+        "121-121726-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-02/6/clean",
+      "path": "roster-02/6/clean.wav",
+      "sha256": "8f33c5354e68a970c7abf60c155cb8eba3774c2d60fd02780455c171543b5b20",
+      "duration_ms": 3000,
+      "sources": [
+        "121-121726-0002.flac",
+        "121-121726-0003.flac"
+      ]
+    },
+    {
+      "token": "roster-02/6/telephone_bandpass",
+      "path": "roster-02/6/telephone_bandpass.wav",
+      "sha256": "db81fe4e71a3d08f12ae01bd570c5c3e84f949cc693930e1f58aa339d774b865",
+      "duration_ms": 3000,
+      "sources": [
+        "121-121726-0002.flac",
+        "121-121726-0003.flac"
+      ]
+    },
+    {
+      "token": "roster-02/6/opus_low_bitrate",
+      "path": "roster-02/6/opus_low_bitrate.wav",
+      "sha256": "b46f54f0b48dcdb9c11e6e2ef0b369011e2cf8eaae9995de6cd827a4122481e8",
+      "duration_ms": 3000,
+      "sources": [
+        "121-121726-0002.flac",
+        "121-121726-0003.flac"
+      ]
+    },
+    {
+      "token": "roster-02/6/room_impulse_response",
+      "path": "roster-02/6/room_impulse_response.wav",
+      "sha256": "dd59d43a58e1d4b07169a002cf932c986caf96860adc1762a61db8019755c79d",
+      "duration_ms": 3000,
+      "sources": [
+        "121-121726-0002.flac",
+        "121-121726-0003.flac"
+      ]
+    },
+    {
+      "token": "roster-02/7/clean",
+      "path": "roster-02/7/clean.wav",
+      "sha256": "b21eb3267434a77d9e43169ea8731183a8bf06840a0fe420561c86f9f0103c3f",
+      "duration_ms": 3000,
+      "sources": [
+        "121-121726-0003.flac"
+      ]
+    },
+    {
+      "token": "roster-02/7/telephone_bandpass",
+      "path": "roster-02/7/telephone_bandpass.wav",
+      "sha256": "fc0b37e7926b0b3a3844e737cb11ed0f06aca7377b8ee7978ead8eb30d99bc85",
+      "duration_ms": 3000,
+      "sources": [
+        "121-121726-0003.flac"
+      ]
+    },
+    {
+      "token": "roster-02/7/opus_low_bitrate",
+      "path": "roster-02/7/opus_low_bitrate.wav",
+      "sha256": "b77b654b0d7e61021c8f40a584c77107e5d34221c2328cfb885bccf84984ba26",
+      "duration_ms": 3000,
+      "sources": [
+        "121-121726-0003.flac"
+      ]
+    },
+    {
+      "token": "roster-02/7/room_impulse_response",
+      "path": "roster-02/7/room_impulse_response.wav",
+      "sha256": "2b2f509a65286a57a51f0bbb87de26b3afdecb53c4326a2dad501d923e6af953",
+      "duration_ms": 3000,
+      "sources": [
+        "121-121726-0003.flac"
+      ]
+    },
+    {
+      "token": "roster-02/8/clean",
+      "path": "roster-02/8/clean.wav",
+      "sha256": "a2c55e5b89e8cce81e6037dc8157bf021421519dea4381cf0b73e6cf5c608d4a",
+      "duration_ms": 3000,
+      "sources": [
+        "121-121726-0003.flac",
+        "121-121726-0004.flac"
+      ]
+    },
+    {
+      "token": "roster-02/8/telephone_bandpass",
+      "path": "roster-02/8/telephone_bandpass.wav",
+      "sha256": "856f5720026b4fb2362f28b8d7adfd9d22a4272cda3e08ef328517cbffec5a4f",
+      "duration_ms": 3000,
+      "sources": [
+        "121-121726-0003.flac",
+        "121-121726-0004.flac"
+      ]
+    },
+    {
+      "token": "roster-02/8/opus_low_bitrate",
+      "path": "roster-02/8/opus_low_bitrate.wav",
+      "sha256": "93b8e38f2788ea12daa4026faa903cc894a8bbc313a7be9fb332c834ca6299c4",
+      "duration_ms": 3000,
+      "sources": [
+        "121-121726-0003.flac",
+        "121-121726-0004.flac"
+      ]
+    },
+    {
+      "token": "roster-02/8/room_impulse_response",
+      "path": "roster-02/8/room_impulse_response.wav",
+      "sha256": "7c70243c54fd0799b3690ca6db53b0fc8e8f87bd4270fda1eb9bdf2c30c7b531",
+      "duration_ms": 3000,
+      "sources": [
+        "121-121726-0003.flac",
+        "121-121726-0004.flac"
+      ]
+    },
+    {
+      "token": "roster-03/0/clean",
+      "path": "roster-03/0/clean.wav",
+      "sha256": "97306a2c53694dbf48e4e9aa8c7e0281ed23b67b96d346c06c50db2b03c60538",
+      "duration_ms": 3000,
+      "sources": [
+        "237-126133-0000.flac"
+      ]
+    },
+    {
+      "token": "roster-03/1/clean",
+      "path": "roster-03/1/clean.wav",
+      "sha256": "37b248330eef51dc3dd987eb259a227f99e2ef020d0a77f8b24ac25f88d888bf",
+      "duration_ms": 3000,
+      "sources": [
+        "237-126133-0000.flac"
+      ]
+    },
+    {
+      "token": "roster-03/2/clean",
+      "path": "roster-03/2/clean.wav",
+      "sha256": "d3bbb5e2d339592f417fbf880517203cadac082b63b392a1f5f6afd740257a1a",
+      "duration_ms": 3000,
+      "sources": [
+        "237-126133-0000.flac"
+      ]
+    },
+    {
+      "token": "roster-03/3/clean",
+      "path": "roster-03/3/clean.wav",
+      "sha256": "d8c0d38a3e77e39542e9c9e8622265bfdb3d083d1ba473612f7166fad1e03674",
+      "duration_ms": 3000,
+      "sources": [
+        "237-126133-0000.flac"
+      ]
+    },
+    {
+      "token": "roster-03/4/clean",
+      "path": "roster-03/4/clean.wav",
+      "sha256": "7f185d084ea86816ed16adcc298f80e5459201dec84d47d4c97975b13e77edde",
+      "duration_ms": 3000,
+      "sources": [
+        "237-126133-0000.flac",
+        "237-126133-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-03/4/telephone_bandpass",
+      "path": "roster-03/4/telephone_bandpass.wav",
+      "sha256": "4d5b003167c372f2e9a9c88ba1622b23091794c46f968ef3c3f76f95e2a1c0ed",
+      "duration_ms": 3000,
+      "sources": [
+        "237-126133-0000.flac",
+        "237-126133-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-03/4/opus_low_bitrate",
+      "path": "roster-03/4/opus_low_bitrate.wav",
+      "sha256": "db1d1805184035192e43befaadacdc11b2436f647552b8d0a899a8b15adffae1",
+      "duration_ms": 3000,
+      "sources": [
+        "237-126133-0000.flac",
+        "237-126133-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-03/4/room_impulse_response",
+      "path": "roster-03/4/room_impulse_response.wav",
+      "sha256": "09a0bd41d08d2669a1a268cffb51872564dba6988289434520b1541712e4fe73",
+      "duration_ms": 3000,
+      "sources": [
+        "237-126133-0000.flac",
+        "237-126133-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-03/5/clean",
+      "path": "roster-03/5/clean.wav",
+      "sha256": "d64160b2d380a8bc30967352ad0c5780d80768e5bebf5b7ed39e1ca2eaa80031",
+      "duration_ms": 3000,
+      "sources": [
+        "237-126133-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-03/5/telephone_bandpass",
+      "path": "roster-03/5/telephone_bandpass.wav",
+      "sha256": "7142d85f1e9e431f55d4795ef822b2dccbb561a403024c6000ed1c9e82f6a8ee",
+      "duration_ms": 3000,
+      "sources": [
+        "237-126133-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-03/5/opus_low_bitrate",
+      "path": "roster-03/5/opus_low_bitrate.wav",
+      "sha256": "11d03ea22ac7341eb04a0493ab5c7960d2f5c680e41e24f979eb2e2277c607f0",
+      "duration_ms": 3000,
+      "sources": [
+        "237-126133-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-03/5/room_impulse_response",
+      "path": "roster-03/5/room_impulse_response.wav",
+      "sha256": "d6ddd7350b26c607ee2e760887cad0bb06499771285f88289088718279fe0b6c",
+      "duration_ms": 3000,
+      "sources": [
+        "237-126133-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-03/6/clean",
+      "path": "roster-03/6/clean.wav",
+      "sha256": "c8203b26b3500a3f6c3236abf612aad7670cbbaa5699b112b3a753cb2ecfc795",
+      "duration_ms": 3000,
+      "sources": [
+        "237-126133-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-03/6/telephone_bandpass",
+      "path": "roster-03/6/telephone_bandpass.wav",
+      "sha256": "7344d7c76a0e9877b25a6477888a2f3a7be506595d1f0acbe4cf0125f3c4e522",
+      "duration_ms": 3000,
+      "sources": [
+        "237-126133-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-03/6/opus_low_bitrate",
+      "path": "roster-03/6/opus_low_bitrate.wav",
+      "sha256": "81a071ab297a70a6182da35631c4f5ba12c67396a1b923f1df48340c2d860b53",
+      "duration_ms": 3000,
+      "sources": [
+        "237-126133-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-03/6/room_impulse_response",
+      "path": "roster-03/6/room_impulse_response.wav",
+      "sha256": "8ac684ff06cd3be7da0c256c648729617e59b7f040697ff5a11daa8c0cbc33ff",
+      "duration_ms": 3000,
+      "sources": [
+        "237-126133-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-03/7/clean",
+      "path": "roster-03/7/clean.wav",
+      "sha256": "3820564751310157732835a84a9c02a82718031f8e00ce4f1681f691b35f06d7",
+      "duration_ms": 3000,
+      "sources": [
+        "237-126133-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-03/7/telephone_bandpass",
+      "path": "roster-03/7/telephone_bandpass.wav",
+      "sha256": "b36a833c4e00c7796961f2df00715c23ed54a73e44611c60ace16a1912075f60",
+      "duration_ms": 3000,
+      "sources": [
+        "237-126133-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-03/7/opus_low_bitrate",
+      "path": "roster-03/7/opus_low_bitrate.wav",
+      "sha256": "b15b6f74c9411e0755fc0e4bc77d2d8077c6f98af4da707d3ebb3da6a141b553",
+      "duration_ms": 3000,
+      "sources": [
+        "237-126133-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-03/7/room_impulse_response",
+      "path": "roster-03/7/room_impulse_response.wav",
+      "sha256": "179fd256c47fe4d3d130d2f39c0beb07d38af5547b21e09b52f5db47a1bc0aa1",
+      "duration_ms": 3000,
+      "sources": [
+        "237-126133-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-03/8/clean",
+      "path": "roster-03/8/clean.wav",
+      "sha256": "8433191ec567f35b2c9a4ff2d7272eabef52e2729a04f03f6a8d264c996dbb14",
+      "duration_ms": 3000,
+      "sources": [
+        "237-126133-0001.flac",
+        "237-126133-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-03/8/telephone_bandpass",
+      "path": "roster-03/8/telephone_bandpass.wav",
+      "sha256": "b44d5fb12030a2aaed86afee145a37d60f3a0111870a90f4abcfc1cb473e776b",
+      "duration_ms": 3000,
+      "sources": [
+        "237-126133-0001.flac",
+        "237-126133-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-03/8/opus_low_bitrate",
+      "path": "roster-03/8/opus_low_bitrate.wav",
+      "sha256": "b2ce73305e89ab3675557b295e2b063777617f4ab47794ba5c088d21386dd039",
+      "duration_ms": 3000,
+      "sources": [
+        "237-126133-0001.flac",
+        "237-126133-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-03/8/room_impulse_response",
+      "path": "roster-03/8/room_impulse_response.wav",
+      "sha256": "820629af18523ffcd4f184d23f55f78ceeaf4f80cc95ba500818844fae0584d0",
+      "duration_ms": 3000,
+      "sources": [
+        "237-126133-0001.flac",
+        "237-126133-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-04/0/clean",
+      "path": "roster-04/0/clean.wav",
+      "sha256": "c236706bcb686986f0a4de00b059f72887f6c5a0f581eba88408b2d828d70950",
+      "duration_ms": 3000,
+      "sources": [
+        "260-123286-0000.flac"
+      ]
+    },
+    {
+      "token": "roster-04/1/clean",
+      "path": "roster-04/1/clean.wav",
+      "sha256": "ce5fa16840ed5f108ad5c564bd9421ed3f87ebfe7243edbe72963b69d7766713",
+      "duration_ms": 3000,
+      "sources": [
+        "260-123286-0000.flac"
+      ]
+    },
+    {
+      "token": "roster-04/2/clean",
+      "path": "roster-04/2/clean.wav",
+      "sha256": "c0ef4edd1215e9c550587b672b856817d8181be3a5562bc5ba6a25a8a8cd63c4",
+      "duration_ms": 3000,
+      "sources": [
+        "260-123286-0000.flac",
+        "260-123286-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-04/3/clean",
+      "path": "roster-04/3/clean.wav",
+      "sha256": "9c88867302515888d19f993292ce9fa85df9695def95a2cac4e41392b23b9b28",
+      "duration_ms": 3000,
+      "sources": [
+        "260-123286-0001.flac",
+        "260-123286-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-04/4/clean",
+      "path": "roster-04/4/clean.wav",
+      "sha256": "d16fd464bc61987447df4571d203b961c02b7eb2adf996163fcf51d5144e20db",
+      "duration_ms": 3000,
+      "sources": [
+        "260-123286-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-04/4/telephone_bandpass",
+      "path": "roster-04/4/telephone_bandpass.wav",
+      "sha256": "9d70f6db8ed14bdc6d361532f8147741859d19036ef124dcc525df27c370266b",
+      "duration_ms": 3000,
+      "sources": [
+        "260-123286-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-04/4/opus_low_bitrate",
+      "path": "roster-04/4/opus_low_bitrate.wav",
+      "sha256": "13b55b53a2f754fb398ab0aaf3e832f70d4efc96d854a03889b6a155bfb5ae6c",
+      "duration_ms": 3000,
+      "sources": [
+        "260-123286-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-04/4/room_impulse_response",
+      "path": "roster-04/4/room_impulse_response.wav",
+      "sha256": "a250d69dd02445a5c4200b87e71da23fbe6b9e519a159ad9d4cf94dc881fbdbe",
+      "duration_ms": 3000,
+      "sources": [
+        "260-123286-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-04/5/clean",
+      "path": "roster-04/5/clean.wav",
+      "sha256": "a37b822daef2e6d25782a09b2e48b7d8e5e5e78278e19920be6b4e519f76223e",
+      "duration_ms": 3000,
+      "sources": [
+        "260-123286-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-04/5/telephone_bandpass",
+      "path": "roster-04/5/telephone_bandpass.wav",
+      "sha256": "e6c60a646d1a30edff6b838721953130c84dfb4820016959931a234786e112dd",
+      "duration_ms": 3000,
+      "sources": [
+        "260-123286-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-04/5/opus_low_bitrate",
+      "path": "roster-04/5/opus_low_bitrate.wav",
+      "sha256": "d06a715b7e589490cf55336ff2a46ae1fcb4c6510b2e49ac120f28f767ae4ff7",
+      "duration_ms": 3000,
+      "sources": [
+        "260-123286-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-04/5/room_impulse_response",
+      "path": "roster-04/5/room_impulse_response.wav",
+      "sha256": "0291e695d6a6214119ee2daeb977e63857685b1cb7025bac5470731b488b5a6f",
+      "duration_ms": 3000,
+      "sources": [
+        "260-123286-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-04/6/clean",
+      "path": "roster-04/6/clean.wav",
+      "sha256": "537d0aea8f288d44892029b3fc9690ec1ba889ca295f986ef118abf2ef5b5cfc",
+      "duration_ms": 3000,
+      "sources": [
+        "260-123286-0002.flac",
+        "260-123286-0003.flac"
+      ]
+    },
+    {
+      "token": "roster-04/6/telephone_bandpass",
+      "path": "roster-04/6/telephone_bandpass.wav",
+      "sha256": "6ff95396850bbed174179a8e5e90b50cd5d946c2aa3c8b5e389245ea9be1c5e2",
+      "duration_ms": 3000,
+      "sources": [
+        "260-123286-0002.flac",
+        "260-123286-0003.flac"
+      ]
+    },
+    {
+      "token": "roster-04/6/opus_low_bitrate",
+      "path": "roster-04/6/opus_low_bitrate.wav",
+      "sha256": "bf623b2bada85aa2e256afa900c5c7816de280efde176c7617963ace69574af9",
+      "duration_ms": 3000,
+      "sources": [
+        "260-123286-0002.flac",
+        "260-123286-0003.flac"
+      ]
+    },
+    {
+      "token": "roster-04/6/room_impulse_response",
+      "path": "roster-04/6/room_impulse_response.wav",
+      "sha256": "6732c4c5526993de55323b061244addbc934e71000d5cedb80992b89837a1524",
+      "duration_ms": 3000,
+      "sources": [
+        "260-123286-0002.flac",
+        "260-123286-0003.flac"
+      ]
+    },
+    {
+      "token": "roster-04/7/clean",
+      "path": "roster-04/7/clean.wav",
+      "sha256": "bba5ec6cf4312253a03b9e56fc022565e1ef069944b435b8ae1389361b32503c",
+      "duration_ms": 3000,
+      "sources": [
+        "260-123286-0003.flac"
+      ]
+    },
+    {
+      "token": "roster-04/7/telephone_bandpass",
+      "path": "roster-04/7/telephone_bandpass.wav",
+      "sha256": "3e2b4c3184eda81f33faac5c1f56556c335053fc1f73584c823976e9a5e967dc",
+      "duration_ms": 3000,
+      "sources": [
+        "260-123286-0003.flac"
+      ]
+    },
+    {
+      "token": "roster-04/7/opus_low_bitrate",
+      "path": "roster-04/7/opus_low_bitrate.wav",
+      "sha256": "1c5eaedbce7afa0c6b9de73cd83d32d1dad36d798446b8c0c1fef7b32aa2d225",
+      "duration_ms": 3000,
+      "sources": [
+        "260-123286-0003.flac"
+      ]
+    },
+    {
+      "token": "roster-04/7/room_impulse_response",
+      "path": "roster-04/7/room_impulse_response.wav",
+      "sha256": "454c5e647080cb9945561ccf02005847def88d62fe7d9c0421169664bfc07260",
+      "duration_ms": 3000,
+      "sources": [
+        "260-123286-0003.flac"
+      ]
+    },
+    {
+      "token": "roster-04/8/clean",
+      "path": "roster-04/8/clean.wav",
+      "sha256": "4690972b6cfa174b76a8fa14288438e160c19e3a767dab7f813f1a4e7aae7098",
+      "duration_ms": 3000,
+      "sources": [
+        "260-123286-0003.flac"
+      ]
+    },
+    {
+      "token": "roster-04/8/telephone_bandpass",
+      "path": "roster-04/8/telephone_bandpass.wav",
+      "sha256": "907d92e3cbb5ccccdd4753954ec72298d9a33a81f957d1e5117fa1df9e996d20",
+      "duration_ms": 3000,
+      "sources": [
+        "260-123286-0003.flac"
+      ]
+    },
+    {
+      "token": "roster-04/8/opus_low_bitrate",
+      "path": "roster-04/8/opus_low_bitrate.wav",
+      "sha256": "45ab440c6b5caa733951a40131668b9b3345c6b7fce5e2232959661d77618a55",
+      "duration_ms": 3000,
+      "sources": [
+        "260-123286-0003.flac"
+      ]
+    },
+    {
+      "token": "roster-04/8/room_impulse_response",
+      "path": "roster-04/8/room_impulse_response.wav",
+      "sha256": "e3b1bdb13a08150667ef7ea1b514e7d79f0a743a2f08c2a9d51bcef9ba1b9dd7",
+      "duration_ms": 3000,
+      "sources": [
+        "260-123286-0003.flac"
+      ]
+    },
+    {
+      "token": "roster-05/0/clean",
+      "path": "roster-05/0/clean.wav",
+      "sha256": "19117013705cfb0e3adbaab22e31b4403ec329d0cfe3e94a6b29fd1a2653c66e",
+      "duration_ms": 3000,
+      "sources": [
+        "672-122797-0000.flac"
+      ]
+    },
+    {
+      "token": "roster-05/1/clean",
+      "path": "roster-05/1/clean.wav",
+      "sha256": "01d541d7e32a9bb6dd4aef32e0e40431f6851af2f096bd6f7a519533ccea0441",
+      "duration_ms": 3000,
+      "sources": [
+        "672-122797-0000.flac",
+        "672-122797-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-05/2/clean",
+      "path": "roster-05/2/clean.wav",
+      "sha256": "c10cf8bf7517265db4385d55a16039dc7e5f60ab7fb67f5beefaedabbcc8ebbb",
+      "duration_ms": 3000,
+      "sources": [
+        "672-122797-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-05/3/clean",
+      "path": "roster-05/3/clean.wav",
+      "sha256": "d31fe26f61825c6a2b6123cc5726a4e1bdf17e3367e86b4b8df487cefd31d199",
+      "duration_ms": 3000,
+      "sources": [
+        "672-122797-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-05/4/clean",
+      "path": "roster-05/4/clean.wav",
+      "sha256": "0e358d0011bc14e1d0fcb2b34e903640f4840b3a29269304040bf4a40ace025d",
+      "duration_ms": 3000,
+      "sources": [
+        "672-122797-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-05/4/telephone_bandpass",
+      "path": "roster-05/4/telephone_bandpass.wav",
+      "sha256": "f3ed54157fd57b34d7a43352ff340c528e94ceae407b2171d0188e52634b2013",
+      "duration_ms": 3000,
+      "sources": [
+        "672-122797-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-05/4/opus_low_bitrate",
+      "path": "roster-05/4/opus_low_bitrate.wav",
+      "sha256": "af0158e25912b8766a2cfc49946f4ee6db88ee17e6cadf1cc6362e70dc7efa2c",
+      "duration_ms": 3000,
+      "sources": [
+        "672-122797-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-05/4/room_impulse_response",
+      "path": "roster-05/4/room_impulse_response.wav",
+      "sha256": "b5e8319de8de1b0f05a077f4c499712318abbbf7421b77f41ff91f6012d72503",
+      "duration_ms": 3000,
+      "sources": [
+        "672-122797-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-05/5/clean",
+      "path": "roster-05/5/clean.wav",
+      "sha256": "08b70359cf97c65acc60231eaf5dfa3a9645265aee8f3ab8c5322ae15aeb6e12",
+      "duration_ms": 3000,
+      "sources": [
+        "672-122797-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-05/5/telephone_bandpass",
+      "path": "roster-05/5/telephone_bandpass.wav",
+      "sha256": "83d9c646f02cc89129eefaa5061c2993d29f6b14d82cedc8d8be2653c5075ae0",
+      "duration_ms": 3000,
+      "sources": [
+        "672-122797-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-05/5/opus_low_bitrate",
+      "path": "roster-05/5/opus_low_bitrate.wav",
+      "sha256": "f8ef239ad8b14b3154cc2726385f7dec2c4cc264ed39b18d385f1b2b2a9a3856",
+      "duration_ms": 3000,
+      "sources": [
+        "672-122797-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-05/5/room_impulse_response",
+      "path": "roster-05/5/room_impulse_response.wav",
+      "sha256": "f3de6e9b495af4c22c1ce07997377864488b0e2ca95b2e4f7ecf745c6cb3e734",
+      "duration_ms": 3000,
+      "sources": [
+        "672-122797-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-05/6/clean",
+      "path": "roster-05/6/clean.wav",
+      "sha256": "a454fd9520d2413ec49753b534d5e4a0b84ae16d0ba4e7bde2ed1b75038e9ae4",
+      "duration_ms": 3000,
+      "sources": [
+        "672-122797-0001.flac",
+        "672-122797-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-05/6/telephone_bandpass",
+      "path": "roster-05/6/telephone_bandpass.wav",
+      "sha256": "cc486ddc72830b90d2d531f29bc97460c50fda05c49e0aa1279973ae4aa1b0ba",
+      "duration_ms": 3000,
+      "sources": [
+        "672-122797-0001.flac",
+        "672-122797-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-05/6/opus_low_bitrate",
+      "path": "roster-05/6/opus_low_bitrate.wav",
+      "sha256": "da10f25868f59f242abb8a3acd0027121207b3b404fead5dc0da38846d60787d",
+      "duration_ms": 3000,
+      "sources": [
+        "672-122797-0001.flac",
+        "672-122797-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-05/6/room_impulse_response",
+      "path": "roster-05/6/room_impulse_response.wav",
+      "sha256": "1f33f64933a504120a96525490317f11da437c548d0aa1a508dd3e1605492685",
+      "duration_ms": 3000,
+      "sources": [
+        "672-122797-0001.flac",
+        "672-122797-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-05/7/clean",
+      "path": "roster-05/7/clean.wav",
+      "sha256": "3be01f60884e3f1b7282251a3efbe2473835fc679b193d2e63d87fc452876e08",
+      "duration_ms": 3000,
+      "sources": [
+        "672-122797-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-05/7/telephone_bandpass",
+      "path": "roster-05/7/telephone_bandpass.wav",
+      "sha256": "4e583b88a2696117604d35eb7a46d4a73ab9ffa3ba3ef6d61aa15db86128924e",
+      "duration_ms": 3000,
+      "sources": [
+        "672-122797-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-05/7/opus_low_bitrate",
+      "path": "roster-05/7/opus_low_bitrate.wav",
+      "sha256": "4555f511f701bd77f74f3396bc3a5c73092d6988b0f9fadc83080541d3c16fa7",
+      "duration_ms": 3000,
+      "sources": [
+        "672-122797-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-05/7/room_impulse_response",
+      "path": "roster-05/7/room_impulse_response.wav",
+      "sha256": "0dea67c15364714cad62848947801f1006e4f9d77c54964901c9041ed0902c6d",
+      "duration_ms": 3000,
+      "sources": [
+        "672-122797-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-05/8/clean",
+      "path": "roster-05/8/clean.wav",
+      "sha256": "087305a401e15aeeac81a6b235dde001e8bdfd19c57c566e4e25427721bf40ae",
+      "duration_ms": 3000,
+      "sources": [
+        "672-122797-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-05/8/telephone_bandpass",
+      "path": "roster-05/8/telephone_bandpass.wav",
+      "sha256": "6ca82194f618591df7d1d5d6ba786a33629f3494cd7392e430823dc34daf963f",
+      "duration_ms": 3000,
+      "sources": [
+        "672-122797-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-05/8/opus_low_bitrate",
+      "path": "roster-05/8/opus_low_bitrate.wav",
+      "sha256": "f39c195912fa7f2734a514a56ee91ca01144b0f45efa01e673ce29c562766d60",
+      "duration_ms": 3000,
+      "sources": [
+        "672-122797-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-05/8/room_impulse_response",
+      "path": "roster-05/8/room_impulse_response.wav",
+      "sha256": "f012810912966e1d224e57b0d57f587ce9e42d2c149e876efd89a374e70d9538",
+      "duration_ms": 3000,
+      "sources": [
+        "672-122797-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-06/0/clean",
+      "path": "roster-06/0/clean.wav",
+      "sha256": "661a39c3d9173109f0d62558a9e2504a49ce5341d8d2daa21c9bb68418ca72f1",
+      "duration_ms": 3000,
+      "sources": [
+        "908-157963-0000.flac"
+      ]
+    },
+    {
+      "token": "roster-06/1/clean",
+      "path": "roster-06/1/clean.wav",
+      "sha256": "a3fbded04c795ebebad33902f03caf176a2d775536b3470d88db22f46ed0be1b",
+      "duration_ms": 3000,
+      "sources": [
+        "908-157963-0000.flac"
+      ]
+    },
+    {
+      "token": "roster-06/2/clean",
+      "path": "roster-06/2/clean.wav",
+      "sha256": "d56a745272bf7478b03fef62cc1419ce1396848d0ec5aa79ab666494d4f155e2",
+      "duration_ms": 3000,
+      "sources": [
+        "908-157963-0000.flac"
+      ]
+    },
+    {
+      "token": "roster-06/3/clean",
+      "path": "roster-06/3/clean.wav",
+      "sha256": "cf79652f628174a75f86a17c0d545699a6e581400cdf1ed8c2e8b5fdb23c793a",
+      "duration_ms": 3000,
+      "sources": [
+        "908-157963-0000.flac"
+      ]
+    },
+    {
+      "token": "roster-06/4/clean",
+      "path": "roster-06/4/clean.wav",
+      "sha256": "87d6ff04197c5fca15c2802f1bccace77dfbc9709008b1cff88fb365e5e1e1ac",
+      "duration_ms": 3000,
+      "sources": [
+        "908-157963-0000.flac",
+        "908-157963-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-06/4/telephone_bandpass",
+      "path": "roster-06/4/telephone_bandpass.wav",
+      "sha256": "bf9b348ed18d0ede7f2cc9651b375503e270578baa673025e95545a32c8175df",
+      "duration_ms": 3000,
+      "sources": [
+        "908-157963-0000.flac",
+        "908-157963-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-06/4/opus_low_bitrate",
+      "path": "roster-06/4/opus_low_bitrate.wav",
+      "sha256": "b32241b4e8ad1c1a7ec1a65e19f61df301a3d4fdc31239156470273a3e6fdf54",
+      "duration_ms": 3000,
+      "sources": [
+        "908-157963-0000.flac",
+        "908-157963-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-06/4/room_impulse_response",
+      "path": "roster-06/4/room_impulse_response.wav",
+      "sha256": "4de209022c2158d01d32c4e4f40c1471169e5d67e757c45868c06f9f45b403de",
+      "duration_ms": 3000,
+      "sources": [
+        "908-157963-0000.flac",
+        "908-157963-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-06/5/clean",
+      "path": "roster-06/5/clean.wav",
+      "sha256": "0d2434468f7e4eb59944f66eb19fbb45e8f7774ebe12044f9a28498a7f995a69",
+      "duration_ms": 3000,
+      "sources": [
+        "908-157963-0001.flac",
+        "908-157963-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-06/5/telephone_bandpass",
+      "path": "roster-06/5/telephone_bandpass.wav",
+      "sha256": "b39fbeee4ca62a5e4f49ac2aff9ae9fbb510591786314b4085bc26d1811be3b3",
+      "duration_ms": 3000,
+      "sources": [
+        "908-157963-0001.flac",
+        "908-157963-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-06/5/opus_low_bitrate",
+      "path": "roster-06/5/opus_low_bitrate.wav",
+      "sha256": "b748faac4548ff9fe17f0bfaa453e636ade0b45bdf9c09b1d11c13938cb3ade8",
+      "duration_ms": 3000,
+      "sources": [
+        "908-157963-0001.flac",
+        "908-157963-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-06/5/room_impulse_response",
+      "path": "roster-06/5/room_impulse_response.wav",
+      "sha256": "7f98974dd28892b9974d52a4d601f2befdd5fc96f2991636fe004e15da62d380",
+      "duration_ms": 3000,
+      "sources": [
+        "908-157963-0001.flac",
+        "908-157963-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-06/6/clean",
+      "path": "roster-06/6/clean.wav",
+      "sha256": "51247defb0653f8ceb7284b0a4e243f2f1a0d5453dba954097d86887ec6729fd",
+      "duration_ms": 3000,
+      "sources": [
+        "908-157963-0002.flac",
+        "908-157963-0003.flac"
+      ]
+    },
+    {
+      "token": "roster-06/6/telephone_bandpass",
+      "path": "roster-06/6/telephone_bandpass.wav",
+      "sha256": "0b6a0b04e6c721b4ec1b198a036bea1bf8b7fe4e0c525ee469f1a0a48a8bc93f",
+      "duration_ms": 3000,
+      "sources": [
+        "908-157963-0002.flac",
+        "908-157963-0003.flac"
+      ]
+    },
+    {
+      "token": "roster-06/6/opus_low_bitrate",
+      "path": "roster-06/6/opus_low_bitrate.wav",
+      "sha256": "61b8429f76aeade04b32bb4e4dd3c569e370722b692868067b679a8fa7b9ca9f",
+      "duration_ms": 3000,
+      "sources": [
+        "908-157963-0002.flac",
+        "908-157963-0003.flac"
+      ]
+    },
+    {
+      "token": "roster-06/6/room_impulse_response",
+      "path": "roster-06/6/room_impulse_response.wav",
+      "sha256": "1b6f6496bdf4d105bf43b399fe8b2112c4c71b77077e13592229959b6cfe2ca0",
+      "duration_ms": 3000,
+      "sources": [
+        "908-157963-0002.flac",
+        "908-157963-0003.flac"
+      ]
+    },
+    {
+      "token": "roster-06/7/clean",
+      "path": "roster-06/7/clean.wav",
+      "sha256": "7af7e08b820003f248ccbb7ec1472d5e667eb69670c73bfe189c0aa48f220440",
+      "duration_ms": 3000,
+      "sources": [
+        "908-157963-0003.flac",
+        "908-157963-0004.flac"
+      ]
+    },
+    {
+      "token": "roster-06/7/telephone_bandpass",
+      "path": "roster-06/7/telephone_bandpass.wav",
+      "sha256": "0d8d93242936f93038598cae217fb90111723872a55e42e09ed8ede5301111b1",
+      "duration_ms": 3000,
+      "sources": [
+        "908-157963-0003.flac",
+        "908-157963-0004.flac"
+      ]
+    },
+    {
+      "token": "roster-06/7/opus_low_bitrate",
+      "path": "roster-06/7/opus_low_bitrate.wav",
+      "sha256": "cbef9bb69a2e8303f29550fe9939ee42599b4545d4c0da067fec7eba7fcbd1ba",
+      "duration_ms": 3000,
+      "sources": [
+        "908-157963-0003.flac",
+        "908-157963-0004.flac"
+      ]
+    },
+    {
+      "token": "roster-06/7/room_impulse_response",
+      "path": "roster-06/7/room_impulse_response.wav",
+      "sha256": "1068e17b6763497f82da19e6b5cc5b639c62b377c26144d806679ff176f86782",
+      "duration_ms": 3000,
+      "sources": [
+        "908-157963-0003.flac",
+        "908-157963-0004.flac"
+      ]
+    },
+    {
+      "token": "roster-06/8/clean",
+      "path": "roster-06/8/clean.wav",
+      "sha256": "80b1b9e4068a6513d702781f6f54a679866314e9c5f62e2875276f08d3c9d600",
+      "duration_ms": 3000,
+      "sources": [
+        "908-157963-0004.flac"
+      ]
+    },
+    {
+      "token": "roster-06/8/telephone_bandpass",
+      "path": "roster-06/8/telephone_bandpass.wav",
+      "sha256": "b4cb14a47d8e0df630f59d940b53740a75b1c4e041970a1567683d4d853cc611",
+      "duration_ms": 3000,
+      "sources": [
+        "908-157963-0004.flac"
+      ]
+    },
+    {
+      "token": "roster-06/8/opus_low_bitrate",
+      "path": "roster-06/8/opus_low_bitrate.wav",
+      "sha256": "f77415f024837d948ae0fc2bc270727a1a0411347fb7da6e5bebf1594b1fb503",
+      "duration_ms": 3000,
+      "sources": [
+        "908-157963-0004.flac"
+      ]
+    },
+    {
+      "token": "roster-06/8/room_impulse_response",
+      "path": "roster-06/8/room_impulse_response.wav",
+      "sha256": "cd9369f7c0bb40daa52ce85cb982aa9ffab85ad1b602944a070f74f4cb8882ae",
+      "duration_ms": 3000,
+      "sources": [
+        "908-157963-0004.flac"
+      ]
+    },
+    {
+      "token": "roster-07/0/clean",
+      "path": "roster-07/0/clean.wav",
+      "sha256": "580023a0ad53b8af163f23d7265d4159d5eb12b0d13ea0a22d05d22d8d2a8378",
+      "duration_ms": 3000,
+      "sources": [
+        "1089-134686-0000.flac"
+      ]
+    },
+    {
+      "token": "roster-07/1/clean",
+      "path": "roster-07/1/clean.wav",
+      "sha256": "2084262527ff985b64fcd0cc6c8b6d6130c02a290da34b296c3141b845f7ba56",
+      "duration_ms": 3000,
+      "sources": [
+        "1089-134686-0000.flac"
+      ]
+    },
+    {
+      "token": "roster-07/2/clean",
+      "path": "roster-07/2/clean.wav",
+      "sha256": "38f03dd14b482fd7a0cc7f9d38c720029aa39349565f5134191877f84be171bb",
+      "duration_ms": 3000,
+      "sources": [
+        "1089-134686-0000.flac"
+      ]
+    },
+    {
+      "token": "roster-07/3/clean",
+      "path": "roster-07/3/clean.wav",
+      "sha256": "47e69bb698247e365ec1256539d0ba2bbbf2a49070189a8c0863e58c174778cc",
+      "duration_ms": 3000,
+      "sources": [
+        "1089-134686-0000.flac",
+        "1089-134686-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-07/4/clean",
+      "path": "roster-07/4/clean.wav",
+      "sha256": "44f5198e36466a4077ba0ab2ad5ec7fed2b13c997b1023cd1c92a7de9ab6f662",
+      "duration_ms": 3000,
+      "sources": [
+        "1089-134686-0001.flac",
+        "1089-134686-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-07/4/telephone_bandpass",
+      "path": "roster-07/4/telephone_bandpass.wav",
+      "sha256": "2c3ea8dc55b3c0b10cbb33f519d07eaf55dd7a11f04be4129c92c94f7fe3377f",
+      "duration_ms": 3000,
+      "sources": [
+        "1089-134686-0001.flac",
+        "1089-134686-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-07/4/opus_low_bitrate",
+      "path": "roster-07/4/opus_low_bitrate.wav",
+      "sha256": "25d84a971da9207f52c26f5bb68a12b2ef78e349a5afeb05f574e9ccf263d4f8",
+      "duration_ms": 3000,
+      "sources": [
+        "1089-134686-0001.flac",
+        "1089-134686-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-07/4/room_impulse_response",
+      "path": "roster-07/4/room_impulse_response.wav",
+      "sha256": "ed2dd8148fc933936fe11ae866773e22414474ebeb6f144671ad185f8d95be33",
+      "duration_ms": 3000,
+      "sources": [
+        "1089-134686-0001.flac",
+        "1089-134686-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-07/5/clean",
+      "path": "roster-07/5/clean.wav",
+      "sha256": "4a6ea4ec4d72eb42cb269f7db2ca9831f18b269444bc9ac3b55732f7ea998f0b",
+      "duration_ms": 3000,
+      "sources": [
+        "1089-134686-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-07/5/telephone_bandpass",
+      "path": "roster-07/5/telephone_bandpass.wav",
+      "sha256": "b72f0509adde142ba86298427b16955d94166164e09c8f0a8358c7b34240e284",
+      "duration_ms": 3000,
+      "sources": [
+        "1089-134686-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-07/5/opus_low_bitrate",
+      "path": "roster-07/5/opus_low_bitrate.wav",
+      "sha256": "197a7e29eee4037c684fa32d39dc6c17982df95cc7e1635ebdd02e7558f5767c",
+      "duration_ms": 3000,
+      "sources": [
+        "1089-134686-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-07/5/room_impulse_response",
+      "path": "roster-07/5/room_impulse_response.wav",
+      "sha256": "d5ea89643acb55433f6f67b6066e39e85ae50b9dafda425f8de42ae08aa5ca0e",
+      "duration_ms": 3000,
+      "sources": [
+        "1089-134686-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-07/6/clean",
+      "path": "roster-07/6/clean.wav",
+      "sha256": "f7109d792f88d13c9dc383753a82fd982883342393b6195349b01bc51f9ba7c1",
+      "duration_ms": 3000,
+      "sources": [
+        "1089-134686-0002.flac",
+        "1089-134686-0003.flac"
+      ]
+    },
+    {
+      "token": "roster-07/6/telephone_bandpass",
+      "path": "roster-07/6/telephone_bandpass.wav",
+      "sha256": "796cddd4158883dc4fc4321dfad1be5d4958f081d94d503df190ccfa660622d3",
+      "duration_ms": 3000,
+      "sources": [
+        "1089-134686-0002.flac",
+        "1089-134686-0003.flac"
+      ]
+    },
+    {
+      "token": "roster-07/6/opus_low_bitrate",
+      "path": "roster-07/6/opus_low_bitrate.wav",
+      "sha256": "f6fa9bdf4b257138f0b08f32f0af9f1172ab20138870e0706c17ad7cf61ede78",
+      "duration_ms": 3000,
+      "sources": [
+        "1089-134686-0002.flac",
+        "1089-134686-0003.flac"
+      ]
+    },
+    {
+      "token": "roster-07/6/room_impulse_response",
+      "path": "roster-07/6/room_impulse_response.wav",
+      "sha256": "fb28179c47e0f8435ea34b52a072f0a21a3a89747ddcfe83370a6e755889ae21",
+      "duration_ms": 3000,
+      "sources": [
+        "1089-134686-0002.flac",
+        "1089-134686-0003.flac"
+      ]
+    },
+    {
+      "token": "roster-07/7/clean",
+      "path": "roster-07/7/clean.wav",
+      "sha256": "10c2f92c5e3e2adcd5a150bb7f5c5ea176f3b07d2279b00375cd195c5ae51350",
+      "duration_ms": 3000,
+      "sources": [
+        "1089-134686-0003.flac",
+        "1089-134686-0004.flac"
+      ]
+    },
+    {
+      "token": "roster-07/7/telephone_bandpass",
+      "path": "roster-07/7/telephone_bandpass.wav",
+      "sha256": "54005e936a046d9d943dec171721dde3e76fc86e61d5090bad2adcc07122d151",
+      "duration_ms": 3000,
+      "sources": [
+        "1089-134686-0003.flac",
+        "1089-134686-0004.flac"
+      ]
+    },
+    {
+      "token": "roster-07/7/opus_low_bitrate",
+      "path": "roster-07/7/opus_low_bitrate.wav",
+      "sha256": "dd5b54738568e0f0e52632b966e571b63ee9c07192e54bd78afcf52d6aae49ee",
+      "duration_ms": 3000,
+      "sources": [
+        "1089-134686-0003.flac",
+        "1089-134686-0004.flac"
+      ]
+    },
+    {
+      "token": "roster-07/7/room_impulse_response",
+      "path": "roster-07/7/room_impulse_response.wav",
+      "sha256": "c117ea82ead53e696637edb97ec029e70f13fbe2585dcae621977c6fddffd0fe",
+      "duration_ms": 3000,
+      "sources": [
+        "1089-134686-0003.flac",
+        "1089-134686-0004.flac"
+      ]
+    },
+    {
+      "token": "roster-07/8/clean",
+      "path": "roster-07/8/clean.wav",
+      "sha256": "5e56084712f55e153d7b63fecd007cbae2348ad2f1534c5c3273d08294a5d361",
+      "duration_ms": 3000,
+      "sources": [
+        "1089-134686-0004.flac"
+      ]
+    },
+    {
+      "token": "roster-07/8/telephone_bandpass",
+      "path": "roster-07/8/telephone_bandpass.wav",
+      "sha256": "62512fc174e12aac35e5ee2c42c4b91798b6c062fb2cc67336eddc21d5304c50",
+      "duration_ms": 3000,
+      "sources": [
+        "1089-134686-0004.flac"
+      ]
+    },
+    {
+      "token": "roster-07/8/opus_low_bitrate",
+      "path": "roster-07/8/opus_low_bitrate.wav",
+      "sha256": "0e1677c13a04bd521153ba976c50a3584dcd55ab53cf3a7f6ec9f9fa4b3f4108",
+      "duration_ms": 3000,
+      "sources": [
+        "1089-134686-0004.flac"
+      ]
+    },
+    {
+      "token": "roster-07/8/room_impulse_response",
+      "path": "roster-07/8/room_impulse_response.wav",
+      "sha256": "2abd51fdb1dbc09415d26dc5d51ea72d84e40831a63803ba43b91efb6efbbe61",
+      "duration_ms": 3000,
+      "sources": [
+        "1089-134686-0004.flac"
+      ]
+    },
+    {
+      "token": "roster-08/0/clean",
+      "path": "roster-08/0/clean.wav",
+      "sha256": "f047f07418d16fbbc4787160c56596651acab0557379e2a72ad4c03132cc8a73",
+      "duration_ms": 3000,
+      "sources": [
+        "1188-133604-0000.flac"
+      ]
+    },
+    {
+      "token": "roster-08/1/clean",
+      "path": "roster-08/1/clean.wav",
+      "sha256": "f39c14c21e3a2dc773e37ee1d89ddccf574667eed40959b56fa0848bcf106ea4",
+      "duration_ms": 3000,
+      "sources": [
+        "1188-133604-0000.flac"
+      ]
+    },
+    {
+      "token": "roster-08/2/clean",
+      "path": "roster-08/2/clean.wav",
+      "sha256": "2a298809ac398620553ff54995627217d8f196ca422e75cfeeebb53a22367a10",
+      "duration_ms": 3000,
+      "sources": [
+        "1188-133604-0000.flac"
+      ]
+    },
+    {
+      "token": "roster-08/3/clean",
+      "path": "roster-08/3/clean.wav",
+      "sha256": "ffcae50f67bbbc27f6321478ace25b11f137781b71ec6ab0a33608243bd446fc",
+      "duration_ms": 3000,
+      "sources": [
+        "1188-133604-0000.flac",
+        "1188-133604-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-08/4/clean",
+      "path": "roster-08/4/clean.wav",
+      "sha256": "d5f01ec25f29ce4fd3b33857c72ca030027dc8f91c224137f3449cfdfec7b5ce",
+      "duration_ms": 3000,
+      "sources": [
+        "1188-133604-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-08/4/telephone_bandpass",
+      "path": "roster-08/4/telephone_bandpass.wav",
+      "sha256": "b05bc21c3a16b45de315eed11b37985c95e6795148b0be3ab3dce488bd81e77e",
+      "duration_ms": 3000,
+      "sources": [
+        "1188-133604-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-08/4/opus_low_bitrate",
+      "path": "roster-08/4/opus_low_bitrate.wav",
+      "sha256": "f96a137414a7fd0d9a1171c607774f947aa9347f8c17e3b3cb95909b0054b42a",
+      "duration_ms": 3000,
+      "sources": [
+        "1188-133604-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-08/4/room_impulse_response",
+      "path": "roster-08/4/room_impulse_response.wav",
+      "sha256": "1280bb2493e2b655f49b0518424ed8c42b746b4734bcaaf8521671135ab8b688",
+      "duration_ms": 3000,
+      "sources": [
+        "1188-133604-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-08/5/clean",
+      "path": "roster-08/5/clean.wav",
+      "sha256": "756181c1998f3c90d4ecf11ac9bd80ad1b7e1917feffee9df5612e12db0b653a",
+      "duration_ms": 3000,
+      "sources": [
+        "1188-133604-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-08/5/telephone_bandpass",
+      "path": "roster-08/5/telephone_bandpass.wav",
+      "sha256": "5b3fca93a75662f99922e53986274961945d29e2be57d7f59123a306e98d4b52",
+      "duration_ms": 3000,
+      "sources": [
+        "1188-133604-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-08/5/opus_low_bitrate",
+      "path": "roster-08/5/opus_low_bitrate.wav",
+      "sha256": "011cb2ec4075dcba48c2b7d9bf58db6333a74a492ec7a1bb042c3cde2b451ceb",
+      "duration_ms": 3000,
+      "sources": [
+        "1188-133604-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-08/5/room_impulse_response",
+      "path": "roster-08/5/room_impulse_response.wav",
+      "sha256": "2c025008f16420f3d89bc958c4edb4f918367cb80a5e423553a655d0630ffebf",
+      "duration_ms": 3000,
+      "sources": [
+        "1188-133604-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-08/6/clean",
+      "path": "roster-08/6/clean.wav",
+      "sha256": "469caf658e029a324411843a038a000e3e6bc463754f3d8c073080fac3ac9e93",
+      "duration_ms": 3000,
+      "sources": [
+        "1188-133604-0001.flac",
+        "1188-133604-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-08/6/telephone_bandpass",
+      "path": "roster-08/6/telephone_bandpass.wav",
+      "sha256": "d7a3ce1af57239f6d82bd1eaa5c4936db53c42ca04f9cef52d970c2ab000294e",
+      "duration_ms": 3000,
+      "sources": [
+        "1188-133604-0001.flac",
+        "1188-133604-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-08/6/opus_low_bitrate",
+      "path": "roster-08/6/opus_low_bitrate.wav",
+      "sha256": "bc4a0e6fe97d2cddf7a23179cb59d002d8c26e24ea00100d13b0633079802892",
+      "duration_ms": 3000,
+      "sources": [
+        "1188-133604-0001.flac",
+        "1188-133604-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-08/6/room_impulse_response",
+      "path": "roster-08/6/room_impulse_response.wav",
+      "sha256": "e1725e94c19de08cab51450a3a8c3563930acf32af907857ec4f504208e7fe20",
+      "duration_ms": 3000,
+      "sources": [
+        "1188-133604-0001.flac",
+        "1188-133604-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-08/7/clean",
+      "path": "roster-08/7/clean.wav",
+      "sha256": "25cba9e94f19c89073f3340ae263f8a3658a912051e1e2899dde7464f83702ad",
+      "duration_ms": 3000,
+      "sources": [
+        "1188-133604-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-08/7/telephone_bandpass",
+      "path": "roster-08/7/telephone_bandpass.wav",
+      "sha256": "550f19592e2c8480d994d072a8f50db69b5def6d5129469eddc9df2a38969e05",
+      "duration_ms": 3000,
+      "sources": [
+        "1188-133604-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-08/7/opus_low_bitrate",
+      "path": "roster-08/7/opus_low_bitrate.wav",
+      "sha256": "7d399fceab9a931aaf8e36a5065622e82bc5e0e5701f3f7f197cb5b9a95588da",
+      "duration_ms": 3000,
+      "sources": [
+        "1188-133604-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-08/7/room_impulse_response",
+      "path": "roster-08/7/room_impulse_response.wav",
+      "sha256": "41cf23d4fabe243eb436d8f72b52e4cc8dd0291ef4195bfbdd0fc77b0165c1c7",
+      "duration_ms": 3000,
+      "sources": [
+        "1188-133604-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-08/8/clean",
+      "path": "roster-08/8/clean.wav",
+      "sha256": "912bcacf1e5f69c03f5a04bcb05b9f18019253e7487faeef6be3de6d48ca6231",
+      "duration_ms": 3000,
+      "sources": [
+        "1188-133604-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-08/8/telephone_bandpass",
+      "path": "roster-08/8/telephone_bandpass.wav",
+      "sha256": "e8a42f25c0795bc10459d81fa35ad7ee4f334eaa41d148d23204d584bd4d30a9",
+      "duration_ms": 3000,
+      "sources": [
+        "1188-133604-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-08/8/opus_low_bitrate",
+      "path": "roster-08/8/opus_low_bitrate.wav",
+      "sha256": "ed2abd8e1e9f79650094392a7e61d1523edb65e4b3b0a516c9175451f37b20e0",
+      "duration_ms": 3000,
+      "sources": [
+        "1188-133604-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-08/8/room_impulse_response",
+      "path": "roster-08/8/room_impulse_response.wav",
+      "sha256": "c91f162fe42eecd38a8574050615e189f5be33d97a00a535fad012d5a5a0b1fa",
+      "duration_ms": 3000,
+      "sources": [
+        "1188-133604-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-09/0/clean",
+      "path": "roster-09/0/clean.wav",
+      "sha256": "d070cc1b6574f04845fd762c60a84c78d0b471dcee0584f57f6ea120bbbdd990",
+      "duration_ms": 3000,
+      "sources": [
+        "1221-135766-0000.flac"
+      ]
+    },
+    {
+      "token": "roster-09/1/clean",
+      "path": "roster-09/1/clean.wav",
+      "sha256": "f46a9ad1db67830a03241d958ca89f8571505b92b2ab07f508ad030b8d5fbeb5",
+      "duration_ms": 3000,
+      "sources": [
+        "1221-135766-0000.flac"
+      ]
+    },
+    {
+      "token": "roster-09/2/clean",
+      "path": "roster-09/2/clean.wav",
+      "sha256": "863f442c1fcf5404762a167373be91b77a02594144a11f3e81de2164b299fa3b",
+      "duration_ms": 3000,
+      "sources": [
+        "1221-135766-0000.flac"
+      ]
+    },
+    {
+      "token": "roster-09/3/clean",
+      "path": "roster-09/3/clean.wav",
+      "sha256": "a7662d1a01c1a61f4c9569c313387f198b323aab78d5fe1a06c16dc16dd40556",
+      "duration_ms": 3000,
+      "sources": [
+        "1221-135766-0000.flac"
+      ]
+    },
+    {
+      "token": "roster-09/4/clean",
+      "path": "roster-09/4/clean.wav",
+      "sha256": "17e1cec4abf4a73249b3ce927c7f955bcb3978186898eb4a3288e34429924f9c",
+      "duration_ms": 3000,
+      "sources": [
+        "1221-135766-0000.flac",
+        "1221-135766-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-09/4/telephone_bandpass",
+      "path": "roster-09/4/telephone_bandpass.wav",
+      "sha256": "00abdc390ccdb93f9aea76594a9049f1d558c6db5f7b3bd1f728577fb8cc3b20",
+      "duration_ms": 3000,
+      "sources": [
+        "1221-135766-0000.flac",
+        "1221-135766-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-09/4/opus_low_bitrate",
+      "path": "roster-09/4/opus_low_bitrate.wav",
+      "sha256": "7e2a2168824c630b1c6f02d398d73c10eb62eca8b419f8e54aaf9226f9f59a2d",
+      "duration_ms": 3000,
+      "sources": [
+        "1221-135766-0000.flac",
+        "1221-135766-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-09/4/room_impulse_response",
+      "path": "roster-09/4/room_impulse_response.wav",
+      "sha256": "4b7c9e096cfeccde3b6e1bdca2e0896b81adaf28abbfa40c00e1a07177b54d31",
+      "duration_ms": 3000,
+      "sources": [
+        "1221-135766-0000.flac",
+        "1221-135766-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-09/5/clean",
+      "path": "roster-09/5/clean.wav",
+      "sha256": "b1a76335319e49b4e3ae42d281913f103d73c46da4801eb9669b63045c6582d2",
+      "duration_ms": 3000,
+      "sources": [
+        "1221-135766-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-09/5/telephone_bandpass",
+      "path": "roster-09/5/telephone_bandpass.wav",
+      "sha256": "58d2b5b98e1f1a03dc5b333b663a2e61d50b927478ee3fecfc64307cdb0f405a",
+      "duration_ms": 3000,
+      "sources": [
+        "1221-135766-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-09/5/opus_low_bitrate",
+      "path": "roster-09/5/opus_low_bitrate.wav",
+      "sha256": "bc9bdc41fe5a67e210f160fd0b56bc27222c3e3cc4672590e0ecd6bc4c58fc61",
+      "duration_ms": 3000,
+      "sources": [
+        "1221-135766-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-09/5/room_impulse_response",
+      "path": "roster-09/5/room_impulse_response.wav",
+      "sha256": "74a1dd628961723480859bb3ec44331a9143f62dfcd9ee6e23ce4e33829530ef",
+      "duration_ms": 3000,
+      "sources": [
+        "1221-135766-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-09/6/clean",
+      "path": "roster-09/6/clean.wav",
+      "sha256": "b8588df0216a255f81c152a293b6712133eb12e0abbfa66c13a17d457db5f399",
+      "duration_ms": 3000,
+      "sources": [
+        "1221-135766-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-09/6/telephone_bandpass",
+      "path": "roster-09/6/telephone_bandpass.wav",
+      "sha256": "b5ed6b3f35069d052119e804473b75663e0f28bf16136fad53c314610f6cbbe9",
+      "duration_ms": 3000,
+      "sources": [
+        "1221-135766-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-09/6/opus_low_bitrate",
+      "path": "roster-09/6/opus_low_bitrate.wav",
+      "sha256": "1282d0c79a53dde9f63e38575c15218ab029c627a967639d5ca1603c177a437d",
+      "duration_ms": 3000,
+      "sources": [
+        "1221-135766-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-09/6/room_impulse_response",
+      "path": "roster-09/6/room_impulse_response.wav",
+      "sha256": "2078ef352427e8f49c90b1b73d64ba7602959901174d2dd6ea0ede3c8fd5df53",
+      "duration_ms": 3000,
+      "sources": [
+        "1221-135766-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-09/7/clean",
+      "path": "roster-09/7/clean.wav",
+      "sha256": "84a469e20ee63fb2a16d89a3ca431e0a83dbefa416a866e9a35bb51c8a128b49",
+      "duration_ms": 3000,
+      "sources": [
+        "1221-135766-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-09/7/telephone_bandpass",
+      "path": "roster-09/7/telephone_bandpass.wav",
+      "sha256": "01d47a7ea81c5141114ac684c70db93abae9b93cab0013807096e51dd16808b6",
+      "duration_ms": 3000,
+      "sources": [
+        "1221-135766-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-09/7/opus_low_bitrate",
+      "path": "roster-09/7/opus_low_bitrate.wav",
+      "sha256": "50679414eb31acc459bd1e9a9265f5c3538354a909d83b3165b2199947f73726",
+      "duration_ms": 3000,
+      "sources": [
+        "1221-135766-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-09/7/room_impulse_response",
+      "path": "roster-09/7/room_impulse_response.wav",
+      "sha256": "3e5fc99d052bc3639a546a3f582329a888a8b883dcdfa51fcfb07e9f6c3fe156",
+      "duration_ms": 3000,
+      "sources": [
+        "1221-135766-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-09/8/clean",
+      "path": "roster-09/8/clean.wav",
+      "sha256": "0fae14a7aa3dffae7ca8e39613da9a8261f6d99f90a792fc2f5c128295b84384",
+      "duration_ms": 3000,
+      "sources": [
+        "1221-135766-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-09/8/telephone_bandpass",
+      "path": "roster-09/8/telephone_bandpass.wav",
+      "sha256": "dea43e0582ad173bf4dd17042835bc1cace0d9c64624f8492d068da5ce0315b7",
+      "duration_ms": 3000,
+      "sources": [
+        "1221-135766-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-09/8/opus_low_bitrate",
+      "path": "roster-09/8/opus_low_bitrate.wav",
+      "sha256": "2a01b1bd9a523b2e6d59682c8f9399019fad85adff6ac340e26aa33d6851c234",
+      "duration_ms": 3000,
+      "sources": [
+        "1221-135766-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-09/8/room_impulse_response",
+      "path": "roster-09/8/room_impulse_response.wav",
+      "sha256": "0339ee99fe2a553603a6702ba62d6512f215a7ee1bae93dcdc12f11c8572083c",
+      "duration_ms": 3000,
+      "sources": [
+        "1221-135766-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-10/0/clean",
+      "path": "roster-10/0/clean.wav",
+      "sha256": "1c2671d5b10d893c7400383ce7bc35c66e21f2d52a87694a1dd698eed11f420c",
+      "duration_ms": 3000,
+      "sources": [
+        "1284-1180-0000.flac"
+      ]
+    },
+    {
+      "token": "roster-10/1/clean",
+      "path": "roster-10/1/clean.wav",
+      "sha256": "e059454dc1409ab19191d17af6ad7c14bd296d2829e389d202f79c9926bf5fdc",
+      "duration_ms": 3000,
+      "sources": [
+        "1284-1180-0000.flac"
+      ]
+    },
+    {
+      "token": "roster-10/2/clean",
+      "path": "roster-10/2/clean.wav",
+      "sha256": "71d75e2f139e41a6294d427147fcb42dc2e1346fa3728400c23d5240669103c0",
+      "duration_ms": 3000,
+      "sources": [
+        "1284-1180-0000.flac",
+        "1284-1180-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-10/3/clean",
+      "path": "roster-10/3/clean.wav",
+      "sha256": "3d2b113c4edad39b3f60f354f65341536f5ad81379660ee27061f7972065a36e",
+      "duration_ms": 3000,
+      "sources": [
+        "1284-1180-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-10/4/clean",
+      "path": "roster-10/4/clean.wav",
+      "sha256": "39359266b8cb97042818e02e52a3ff2591a5ff672b059aff7a4a5bdab3f4dd13",
+      "duration_ms": 3000,
+      "sources": [
+        "1284-1180-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-10/4/telephone_bandpass",
+      "path": "roster-10/4/telephone_bandpass.wav",
+      "sha256": "0e3d03259afd1af8dacb3ea5f0e8afeb28815c3cb9189fc648555133a72cd610",
+      "duration_ms": 3000,
+      "sources": [
+        "1284-1180-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-10/4/opus_low_bitrate",
+      "path": "roster-10/4/opus_low_bitrate.wav",
+      "sha256": "fd2b960a3599a202d430c414b252ad67328d19a81f1e7626e1c50a0157b98e97",
+      "duration_ms": 3000,
+      "sources": [
+        "1284-1180-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-10/4/room_impulse_response",
+      "path": "roster-10/4/room_impulse_response.wav",
+      "sha256": "a26d3729efbd83149c78b81723dd2bae9a85370374a536578931ae1b15906068",
+      "duration_ms": 3000,
+      "sources": [
+        "1284-1180-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-10/5/clean",
+      "path": "roster-10/5/clean.wav",
+      "sha256": "357943457853834ed0f929c7fdb3d322e32b9b2644f5f6c791591173d36e74e5",
+      "duration_ms": 3000,
+      "sources": [
+        "1284-1180-0001.flac",
+        "1284-1180-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-10/5/telephone_bandpass",
+      "path": "roster-10/5/telephone_bandpass.wav",
+      "sha256": "2714cb9e61788a3409a57cf62f0a6e1421a6d314c9c739f66192db885882427d",
+      "duration_ms": 3000,
+      "sources": [
+        "1284-1180-0001.flac",
+        "1284-1180-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-10/5/opus_low_bitrate",
+      "path": "roster-10/5/opus_low_bitrate.wav",
+      "sha256": "c2ed46905afd4738e5840227ec2eefcd7d4afa8761662efca855faa43e97b168",
+      "duration_ms": 3000,
+      "sources": [
+        "1284-1180-0001.flac",
+        "1284-1180-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-10/5/room_impulse_response",
+      "path": "roster-10/5/room_impulse_response.wav",
+      "sha256": "1ea753fdaf27cea48fb61297d37c39b948739f736c5d7337d2f11803b81fd0fd",
+      "duration_ms": 3000,
+      "sources": [
+        "1284-1180-0001.flac",
+        "1284-1180-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-10/6/clean",
+      "path": "roster-10/6/clean.wav",
+      "sha256": "08f33cc1444497438f8d3d2c38dabd3be6fa7a79864a788b9dd13ab7089b54fb",
+      "duration_ms": 3000,
+      "sources": [
+        "1284-1180-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-10/6/telephone_bandpass",
+      "path": "roster-10/6/telephone_bandpass.wav",
+      "sha256": "8169bf717b63d660718cb39451296f49b507379ff2714150640d24eaf6398676",
+      "duration_ms": 3000,
+      "sources": [
+        "1284-1180-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-10/6/opus_low_bitrate",
+      "path": "roster-10/6/opus_low_bitrate.wav",
+      "sha256": "0301af4e85aa7deabed633cbdd0bfd65898752433d1d2fae79201c419a117a8f",
+      "duration_ms": 3000,
+      "sources": [
+        "1284-1180-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-10/6/room_impulse_response",
+      "path": "roster-10/6/room_impulse_response.wav",
+      "sha256": "2579841e6be806912aaa0346737206459d7e0b343d1e15c6bb5b983499fdd750",
+      "duration_ms": 3000,
+      "sources": [
+        "1284-1180-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-10/7/clean",
+      "path": "roster-10/7/clean.wav",
+      "sha256": "2e36f025d1028e9dbe9fe93549210e42796f58a03a9231cc15229dfc91f553ee",
+      "duration_ms": 3000,
+      "sources": [
+        "1284-1180-0002.flac",
+        "1284-1180-0003.flac"
+      ]
+    },
+    {
+      "token": "roster-10/7/telephone_bandpass",
+      "path": "roster-10/7/telephone_bandpass.wav",
+      "sha256": "c7760ef546057439d686596e226374265bfdf726000e00aaa8f80b6cb7bda0e0",
+      "duration_ms": 3000,
+      "sources": [
+        "1284-1180-0002.flac",
+        "1284-1180-0003.flac"
+      ]
+    },
+    {
+      "token": "roster-10/7/opus_low_bitrate",
+      "path": "roster-10/7/opus_low_bitrate.wav",
+      "sha256": "707cee7293740bb349bb6989643915d4b16e914960d053ec87066847dee60694",
+      "duration_ms": 3000,
+      "sources": [
+        "1284-1180-0002.flac",
+        "1284-1180-0003.flac"
+      ]
+    },
+    {
+      "token": "roster-10/7/room_impulse_response",
+      "path": "roster-10/7/room_impulse_response.wav",
+      "sha256": "4f7ebe282fb2fea5900ec3e651a9767a36f96993e293a626defdb3160240fd17",
+      "duration_ms": 3000,
+      "sources": [
+        "1284-1180-0002.flac",
+        "1284-1180-0003.flac"
+      ]
+    },
+    {
+      "token": "roster-10/8/clean",
+      "path": "roster-10/8/clean.wav",
+      "sha256": "717381a9dfc63661c223d65cd7eb0a83e1c95fb9e14ca997a57dbc1b8deaa560",
+      "duration_ms": 3000,
+      "sources": [
+        "1284-1180-0003.flac"
+      ]
+    },
+    {
+      "token": "roster-10/8/telephone_bandpass",
+      "path": "roster-10/8/telephone_bandpass.wav",
+      "sha256": "a038f7a4228fa31544fd40d2c8cb2f600ea18dbbce2bff4a8dd674d6ac24eb64",
+      "duration_ms": 3000,
+      "sources": [
+        "1284-1180-0003.flac"
+      ]
+    },
+    {
+      "token": "roster-10/8/opus_low_bitrate",
+      "path": "roster-10/8/opus_low_bitrate.wav",
+      "sha256": "7724d4822298837bbfa433dc323c8237ef29f3b6ab91d6a942ef1706c06eec65",
+      "duration_ms": 3000,
+      "sources": [
+        "1284-1180-0003.flac"
+      ]
+    },
+    {
+      "token": "roster-10/8/room_impulse_response",
+      "path": "roster-10/8/room_impulse_response.wav",
+      "sha256": "0ba262bdc85f2139ef1857794d14b97ac19d563a91572801618124c1d89dac3f",
+      "duration_ms": 3000,
+      "sources": [
+        "1284-1180-0003.flac"
+      ]
+    },
+    {
+      "token": "roster-11/0/clean",
+      "path": "roster-11/0/clean.wav",
+      "sha256": "b9c8febfdd367f964dced3f6b729c66b851fc37a1c34cff132a846be3563545c",
+      "duration_ms": 3000,
+      "sources": [
+        "1320-122612-0000.flac"
+      ]
+    },
+    {
+      "token": "roster-11/1/clean",
+      "path": "roster-11/1/clean.wav",
+      "sha256": "1f4032e7b93035830aa8ecd8350aa317b145bac2ec3ccdbf15cd25fda1bf2bc8",
+      "duration_ms": 3000,
+      "sources": [
+        "1320-122612-0000.flac"
+      ]
+    },
+    {
+      "token": "roster-11/2/clean",
+      "path": "roster-11/2/clean.wav",
+      "sha256": "b7491bf4b9da19d034e355641dd204276557aa0b60009e69835ef6361c7256c0",
+      "duration_ms": 3000,
+      "sources": [
+        "1320-122612-0000.flac"
+      ]
+    },
+    {
+      "token": "roster-11/3/clean",
+      "path": "roster-11/3/clean.wav",
+      "sha256": "f8f0dcfd4a231bddea38c9fe3e5cee09ae6977d94e4b56166f7181bc48c45669",
+      "duration_ms": 3000,
+      "sources": [
+        "1320-122612-0000.flac"
+      ]
+    },
+    {
+      "token": "roster-11/4/clean",
+      "path": "roster-11/4/clean.wav",
+      "sha256": "bae13cabce92f5197806decf21afe0e5ee9a9c34952e67a7a538037cb8b30e2a",
+      "duration_ms": 3000,
+      "sources": [
+        "1320-122612-0000.flac",
+        "1320-122612-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-11/4/telephone_bandpass",
+      "path": "roster-11/4/telephone_bandpass.wav",
+      "sha256": "52c7d5d7967159248068823532cec8d7ae02cbb3664e52a52621803fbaf46e8d",
+      "duration_ms": 3000,
+      "sources": [
+        "1320-122612-0000.flac",
+        "1320-122612-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-11/4/opus_low_bitrate",
+      "path": "roster-11/4/opus_low_bitrate.wav",
+      "sha256": "9b25b1cd8f4c01da331c7a2be6e8d970ce554ec96c32d2ed8a1fab022f0c392f",
+      "duration_ms": 3000,
+      "sources": [
+        "1320-122612-0000.flac",
+        "1320-122612-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-11/4/room_impulse_response",
+      "path": "roster-11/4/room_impulse_response.wav",
+      "sha256": "54c27459a26fa3bcf91c5984439098318af372f6da697185a28842ed64b823d4",
+      "duration_ms": 3000,
+      "sources": [
+        "1320-122612-0000.flac",
+        "1320-122612-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-11/5/clean",
+      "path": "roster-11/5/clean.wav",
+      "sha256": "099f97ef1d38d2a796f8fe331caee63262669dec4329ebe8a5193db67debabc1",
+      "duration_ms": 3000,
+      "sources": [
+        "1320-122612-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-11/5/telephone_bandpass",
+      "path": "roster-11/5/telephone_bandpass.wav",
+      "sha256": "5e337d9205b207dadc9faed62cb78bb9269b31901ba2cb06d1cd6954ee902ab0",
+      "duration_ms": 3000,
+      "sources": [
+        "1320-122612-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-11/5/opus_low_bitrate",
+      "path": "roster-11/5/opus_low_bitrate.wav",
+      "sha256": "4fe0e44dc895e310049b42f8c3f6d62f6380f747305dc59a8d42aaa90165ed57",
+      "duration_ms": 3000,
+      "sources": [
+        "1320-122612-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-11/5/room_impulse_response",
+      "path": "roster-11/5/room_impulse_response.wav",
+      "sha256": "c8d1ade3900c2969d7386bcc35c7c6dd843d7f9055e31a77e04f0051d4732fb5",
+      "duration_ms": 3000,
+      "sources": [
+        "1320-122612-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-11/6/clean",
+      "path": "roster-11/6/clean.wav",
+      "sha256": "c44190fa871e74f694e5d8955eaf82d7645f3f33115abbf57b376d7167d39488",
+      "duration_ms": 3000,
+      "sources": [
+        "1320-122612-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-11/6/telephone_bandpass",
+      "path": "roster-11/6/telephone_bandpass.wav",
+      "sha256": "74b9b6ccf53b20f399d39c135424fbdbb7106d523ea0261923497ff80020ccc0",
+      "duration_ms": 3000,
+      "sources": [
+        "1320-122612-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-11/6/opus_low_bitrate",
+      "path": "roster-11/6/opus_low_bitrate.wav",
+      "sha256": "6051f2889f327ca6b6354b2d8e17b7c1b9b37dfc8bce95c059f9588c7aea48af",
+      "duration_ms": 3000,
+      "sources": [
+        "1320-122612-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-11/6/room_impulse_response",
+      "path": "roster-11/6/room_impulse_response.wav",
+      "sha256": "01cea6deb9cd7cd36d403a0b8d34d64159a6045a2b5f1530a13bc6549923901c",
+      "duration_ms": 3000,
+      "sources": [
+        "1320-122612-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-11/7/clean",
+      "path": "roster-11/7/clean.wav",
+      "sha256": "11cb741f5414c547164d7678a7b074552d9d1d9d4b52fd2feb55c46b2852cac6",
+      "duration_ms": 3000,
+      "sources": [
+        "1320-122612-0001.flac",
+        "1320-122612-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-11/7/telephone_bandpass",
+      "path": "roster-11/7/telephone_bandpass.wav",
+      "sha256": "f7205169a9bc88a39e93ec643a93bd87d7fd70489190bb3ce21e6514bdeff0d1",
+      "duration_ms": 3000,
+      "sources": [
+        "1320-122612-0001.flac",
+        "1320-122612-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-11/7/opus_low_bitrate",
+      "path": "roster-11/7/opus_low_bitrate.wav",
+      "sha256": "4479fe924d479f8a31827e09a7ea2904de28c882a8ba2c17dd4dcd255ecb9498",
+      "duration_ms": 3000,
+      "sources": [
+        "1320-122612-0001.flac",
+        "1320-122612-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-11/7/room_impulse_response",
+      "path": "roster-11/7/room_impulse_response.wav",
+      "sha256": "9553e1dcf16de293a0fd117a0cd6d869ebe6f1e3d7dd18bd7810ac316d6e495a",
+      "duration_ms": 3000,
+      "sources": [
+        "1320-122612-0001.flac",
+        "1320-122612-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-11/8/clean",
+      "path": "roster-11/8/clean.wav",
+      "sha256": "e616e73c8255335b25da4ac3e97fc9e417da414f432cabc584ffc706b94b14fb",
+      "duration_ms": 3000,
+      "sources": [
+        "1320-122612-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-11/8/telephone_bandpass",
+      "path": "roster-11/8/telephone_bandpass.wav",
+      "sha256": "ef1c592f0d4b899064c6653a7cefe52b33da2a7ff0adad5e43bca358cf4ffedc",
+      "duration_ms": 3000,
+      "sources": [
+        "1320-122612-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-11/8/opus_low_bitrate",
+      "path": "roster-11/8/opus_low_bitrate.wav",
+      "sha256": "148ea53eb202058e398812b0037cbc75ba61e93879de962ede3ad7c5c7c32621",
+      "duration_ms": 3000,
+      "sources": [
+        "1320-122612-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-11/8/room_impulse_response",
+      "path": "roster-11/8/room_impulse_response.wav",
+      "sha256": "0146222608685035bf64af89699ea7d9540baeb728b4d7cfb85036eafa1a3ff7",
+      "duration_ms": 3000,
+      "sources": [
+        "1320-122612-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-12/0/clean",
+      "path": "roster-12/0/clean.wav",
+      "sha256": "3ca5da3cd9a0fea0484da48ad38058ee3967735ce6e0abe0ac2001d95d73ad7f",
+      "duration_ms": 3000,
+      "sources": [
+        "1580-141083-0000.flac"
+      ]
+    },
+    {
+      "token": "roster-12/1/clean",
+      "path": "roster-12/1/clean.wav",
+      "sha256": "7c97c3a0bf9030a79ae6f0d4eba12f577e52a6a131b8db4c4cec013e80bff1cb",
+      "duration_ms": 3000,
+      "sources": [
+        "1580-141083-0000.flac"
+      ]
+    },
+    {
+      "token": "roster-12/2/clean",
+      "path": "roster-12/2/clean.wav",
+      "sha256": "09e0e812b5c78e3a4eaf4f03ab5cc8e844a045567d4550c91ee1d81734fc0e2c",
+      "duration_ms": 3000,
+      "sources": [
+        "1580-141083-0000.flac",
+        "1580-141083-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-12/3/clean",
+      "path": "roster-12/3/clean.wav",
+      "sha256": "0fc6550d05f341d660a30bbd29592a27dbed607b1ba62d9f6687a18f9803a71f",
+      "duration_ms": 3000,
+      "sources": [
+        "1580-141083-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-12/4/clean",
+      "path": "roster-12/4/clean.wav",
+      "sha256": "795d5e21e382d52a1d2fd050f15918a9ee4b3dbd679acf306f390776afa50642",
+      "duration_ms": 3000,
+      "sources": [
+        "1580-141083-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-12/4/telephone_bandpass",
+      "path": "roster-12/4/telephone_bandpass.wav",
+      "sha256": "160934ac91eef5d3546c58eb507f27161215c2b20eb36b48515a6cd5b480b9c3",
+      "duration_ms": 3000,
+      "sources": [
+        "1580-141083-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-12/4/opus_low_bitrate",
+      "path": "roster-12/4/opus_low_bitrate.wav",
+      "sha256": "2d25cefc619c7dc02eed319d6956fba30fa265833d006e924228402c18ad2a9a",
+      "duration_ms": 3000,
+      "sources": [
+        "1580-141083-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-12/4/room_impulse_response",
+      "path": "roster-12/4/room_impulse_response.wav",
+      "sha256": "38cf1d7eaf0eccf04b4c23bca66a4e8978ed1290fb18c83bd2629ffa584853ce",
+      "duration_ms": 3000,
+      "sources": [
+        "1580-141083-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-12/5/clean",
+      "path": "roster-12/5/clean.wav",
+      "sha256": "7a7f4cdbbe153d128f3da732bdab48dc4cd2fae4345f05b88d5fa2f1c3ba1f48",
+      "duration_ms": 3000,
+      "sources": [
+        "1580-141083-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-12/5/telephone_bandpass",
+      "path": "roster-12/5/telephone_bandpass.wav",
+      "sha256": "867df2cfc12fecf0a34166ad42acfd30f30f7d040d56bf11c1f83a6038e79246",
+      "duration_ms": 3000,
+      "sources": [
+        "1580-141083-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-12/5/opus_low_bitrate",
+      "path": "roster-12/5/opus_low_bitrate.wav",
+      "sha256": "f940381a6485d388226f2d1e8b1c3786e7e3023abef7ce4927517f21aac52cc5",
+      "duration_ms": 3000,
+      "sources": [
+        "1580-141083-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-12/5/room_impulse_response",
+      "path": "roster-12/5/room_impulse_response.wav",
+      "sha256": "823023917f8588577a63a368c7055e3c1b6f6584d7321cd262afd401a9f203d5",
+      "duration_ms": 3000,
+      "sources": [
+        "1580-141083-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-12/6/clean",
+      "path": "roster-12/6/clean.wav",
+      "sha256": "efde4870f7c480bd197662bdaa00c2f1bad6ef70438bb1427ae6d4bf924b622b",
+      "duration_ms": 3000,
+      "sources": [
+        "1580-141083-0001.flac",
+        "1580-141083-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-12/6/telephone_bandpass",
+      "path": "roster-12/6/telephone_bandpass.wav",
+      "sha256": "00c58fd3d31c7069e795b1ce93199c0d809423b9d50c5ac14ec319d1808414f9",
+      "duration_ms": 3000,
+      "sources": [
+        "1580-141083-0001.flac",
+        "1580-141083-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-12/6/opus_low_bitrate",
+      "path": "roster-12/6/opus_low_bitrate.wav",
+      "sha256": "165c72152008f572d628882f8963ac64b43aa7e89a4459b48ff18ea7f49d6cad",
+      "duration_ms": 3000,
+      "sources": [
+        "1580-141083-0001.flac",
+        "1580-141083-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-12/6/room_impulse_response",
+      "path": "roster-12/6/room_impulse_response.wav",
+      "sha256": "73daaf859498301f524670c135ef926464a726466fb0436efc3dae792d34871f",
+      "duration_ms": 3000,
+      "sources": [
+        "1580-141083-0001.flac",
+        "1580-141083-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-12/7/clean",
+      "path": "roster-12/7/clean.wav",
+      "sha256": "9a023dcb864825fe9338d1dfdf3c28a1fede4f90d24387894906572b8a40c820",
+      "duration_ms": 3000,
+      "sources": [
+        "1580-141083-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-12/7/telephone_bandpass",
+      "path": "roster-12/7/telephone_bandpass.wav",
+      "sha256": "8cc34d70300e4da963fbfa134737d86c8bcec656b52959665d5fa9ccc4616e58",
+      "duration_ms": 3000,
+      "sources": [
+        "1580-141083-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-12/7/opus_low_bitrate",
+      "path": "roster-12/7/opus_low_bitrate.wav",
+      "sha256": "422db713d057c66c174c9edcec0cc0c42775a56991708eee3ff115eb74bc794f",
+      "duration_ms": 3000,
+      "sources": [
+        "1580-141083-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-12/7/room_impulse_response",
+      "path": "roster-12/7/room_impulse_response.wav",
+      "sha256": "b5c2986ee9ac10140a8aeb5e9d33ee143fbae982ef8c1862b3201e496f7432a9",
+      "duration_ms": 3000,
+      "sources": [
+        "1580-141083-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-12/8/clean",
+      "path": "roster-12/8/clean.wav",
+      "sha256": "a2c36fa3094607719725513be3e50420eacfee7b61e5ffde76c33ca1774d47fd",
+      "duration_ms": 3000,
+      "sources": [
+        "1580-141083-0002.flac",
+        "1580-141083-0003.flac"
+      ]
+    },
+    {
+      "token": "roster-12/8/telephone_bandpass",
+      "path": "roster-12/8/telephone_bandpass.wav",
+      "sha256": "512cbcc93149aef46e97acd5a9a38e9632ba4e5dc6c5388925ceaaed0d362d41",
+      "duration_ms": 3000,
+      "sources": [
+        "1580-141083-0002.flac",
+        "1580-141083-0003.flac"
+      ]
+    },
+    {
+      "token": "roster-12/8/opus_low_bitrate",
+      "path": "roster-12/8/opus_low_bitrate.wav",
+      "sha256": "bb112d2774301449b2504acf3bb106b5636e92cc80dbd0d320e84617b3ae463d",
+      "duration_ms": 3000,
+      "sources": [
+        "1580-141083-0002.flac",
+        "1580-141083-0003.flac"
+      ]
+    },
+    {
+      "token": "roster-12/8/room_impulse_response",
+      "path": "roster-12/8/room_impulse_response.wav",
+      "sha256": "a16e3edf992bacceb148d35a379e93de5f3edb55650f89ccc0dc9a1b79f5b749",
+      "duration_ms": 3000,
+      "sources": [
+        "1580-141083-0002.flac",
+        "1580-141083-0003.flac"
+      ]
+    },
+    {
+      "token": "cohort-01/0/clean",
+      "path": "cohort-01/0/clean.wav",
+      "sha256": "a6483e08dd00ad156cc6ecdfc7393bfa5674b9cf3bdb7f880a512375aed24c9e",
+      "duration_ms": 3000,
+      "sources": [
+        "1995-1826-0000.flac"
+      ]
+    },
+    {
+      "token": "cohort-02/0/clean",
+      "path": "cohort-02/0/clean.wav",
+      "sha256": "53889190022c76d49301e6e9b60e49f2bad4751eef937735090ceb03a65a20d0",
+      "duration_ms": 3000,
+      "sources": [
+        "2094-142345-0000.flac"
+      ]
+    },
+    {
+      "token": "cohort-03/0/clean",
+      "path": "cohort-03/0/clean.wav",
+      "sha256": "c7f43c53db907648281f9799afc34402efad27b28f4ed8be94061fc68246de20",
+      "duration_ms": 3000,
+      "sources": [
+        "2300-131720-0000.flac"
+      ]
+    },
+    {
+      "token": "cohort-04/0/clean",
+      "path": "cohort-04/0/clean.wav",
+      "sha256": "90de2f487a4b823b7e8da961ca68c36d4716183816ca9438a858c9111a67ec04",
+      "duration_ms": 3000,
+      "sources": [
+        "2830-3979-0000.flac"
+      ]
+    },
+    {
+      "token": "cohort-05/0/clean",
+      "path": "cohort-05/0/clean.wav",
+      "sha256": "7482a43c6c6c341f28aab8bb1832ca9fd588107283da47706aa61e5ed748d7ea",
+      "duration_ms": 3000,
+      "sources": [
+        "2961-960-0000.flac"
+      ]
+    },
+    {
+      "token": "cohort-06/0/clean",
+      "path": "cohort-06/0/clean.wav",
+      "sha256": "8b4ad215667f94c1e9e26264ffb75f0bb97a912e34bb166cc05c490bf291bcd9",
+      "duration_ms": 3000,
+      "sources": [
+        "3570-5694-0000.flac"
+      ]
+    },
+    {
+      "token": "cohort-07/0/clean",
+      "path": "cohort-07/0/clean.wav",
+      "sha256": "352aa5357dccf301a7afe6bd02031d063979c86be7df026b79c9fb2905781433",
+      "duration_ms": 3000,
+      "sources": [
+        "3575-170457-0000.flac"
+      ]
+    },
+    {
+      "token": "cohort-08/0/clean",
+      "path": "cohort-08/0/clean.wav",
+      "sha256": "50a09fba159c29d65185abd99fe7dd2f7603201cfcd435ca0d707d62fa2c75cd",
+      "duration_ms": 3000,
+      "sources": [
+        "3729-6852-0000.flac"
+      ]
+    },
+    {
+      "token": "cohort-09/0/clean",
+      "path": "cohort-09/0/clean.wav",
+      "sha256": "1ef81ab36a394cac31597750e41ee61973a461f88ab11dd9ce1b4a1ada306b06",
+      "duration_ms": 3000,
+      "sources": [
+        "4077-13751-0000.flac"
+      ]
+    },
+    {
+      "token": "cohort-10/0/clean",
+      "path": "cohort-10/0/clean.wav",
+      "sha256": "e86e23ee29705060adae17551dd635b9bf6cbfb033ecd96b6f9a3cb32ce3919c",
+      "duration_ms": 3000,
+      "sources": [
+        "4446-2271-0000.flac"
+      ]
+    },
+    {
+      "token": "cohort-11/0/clean",
+      "path": "cohort-11/0/clean.wav",
+      "sha256": "d71cc554e616b6af1b65059b6e077ed2fca1efaa06a90ef6aa0e0f78d15aaa07",
+      "duration_ms": 3000,
+      "sources": [
+        "4507-16021-0000.flac",
+        "4507-16021-0001.flac"
+      ]
+    },
+    {
+      "token": "cohort-12/0/clean",
+      "path": "cohort-12/0/clean.wav",
+      "sha256": "721898ab304adf22681f60b4ba7710f467e23438a650c5ff0ba6511183f763a0",
+      "duration_ms": 3000,
+      "sources": [
+        "4970-29093-0000.flac"
+      ]
+    },
+    {
+      "token": "cohort-13/0/clean",
+      "path": "cohort-13/0/clean.wav",
+      "sha256": "cbf66adaedd753d86b7b68595137b12be4d6b60d0b770f46963b68f08217b18f",
+      "duration_ms": 3000,
+      "sources": [
+        "4992-23283-0000.flac"
+      ]
+    },
+    {
+      "token": "cohort-14/0/clean",
+      "path": "cohort-14/0/clean.wav",
+      "sha256": "ab6cca2aea5913b53e1ed2086f443be1e0fdb0fbd840d723cbd370dbcafff0a1",
+      "duration_ms": 3000,
+      "sources": [
+        "5105-28233-0000.flac"
+      ]
+    },
+    {
+      "token": "cohort-15/0/clean",
+      "path": "cohort-15/0/clean.wav",
+      "sha256": "65eebc7756880ea287e94893f23ea39336e4a407b45535a8336492a0d43542bc",
+      "duration_ms": 3000,
+      "sources": [
+        "5142-33396-0000.flac",
+        "5142-33396-0001.flac"
+      ]
+    },
+    {
+      "token": "cohort-16/0/clean",
+      "path": "cohort-16/0/clean.wav",
+      "sha256": "3c2110b5d18472334a47686a235846ed5bba3003deeba7a28fd3f5d3c0acebc9",
+      "duration_ms": 3000,
+      "sources": [
+        "5639-40744-0000.flac"
+      ]
+    },
+    {
+      "token": "cohort-17/0/clean",
+      "path": "cohort-17/0/clean.wav",
+      "sha256": "79379b2249a8a7de1a077dacdc574c7f5c0637de39af48398c152469d2a330c6",
+      "duration_ms": 3000,
+      "sources": [
+        "5683-32865-0000.flac",
+        "5683-32865-0001.flac"
+      ]
+    },
+    {
+      "token": "cohort-18/0/clean",
+      "path": "cohort-18/0/clean.wav",
+      "sha256": "1dd01a1cf47dfe9ae88eb12d36e4cfa72f357fe8e1ede4bd08b32e1fa66b4e62",
+      "duration_ms": 3000,
+      "sources": [
+        "6829-68769-0000.flac"
+      ]
+    },
+    {
+      "token": "cohort-19/0/clean",
+      "path": "cohort-19/0/clean.wav",
+      "sha256": "1e5b28ca71c24d54c2ac05755317390f1091fe9806de01976a53783e7c09aab9",
+      "duration_ms": 3000,
+      "sources": [
+        "6930-75918-0000.flac"
+      ]
+    },
+    {
+      "token": "cohort-20/0/clean",
+      "path": "cohort-20/0/clean.wav",
+      "sha256": "3843df5ff51bf479ffa774586b5d54f1bf131cbecac8e701a37402f7bbb842cc",
+      "duration_ms": 3000,
+      "sources": [
+        "7021-79730-0000.flac",
+        "7021-79730-0001.flac"
+      ]
+    },
+    {
+      "token": "cohort-21/0/clean",
+      "path": "cohort-21/0/clean.wav",
+      "sha256": "fbede8a0837ccebf38104f33c493aee4df866e7c5b106372f1ebd8e0320e7fbb",
+      "duration_ms": 3000,
+      "sources": [
+        "7127-75946-0000.flac"
+      ]
+    },
+    {
+      "token": "cohort-22/0/clean",
+      "path": "cohort-22/0/clean.wav",
+      "sha256": "d3359eff13dbb1aa36dfa8ecec539a8f5bd9346a226a665c4b6a185999afba11",
+      "duration_ms": 3000,
+      "sources": [
+        "7176-88083-0000.flac"
+      ]
+    },
+    {
+      "token": "cohort-23/0/clean",
+      "path": "cohort-23/0/clean.wav",
+      "sha256": "a6b8d6604aa4e77774776cb671cb32a42fd90425deecb4ea8abeb02f846ce514",
+      "duration_ms": 3000,
+      "sources": [
+        "7729-102255-0000.flac"
+      ]
+    },
+    {
+      "token": "cohort-24/0/clean",
+      "path": "cohort-24/0/clean.wav",
+      "sha256": "aca15e1372c36fedb2ba34e17380067311c2563691ca8703008121aa2c1f2fdf",
+      "duration_ms": 3000,
+      "sources": [
+        "8224-274381-0000.flac"
+      ]
+    }
+  ]
+}

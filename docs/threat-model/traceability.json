@@ -737,10 +737,11 @@
         "a_ciphertext_cannot_be_moved_to_another_person_or_model",
         "destroying_the_key_makes_every_remaining_ciphertext_undecryptable",
         "a_locked_store_locks_the_biometric_tier_and_nothing_else",
-        "a_locked_store_refuses_the_voice_profile_key_without_a_plaintext_fallback"
+        "a_locked_store_refuses_the_voice_profile_key_without_a_plaintext_fallback",
+        "a_plaintext_backup_carrying_voice_profiles_cannot_be_produced"
       ],
-      "status": "open",
-      "notes": "Storage leg implemented (P1.2): migration 0900 keeps embeddings only as XChaCha20-Poly1305 ciphertext bound to person+model+dimension as AEAD additional data, the key lives in the OS vault under SecretScope::VoiceProfileKey, an unavailable vault locks the biometric tier while the name-only roster keeps working (ADR-0014, spec §12.2A), and destroying the key is the VP-095 cryptographic erasure. The matching job keeps the same rule in flight: its per-cluster scratch (migration 0901) is ciphertext bound to job, run and cluster and is destroyed when the job settles. Gap: the export/backup exclusion of embeddings is not built yet (tracked by TM-046), and encryption protects data at rest, not data in use — vectors are plaintext in process memory while a job runs."
+      "status": "implemented",
+      "notes": "Implemented (P1.2 + P2.3 + P2.5). Embeddings exist at rest only as XChaCha20-Poly1305 ciphertext bound to person, model id, model version and dimensionality as AEAD additional data; the key lives in the OS vault under SecretScope::VoiceProfileKey; an unavailable vault locks the biometric tier while the name-only roster keeps working (ADR-0014, spec §12.2A); destroying the key is the VP-095 cryptographic erasure; and the match job's per-cluster scratch (migration 0901) follows the same rule and is destroyed when the job settles. The gap this row waited on was the export leg, which closed with P2.3 (TM-046): a plaintext artifact carrying embeddings is unrepresentable, so a stolen store has no plaintext sibling to compare against. P2.5 closed the last leg, which was a document rather than code — docs/public/privacy-disclosure.md now tells the user, in their own words, that encryption protects data at rest and not data in use. Residual, stated rather than denied: vectors are plaintext in process memory while a job runs, and the real ONNX engine added in P2.5 still runs in-process, so ADR-0015's out-of-process requirement is a named release-evidence item (docs/release/voice-profiles-evidence.md) and the feature stays off until it is met."
     },
     {
       "id": "TM-046",
@@ -774,10 +775,12 @@
         "turning_the_feature_on_requires_accepting_the_current_disclosure",
         "enrolling_then_confirming_a_suggestion_names_the_cluster_and_its_segments",
         "rejecting_never_renames_and_reject_then_pick_records_the_correction",
-        "splitting_an_enrolment_re_seals_the_exemplars_it_moves"
+        "splitting_an_enrolment_re_seals_the_exemplars_it_moves",
+        "a_suggestion_is_offered_in_the_one_wording_and_never_as_an_identity",
+        "the_queue_reads_as_a_suggestion_and_never_as_an_identity"
       ],
-      "status": "open",
-      "notes": "Planned by docs/specs/VOICE_PROFILES_SPEC.md (VP-060 to VP-066, VP-094) and ADR-0082. There is deliberately no auto-assignment tier at any score: measured demographic error disparity in VoxCeleb-trained models makes an auto-assignment threshold a policy about whose records get silently corrupted. The matching half of the control exists as of the P1.4 change in crates/app-core/src/voice_profiles/matching: suggestion-only bands, speech minima, model-version-mismatch refusal and bounded per-profile calibration, with golden and property tests in crates/app-core/tests/voice_matching.rs. The row stays planned because enrolment, exemplar provenance and remembered rejections still have no implementation and the owner file does not exist yet. The enrolment leg landed with P1.5: crates/app-core/src/voice_profiles/enroll.rs enforces the VP-065 minima from the stored reconciliation before the embedder is called, records provenance (recording, run, cluster, span) per exemplar and splits an enrolment by that provenance with the ciphertexts re-sealed under the new owner; the consent gate is a ConsentProof value with no public constructor, so the roster path cannot reach embedding code at all, and a scripted embedder that panics on call proves it at runtime in both closed states. A rejection is kept as a score record and feeds the per-profile offset the matcher reads. Remaining: the egui surfaces that present suggestions and the dedupe/merge disclosures (P2.1), and the real ONNX embedder."
+      "status": "implemented",
+      "notes": "Implemented (P1.4 + P1.5 + P2.1). There is deliberately no auto-assignment tier at any score: measured demographic error disparity in VoxCeleb-trained models makes an auto-assignment threshold a policy about whose records get silently corrupted (ADR-0082). The matching half is crates/app-core/src/voice_profiles/matching — suggestion-only bands, speech minima, model-version-mismatch refusal, bounded per-profile calibration. The enrolment half is crates/app-core/src/voice_profiles/enroll.rs — the VP-065 minima checked against the stored reconciliation before the embedder is called, per-exemplar provenance (recording, run, cluster, span), split-by-provenance with the ciphertexts re-sealed under the new owner, and a consent gate that is a ConsentProof value with no public constructor, so the roster path cannot reach embedding code at all. A rejection is kept as a score record and feeds the per-profile offset. P2.1 landed the last leg: every surface that shows a match says it sounds like a person and never that it is one, and the picker offers the suggestion rather than pre-selecting it. P2.5's measured checkpoint does not change the row — a measured EER is an argument about scores, and no score assigns anything. Residual: a user who confirms a wrong suggestion is still a user acting; the product makes that reversible (split by provenance, remembered rejections) rather than preventing it."
     },
     {
       "id": "TM-048",
@@ -789,10 +792,11 @@
       "verification": [
         "a_plaintext_backup_carrying_voice_profiles_cannot_be_produced",
         "a_staged_voice_entry_cannot_be_emitted_as_a_plaintext_archive",
-        "an_encrypted_backup_may_carry_voice_profiles_and_a_restore_re_runs_the_consent_gate"
+        "an_encrypted_backup_may_carry_voice_profiles_and_a_restore_re_runs_the_consent_gate",
+        "the_same_voice_in_two_libraries_shares_no_identifier_or_ciphertext"
       ],
-      "status": "open",
-      "notes": "Export leg implemented (P2.3): plaintext voice export is unrepresentable, the per-library AEAD key never travels in an archive, and a restore re-runs the consent gate, so there is no plaintext artifact to correlate across libraries. Remaining: the no-stable-identifier posture is asserted by construction rather than by a test, and the documented residual risk stands — a user who restores one encrypted backup into two libraries has, by their own action, two copies of the same profiles (ADR-0080)."
+      "status": "implemented",
+      "notes": "Implemented (P2.3 + P2.5). No sync exists, each library holds its own AEAD key, voice data is excluded from exports by default and is representable only inside a password-encrypted backup, so there is no plaintext artifact to correlate; a restore re-runs the consent gate. P2.5 replaced the remaining by-construction argument with a named test: the_same_voice_in_two_libraries_shares_no_identifier_or_ciphertext enrols the same vector under the same display name in two independent libraries and shows that the person id, the nonce and the ciphertext all differ, leaving only the model digest in common — which identifies the checkpoint, not a person. Residual, documented rather than denied: a user who restores one encrypted backup into two libraries has, by their own action, two copies of the same profiles (ADR-0080)."
     }
   ]
 }

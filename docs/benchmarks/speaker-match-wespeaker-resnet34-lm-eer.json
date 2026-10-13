@@ -1,0 +1,481 @@
+{
+  "schema_version": 1,
+  "generator": "plaudon-eval 0.1.0",
+  "measured_on": "2026-10-13T00:28:42Z",
+  "commit": "eb694e64442aa1724adacb1e59dc7cebb3ecf54e",
+  "model": {
+    "model_id": "wespeaker-resnet34-lm",
+    "model_version": "voxceleb-2022-10",
+    "model_sha256": "e9848563da86f263117134dfd7ad63c92355b37de492b55e325400c9d9c39012",
+    "dim": 256,
+    "embedding_source": "model_pack"
+  },
+  "runtime": {
+    "platform": "macos-arm64",
+    "host_cpu": "Apple M5",
+    "peak_rss_bytes": 224509952,
+    "startup_ms": 481,
+    "real_time_factor": 0.0124
+  },
+  "release_evidence": {
+    "qualifies": true,
+    "blockers": []
+  },
+  "fixtures": {
+    "library_id": "librispeech-test-clean-v1",
+    "manifest_sha256": "03b856464ab50114707601d0ef60b2715a87ea05f436983a4cfbf7b7c96f9672",
+    "fixtures": 4,
+    "speakers": 36,
+    "attributions": [
+      {
+        "corpus": "libri_speech_test_clean_derived",
+        "licence": "CC-BY-4.0",
+        "attribution": "LibriSpeech (Panayotov et al., openslr.org/12), CC-BY-4.0, derived from public-domain LibriVox recordings; used as test material only"
+      }
+    ]
+  },
+  "overall": {
+    "condition": "overall",
+    "targets": 240,
+    "nontargets": 2640,
+    "false_accept_resolution": 0.0003787878787878788,
+    "equal_error_rate": {
+      "rate": 0.006060606060606061,
+      "threshold": 5.464564626867121,
+      "exact": false
+    },
+    "operating_points": [
+      {
+        "threshold": -0.9400573968887329,
+        "false_accept_rate": 0.5,
+        "false_reject_rate": 0.0,
+        "max_false_accept_rate": 0.5
+      },
+      {
+        "threshold": 0.5441474318504333,
+        "false_accept_rate": 0.2,
+        "false_reject_rate": 0.0,
+        "max_false_accept_rate": 0.2
+      },
+      {
+        "threshold": 1.671083927154541,
+        "false_accept_rate": 0.1,
+        "false_reject_rate": 0.0,
+        "max_false_accept_rate": 0.1
+      },
+      {
+        "threshold": 2.7995660305023193,
+        "false_accept_rate": 0.05,
+        "false_reject_rate": 0.0,
+        "max_false_accept_rate": 0.05
+      },
+      {
+        "threshold": 4.125874042510986,
+        "false_accept_rate": 0.019696969696969695,
+        "false_reject_rate": 0.0,
+        "max_false_accept_rate": 0.02
+      },
+      {
+        "threshold": 4.990978240966797,
+        "false_accept_rate": 0.009848484848484848,
+        "false_reject_rate": 0.004166666666666667,
+        "max_false_accept_rate": 0.01
+      },
+      {
+        "threshold": 5.825878143310547,
+        "false_accept_rate": 0.004924242424242424,
+        "false_reject_rate": 0.016666666666666666,
+        "max_false_accept_rate": 0.005
+      },
+      {
+        "threshold": 6.414407253265381,
+        "false_accept_rate": 0.001893939393939394,
+        "false_reject_rate": 0.05416666666666667,
+        "max_false_accept_rate": 0.002
+      },
+      {
+        "threshold": 6.791702747344971,
+        "false_accept_rate": 0.0007575757575757576,
+        "false_reject_rate": 0.06666666666666667,
+        "max_false_accept_rate": 0.001
+      }
+    ],
+    "bands": {
+      "target_suggest": 239,
+      "target_weak": 1,
+      "target_none": 0,
+      "nontarget_suggest": 26,
+      "nontarget_weak": 238,
+      "nontarget_none": 2376
+    }
+  },
+  "conditions": [
+    {
+      "condition": "clean",
+      "targets": 60,
+      "nontargets": 660,
+      "false_accept_resolution": 0.0015151515151515152,
+      "equal_error_rate": {
+        "rate": 0.0030303030303030303,
+        "threshold": 6.136723735115745,
+        "exact": false
+      },
+      "operating_points": [
+        {
+          "threshold": -0.9098486304283142,
+          "false_accept_rate": 0.5,
+          "false_reject_rate": 0.0,
+          "max_false_accept_rate": 0.5
+        },
+        {
+          "threshold": 0.6402599811553955,
+          "false_accept_rate": 0.2,
+          "false_reject_rate": 0.0,
+          "max_false_accept_rate": 0.2
+        },
+        {
+          "threshold": 1.7458536624908447,
+          "false_accept_rate": 0.1,
+          "false_reject_rate": 0.0,
+          "max_false_accept_rate": 0.1
+        },
+        {
+          "threshold": 2.9099130630493164,
+          "false_accept_rate": 0.05,
+          "false_reject_rate": 0.0,
+          "max_false_accept_rate": 0.05
+        },
+        {
+          "threshold": 4.270380020141602,
+          "false_accept_rate": 0.019696969696969695,
+          "false_reject_rate": 0.0,
+          "max_false_accept_rate": 0.02
+        },
+        {
+          "threshold": 5.313442230224609,
+          "false_accept_rate": 0.00909090909090909,
+          "false_reject_rate": 0.0,
+          "max_false_accept_rate": 0.01
+        },
+        {
+          "threshold": 6.003899097442627,
+          "false_accept_rate": 0.004545454545454545,
+          "false_reject_rate": 0.0,
+          "max_false_accept_rate": 0.005
+        },
+        {
+          "threshold": 6.471445083618164,
+          "false_accept_rate": 0.0015151515151515152,
+          "false_reject_rate": 0.03333333333333333,
+          "max_false_accept_rate": 0.002
+        }
+      ],
+      "bands": {
+        "target_suggest": 60,
+        "target_weak": 0,
+        "target_none": 0,
+        "nontarget_suggest": 7,
+        "nontarget_weak": 62,
+        "nontarget_none": 591
+      }
+    },
+    {
+      "condition": "telephone_bandpass",
+      "targets": 60,
+      "nontargets": 660,
+      "false_accept_resolution": 0.0015151515151515152,
+      "equal_error_rate": {
+        "rate": 0.004545454545454545,
+        "threshold": 5.859666564247825,
+        "exact": false
+      },
+      "operating_points": [
+        {
+          "threshold": -0.9302595853805542,
+          "false_accept_rate": 0.5,
+          "false_reject_rate": 0.0,
+          "max_false_accept_rate": 0.5
+        },
+        {
+          "threshold": 0.5221136212348938,
+          "false_accept_rate": 0.2,
+          "false_reject_rate": 0.0,
+          "max_false_accept_rate": 0.2
+        },
+        {
+          "threshold": 1.593601107597351,
+          "false_accept_rate": 0.1,
+          "false_reject_rate": 0.0,
+          "max_false_accept_rate": 0.1
+        },
+        {
+          "threshold": 2.841674327850342,
+          "false_accept_rate": 0.05,
+          "false_reject_rate": 0.0,
+          "max_false_accept_rate": 0.05
+        },
+        {
+          "threshold": 4.37103271484375,
+          "false_accept_rate": 0.019696969696969695,
+          "false_reject_rate": 0.0,
+          "max_false_accept_rate": 0.02
+        },
+        {
+          "threshold": 5.240622043609619,
+          "false_accept_rate": 0.00909090909090909,
+          "false_reject_rate": 0.0,
+          "max_false_accept_rate": 0.01
+        },
+        {
+          "threshold": 5.825878143310547,
+          "false_accept_rate": 0.004545454545454545,
+          "false_reject_rate": 0.0,
+          "max_false_accept_rate": 0.005
+        },
+        {
+          "threshold": 7.166557312011719,
+          "false_accept_rate": 0.0015151515151515152,
+          "false_reject_rate": 0.06666666666666667,
+          "max_false_accept_rate": 0.002
+        }
+      ],
+      "bands": {
+        "target_suggest": 60,
+        "target_weak": 0,
+        "target_none": 0,
+        "nontarget_suggest": 7,
+        "nontarget_weak": 55,
+        "nontarget_none": 598
+      }
+    },
+    {
+      "condition": "opus_low_bitrate",
+      "targets": 60,
+      "nontargets": 660,
+      "false_accept_resolution": 0.0015151515151515152,
+      "equal_error_rate": {
+        "rate": 0.006060606060606061,
+        "threshold": 5.083172277970747,
+        "exact": false
+      },
+      "operating_points": [
+        {
+          "threshold": -0.9776718616485596,
+          "false_accept_rate": 0.5,
+          "false_reject_rate": 0.0,
+          "max_false_accept_rate": 0.5
+        },
+        {
+          "threshold": 0.4921989142894745,
+          "false_accept_rate": 0.2,
+          "false_reject_rate": 0.0,
+          "max_false_accept_rate": 0.2
+        },
+        {
+          "threshold": 1.5614897012710571,
+          "false_accept_rate": 0.1,
+          "false_reject_rate": 0.0,
+          "max_false_accept_rate": 0.1
+        },
+        {
+          "threshold": 2.6062028408050537,
+          "false_accept_rate": 0.05,
+          "false_reject_rate": 0.0,
+          "max_false_accept_rate": 0.05
+        },
+        {
+          "threshold": 3.8017070293426514,
+          "false_accept_rate": 0.019696969696969695,
+          "false_reject_rate": 0.0,
+          "max_false_accept_rate": 0.02
+        },
+        {
+          "threshold": 4.763710975646973,
+          "false_accept_rate": 0.00909090909090909,
+          "false_reject_rate": 0.0,
+          "max_false_accept_rate": 0.01
+        },
+        {
+          "threshold": 5.4107184410095215,
+          "false_accept_rate": 0.004545454545454545,
+          "false_reject_rate": 0.016666666666666666,
+          "max_false_accept_rate": 0.005
+        },
+        {
+          "threshold": 6.414407253265381,
+          "false_accept_rate": 0.0015151515151515152,
+          "false_reject_rate": 0.08333333333333333,
+          "max_false_accept_rate": 0.002
+        }
+      ],
+      "bands": {
+        "target_suggest": 59,
+        "target_weak": 1,
+        "target_none": 0,
+        "nontarget_suggest": 4,
+        "nontarget_weak": 58,
+        "nontarget_none": 598
+      }
+    },
+    {
+      "condition": "room_impulse_response",
+      "targets": 60,
+      "nontargets": 660,
+      "false_accept_resolution": 0.0015151515151515152,
+      "equal_error_rate": {
+        "rate": 0.006060606060606061,
+        "threshold": 5.540825627066872,
+        "exact": false
+      },
+      "operating_points": [
+        {
+          "threshold": -0.9334512948989868,
+          "false_accept_rate": 0.5,
+          "false_reject_rate": 0.0,
+          "max_false_accept_rate": 0.5
+        },
+        {
+          "threshold": 0.5663019418716431,
+          "false_accept_rate": 0.2,
+          "false_reject_rate": 0.0,
+          "max_false_accept_rate": 0.2
+        },
+        {
+          "threshold": 1.771846890449524,
+          "false_accept_rate": 0.1,
+          "false_reject_rate": 0.0,
+          "max_false_accept_rate": 0.1
+        },
+        {
+          "threshold": 2.7747089862823486,
+          "false_accept_rate": 0.05,
+          "false_reject_rate": 0.0,
+          "max_false_accept_rate": 0.05
+        },
+        {
+          "threshold": 4.322412490844727,
+          "false_accept_rate": 0.019696969696969695,
+          "false_reject_rate": 0.0,
+          "max_false_accept_rate": 0.02
+        },
+        {
+          "threshold": 5.204318523406982,
+          "false_accept_rate": 0.00909090909090909,
+          "false_reject_rate": 0.0,
+          "max_false_accept_rate": 0.01
+        },
+        {
+          "threshold": 5.828707695007324,
+          "false_accept_rate": 0.004545454545454545,
+          "false_reject_rate": 0.016666666666666666,
+          "max_false_accept_rate": 0.005
+        },
+        {
+          "threshold": 6.773693084716797,
+          "false_accept_rate": 0.0015151515151515152,
+          "false_reject_rate": 0.03333333333333333,
+          "max_false_accept_rate": 0.002
+        }
+      ],
+      "bands": {
+        "target_suggest": 60,
+        "target_weak": 0,
+        "target_none": 0,
+        "nontarget_suggest": 8,
+        "nontarget_weak": 63,
+        "nontarget_none": 589
+      }
+    }
+  ],
+  "calibration": {
+    "status": {
+      "status": "derived"
+    },
+    "suggest": {
+      "threshold": 4.990978240966797,
+      "false_accept_rate": 0.009848484848484848,
+      "false_reject_rate": 0.004166666666666667,
+      "max_false_accept_rate": 0.01
+    },
+    "floor": {
+      "threshold": 1.671083927154541,
+      "false_accept_rate": 0.1,
+      "false_reject_rate": 0.0,
+      "max_false_accept_rate": 0.1
+    },
+    "max_profile_offset": 0.8299736,
+    "equal_error_rate": {
+      "rate": 0.006060606060606061,
+      "threshold": 5.464564626867121,
+      "exact": false
+    },
+    "provenance": {
+      "embedding_source": "model_pack",
+      "model_id": "wespeaker-resnet34-lm",
+      "model_version": "voxceleb-2022-10",
+      "model_sha256": "e9848563da86f263117134dfd7ad63c92355b37de492b55e325400c9d9c39012",
+      "library_id": "librispeech-test-clean-v1",
+      "manifest_sha256": "03b856464ab50114707601d0ef60b2715a87ea05f436983a4cfbf7b7c96f9672",
+      "targets": 240,
+      "nontargets": 2640,
+      "false_accept_resolution": 0.0003787878787878788
+    }
+  },
+  "diarization": {
+    "session_id": "librispeech-session-01",
+    "hypothesis_source": "scripted-perturbation/1",
+    "der": 0.30541666666666667,
+    "missed_ms": 14200,
+    "false_alarm_ms": 0,
+    "confusion_ms": 15120,
+    "reference_speech_ms": 96000,
+    "overlap_ms": 3000,
+    "collar_ms": 0,
+    "skip_overlap_regions": false
+  },
+  "golden_suggestions": [
+    {
+      "cluster_key": "roster-01/4/clean",
+      "person_id": "roster-01",
+      "band": "suggest",
+      "score": 9.27244758605957
+    },
+    {
+      "cluster_key": "roster-01/4/clean",
+      "person_id": "roster-02",
+      "band": "weak",
+      "score": 2.166930675506592
+    },
+    {
+      "cluster_key": "roster-01/4/clean",
+      "person_id": "roster-10",
+      "band": "weak",
+      "score": 2.016049861907959
+    },
+    {
+      "cluster_key": "roster-02/4/clean",
+      "person_id": "roster-02",
+      "band": "suggest",
+      "score": 7.419144630432129
+    },
+    {
+      "cluster_key": "roster-03/4/clean",
+      "person_id": "roster-03",
+      "band": "suggest",
+      "score": 23.01154899597168
+    },
+    {
+      "cluster_key": "roster-03/4/clean",
+      "person_id": "roster-12",
+      "band": "suggest",
+      "score": 5.313442230224609
+    }
+  ],
+  "caveats": [
+    "Speaker-verification accuracy is demographically skewed; smaller models can widen the gap (Hutiri & Ding, arxiv.org/abs/2201.09486). These pooled figures hide subgroup differences and must never be quoted as a single advertised accuracy number (VP-170, VP-171).",
+    "No score in this document authorises an automatic assignment. Every outcome is a suggestion a person confirms (VP-060, ADR-0082).",
+    "Published model-card EERs (VoxCeleb1-O, full-length utterances) measure a different protocol and must not be compared with these figures (VP-173).",
+    "ADR-0081 §4 is a two-platform gate and one document covers one platform: a release needs this artifact for macOS arm64 *and* for Windows x64, so `release_evidence.qualifies` means \"usable as evidence for the platform named in `runtime`\", never \"the gate is passed\".",
+    "The diarization section scores a scripted-perturbation/1 hypothesis against exact synthetic ground truth; it measures the DER implementation, not a diarization provider."
+  ]
+}

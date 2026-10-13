@@ -194,3 +194,21 @@ satisfies `schemas/device-evidence.v1.schema.json`: `test_run_id`,
 `emitted_opcodes`, `network_denied_run` and `checks` (`id`, `outcome`
 `passed|failed|skipped`, `detail`). `test_run_id` and `recorded_at` are what
 `compatibility.yaml` cites as `test_run_id` and `last_verified_at`.
+
+## Speaker embedding on this platform (EPIC P, ADR-0081 §4)
+
+**No figure exists.** ADR-0081 §4 requires peak RSS, startup, real-time factor
+and an EER artifact on *both* reference platforms before the voice-profiles
+feature may ship. macOS arm64 is measured
+([docs/hardware/macos-apple-silicon.md](./macos-apple-silicon.md) §"Speaker
+embedding on this platform"); Windows x64 is not, here or anywhere else, and
+nothing in this repository implies otherwise. A measurement taken on another
+host is not evidence for this one (§18.3A), and the macOS numbers must not be
+reused as an estimate.
+
+The run that would produce the missing artifact is written out — commands,
+output paths and the one platform-specific trap — in
+[docs/release/voice-profiles-evidence.md](../release/voice-profiles-evidence.md).
+The trap in short: `ort`'s prebuilt x86-64 ONNX Runtime requires AVX2 and warns
+at startup when the CPU lacks it, so the Windows leg has to state the processor
+baseline rather than discover it from one machine that happens to have AVX2.

@@ -535,6 +535,7 @@
     "Speaker-verification accuracy is demographically skewed; smaller models can widen the gap (Hutiri & Ding, arxiv.org/abs/2201.09486). These pooled figures hide subgroup differences and must never be quoted as a single advertised accuracy number (VP-170, VP-171).",
     "No score in this document authorises an automatic assignment. Every outcome is a suggestion a person confirms (VP-060, ADR-0082).",
     "Published model-card EERs (VoxCeleb1-O, full-length utterances) measure a different protocol and must not be compared with these figures (VP-173).",
+    "ADR-0081 §4 is a two-platform gate and one document covers one platform: a release needs this artifact for macOS arm64 *and* for Windows x64, so `release_evidence.qualifies` means \"usable as evidence for the platform named in `runtime`\", never \"the gate is passed\".",
     "Embeddings in this run were generated from a seed, not extracted from audio by a model. The error rates below describe that generator and the harness around it; they are not a measurement of any checkpoint (VP-183).",
     "The diarization section scores a scripted-perturbation/1 hypothesis against exact synthetic ground truth; it measures the DER implementation, not a diarization provider."
   ]

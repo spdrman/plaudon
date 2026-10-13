@@ -197,3 +197,133 @@ satisfies `schemas/device-evidence.v1.schema.json`: `test_run_id`,
 `emitted_opcodes`, `network_denied_run` and `checks` (`id`, `outcome`
 `passed|failed|skipped`, `detail`). `test_run_id` and `recorded_at` are what
 `compatibility.yaml` cites as `test_run_id` and `last_verified_at`.
+
+## Speaker embedding on this platform (EPIC P, ADR-0081 §4)
+
+Everything above is about the opt-in PLAUD device suite. This section is the
+other kind of hardware evidence the same platform owes: the measured runtime
+footprint and accuracy of the speaker-embedding checkpoint, which ADR-0081 §4
+requires **on both reference platforms** before the voice-profiles feature may
+ship. macOS arm64 is measured below. Windows x64 is not measured anywhere and
+is a release-evidence item
+([docs/release/voice-profiles-evidence.md](../release/voice-profiles-evidence.md)).
+
+### The machine
+
+| Fact | Value |
+|---|---|
+| CPU | Apple M5, 10 logical cores |
+| Memory | 34 359 738 368 bytes (32 GiB) |
+| OS | macOS 27.0.1, build 26A434 |
+| Target | `aarch64-apple-darwin` |
+| Toolchain | `rustc 1.99.0 (b940084d7 2026-09-28)`, `cargo 1.99.0 (5f94df478 2026-08-27)` |
+| Build | `--release`, `CARGO_BUILD_JOBS=2` (workstation resource policy) |
+| Runtime | `ort` 2.0.0-rc.14 linking a prebuilt ONNX Runtime **statically**; 1 intra-op thread, 1 inter-op thread |
+| Checkpoint | `wespeaker_en_voxceleb_resnet34_LM.onnx`, sha256 `e9848563…c39012`, 256-dimensional |
+| Date | 2026-10-12 |
+
+No accelerator is used: this is CPU-only inference, which is what the Windows
+leg will also be.
+
+### The commands, exactly
+
+```sh
+export SDKROOT="$(xcrun --show-sdk-path)"
+scripts/fetch-speaker-models.sh --dir /tmp/speaker-models
+
+# LibriSpeech test-clean, 346 663 984 bytes,
+# sha256 39fde525e59672dc6d1551919b1478f724438a95aa55f874b576be21967e6c23
+curl -L -o test-clean.tar.gz https://www.openslr.org/resources/12/test-clean.tar.gz
+tar xzf test-clean.tar.gz -C /tmp/p248-corpus
+
+cargo build -j2 --release -p plaudon-ai-speaker --features onnx \
+  --bin plaudon-speaker-embed
+
+./target/release/plaudon-speaker-embed build-fixtures \
+  --librispeech /tmp/p248-corpus \
+  --plan tests/fixtures/speaker-eval/librispeech-plan.json \
+  --out /tmp/p248-fixtures
+
+/usr/bin/time -l ./target/release/plaudon-speaker-embed embed \
+  --model /tmp/speaker-models/wespeaker_en_voxceleb_resnet34_LM.onnx \
+  --fixtures /tmp/p248-fixtures \
+  --plan tests/fixtures/speaker-eval/librispeech-plan.json \
+  --out /tmp/p248-run/eval-embeddings.json \
+  --stats /tmp/p248-run/runtime-stats.json --threads 1
+
+cargo run -j2 --release -q -p plaudon-eval --bin plaudon-eval -- speaker-match \
+  --plan tests/fixtures/speaker-eval/librispeech-plan.json \
+  --model-pack /tmp/p248-run \
+  --out docs/benchmarks/speaker-match-wespeaker-resnet34-lm-eer.json \
+  --commit "$(git rev-parse HEAD)" --measured-on "$(date -u +%FT%TZ)" \
+  --platform macos-arm64 --host-cpu "Apple M5" \
+  --peak-rss-bytes 224509952 --startup-ms 481 --real-time-factor 0.0124
+```
+
+`eval-embeddings.json` is **not** committed and must not be: it is 312 voice
+embeddings of real readers (VP-002, VP-112). The committed outputs are the
+report and the fixture manifest, neither of which contains a vector.
+
+### Runtime footprint
+
+| Figure | Value | How it was taken |
+|---|---|---|
+| Startup | **481 ms** | Digest verification of the 26 530 550-byte checkpoint plus ONNX Runtime session creation, timed inside `SpeakerEmbeddingModel::open`. |
+| Real-time factor, embedding only | **0.0124** | 11.581 s of CPU-bound work for 936.0 s of audio (312 windows of 3 s). |
+| Real-time factor, decode + embed | **0.0127** | 11.881 s for the same audio, including WAV decode through `plaudon-audio`. |
+| Per window | **37.1 ms** mean, **201.0 ms** max | The maximum is the first window, which pays the lazy allocator and page-in cost. |
+| Peak RSS | **224 509 952 bytes (214 MiB)** | `/usr/bin/time -l`, whole process, across the full 312-window run. |
+| Fixture build | 28.7 s | 312 files: FLAC decode, concatenation, band-pass, impulse-response convolution, Opus round trip. |
+
+A 60-minute recording with 25% speech in 3-second windows is roughly 300
+windows: about 11 s of embedding work on this machine, bounded in memory by the
+window rather than the recording, because the canonical PCM derivative lives on
+disk and windows are read by seeking.
+
+### Accuracy on licence-clean audio
+
+From `docs/benchmarks/speaker-match-wespeaker-resnet34-lm-eer.json`: 12 enrolled
+speakers, 24 AS-Norm cohort speakers, 240 target and 2 640 non-target trials,
+LibriSpeech `test-clean` derived, 3-second utterances, enrolment and trial
+material disjoint.
+
+| Condition | EER | Trials (target / non-target) |
+|---|---|---|
+| Pooled | **0.61%** | 240 / 2 640 |
+| Clean | 0.30% | 60 / 660 |
+| Telephone band-pass (300–3400 Hz) | 0.45% | 60 / 660 |
+| Opus 12 kbit/s round trip | 0.61% | 60 / 660 |
+| Room impulse response | 0.61% | 60 / 660 |
+
+Derived operating point: `T_suggest` 4.991 (false accept 0.98%, false reject
+0.42%), `T_floor` 1.671 at a 10% false-accept rate.
+
+Three honest limits on these numbers:
+
+1. **LibriSpeech is read speech by native-English readers in quiet.** Meeting
+   audio is not. These figures bound what the checkpoint can do on easy
+   material; they are not a product accuracy claim, and VP-170/VP-171 forbid
+   quoting a pooled figure as an advertised accuracy.
+2. **`noise_musan` is absent**, because the corpus was not downloaded. A
+   missing condition is reported as missing.
+3. **The DER in the same artifact is not a diarizer's.** It scores a scripted
+   hypothesis against exact synthetic ground truth, which measures
+   `crates/ai-diarization::der`. No real diarization provider exists yet.
+
+### Why the runtime is `ort` and the features are first-party
+
+Measured on this machine, at `CARGO_BUILD_JOBS=2`, from a clean target
+directory:
+
+| Candidate | Clean build | Normal-build crates | What ships |
+|---|---|---|---|
+| `ort` 2.0.0-rc.14 + first-party fbank | **15 s** | 15 | one self-contained binary; ONNX Runtime linked statically |
+| `sherpa-rs` 0.6.8 (the ADR-0081 fallback) | **80 s** | 15 | three dylibs — `libsherpa-onnx-c-api` (3.2 MB), `libsherpa-onnx-cxx-api` (94 KB), `libonnxruntime.1.17.1.dylib` (23 MB) — plus a bindgen/libclang and CMake requirement on every build host |
+| `ort` + `knf-rs` (the ADR's literal wording) | 15 s | 17 | as the first row, plus vendored kaldi-native-fbank C++ built with CMake and bindgen |
+
+The first-party feature front end was cross-checked against
+`kaldi-native-fbank` through `knf-rs` 0.3.2 on a 3-second broadband signal with
+the same window function: identical frame and bin counts (298 × 80),
+**maximum absolute difference 5.6 × 10⁻⁴, RMS 1.2 × 10⁻⁵** — f32 rounding, not
+a behavioural difference. `knf-rs` is a verification tool here and is not a
+dependency of this repository.
