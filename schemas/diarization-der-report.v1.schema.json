@@ -1,0 +1,506 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.invalid/schemas/diarization-der-report.v1.schema.json",
+  "title": "Diarization error-rate report v1",
+  "description": "The committed docs/benchmarks/diarization-<provider>-der.json artifact (ADR-0400 condition 4). Carries durations, rates and counts for a provider measured on labelled audio including overlapping speech; never audio, never an embedding, never a speaker identity.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "generator",
+    "measured_on",
+    "commit",
+    "provider",
+    "runtime",
+    "corpus",
+    "sessions",
+    "by_condition",
+    "overall",
+    "release_evidence",
+    "caveats"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "generator": {
+      "type": "string",
+      "minLength": 1
+    },
+    "measured_on": {
+      "type": "string",
+      "minLength": 1
+    },
+    "commit": {
+      "type": "string",
+      "minLength": 1
+    },
+    "provider": {
+      "$ref": "#/$defs/provider"
+    },
+    "runtime": {
+      "$ref": "#/$defs/runtime"
+    },
+    "corpus": {
+      "$ref": "#/$defs/corpus"
+    },
+    "sessions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/session"
+      },
+      "minItems": 1
+    },
+    "by_condition": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "condition",
+          "pooled"
+        ],
+        "properties": {
+          "condition": {
+            "type": "string",
+            "minLength": 1
+          },
+          "pooled": {
+            "$ref": "#/$defs/pooled"
+          }
+        }
+      }
+    },
+    "overall": {
+      "$ref": "#/$defs/pooled"
+    },
+    "release_evidence": {
+      "$ref": "#/$defs/releaseEvidence"
+    },
+    "caveats": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 3
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "duration": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "rate": {
+      "type": "number",
+      "minimum": 0
+    },
+    "provider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_id",
+        "provider_version",
+        "validated",
+        "models",
+        "parameters"
+      ],
+      "properties": {
+        "provider_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "provider_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "validated": {
+          "type": "boolean"
+        },
+        "models": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "model_id",
+              "version",
+              "sha256",
+              "licence_spdx",
+              "role"
+            ],
+            "properties": {
+              "model_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "version": {
+                "type": "string",
+                "minLength": 1
+              },
+              "sha256": {
+                "$ref": "#/$defs/sha256"
+              },
+              "licence_spdx": {
+                "type": "string",
+                "minLength": 1
+              },
+              "role": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "parameters": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "value",
+              "provenance"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "value": {
+                "type": "string",
+                "minLength": 1
+              },
+              "provenance": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "platform",
+        "host_cpu",
+        "os_build",
+        "intra_op_threads",
+        "peak_rss_bytes",
+        "startup_ms",
+        "real_time_factor"
+      ],
+      "properties": {
+        "platform": {
+          "type": "string",
+          "minLength": 1
+        },
+        "host_cpu": {
+          "type": "string",
+          "minLength": 1
+        },
+        "os_build": {
+          "type": "string",
+          "minLength": 1
+        },
+        "intra_op_threads": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "peak_rss_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "startup_ms": {
+          "$ref": "#/$defs/duration"
+        },
+        "real_time_factor": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
+    "corpus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "library_id",
+        "corpus",
+        "licence",
+        "attribution",
+        "audio_committed",
+        "recipe"
+      ],
+      "properties": {
+        "library_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "corpus": {
+          "type": "string",
+          "minLength": 1
+        },
+        "licence": {
+          "type": "string",
+          "minLength": 1
+        },
+        "attribution": {
+          "type": "string",
+          "minLength": 1
+        },
+        "audio_committed": {
+          "const": false
+        },
+        "recipe": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "derReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "der",
+        "missed_ms",
+        "false_alarm_ms",
+        "confusion_ms",
+        "total_reference_ms",
+        "overlapping_reference_ms",
+        "reference_speaker_count",
+        "hypothesis_cluster_count",
+        "scored_frames",
+        "excluded_frames",
+        "overlap_regions_skipped",
+        "collar_ms"
+      ],
+      "properties": {
+        "der": {
+          "$ref": "#/$defs/rate"
+        },
+        "missed_ms": {
+          "$ref": "#/$defs/duration"
+        },
+        "false_alarm_ms": {
+          "$ref": "#/$defs/duration"
+        },
+        "confusion_ms": {
+          "$ref": "#/$defs/duration"
+        },
+        "total_reference_ms": {
+          "$ref": "#/$defs/duration"
+        },
+        "overlapping_reference_ms": {
+          "$ref": "#/$defs/duration"
+        },
+        "reference_speaker_count": {
+          "$ref": "#/$defs/count"
+        },
+        "hypothesis_cluster_count": {
+          "$ref": "#/$defs/count"
+        },
+        "scored_frames": {
+          "$ref": "#/$defs/count"
+        },
+        "excluded_frames": {
+          "$ref": "#/$defs/count"
+        },
+        "overlap_regions_skipped": {
+          "type": "boolean"
+        },
+        "collar_ms": {
+          "$ref": "#/$defs/duration"
+        }
+      }
+    },
+    "breakdown": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "overall",
+        "single_speaker",
+        "overlapping"
+      ],
+      "properties": {
+        "overall": {
+          "$ref": "#/$defs/derReport"
+        },
+        "single_speaker": {
+          "$ref": "#/$defs/derReport"
+        },
+        "overlapping": {
+          "$ref": "#/$defs/derReport"
+        }
+      }
+    },
+    "session": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "session_id",
+        "condition",
+        "media_sha256",
+        "duration_ms",
+        "reference_speakers",
+        "reference_speech_ms",
+        "overlapping_reference_ms",
+        "hypothesis_clusters",
+        "hypothesis_turns",
+        "elapsed_ms",
+        "der"
+      ],
+      "properties": {
+        "session_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "condition": {
+          "type": "string",
+          "minLength": 1
+        },
+        "media_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "duration_ms": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "reference_speakers": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "reference_speech_ms": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "overlapping_reference_ms": {
+          "$ref": "#/$defs/duration"
+        },
+        "hypothesis_clusters": {
+          "$ref": "#/$defs/count"
+        },
+        "hypothesis_turns": {
+          "$ref": "#/$defs/count"
+        },
+        "elapsed_ms": {
+          "$ref": "#/$defs/duration"
+        },
+        "der": {
+          "$ref": "#/$defs/breakdown"
+        }
+      }
+    },
+    "pooledFigures": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "der",
+        "missed_ms",
+        "false_alarm_ms",
+        "confusion_ms",
+        "total_reference_ms",
+        "scored_frames"
+      ],
+      "properties": {
+        "der": {
+          "$ref": "#/$defs/rate"
+        },
+        "missed_ms": {
+          "$ref": "#/$defs/duration"
+        },
+        "false_alarm_ms": {
+          "$ref": "#/$defs/duration"
+        },
+        "confusion_ms": {
+          "$ref": "#/$defs/duration"
+        },
+        "total_reference_ms": {
+          "$ref": "#/$defs/duration"
+        },
+        "scored_frames": {
+          "$ref": "#/$defs/count"
+        }
+      }
+    },
+    "pooled": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sessions",
+        "overall",
+        "single_speaker",
+        "overlapping"
+      ],
+      "properties": {
+        "sessions": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "overall": {
+          "$ref": "#/$defs/pooledFigures"
+        },
+        "single_speaker": {
+          "$ref": "#/$defs/pooledFigures"
+        },
+        "overlapping": {
+          "$ref": "#/$defs/pooledFigures"
+        }
+      }
+    },
+    "releaseEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "qualifies",
+        "blockers"
+      ],
+      "properties": {
+        "qualifies": {
+          "type": "boolean"
+        },
+        "blockers": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "allOf": [
+        {
+          "description": "A document that lists blockers may never claim to qualify.",
+          "if": {
+            "properties": {
+              "qualifies": {
+                "const": true
+              }
+            },
+            "required": [
+              "qualifies"
+            ]
+          },
+          "then": {
+            "properties": {
+              "blockers": {
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

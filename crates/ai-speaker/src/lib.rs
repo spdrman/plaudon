@@ -1,4 +1,5 @@
-//! Local speaker-embedding engine (EPIC P phase 2, ADR-0081).
+//! Local speaker-embedding and speaker-segmentation engines (EPIC P phase 2,
+//! ADR-0081, ADR-0400).
 //!
 //! `plaudon-app-core` owns the [`SpeakerEmbedder`] seam and the deterministic
 //! double behind it. This crate is the other implementation: a real ONNX
@@ -28,13 +29,25 @@
 //!   and no build-time C++ — the measured reason is in that module's
 //!   documentation and in `docs/hardware/macos-apple-silicon.md`.
 //!
+//! The second checkpoint has an engine too. [`segmentation`] drives pyannote
+//! `segmentation-3.0` over one window and [`diarize`] assembles those windows,
+//! the embedding model and `plaudon_ai_diarization::pipeline` into a real
+//! [`DiarizationProvider`] — the thing ADR-0400 condition 4 needs in order to
+//! be a measurement. It is behind the same feature, and it is deliberately
+//! *not* in `VALIDATED_PROVIDERS`.
+//!
 //! [`SpeakerEmbedder`]: plaudon_app_core::voice_profiles::embedder::SpeakerEmbedder
+//! [`DiarizationProvider`]: plaudon_ai_diarization::contract::DiarizationProvider
 
 pub mod checkpoint;
 pub mod fbank;
 pub mod runtime;
 
 #[cfg(feature = "onnx")]
+pub mod diarize;
+#[cfg(feature = "onnx")]
 pub mod onnx;
 #[cfg(feature = "onnx")]
 pub mod sandboxed;
+#[cfg(feature = "onnx")]
+pub mod segmentation;
