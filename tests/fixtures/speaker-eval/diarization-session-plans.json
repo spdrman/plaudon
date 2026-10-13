@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "notes": "Session timelines for the ADR-0400 condition 4 DER run, mixed into multi-speaker audio by `plaudon-speaker-embed build-session` (crates/ai-speaker, feature `onnx`). The timeline is the ground truth: `SessionPlan::synthesize` lays the turns out from a fixed seed, so the RTTM is exact by construction and nothing is annotated. `librispeech-session-01` is the same timeline the speaker-matching harness plan carries, so the DER in docs/benchmarks/diarization-onnx-pyannote-wespeaker-der.json and the one in the EER artifact describe the same session; `librispeech-session-02` exists because that timeline is only 3.5% overlapped, which is too little speech for an overlap-only figure to mean anything. `librispeech-session-03` is `librispeech-session-02` with the overlap removed and nothing else changed — same readers, same seed, same turn order — so the difference between the two is what overlapping speech costs this provider rather than what three similar voices cost it. Speaker labels are the roster of tests/fixtures/speaker-eval/librispeech-plan.json and are assigned to LibriSpeech test-clean readers by the same deterministic rule, so `roster-01` is the same reader in both measurements. The audio is never committed (VP-181, VP-182).",
+  "sessions": [
+    {
+      "session_id": "librispeech-session-01",
+      "speakers": [
+        "roster-01",
+        "roster-02",
+        "roster-03",
+        "roster-04"
+      ],
+      "utterances_per_speaker": 6,
+      "utterance_ms": 4000,
+      "gap_ms": 500,
+      "overlap_every": 4,
+      "overlap_ms": 600,
+      "seed": 20261012
+    },
+    {
+      "session_id": "librispeech-session-02",
+      "speakers": [
+        "roster-05",
+        "roster-06",
+        "roster-07"
+      ],
+      "utterances_per_speaker": 8,
+      "utterance_ms": 3500,
+      "gap_ms": 300,
+      "overlap_every": 2,
+      "overlap_ms": 1200,
+      "seed": 20261013
+    },
+    {
+      "session_id": "librispeech-session-03",
+      "speakers": [
+        "roster-05",
+        "roster-06",
+        "roster-07"
+      ],
+      "utterances_per_speaker": 8,
+      "utterance_ms": 3500,
+      "gap_ms": 300,
+      "overlap_every": 0,
+      "overlap_ms": 0,
+      "seed": 20261013
+    }
+  ]
+}

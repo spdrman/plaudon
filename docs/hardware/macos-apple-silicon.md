@@ -380,3 +380,44 @@ the same window function: identical frame and bin counts (298 × 80),
 **maximum absolute difference 5.6 × 10⁻⁴, RMS 1.2 × 10⁻⁵** — f32 rounding, not
 a behavioural difference. `knf-rs` is a verification tool here and is not a
 dependency of this repository.
+
+## Speaker diarization (EPIC P, ADR-0400 condition 4)
+
+Same machine, same build policy and the same two checkpoints as the speaker
+embedding run above; measured 2026-10-13 at commit `0a6b775`. The provider is
+`plaudon_ai_speaker::diarize::OnnxDiarizationProvider` (feature `onnx`), and it
+is **not** in `VALIDATED_PROVIDERS`.
+
+```sh
+export SDKROOT="$(xcrun --show-sdk-path)"
+export CXXFLAGS="-isystem $SDKROOT/usr/include/c++/v1"
+export ORT_LIB_LOCATION="$PWD/vendor/onnxruntime/aarch64-apple-darwin"
+
+./target/release/plaudon-speaker-embed build-session \
+  --librispeech /tmp/p282-corpus \
+  --plan tests/fixtures/speaker-eval/librispeech-plan.json \
+  --sessions tests/fixtures/speaker-eval/diarization-session-plans.json \
+  --out /tmp/p282-sessions \
+  --conditions clean,telephone_bandpass,opus_low_bitrate,room_impulse_response
+
+/usr/bin/time -l ./target/release/plaudon-speaker-embed diarize \
+  --segmentation /tmp/speaker-models/pyannote-segmentation-3.0.onnx \
+  --embedding /tmp/speaker-models/wespeaker_en_voxceleb_resnet34_LM.onnx \
+  --sessions /tmp/p282-sessions \
+  --out docs/benchmarks/diarization-onnx-pyannote-wespeaker-der.json \
+  --peak-rss-bytes 318439424 \
+  --commit "$(git rev-parse HEAD)" --measured-on "$(date -u +%FT%TZ)"
+```
+
+| Figure | Value | How it was taken |
+|---|---|---|
+| Startup | **75 ms** | Digest verification of both checkpoints plus two ONNX Runtime sessions, timed inside the tool. |
+| Real-time factor | **0.142** | 152.0 s of segmentation and embedding work for 1 069.2 s of audio, one intra-op thread, CPU execution provider. |
+| Peak RSS | **318 439 424 bytes (304 MiB)** | `/usr/bin/time -l`, whole process. Two identical runs peaked at 304 and 286 MiB; the committed artifact records the larger. |
+| Session mix build | 37.2 s | 12 wav files: FLAC decode, silence trim, mixing, band-pass, impulse response, Opus round trip. |
+
+Accuracy, the caveats and the per-condition breakdown are in
+[docs/benchmarks/diarization-eval.md](../benchmarks/diarization-eval.md);
+pooled DER is **32.65%** with overlap included and a zero collar, **26.29%** on
+the overlapping frames alone. The session audio and the hypothesis RTTMs are
+never committed.

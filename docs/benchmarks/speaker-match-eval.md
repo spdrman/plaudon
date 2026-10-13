@@ -37,11 +37,6 @@ These remain unmeasured and unclaimed:
 - **noise beyond MUSAN's `noise` subset**: the measured `noise_musan` condition
   is one additive mixture at a single declared SNR (10 dB). MUSAN's `music` and
   `babble` material, other SNRs and real far-field capture are not measured;
-- **DER of a real diarization provider**. The committed DER figure scores a
-  deliberately imperfect *scripted* hypothesis against exact synthetic ground
-  truth, so it measures `crates/ai-diarization::der`, not a provider. The
-  segmentation checkpoint is licensed and pinned, but nothing decodes its
-  powerset output into turns yet;
 - **the shipped threshold defaults**. The derived `T_suggest`/`T_floor` from
   the measured run describe LibriSpeech read speech at three seconds; nothing
   installs them, and a default operating point needs the Windows leg and
@@ -94,7 +89,9 @@ metric code shows up as a diff in review rather than as a silent drift.
    resolve 1% and the harness refuses to publish a threshold from it.
 6. **Re-bands the trials** with the derived thresholds, using the product's own
    band rule, and pins the suggestions of a golden fixture to the model sha256.
-7. **Scores DER** (`crates/ai-diarization::der`) on the synthetic session.
+7. **Scores DER** (`crates/ai-diarization::der`) on the synthetic session,
+   against a scripted hypothesis. A *provider's* DER on mixed audio is a
+   separate run and a separate artifact ([`diarization-eval.md`](diarization-eval.md)).
 
 ## The fixture tiers and their licences (VP-181, VP-182)
 
@@ -150,9 +147,11 @@ stated SNR reports an error rate that means nothing.
 
 The session timeline (`speaker::fixtures`) remains the generator's: a seeded
 turn permutation with controlled overlap and an exact RTTM. Mixing that
-timeline into one multi-speaker wav — the input a *diarization* provider would
-need — is not built yet, which is why the DER figure in the artifact still
-scores a scripted hypothesis.
+timeline into one multi-speaker wav — the input a *diarization* provider needs
+— is `plaudon-speaker-embed build-session`, and the DER a real provider scores
+on it is in [`diarization-eval.md`](diarization-eval.md). The DER figure inside
+*this* artifact is still the scripted hypothesis, and still measures
+`crates/ai-diarization::der` rather than a provider.
 
 ### Cross-device conditions (VP-184)
 
