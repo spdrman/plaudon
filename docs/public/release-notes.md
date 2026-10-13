@@ -46,8 +46,11 @@ affiliated with or approved by PLAUD, OpenRouter or Apple.
 
 ### Release artifacts and verification
 
-Each release publishes a signed macOS bundle, a signed Windows installer and a
-release evidence bundle containing build and toolchain hashes, the tested OS
+**0.1.0 is an unsigned, not-notarized development release.** The macOS
+`Plaudon.app` is ad-hoc signed and not notarized (macOS Gatekeeper will warn),
+and the Windows 11 x64 `.msi` is not Authenticode-signed (SmartScreen will
+warn). A fully signed release will carry a signed macOS bundle, a signed
+Windows installer and a release evidence bundle containing build and toolchain hashes, the tested OS
 builds, test results, the software bill of materials, the licence audit, the
 database migration and restore results, egress traces from the Local-only tests,
 and the compatibility records backing every published claim. The evidence
@@ -67,6 +70,13 @@ a rollback never relaxes that check.
   encryption if that matters.
 - Cloud providers' retention is governed by their policies, not by this
   application; the consent prompt states retention before anything is sent.
+- **The Windows 11 installer has been built and structurally audited but never
+  installed or run on Windows.** Install, upgrade, uninstall, file
+  associations, notifications and the screen-reader experience on Windows are
+  untested; validation is planned for 0.2.1 (tracked in the GitHub epic
+  "Windows 11 validation (0.2.1)").
+- Plaudon is provided as is, with no warranty of any kind; you use it at your
+  own risk (see the MIT [LICENSE](../../LICENSE)).
 
 ### Reading
 
