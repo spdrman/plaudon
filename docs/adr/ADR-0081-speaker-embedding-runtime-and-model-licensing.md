@@ -122,8 +122,9 @@ this platform"):
 
 The §4 gate is **not** passed, and the feature flag therefore stays off. What now exists:
 `docs/benchmarks/speaker-match-wespeaker-resnet34-lm-eer.json` — WeSpeaker ResNet34-LM over
-LibriSpeech `test-clean`-derived fixtures on macOS arm64, pooled **EER 0.61%** (240 target / 2 640
-non-target trials), startup **481 ms**, RTF **0.0124**, peak RSS **214 MiB**. What does not:
+LibriSpeech `test-clean`-derived fixtures on macOS arm64, in five conditions including a MUSAN
+noise mix at 10 dB SNR (#284), pooled **EER 0.67%** (300 target / 3 300 non-target trials),
+startup **103 ms**, RTF **0.0143**, peak RSS **87 MiB**. What does not:
 Windows x64 figures of any kind, a real diarization provider's DER, and out-of-process inference
 on Windows. Each is an item with an owner and a next step in
 [docs/release/voice-profiles-evidence.md](../release/voice-profiles-evidence.md). Legal review is

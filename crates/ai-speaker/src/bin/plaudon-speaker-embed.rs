@@ -2,7 +2,7 @@
 //!
 //! ```text
 //! plaudon-speaker-embed build-fixtures --librispeech <dir> --plan <plan.json> --out <dir>
-//!                                      [--ffmpeg <path>]
+//!                                      [--musan <dir>] [--musan-snr-db <db>] [--ffmpeg <path>]
 //! plaudon-speaker-embed embed --model <file.onnx> --fixtures <dir> --plan <plan.json>
 //!                             --out <eval-embeddings.json> [--stats <file.json>] [--threads <n>]
 //! ```
@@ -43,7 +43,7 @@ use sha2::{Digest, Sha256};
 
 const USAGE: &str = "\
 plaudon-speaker-embed build-fixtures --librispeech <dir> --plan <plan.json> --out <dir>
-                                     [--ffmpeg <path>]
+                                     [--musan <dir>] [--musan-snr-db <db>] [--ffmpeg <path>]
 plaudon-speaker-embed embed --model <file.onnx> --fixtures <dir> --plan <plan.json>
                             --out <eval-embeddings.json> [--stats <file.json>] [--threads <n>]";
 
@@ -183,6 +183,26 @@ struct FixtureRecord {
     sources: Vec<String>,
 }
 
+/// The MUSAN noise file one fixture was mixed with.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct NoiseFileRecord {
+    path: String,
+    sha256: String,
+    duration_ms: u32,
+}
+
+/// Everything the noise condition needs to be reproducible from the corpus.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct NoiseProvenance {
+    corpus: String,
+    corpus_licence: String,
+    attribution: String,
+    subset: String,
+    snr_db: f64,
+    selection: String,
+    files: Vec<NoiseFileRecord>,
+}
+
 /// The document `build-fixtures` writes beside the audio.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct FixtureManifestOut {
@@ -192,6 +212,8 @@ struct FixtureManifestOut {
     attribution: String,
     sample_rate_hz: u32,
     recipe: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    noise: Option<NoiseProvenance>,
     speaker_assignment: BTreeMap<String, String>,
     fixtures: Vec<FixtureRecord>,
 }
@@ -201,6 +223,13 @@ fn build_fixtures(arguments: &[String]) -> Result<(), String> {
     let plan_path = PathBuf::from(required(arguments, "--plan")?);
     let out = PathBuf::from(required(arguments, "--out")?);
     let ffmpeg = value(arguments, "--ffmpeg").unwrap_or("ffmpeg").to_owned();
+    let snr_db: f64 = match value(arguments, "--musan-snr-db") {
+        Some(raw) => raw
+            .parse()
+            .map_err(|_| format!("--musan-snr-db expects a number, got `{raw}`"))?,
+        None => DEFAULT_MUSAN_SNR_DB,
+    };
+    let musan = value(arguments, "--musan").map(PathBuf::from);
 
     let plan = PlanView::read(&plan_path)?;
     let readers = librispeech_readers(&librispeech)?;
@@ -223,6 +252,17 @@ fn build_fixtures(arguments: &[String]) -> Result<(), String> {
         (u64::from(plan.utterance_ms) * u64::from(MODEL_SAMPLE_RATE_HZ) / 1_000) as usize;
     let ctx = JobContext::new(JobId::new());
     let mut records = Vec::new();
+    let mut noise_pool = match (plan.conditions.contains(&Condition::NoiseMusan), &musan) {
+        (true, Some(dir)) => Some(MusanPool::open(dir, snr_db)?),
+        (true, None) => {
+            return Err(
+                "the plan asks for `noise_musan`: pass --musan <dir with MUSAN> \
+                        (openslr.org/17), or drop the condition from the plan"
+                    .to_owned(),
+            )
+        }
+        (false, _) => None,
+    };
 
     for (label, reader) in wanted.iter().zip(readers.iter()) {
         let needed = if plan.roster.contains(label) {
@@ -244,7 +284,19 @@ fn build_fixtures(arguments: &[String]) -> Result<(), String> {
             };
             for condition in conditions {
                 let request = SegmentRequest::new(label, utterance, condition);
-                let processed = apply_condition(samples, condition, &out, &ffmpeg)?;
+                let mut sources = sources[index].clone();
+                let processed = apply_condition(
+                    samples,
+                    condition,
+                    ConditionContext {
+                        scratch: &out,
+                        ffmpeg: &ffmpeg,
+                        noise: noise_pool.as_mut(),
+                        token: &request.token(),
+                        job: &ctx,
+                    },
+                    &mut sources,
+                )?;
                 let path = out.join(request.relative_path());
                 if let Some(parent) = path.parent() {
                     std::fs::create_dir_all(parent)
@@ -256,7 +308,7 @@ fn build_fixtures(arguments: &[String]) -> Result<(), String> {
                     path: request.relative_path(),
                     sha256: file_digest(&path)?,
                     duration_ms: plan.utterance_ms,
-                    sources: sources[index].clone(),
+                    sources,
                 });
             }
         }
@@ -290,6 +342,9 @@ fn build_fixtures(arguments: &[String]) -> Result<(), String> {
                  to 16 kHz mono PCM by the same binary"
         ),
     );
+    if let Some(pool) = &noise_pool {
+        recipe.insert("noise_musan".to_owned(), pool.recipe());
+    }
 
     let manifest = FixtureManifestOut {
         schema_version: 1,
@@ -300,6 +355,7 @@ fn build_fixtures(arguments: &[String]) -> Result<(), String> {
             .to_owned(),
         sample_rate_hz: MODEL_SAMPLE_RATE_HZ,
         recipe,
+        noise: noise_pool.as_ref().map(MusanPool::provenance),
         speaker_assignment: assignment,
         fixtures: records,
     };
@@ -348,7 +404,7 @@ fn librispeech_readers(root: &Path) -> Result<Vec<Reader>, String> {
             continue;
         }
         let mut files = Vec::new();
-        collect_flac(&entry.path(), &mut files);
+        collect_extension(&entry.path(), "flac", &mut files);
         files.sort();
         if !files.is_empty() {
             readers.push(Reader { id, files });
@@ -366,15 +422,15 @@ fn librispeech_readers(root: &Path) -> Result<Vec<Reader>, String> {
     Ok(readers)
 }
 
-fn collect_flac(dir: &Path, out: &mut Vec<PathBuf>) {
+fn collect_extension(dir: &Path, extension: &str, out: &mut Vec<PathBuf>) {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return;
     };
     for entry in entries.flatten() {
         let path = entry.path();
         if path.is_dir() {
-            collect_flac(&path, out);
-        } else if path.extension().is_some_and(|ext| ext == "flac") {
+            collect_extension(&path, extension, out);
+        } else if path.extension().is_some_and(|ext| ext == extension) {
             out.push(path);
         }
     }
@@ -456,23 +512,204 @@ fn decode_mono_16k(path: &Path, ctx: &JobContext) -> Result<Vec<f32>, String> {
 
 // ------------------------------------------------------------- conditions
 
+/// Everything a condition may need besides the samples themselves.
+struct ConditionContext<'a> {
+    scratch: &'a Path,
+    ffmpeg: &'a str,
+    noise: Option<&'a mut MusanPool>,
+    token: &'a str,
+    job: &'a JobContext,
+}
+
 fn apply_condition(
     samples: &[f32],
     condition: Condition,
-    scratch: &Path,
-    ffmpeg: &str,
+    cx: ConditionContext<'_>,
+    sources: &mut Vec<String>,
 ) -> Result<Vec<f32>, String> {
     match condition {
         Condition::Clean => Ok(samples.to_vec()),
         Condition::TelephoneBandpass => Ok(bandpass(samples)),
         Condition::RoomImpulseResponse => Ok(reverberate(samples)),
-        Condition::OpusLowBitrate => opus_round_trip(samples, scratch, ffmpeg),
-        Condition::NoiseMusan => Err(
-            "the MUSAN condition needs the MUSAN corpus, which this tool does not fetch; \
-             remove `noise_musan` from the plan's conditions or build it separately"
-                .to_owned(),
-        ),
+        Condition::OpusLowBitrate => opus_round_trip(samples, cx.scratch, cx.ffmpeg),
+        Condition::NoiseMusan => {
+            let pool = cx.noise.ok_or_else(|| {
+                "the MUSAN condition needs the MUSAN corpus: pass --musan <dir>".to_owned()
+            })?;
+            let (mixed, source) = pool.mix(cx.token, samples, cx.job)?;
+            sources.push(source);
+            Ok(mixed)
+        }
     }
+}
+
+// ------------------------------------------------------------------ MUSAN
+
+/// Signal-to-noise ratio of the `noise_musan` condition, in dB.
+///
+/// 10 dB is audible noise that still leaves the speech intelligible — the
+/// band a laptop microphone in a café or an open-plan office actually sits
+/// in. The figure is declared in the fixture manifest, because an SNR that is
+/// not stated makes the condition's error rate meaningless.
+const DEFAULT_MUSAN_SNR_DB: f64 = 10.0;
+
+/// The MUSAN `noise` subset, and the assignment of its files to fixtures.
+///
+/// Selection is derived from the fixture token alone — digest in, index out —
+/// so the same plan and the same corpus produce the same mixtures on any
+/// machine, in any build order, and the manifest can name the file behind
+/// every mixed fixture.
+struct MusanPool {
+    root: PathBuf,
+    files: Vec<String>,
+    snr_db: f64,
+    decoded: BTreeMap<String, Vec<f32>>,
+    used: BTreeMap<String, NoiseFileRecord>,
+}
+
+impl MusanPool {
+    fn open(dir: &Path, snr_db: f64) -> Result<Self, String> {
+        if !snr_db.is_finite() {
+            return Err(format!("--musan-snr-db {snr_db} is not a number"));
+        }
+        let root = if dir.join("musan/noise").is_dir() {
+            dir.join("musan/noise")
+        } else if dir.join("noise").is_dir() {
+            dir.join("noise")
+        } else {
+            dir.to_path_buf()
+        };
+        let mut absolute = Vec::new();
+        collect_extension(&root, "wav", &mut absolute);
+        let mut files: Vec<String> = absolute
+            .iter()
+            .filter_map(|path| path.strip_prefix(&root).ok())
+            .map(|path| path.to_string_lossy().replace('\\', "/"))
+            .collect();
+        files.sort();
+        if files.is_empty() {
+            return Err(format!(
+                "no MUSAN noise wavs under {}; expected the `noise` subset of \
+                 musan.tar.gz (openslr.org/17)",
+                root.display()
+            ));
+        }
+        Ok(Self {
+            root,
+            files,
+            snr_db,
+            decoded: BTreeMap::new(),
+            used: BTreeMap::new(),
+        })
+    }
+
+    /// Mix one fixture with its noise file, returning the provenance line.
+    fn mix(
+        &mut self,
+        token: &str,
+        samples: &[f32],
+        ctx: &JobContext,
+    ) -> Result<(Vec<f32>, String), String> {
+        let digest = Sha256::digest(token.as_bytes());
+        let pick = u64::from_be_bytes(digest[0..8].try_into().expect("8 bytes"));
+        let seek = u64::from_be_bytes(digest[8..16].try_into().expect("8 bytes"));
+        let name = self.files[(pick % self.files.len() as u64) as usize].clone();
+        let noise = self.noise_samples(&name, ctx)?;
+
+        let mut window = Vec::with_capacity(samples.len());
+        let start = if noise.len() > samples.len() {
+            (seek % (noise.len() - samples.len() + 1) as u64) as usize
+        } else {
+            0
+        };
+        // Shorter noise files are tiled, which is what MUSAN's own recipe
+        // does: the subset holds clips from a few seconds upwards.
+        let mut cursor = start;
+        while window.len() < samples.len() {
+            let take = (samples.len() - window.len()).min(noise.len() - cursor);
+            window.extend_from_slice(&noise[cursor..cursor + take]);
+            cursor = (cursor + take) % noise.len();
+        }
+
+        let speech_rms = rms(samples);
+        let noise_rms = rms(&window);
+        if noise_rms <= f64::from(f32::EPSILON) {
+            return Err(format!("MUSAN file {name} is silent"));
+        }
+        let gain = speech_rms / noise_rms * 10.0f64.powf(-self.snr_db / 20.0);
+        let mut mixed: Vec<f32> = samples
+            .iter()
+            .zip(window.iter())
+            .map(|(speech, noise)| (f64::from(*speech) + gain * f64::from(*noise)) as f32)
+            .collect();
+        // Digital clipping would be a second, undeclared condition; the sum is
+        // scaled back as a whole instead, which leaves the SNR untouched.
+        let peak = mixed
+            .iter()
+            .fold(0.0f32, |peak, value| peak.max(value.abs()));
+        if peak > 1.0 {
+            for value in &mut mixed {
+                *value /= peak;
+            }
+        }
+        Ok((mixed, format!("musan:noise/{name}")))
+    }
+
+    fn noise_samples(&mut self, name: &str, ctx: &JobContext) -> Result<&Vec<f32>, String> {
+        if !self.decoded.contains_key(name) {
+            let path = self.root.join(name);
+            let samples = decode_mono_16k(&path, ctx)?;
+            if samples.is_empty() {
+                return Err(format!("{} decoded to nothing", path.display()));
+            }
+            self.used.insert(
+                name.to_owned(),
+                NoiseFileRecord {
+                    path: format!("noise/{name}"),
+                    sha256: file_digest(&path)?,
+                    duration_ms: (samples.len() as u64 * 1_000 / u64::from(MODEL_SAMPLE_RATE_HZ))
+                        as u32,
+                },
+            );
+            self.decoded.insert(name.to_owned(), samples);
+        }
+        Ok(&self.decoded[name])
+    }
+
+    fn recipe(&self) -> String {
+        format!(
+            "the clean fixture summed with one file of the MUSAN `noise` subset at {:.1} dB SNR, \
+             the noise scaled by the ratio of the two RMS levels and the sum divided by its peak \
+             only if it would clip; the file and the offset come from the sha256 of the fixture \
+             token, so the mixture is reproducible from the corpus",
+            self.snr_db
+        )
+    }
+
+    fn provenance(&self) -> NoiseProvenance {
+        NoiseProvenance {
+            corpus: "MUSAN".to_owned(),
+            corpus_licence: "CC-BY-4.0".to_owned(),
+            attribution: "MUSAN (Snyder, Chen and Povey, openslr.org/17), CC-BY-4.0; \
+                          used as test material only, never redistributed"
+                .to_owned(),
+            subset: "noise".to_owned(),
+            snr_db: self.snr_db,
+            selection: "file index = sha256(token)[0..8] mod |files|, start offset = \
+                        sha256(token)[8..16] mod (len - window + 1), over the sorted \
+                        relative paths of every wav under musan/noise"
+                .to_owned(),
+            files: self.used.values().cloned().collect(),
+        }
+    }
+}
+
+fn rms(samples: &[f32]) -> f64 {
+    if samples.is_empty() {
+        return 0.0;
+    }
+    let sum: f64 = samples.iter().map(|value| f64::from(*value).powi(2)).sum();
+    (sum / samples.len() as f64).sqrt()
 }
 
 /// One RBJ biquad.
