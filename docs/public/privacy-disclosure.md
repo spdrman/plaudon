@@ -131,6 +131,25 @@ statute, the obligations — notice, written release, a retention schedule, time
 destruction — fall on you as the person collecting the data. This page tells you
 what the software does; it is not legal advice.
 
+### No warranty / use at your own risk
+
+Plaudon is open-source software under the **MIT License**, provided **"AS IS",
+without warranty of any kind**. In particular, the project makes **no guarantee
+of legal compliance**: no claim is made that using this feature — or the
+application at all — satisfies BIPA, CUBI, My Health My Data, GDPR or any other
+law, and no legal review has been performed or is treated as a release
+condition. Some legal questions about voice data remain genuinely unsettled;
+that uncertainty is known and accepted rather than resolved.
+
+Deciding which laws apply to you, obtaining recording and biometric consent from
+the people you record, and meeting any notice, retention or deletion duties is
+**your** responsibility, and you use the software at your own risk. What this
+project provides instead of a guarantee are engineering safeguards: the feature
+is off by default and absent from default builds, voice data never leaves your
+machine, enrolment requires an explicit three-step consent gate, storage is
+encrypted, retention expires automatically, and the policy above is published so
+you can rely on it.
+
 ## Credentials
 
 Your OpenRouter key and any device authorization material are held in the macOS

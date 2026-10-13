@@ -243,7 +243,7 @@ download — never a silent download (§12 of the base spec).
 | 3D-Speaker CAM++ en (VoxCeleb) | Apache-2.0 [VERIFIED: github.com/modelscope/3D-Speaker LICENSE] | Apache-2.0 asserted on ModelScope despite VoxCeleb training data [VERIFIED: modelscope.cn/models/iic/speech_campplus_sv_en_voxceleb_16k] | No | 29.60 MB | 512 | 0.73% (vendor-reported) [VERIFIED: ModelScope card]; vendor CPU RTF 0.013, CPU model unspecified | Alternate if an Apache-2.0 *label* is a hard requirement; ships a vendor threshold (0.39 cosine similarity) |
 | SpeechBrain ECAPA-TDNN | Apache-2.0 | Apache-2.0 (HF card) | No | [UNVERIFIED] | 192 (standard; [UNVERIFIED] by inspection) | 0.80% [VERIFIED: huggingface.co/speechbrain/spkrec-ecapa-voxceleb] | **Reject for V1: no official ONNX export** (open issue speechbrain#2661); self-export shifts the fidelity burden onto us |
 | pyannote/embedding | MIT | MIT, HF-gated | Yes | — | 512 | 2.8% (card's own figure) | **Reject**: gated and ~4× worse than the above |
-| NVIDIA TitaNet-L | Apache-2.0 (NeMo) | CC-BY-4.0 on HF; NGC pages cite the Apache-2.0 NeMo licence — NVIDIA is inconsistent | No | 101.41 MB (includes a dead 16,681-way classifier head) | 192 | 0.66% [VERIFIED: huggingface.co/nvidia/speakerverification_en_titanet_large] | **Reject for bundling**: trained on LDC Fisher/Switchboard/SRE corpora, which are per-seat and non-redistributable; if the "dataset licence taints weights" theory applies anywhere, it applies here. Counsel question, not an engineering one |
+| NVIDIA TitaNet-L | Apache-2.0 (NeMo) | CC-BY-4.0 on HF; NGC pages cite the Apache-2.0 NeMo licence — NVIDIA is inconsistent | No | 101.41 MB (includes a dead 16,681-way classifier head) | 192 | 0.66% [VERIFIED: huggingface.co/nvidia/speakerverification_en_titanet_large] | **Reject for bundling**: trained on LDC Fisher/Switchboard/SRE corpora, which are per-seat and non-redistributable; if the "dataset licence taints weights" theory applies anywhere, it applies here. An unresolved licensing question we decline to take on, not an engineering one |
 | Resemblyzer / GE2E d-vector | Apache-2.0 repo | No explicit weights statement | No | 17.09 MB (PyTorch) | 256 | No published EER at all [UNVERIFIED] | **Reject**: 2017-era architecture, no ONNX, dormant since 2023 |
 | Whisper-encoder embedding reuse | — | — | — | — | — | Whisper-PMFA reaches 1.42% only with a *newly trained* aggregation head [VERIFIED: arxiv.org/abs/2408.15585] | **Reject**: worse than purpose-built 26 MB models at far higher cost; no redistributable trained head |
 
@@ -748,7 +748,10 @@ voice without explicit opt-in" and "We will distinguish identified speakers (use
 inferred speaker clusters" — and §1.7 — the app "will not make legal-compliance claims or assume a
 PLAUD purchase establishes rights to third-party voices" (both verified against the source text).
 Research pass 2026-10-12; primary sources cited; open legal questions are marked CONTESTED and
-collected in §20/§22. None of this is legal advice; a counsel review is a release gate (VP-131).
+collected in §20/§22. None of this is legal advice, and no legal review gates this release: the
+remaining legal uncertainty is known and accepted by the owner, the software ships under the MIT
+licence "AS IS" with no warranty of any kind — including no warranty of legal compliance — and
+users run it at their own risk (VP-131).
 
 ### 12.1 A voice embedding is biometric data, in every regime that matters
 
@@ -856,8 +859,9 @@ collected in §20/§22. None of this is legal advice; a counsel review is a rele
   always re-runs its own gate and is never implied by an assignment. (c) A name linked to
   transcript content can still be sensitive in the ordinary sense (who said what); nothing in
   this section weakens §16.6-style operational honesty. (d) This boundary is jurisdiction-tested
-  only as far as the cited statute texts go — flagged for the same counsel review as §12.1
-  (VP-131), but it is the reason manual mode ships without the biometric machinery (VP-011), not
+  only as far as the cited statute texts go — known legal uncertainty, accepted by the owner, with
+  the software shipping "AS IS" and no warranty of legal compliance (VP-131). That uncertainty is
+  the reason manual mode ships without the biometric machinery (VP-011), not
   a loophole for storing anything voice-derived: the structural test of §17.1 proves the manual
   path cannot reach embedding code.
 - **VP-128.** **Consent-text clarity.** The activation disclosure (VP-120) states the two-tier
@@ -890,9 +894,11 @@ collected in §20/§22. None of this is legal advice; a counsel review is a rele
   tombstoned name for 30 days for user visibility, then removed. 12 months is the CUBI outer
   bound; the user may shorten it per profile, never lengthen beyond 12 (VP-070 CHECK constraint).
   Expiry runs as a maintenance job and its deletions are journalled (ADR-0072).
-- **VP-131.** Release gate: the retention policy text (BIPA §15(a)'s publicly available policy)
-  ships in `docs/public/`, and a privacy-counsel review of §12 is a named release-evidence item —
-  the feature does not reach a public build without it.
+- **VP-131.** Release requirement: the retention policy text (BIPA §15(a)'s publicly available
+  policy) ships in `docs/public/`, as does the no-warranty / use-at-your-own-risk statement, and
+  the feature stays off by default. No legal review gates the release: the remaining legal
+  uncertainty in §12 and §20(1) is known and accepted by the owner, the MIT licence disclaims all
+  warranties including legal compliance, and users run the software at their own risk.
 
 ### 12.5 Encryption at rest
 
@@ -1109,7 +1115,8 @@ research-appropriate use as test material, attributed in NOTICE).
   "unavailable in this build", like whisper today).
 - **VP-192.** Order of shipping (phases, §19): wire-support + schema first (useful alone — closes
   T12), then matching behind the flag with the fake provider for tests, then the model-pack tier
-  and measured enablement per ADR-0400 conditions, then docs/public updates and the counsel gate
+  and measured enablement per ADR-0400 conditions, then docs/public updates including the
+  no-warranty / use-at-your-own-risk statement
   (VP-131), then default-on *for the build flag* (never for the runtime toggle, which stays
   opt-in forever).
 - **VP-193.** Rollback: the feature flag can be dropped from a release without data loss (tables
@@ -1139,7 +1146,7 @@ below. Issue ids follow the house convention (EPIC P, ≤ 2 phases, ≤ 5 tasks 
 | P2.2 | `PayloadClass::VoiceBiometric` (unconsentable) + egress watch scenario + redaction + fuzz targets | outbound refusal in every mode; local_only_egress extended; corpus replay green |
 | P2.3 | Export/backup/deletion integration: voice namespace (encrypted-only), deletion disclosures, forget-everyone, retention expiry job | plaintext-with-voice unrepresentable; restore re-gates consent; journalled deletes; archive fuzz doc target |
 | P2.4 | Evaluation harness + LibriSpeech/TTS fixture generator + EER/DER reports + threshold calibration | committed benchmark JSON; golden tests pinned to model sha256; cross-device conditions reported |
-| P2.5 | Model-pack tier for the two ONNX artifacts, licence register + NOTICE rows, threat-model row flips, `docs/public` updates, counsel-review evidence item | register tests green; ADR-0400-style conditions documented per artifact; TM-044..048 flipped or re-scoped with named tests |
+| P2.5 | Model-pack tier for the two ONNX artifacts, licence register + NOTICE rows, threat-model row flips, `docs/public` updates including the no-warranty / use-at-your-own-risk statement | register tests green; ADR-0400-style conditions documented per artifact; TM-044..048 flipped or re-scoped with named tests |
 | P2.6 | The two reads P2.1 had no command for: `list_voice_exemplars` (ids, provenance, durations — never vectors) behind the split-by-provenance dialog (VP-091), and `get_cluster_speech` behind the enrolment flow's clean-speech meter (VP-094) | schemas + response scan proving no vector; kittest for the split dialog (ticking, "moving everything is a merge", target attestation) and for the meter (unmeasured ≠ zero, under-minimum disables the enrolment) |
 
 Dependency graph (arrows = "needs"):
@@ -1158,11 +1165,13 @@ parallel; nothing user-visible ships before P2.1 + P2.2 land together.
 
 ## 20. Open questions
 
-1. **Counsel questions (block release, not development):** the TX/WA transfer of the
+1. **Known legal uncertainty (accepted by the owner; blocks nothing):** the TX/WA transfer of the
    *G.T. v. Samsung* control analysis; whether a WA-RCW-19.375 embedding falls in the
    "derived from a recording" carve-out; BIPA exposure of purely personal individual users; the
    EU AI Act "remote" reading for later-meeting recognition of a consented enrollee (all CONTESTED,
-   §12).
+   §12). These remain open questions, not release gates: the project makes no legal-compliance
+   claim, ships "AS IS" under MIT with no warranty, and users carry their own risk and their own
+   duty to obtain consent.
 2. **Model gate:** will ResNet34-LM's pyannote-calibrated threshold transfer to meeting audio on
    the §17 harness, or does V1 ship CAM++-LM with harness-derived thresholds (VP-042)?
 3. **Windows x64 CPU budget:** no published figures exist for any candidate stack; if reference
@@ -1185,7 +1194,7 @@ parallel; nothing user-visible ships before P2.1 + P2.2 land together.
 
 | Risk | Severity | Mitigation / decision |
 |---|---|---|
-| Legal exposure lands on users who skip attendee consent | High | Off-by-default, three-level gate, consent templates and exportable records, retention auto-expiry, blunt in-product responsibility language (§12.2); counsel-reviewed docs are a release gate |
+| Legal exposure lands on users who skip attendee consent | High | Off-by-default, three-level gate, consent templates and exportable records, retention auto-expiry, blunt in-product responsibility language (§12.2); published disclosure in `docs/public/` plus an explicit no-warranty / use-at-your-own-risk statement — the duty and the risk are the user's |
 | Accuracy on real meeting audio far below VoxCeleb headline numbers (far-field, overlap, short turns) | High | Honest targets (AMI-class DER ~17–20%); AMI download-on-demand gate; no shipped claim without the committed harness artifact; suggestion-only UX degrades gracefully |
 | Demographic error disparity harms specific users | High | VP-170/171: no auto-assignment, per-profile calibration, per-condition reporting, plain-language caveat |
 | ONNX runtime supply chain (`ort` is a release candidate; sherpa-onnx is a large C++ dep) | Medium | Path A/B fallback pair; `deny.toml` + register review; out-of-process inference (ADR-0015) contains parser risk |
@@ -1209,7 +1218,7 @@ EPIC before anything ships:
 7. Centroid-vs-multi-exemplar superiority for this exact stack (VP-064) — standard practice,
    validated locally by the harness, no citable benchmark.
 8. The 1.0 s hard floor for any embedding (VP-065) — derived, no single source.
-9. Legal CONTESTED items of §12 and §20(1) — flagged for counsel, not engineering.
+9. Legal CONTESTED items of §12 and §20(1) — known uncertainty accepted by the owner, not engineering work.
 10. `voice_activity_detector` crate licence ("non-standard" on crates.io) — audit before use, if
     used at all.
 11. The claim that per-profile threshold adaptation meaningfully reduces demographic disparity —
