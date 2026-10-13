@@ -18,7 +18,13 @@ default = []
 # build until the §4 gates pass on both reference platforms; the workspace
 # `--all-features` runs exclude this crate for the same reason the Apple
 # bridge is excluded (scripts/pre-commit.sh, docs/PRECOMMIT.md).
-onnx = ["dep:ort", "dep:plaudon-audio", "dep:plaudon-eval", "dep:plaudon-security"]
+onnx = [
+    "dep:ort",
+    "dep:plaudon-audio",
+    "dep:plaudon-eval",
+    "dep:plaudon-security",
+    "dep:plaudon-ai-diarization",
+]
 
 [dependencies]
 async-trait = { workspace = true }
@@ -31,6 +37,11 @@ serde_json = { workspace = true }
 sha2 = { workspace = true }
 thiserror = { workspace = true }
 ort = { workspace = true, optional = true }
+# The diarization contract, its DER metric, the runtime-free half of the
+# segmentation pipeline and the artifact type (ADR-0400). Optional because the
+# segmentation engine is: a default build of this crate is checkpoint facts and
+# a feature front end, nothing more.
+plaudon-ai-diarization = { workspace = true, optional = true }
 plaudon-audio = { workspace = true, optional = true }
 # Inference runs out of process (ADR-0015): the sandbox owns the helper's
 # restrictions, its resource caps and the typed frame protocol.

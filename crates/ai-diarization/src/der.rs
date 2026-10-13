@@ -261,63 +261,66 @@ fn best_mapping(
     mapping
 }
 
-/// Score a hypothesis against a reference annotation.
-#[must_use]
-pub fn diarization_error_rate(
-    reference: &[ReferenceTurn],
-    hypothesis: &[SpeakerTurn],
-    options: DerOptions,
-) -> DerReport {
-    let (ref_frames, hyp_frames, frame_start, _end) = frame_sets(reference, hypothesis);
+/// Which reference frames one accumulation counts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Scope {
+    /// Every scored frame.
+    All,
+    /// Frames where at most one reference speaker is active, including the
+    /// silence a hypothesis may falsely speak over.
+    SingleSpeaker,
+    /// Frames where two or more reference speakers are active at once.
+    Overlapping,
+}
 
-    let mut scored = vec![true; ref_frames.len()];
-    let mut excluded_frames = 0;
-    for (index, keep) in scored.iter_mut().enumerate() {
-        let frame_ms = frame_start + index as u64 * FRAME_MS;
-        let overlap_frame = ref_frames[index].len() > 1;
-        if boundary_excluded(frame_ms, reference, options.collar_ms)
-            || (options.skip_overlap_regions && overlap_frame)
-        {
-            *keep = false;
-            excluded_frames += 1;
+impl Scope {
+    const fn admits(self, reference_speakers: usize) -> bool {
+        match self {
+            Self::All => true,
+            Self::SingleSpeaker => reference_speakers <= 1,
+            Self::Overlapping => reference_speakers > 1,
         }
     }
+}
 
-    let clusters: Vec<String> = {
-        let mut set: BTreeSet<String> = BTreeSet::new();
-        for frame in &hyp_frames {
-            set.extend(frame.iter().cloned());
-        }
-        set.into_iter().collect()
-    };
-    let speakers: Vec<String> = {
-        let mut set: BTreeSet<String> = BTreeSet::new();
-        for frame in &ref_frames {
-            set.extend(frame.iter().cloned());
-        }
-        set.into_iter().collect()
-    };
+/// One scoring run's frame grid, shared by its three accumulations.
+///
+/// The cluster-to-speaker mapping travels with the grid rather than being
+/// decided per scope, because scoring overlap with a mapping optimised for
+/// overlap alone would flatter a system that gets the rest of the session
+/// wrong.
+struct ScoredGrid<'a> {
+    reference: &'a [BTreeSet<String>],
+    hypothesis: &'a [BTreeSet<String>],
+    scored: &'a [bool],
+    mapping: &'a BTreeMap<String, String>,
+    speakers: usize,
+    clusters: usize,
+}
 
-    let counts = cooccurrence(&ref_frames, &hyp_frames, &scored);
-    let mapping = best_mapping(&clusters, &speakers, &counts);
-
+/// Accumulate the three error components over one scope of the frame grid.
+fn accumulate(grid: &ScoredGrid<'_>, scope: Scope, options: DerOptions) -> DerReport {
     let mut missed = 0u64;
     let mut false_alarm = 0u64;
     let mut confusion = 0u64;
     let mut total_reference = 0u64;
     let mut overlapping_reference = 0u64;
     let mut scored_frames = 0usize;
+    let mut excluded_frames = 0usize;
 
-    for (index, keep) in scored.iter().enumerate() {
-        let reference_set = &ref_frames[index];
+    for (index, keep) in grid.scored.iter().enumerate() {
+        let reference_set = &grid.reference[index];
+        let in_scope = *keep && scope.admits(reference_set.len());
         if reference_set.len() > 1 {
-            overlapping_reference += (reference_set.len() as u64 - 1) * FRAME_MS * u64::from(*keep);
+            overlapping_reference +=
+                (reference_set.len() as u64 - 1) * FRAME_MS * u64::from(in_scope);
         }
-        if !keep {
+        if !in_scope {
+            excluded_frames += 1;
             continue;
         }
         scored_frames += 1;
-        let hypothesis_set = &hyp_frames[index];
+        let hypothesis_set = &grid.hypothesis[index];
         let n_ref = reference_set.len() as u64;
         let n_hyp = hypothesis_set.len() as u64;
         total_reference += n_ref * FRAME_MS;
@@ -325,7 +328,7 @@ pub fn diarization_error_rate(
         let correct = hypothesis_set
             .iter()
             .filter(|cluster| {
-                mapping
+                grid.mapping
                     .get(*cluster)
                     .is_some_and(|speaker| reference_set.contains(speaker))
             })
@@ -349,12 +352,100 @@ pub fn diarization_error_rate(
         confusion_ms: confusion,
         total_reference_ms: total_reference,
         overlapping_reference_ms: overlapping_reference,
-        reference_speaker_count: speakers.len(),
-        hypothesis_cluster_count: clusters.len(),
+        reference_speaker_count: grid.speakers,
+        hypothesis_cluster_count: grid.clusters,
         scored_frames,
         excluded_frames,
-        overlap_regions_skipped: options.skip_overlap_regions,
+        overlap_regions_skipped: options.skip_overlap_regions || scope == Scope::SingleSpeaker,
         collar_ms: options.collar_ms,
+    }
+}
+
+/// A DER measurement split by whether the reference holds one voice or several.
+///
+/// Published diarization numbers are routinely quoted with overlap excluded,
+/// which makes a system that cannot represent overlap at all look competitive
+/// with one that can. Reporting both halves of the same run — scored under one
+/// mapping, on one frame grid — is what makes the comparison honest: the
+/// components of [`DerBreakdown::single_speaker`] and
+/// [`DerBreakdown::overlapping`] add up to those of [`DerBreakdown::overall`].
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DerBreakdown {
+    /// Every scored frame.
+    pub overall: DerReport,
+    /// Frames with at most one reference speaker.
+    pub single_speaker: DerReport,
+    /// Frames with two or more simultaneous reference speakers. Empty — and
+    /// therefore zero — when the reference carries no overlap at all, which
+    /// [`DerReport::covers_overlapping_speech`] reports on the overall half.
+    pub overlapping: DerReport,
+}
+
+/// Score a hypothesis against a reference annotation.
+#[must_use]
+pub fn diarization_error_rate(
+    reference: &[ReferenceTurn],
+    hypothesis: &[SpeakerTurn],
+    options: DerOptions,
+) -> DerReport {
+    diarization_error_rate_by_overlap(reference, hypothesis, options).overall
+}
+
+/// Score a hypothesis and split the result by overlapping speech.
+///
+/// One frame grid, one optimal mapping, three accumulations: see
+/// [`DerBreakdown`] for why the split is reported rather than left to a reader
+/// who only ever sees the flattering half.
+#[must_use]
+pub fn diarization_error_rate_by_overlap(
+    reference: &[ReferenceTurn],
+    hypothesis: &[SpeakerTurn],
+    options: DerOptions,
+) -> DerBreakdown {
+    let (ref_frames, hyp_frames, frame_start, _end) = frame_sets(reference, hypothesis);
+
+    let mut scored = vec![true; ref_frames.len()];
+    for (index, keep) in scored.iter_mut().enumerate() {
+        let frame_ms = frame_start + index as u64 * FRAME_MS;
+        let overlap_frame = ref_frames[index].len() > 1;
+        if boundary_excluded(frame_ms, reference, options.collar_ms)
+            || (options.skip_overlap_regions && overlap_frame)
+        {
+            *keep = false;
+        }
+    }
+
+    let clusters: Vec<String> = {
+        let mut set: BTreeSet<String> = BTreeSet::new();
+        for frame in &hyp_frames {
+            set.extend(frame.iter().cloned());
+        }
+        set.into_iter().collect()
+    };
+    let speakers: Vec<String> = {
+        let mut set: BTreeSet<String> = BTreeSet::new();
+        for frame in &ref_frames {
+            set.extend(frame.iter().cloned());
+        }
+        set.into_iter().collect()
+    };
+
+    let counts = cooccurrence(&ref_frames, &hyp_frames, &scored);
+    let mapping = best_mapping(&clusters, &speakers, &counts);
+
+    let grid = ScoredGrid {
+        reference: &ref_frames,
+        hypothesis: &hyp_frames,
+        scored: &scored,
+        mapping: &mapping,
+        speakers: speakers.len(),
+        clusters: clusters.len(),
+    };
+    let score = |scope| accumulate(&grid, scope, options);
+    DerBreakdown {
+        overall: score(Scope::All),
+        single_speaker: score(Scope::SingleSpeaker),
+        overlapping: score(Scope::Overlapping),
     }
 }
 
@@ -405,6 +496,97 @@ mod tests {
         assert!(close(report.der, 1.0), "{report:?}");
         assert_eq!(report.missed_ms, 1_000);
         assert_eq!(report.false_alarm_ms, 0);
+    }
+
+    #[test]
+    fn the_overlap_halves_of_a_breakdown_add_up_to_the_whole() {
+        let reference = vec![
+            ReferenceTurn::new("alice", 0, 2_000),
+            ReferenceTurn::new("bob", 1_500, 3_000),
+        ];
+        // Misses the overlap entirely and speaks 200 ms into the silence.
+        let hypothesis = vec![
+            SpeakerTurn::new("c1", 0, 1_500),
+            SpeakerTurn::new("c2", 1_500, 3_200),
+        ];
+        let split =
+            diarization_error_rate_by_overlap(&reference, &hypothesis, DerOptions::default());
+        assert_eq!(
+            split.single_speaker.missed_ms + split.overlapping.missed_ms,
+            split.overall.missed_ms
+        );
+        assert_eq!(
+            split.single_speaker.false_alarm_ms + split.overlapping.false_alarm_ms,
+            split.overall.false_alarm_ms
+        );
+        assert_eq!(
+            split.single_speaker.confusion_ms + split.overlapping.confusion_ms,
+            split.overall.confusion_ms
+        );
+        assert_eq!(
+            split.single_speaker.total_reference_ms + split.overlapping.total_reference_ms,
+            split.overall.total_reference_ms
+        );
+        assert_eq!(
+            split.single_speaker.scored_frames + split.overlapping.scored_frames,
+            split.overall.scored_frames
+        );
+    }
+
+    #[test]
+    fn missing_every_overlap_scores_one_on_the_overlapping_half_and_well_on_the_other() {
+        let reference = vec![
+            ReferenceTurn::new("alice", 0, 2_000),
+            ReferenceTurn::new("bob", 1_500, 3_000),
+        ];
+        // One voice at a time: the 500 ms of overlap is entirely missed.
+        let hypothesis = vec![
+            SpeakerTurn::new("c1", 0, 1_500),
+            SpeakerTurn::new("c2", 1_500, 3_000),
+        ];
+        let split =
+            diarization_error_rate_by_overlap(&reference, &hypothesis, DerOptions::default());
+        assert!(close(split.single_speaker.der, 0.0), "{split:?}");
+        assert!(close(split.overlapping.der, 0.5), "{split:?}");
+        assert_eq!(split.overlapping.total_reference_ms, 1_000);
+        assert_eq!(split.overlapping.missed_ms, 500);
+        assert!(close(split.overall.der, 500.0 / 3_500.0), "{split:?}");
+    }
+
+    #[test]
+    fn a_breakdown_of_a_reference_without_overlap_reports_an_empty_overlapping_half() {
+        let reference = vec![ReferenceTurn::new("alice", 0, 1_000)];
+        let hypothesis = vec![SpeakerTurn::new("c1", 0, 1_000)];
+        let split =
+            diarization_error_rate_by_overlap(&reference, &hypothesis, DerOptions::default());
+        assert!(!split.overall.covers_overlapping_speech());
+        assert_eq!(split.overlapping.total_reference_ms, 0);
+        assert!(close(split.overlapping.der, 0.0), "{split:?}");
+    }
+
+    #[test]
+    fn the_overall_half_of_a_breakdown_is_what_the_single_entry_point_returns() {
+        let reference = vec![
+            ReferenceTurn::new("alice", 0, 2_000),
+            ReferenceTurn::new("bob", 1_500, 3_000),
+        ];
+        let hypothesis = vec![SpeakerTurn::new("c1", 0, 2_800)];
+        for options in [
+            DerOptions::default(),
+            DerOptions {
+                collar_ms: 250,
+                skip_overlap_regions: false,
+            },
+            DerOptions {
+                collar_ms: 0,
+                skip_overlap_regions: true,
+            },
+        ] {
+            assert_eq!(
+                diarization_error_rate(&reference, &hypothesis, options),
+                diarization_error_rate_by_overlap(&reference, &hypothesis, options).overall
+            );
+        }
     }
 
     #[test]

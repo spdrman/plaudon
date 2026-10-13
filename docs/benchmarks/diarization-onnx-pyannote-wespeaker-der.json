@@ -1,0 +1,911 @@
+{
+  "schema_version": 1,
+  "generator": "plaudon-speaker-embed 0.1.0",
+  "measured_on": "2026-10-13T01:58:47Z",
+  "commit": "0a6b775a03514c08cf9da1a66ac9faf623f2994b",
+  "provider": {
+    "provider_id": "onnx-pyannote-wespeaker",
+    "provider_version": "3.0+voxceleb-2022-10",
+    "validated": false,
+    "models": [
+      {
+        "model_id": "wespeaker-resnet34-lm",
+        "version": "voxceleb-2022-10",
+        "sha256": "e9848563da86f263117134dfd7ad63c92355b37de492b55e325400c9d9c39012",
+        "licence_spdx": "CC-BY-4.0",
+        "role": "256-dimensional speaker embedding over a window of single-speaker speech"
+      },
+      {
+        "model_id": "pyannote-segmentation",
+        "version": "3.0",
+        "sha256": "220ad67ca923bef2fa91f2390c786097bf305bceb5e261d4af67b38e938e1079",
+        "licence_spdx": "MIT",
+        "role": "frame-level speaker-activity segmentation, including overlap"
+      }
+    ],
+    "parameters": [
+      {
+        "name": "window_step_frames",
+        "value": "59",
+        "provenance": "a tenth of the ten-second window, the step pyannote's own pipeline uses"
+      },
+      {
+        "name": "min_track_ms",
+        "value": "1000",
+        "provenance": "declared floor: a shorter track is not embedded at all"
+      },
+      {
+        "name": "cluster.threshold",
+        "value": "0.7045",
+        "provenance": "sherpa-onnx's documented default for this checkpoint pair; not tuned on these sessions"
+      },
+      {
+        "name": "assemble.activity_threshold",
+        "value": "0.50",
+        "provenance": "majority of the windows covering a frame"
+      },
+      {
+        "name": "speaker_count_hint",
+        "value": "none",
+        "provenance": "the speaker count is inferred, never supplied: a hinted run would measure an easier problem than the product's"
+      }
+    ]
+  },
+  "runtime": {
+    "platform": "macos-arm64",
+    "host_cpu": "Apple M5",
+    "os_build": "macos 27.0.1 (26A434)",
+    "intra_op_threads": 1,
+    "peak_rss_bytes": 318439424,
+    "startup_ms": 75,
+    "real_time_factor": 0.14212133569304156
+  },
+  "corpus": {
+    "library_id": "librispeech-session-v1",
+    "corpus": "libri_speech_test_clean_derived",
+    "licence": "CC-BY-4.0",
+    "attribution": "LibriSpeech (Panayotov et al., openslr.org/12), CC-BY-4.0, derived from public-domain LibriVox recordings; used as test material only",
+    "audio_committed": false,
+    "recipe": "each speaker's utterances are cut from their LibriSpeech reader in corpus order, scaled to 0.08 RMS, faded in and out over 160 samples and summed into the session timeline at the plan's offsets; the finished mix is scaled down if its peak exceeds 0.99. Between turns the mix is digital silence."
+  },
+  "sessions": [
+    {
+      "session_id": "librispeech-session-01",
+      "condition": "clean",
+      "media_sha256": "ad3db3c1f7e6543f739d17e6d3048fced79c5e9ead1c81f7727df067e71dcc20",
+      "duration_ms": 102000,
+      "reference_speakers": 4,
+      "reference_speech_ms": 96000,
+      "overlapping_reference_ms": 3000,
+      "hypothesis_clusters": 4,
+      "hypothesis_turns": 30,
+      "elapsed_ms": 14240,
+      "der": {
+        "overall": {
+          "der": 0.11760416666666666,
+          "missed_ms": 1320,
+          "false_alarm_ms": 2730,
+          "confusion_ms": 7240,
+          "total_reference_ms": 96000,
+          "overlapping_reference_ms": 3000,
+          "reference_speaker_count": 4,
+          "hypothesis_cluster_count": 4,
+          "scored_frames": 10204,
+          "excluded_frames": 0,
+          "overlap_regions_skipped": false,
+          "collar_ms": 0
+        },
+        "single_speaker": {
+          "der": 0.11722222222222223,
+          "missed_ms": 1160,
+          "false_alarm_ms": 2730,
+          "confusion_ms": 6660,
+          "total_reference_ms": 90000,
+          "overlapping_reference_ms": 0,
+          "reference_speaker_count": 4,
+          "hypothesis_cluster_count": 4,
+          "scored_frames": 9904,
+          "excluded_frames": 300,
+          "overlap_regions_skipped": true,
+          "collar_ms": 0
+        },
+        "overlapping": {
+          "der": 0.12333333333333334,
+          "missed_ms": 160,
+          "false_alarm_ms": 0,
+          "confusion_ms": 580,
+          "total_reference_ms": 6000,
+          "overlapping_reference_ms": 3000,
+          "reference_speaker_count": 4,
+          "hypothesis_cluster_count": 4,
+          "scored_frames": 300,
+          "excluded_frames": 9904,
+          "overlap_regions_skipped": false,
+          "collar_ms": 0
+        }
+      }
+    },
+    {
+      "session_id": "librispeech-session-01",
+      "condition": "telephone_bandpass",
+      "media_sha256": "cd3d87c9f6226778d875ee0fd3be153f86684f14d2797a1b81dbec7424d0b4b1",
+      "duration_ms": 102000,
+      "reference_speakers": 4,
+      "reference_speech_ms": 96000,
+      "overlapping_reference_ms": 3000,
+      "hypothesis_clusters": 4,
+      "hypothesis_turns": 30,
+      "elapsed_ms": 14377,
+      "der": {
+        "overall": {
+          "der": 0.1275,
+          "missed_ms": 1730,
+          "false_alarm_ms": 4510,
+          "confusion_ms": 6000,
+          "total_reference_ms": 96000,
+          "overlapping_reference_ms": 3000,
+          "reference_speaker_count": 4,
+          "hypothesis_cluster_count": 4,
+          "scored_frames": 10204,
+          "excluded_frames": 0,
+          "overlap_regions_skipped": false,
+          "collar_ms": 0
+        },
+        "single_speaker": {
+          "der": 0.12777777777777777,
+          "missed_ms": 990,
+          "false_alarm_ms": 4510,
+          "confusion_ms": 6000,
+          "total_reference_ms": 90000,
+          "overlapping_reference_ms": 0,
+          "reference_speaker_count": 4,
+          "hypothesis_cluster_count": 4,
+          "scored_frames": 9904,
+          "excluded_frames": 300,
+          "overlap_regions_skipped": true,
+          "collar_ms": 0
+        },
+        "overlapping": {
+          "der": 0.12333333333333334,
+          "missed_ms": 740,
+          "false_alarm_ms": 0,
+          "confusion_ms": 0,
+          "total_reference_ms": 6000,
+          "overlapping_reference_ms": 3000,
+          "reference_speaker_count": 4,
+          "hypothesis_cluster_count": 4,
+          "scored_frames": 300,
+          "excluded_frames": 9904,
+          "overlap_regions_skipped": false,
+          "collar_ms": 0
+        }
+      }
+    },
+    {
+      "session_id": "librispeech-session-01",
+      "condition": "opus_low_bitrate",
+      "media_sha256": "a9f61bcf76f92e140bec5b6382307ad9f8b3f4ac06bd21e4e84441977bd74598",
+      "duration_ms": 102000,
+      "reference_speakers": 4,
+      "reference_speech_ms": 96000,
+      "overlapping_reference_ms": 3000,
+      "hypothesis_clusters": 4,
+      "hypothesis_turns": 29,
+      "elapsed_ms": 14272,
+      "der": {
+        "overall": {
+          "der": 0.16364583333333332,
+          "missed_ms": 2420,
+          "false_alarm_ms": 3310,
+          "confusion_ms": 9980,
+          "total_reference_ms": 96000,
+          "overlapping_reference_ms": 3000,
+          "reference_speaker_count": 4,
+          "hypothesis_cluster_count": 4,
+          "scored_frames": 10204,
+          "excluded_frames": 0,
+          "overlap_regions_skipped": false,
+          "collar_ms": 0
+        },
+        "single_speaker": {
+          "der": 0.165,
+          "missed_ms": 1560,
+          "false_alarm_ms": 3310,
+          "confusion_ms": 9980,
+          "total_reference_ms": 90000,
+          "overlapping_reference_ms": 0,
+          "reference_speaker_count": 4,
+          "hypothesis_cluster_count": 4,
+          "scored_frames": 9904,
+          "excluded_frames": 300,
+          "overlap_regions_skipped": true,
+          "collar_ms": 0
+        },
+        "overlapping": {
+          "der": 0.14333333333333334,
+          "missed_ms": 860,
+          "false_alarm_ms": 0,
+          "confusion_ms": 0,
+          "total_reference_ms": 6000,
+          "overlapping_reference_ms": 3000,
+          "reference_speaker_count": 4,
+          "hypothesis_cluster_count": 4,
+          "scored_frames": 300,
+          "excluded_frames": 9904,
+          "overlap_regions_skipped": false,
+          "collar_ms": 0
+        }
+      }
+    },
+    {
+      "session_id": "librispeech-session-01",
+      "condition": "room_impulse_response",
+      "media_sha256": "61a754fb3e064e0d393001e03591b015465859f26e1eb2a3bcae81d03604bd95",
+      "duration_ms": 102000,
+      "reference_speakers": 4,
+      "reference_speech_ms": 96000,
+      "overlapping_reference_ms": 3000,
+      "hypothesis_clusters": 3,
+      "hypothesis_turns": 33,
+      "elapsed_ms": 14276,
+      "der": {
+        "overall": {
+          "der": 0.34989583333333335,
+          "missed_ms": 2070,
+          "false_alarm_ms": 3020,
+          "confusion_ms": 28500,
+          "total_reference_ms": 96000,
+          "overlapping_reference_ms": 3000,
+          "reference_speaker_count": 4,
+          "hypothesis_cluster_count": 3,
+          "scored_frames": 10204,
+          "excluded_frames": 0,
+          "overlap_regions_skipped": false,
+          "collar_ms": 0
+        },
+        "single_speaker": {
+          "der": 0.34555555555555556,
+          "missed_ms": 1900,
+          "false_alarm_ms": 3020,
+          "confusion_ms": 26180,
+          "total_reference_ms": 90000,
+          "overlapping_reference_ms": 0,
+          "reference_speaker_count": 4,
+          "hypothesis_cluster_count": 3,
+          "scored_frames": 9904,
+          "excluded_frames": 300,
+          "overlap_regions_skipped": true,
+          "collar_ms": 0
+        },
+        "overlapping": {
+          "der": 0.415,
+          "missed_ms": 170,
+          "false_alarm_ms": 0,
+          "confusion_ms": 2320,
+          "total_reference_ms": 6000,
+          "overlapping_reference_ms": 3000,
+          "reference_speaker_count": 4,
+          "hypothesis_cluster_count": 3,
+          "scored_frames": 300,
+          "excluded_frames": 9904,
+          "overlap_regions_skipped": false,
+          "collar_ms": 0
+        }
+      }
+    },
+    {
+      "session_id": "librispeech-session-02",
+      "condition": "clean",
+      "media_sha256": "043a5dd8cd7e3ef1d35022c1f26dd6b00c05714357149acbc7fe98e4fcb42e1d",
+      "duration_ms": 74400,
+      "reference_speakers": 3,
+      "reference_speech_ms": 81600,
+      "overlapping_reference_ms": 10800,
+      "hypothesis_clusters": 3,
+      "hypothesis_turns": 29,
+      "elapsed_ms": 9645,
+      "der": {
+        "overall": {
+          "der": 0.31666666666666665,
+          "missed_ms": 1220,
+          "false_alarm_ms": 7270,
+          "confusion_ms": 17350,
+          "total_reference_ms": 81600,
+          "overlapping_reference_ms": 10800,
+          "reference_speaker_count": 3,
+          "hypothesis_cluster_count": 3,
+          "scored_frames": 7441,
+          "excluded_frames": 0,
+          "overlap_regions_skipped": false,
+          "collar_ms": 0
+        },
+        "single_speaker": {
+          "der": 0.3358333333333333,
+          "missed_ms": 760,
+          "false_alarm_ms": 7270,
+          "confusion_ms": 12120,
+          "total_reference_ms": 60000,
+          "overlapping_reference_ms": 0,
+          "reference_speaker_count": 3,
+          "hypothesis_cluster_count": 3,
+          "scored_frames": 6361,
+          "excluded_frames": 1080,
+          "overlap_regions_skipped": true,
+          "collar_ms": 0
+        },
+        "overlapping": {
+          "der": 0.26342592592592595,
+          "missed_ms": 460,
+          "false_alarm_ms": 0,
+          "confusion_ms": 5230,
+          "total_reference_ms": 21600,
+          "overlapping_reference_ms": 10800,
+          "reference_speaker_count": 3,
+          "hypothesis_cluster_count": 3,
+          "scored_frames": 1080,
+          "excluded_frames": 6361,
+          "overlap_regions_skipped": false,
+          "collar_ms": 0
+        }
+      }
+    },
+    {
+      "session_id": "librispeech-session-02",
+      "condition": "telephone_bandpass",
+      "media_sha256": "9b66cc08ff46b4e42ac3377ca3cfbfc29b40bfa49d721fbd24d752adcf0ebc6a",
+      "duration_ms": 74400,
+      "reference_speakers": 3,
+      "reference_speech_ms": 81600,
+      "overlapping_reference_ms": 10800,
+      "hypothesis_clusters": 4,
+      "hypothesis_turns": 16,
+      "elapsed_ms": 9847,
+      "der": {
+        "overall": {
+          "der": 0.3752450980392157,
+          "missed_ms": 1360,
+          "false_alarm_ms": 6970,
+          "confusion_ms": 22290,
+          "total_reference_ms": 81600,
+          "overlapping_reference_ms": 10800,
+          "reference_speaker_count": 3,
+          "hypothesis_cluster_count": 4,
+          "scored_frames": 7443,
+          "excluded_frames": 0,
+          "overlap_regions_skipped": false,
+          "collar_ms": 0
+        },
+        "single_speaker": {
+          "der": 0.3873333333333333,
+          "missed_ms": 270,
+          "false_alarm_ms": 6970,
+          "confusion_ms": 16000,
+          "total_reference_ms": 60000,
+          "overlapping_reference_ms": 0,
+          "reference_speaker_count": 3,
+          "hypothesis_cluster_count": 4,
+          "scored_frames": 6363,
+          "excluded_frames": 1080,
+          "overlap_regions_skipped": true,
+          "collar_ms": 0
+        },
+        "overlapping": {
+          "der": 0.3416666666666667,
+          "missed_ms": 1090,
+          "false_alarm_ms": 0,
+          "confusion_ms": 6290,
+          "total_reference_ms": 21600,
+          "overlapping_reference_ms": 10800,
+          "reference_speaker_count": 3,
+          "hypothesis_cluster_count": 4,
+          "scored_frames": 1080,
+          "excluded_frames": 6363,
+          "overlap_regions_skipped": false,
+          "collar_ms": 0
+        }
+      }
+    },
+    {
+      "session_id": "librispeech-session-02",
+      "condition": "opus_low_bitrate",
+      "media_sha256": "a6087e7eb6309586f4b034dec14b464c4653d98f23ec642f6baaa76782c6b48d",
+      "duration_ms": 74400,
+      "reference_speakers": 3,
+      "reference_speech_ms": 81600,
+      "overlapping_reference_ms": 10800,
+      "hypothesis_clusters": 4,
+      "hypothesis_turns": 24,
+      "elapsed_ms": 9601,
+      "der": {
+        "overall": {
+          "der": 0.4598039215686274,
+          "missed_ms": 2010,
+          "false_alarm_ms": 7630,
+          "confusion_ms": 27880,
+          "total_reference_ms": 81600,
+          "overlapping_reference_ms": 10800,
+          "reference_speaker_count": 3,
+          "hypothesis_cluster_count": 4,
+          "scored_frames": 7441,
+          "excluded_frames": 0,
+          "overlap_regions_skipped": false,
+          "collar_ms": 0
+        },
+        "single_speaker": {
+          "der": 0.5035,
+          "missed_ms": 730,
+          "false_alarm_ms": 7310,
+          "confusion_ms": 22170,
+          "total_reference_ms": 60000,
+          "overlapping_reference_ms": 0,
+          "reference_speaker_count": 3,
+          "hypothesis_cluster_count": 4,
+          "scored_frames": 6361,
+          "excluded_frames": 1080,
+          "overlap_regions_skipped": true,
+          "collar_ms": 0
+        },
+        "overlapping": {
+          "der": 0.3384259259259259,
+          "missed_ms": 1280,
+          "false_alarm_ms": 320,
+          "confusion_ms": 5710,
+          "total_reference_ms": 21600,
+          "overlapping_reference_ms": 10800,
+          "reference_speaker_count": 3,
+          "hypothesis_cluster_count": 4,
+          "scored_frames": 1080,
+          "excluded_frames": 6361,
+          "overlap_regions_skipped": false,
+          "collar_ms": 0
+        }
+      }
+    },
+    {
+      "session_id": "librispeech-session-02",
+      "condition": "room_impulse_response",
+      "media_sha256": "11726cf4d8809c6f61679d2179fa47f4295fa1210bdc6973b1356ead60a4ed9a",
+      "duration_ms": 74400,
+      "reference_speakers": 3,
+      "reference_speech_ms": 81600,
+      "overlapping_reference_ms": 10800,
+      "hypothesis_clusters": 3,
+      "hypothesis_turns": 20,
+      "elapsed_ms": 10323,
+      "der": {
+        "overall": {
+          "der": 0.3786764705882353,
+          "missed_ms": 1040,
+          "false_alarm_ms": 10300,
+          "confusion_ms": 19560,
+          "total_reference_ms": 81600,
+          "overlapping_reference_ms": 10800,
+          "reference_speaker_count": 3,
+          "hypothesis_cluster_count": 3,
+          "scored_frames": 7441,
+          "excluded_frames": 0,
+          "overlap_regions_skipped": false,
+          "collar_ms": 0
+        },
+        "single_speaker": {
+          "der": 0.4515,
+          "missed_ms": 310,
+          "false_alarm_ms": 9100,
+          "confusion_ms": 17680,
+          "total_reference_ms": 60000,
+          "overlapping_reference_ms": 0,
+          "reference_speaker_count": 3,
+          "hypothesis_cluster_count": 3,
+          "scored_frames": 6361,
+          "excluded_frames": 1080,
+          "overlap_regions_skipped": true,
+          "collar_ms": 0
+        },
+        "overlapping": {
+          "der": 0.1763888888888889,
+          "missed_ms": 730,
+          "false_alarm_ms": 1200,
+          "confusion_ms": 1880,
+          "total_reference_ms": 21600,
+          "overlapping_reference_ms": 10800,
+          "reference_speaker_count": 3,
+          "hypothesis_cluster_count": 3,
+          "scored_frames": 1080,
+          "excluded_frames": 6361,
+          "overlap_regions_skipped": false,
+          "collar_ms": 0
+        }
+      }
+    },
+    {
+      "session_id": "librispeech-session-03",
+      "condition": "clean",
+      "media_sha256": "d427deb72266dd7c7a33ebf80a2ecbe619ca7edbe1be17db0c94ccac047db159",
+      "duration_ms": 90900,
+      "reference_speakers": 3,
+      "reference_speech_ms": 84000,
+      "overlapping_reference_ms": 0,
+      "hypothesis_clusters": 3,
+      "hypothesis_turns": 27,
+      "elapsed_ms": 13750,
+      "der": {
+        "overall": {
+          "der": 0.3523809523809524,
+          "missed_ms": 5230,
+          "false_alarm_ms": 4530,
+          "confusion_ms": 19840,
+          "total_reference_ms": 84000,
+          "overlapping_reference_ms": 0,
+          "reference_speaker_count": 3,
+          "hypothesis_cluster_count": 3,
+          "scored_frames": 9090,
+          "excluded_frames": 0,
+          "overlap_regions_skipped": false,
+          "collar_ms": 0
+        },
+        "single_speaker": {
+          "der": 0.3523809523809524,
+          "missed_ms": 5230,
+          "false_alarm_ms": 4530,
+          "confusion_ms": 19840,
+          "total_reference_ms": 84000,
+          "overlapping_reference_ms": 0,
+          "reference_speaker_count": 3,
+          "hypothesis_cluster_count": 3,
+          "scored_frames": 9090,
+          "excluded_frames": 0,
+          "overlap_regions_skipped": true,
+          "collar_ms": 0
+        },
+        "overlapping": {
+          "der": 0.0,
+          "missed_ms": 0,
+          "false_alarm_ms": 0,
+          "confusion_ms": 0,
+          "total_reference_ms": 0,
+          "overlapping_reference_ms": 0,
+          "reference_speaker_count": 3,
+          "hypothesis_cluster_count": 3,
+          "scored_frames": 0,
+          "excluded_frames": 9090,
+          "overlap_regions_skipped": false,
+          "collar_ms": 0
+        }
+      }
+    },
+    {
+      "session_id": "librispeech-session-03",
+      "condition": "telephone_bandpass",
+      "media_sha256": "d32a8fb7a416d4021671a60bdbd975825fc295fafef279cbb7516b1b370523e9",
+      "duration_ms": 90900,
+      "reference_speakers": 3,
+      "reference_speech_ms": 84000,
+      "overlapping_reference_ms": 0,
+      "hypothesis_clusters": 3,
+      "hypothesis_turns": 14,
+      "elapsed_ms": 13722,
+      "der": {
+        "overall": {
+          "der": 0.41523809523809524,
+          "missed_ms": 670,
+          "false_alarm_ms": 6450,
+          "confusion_ms": 27760,
+          "total_reference_ms": 84000,
+          "overlapping_reference_ms": 0,
+          "reference_speaker_count": 3,
+          "hypothesis_cluster_count": 3,
+          "scored_frames": 9092,
+          "excluded_frames": 0,
+          "overlap_regions_skipped": false,
+          "collar_ms": 0
+        },
+        "single_speaker": {
+          "der": 0.41523809523809524,
+          "missed_ms": 670,
+          "false_alarm_ms": 6450,
+          "confusion_ms": 27760,
+          "total_reference_ms": 84000,
+          "overlapping_reference_ms": 0,
+          "reference_speaker_count": 3,
+          "hypothesis_cluster_count": 3,
+          "scored_frames": 9092,
+          "excluded_frames": 0,
+          "overlap_regions_skipped": true,
+          "collar_ms": 0
+        },
+        "overlapping": {
+          "der": 0.0,
+          "missed_ms": 0,
+          "false_alarm_ms": 0,
+          "confusion_ms": 0,
+          "total_reference_ms": 0,
+          "overlapping_reference_ms": 0,
+          "reference_speaker_count": 3,
+          "hypothesis_cluster_count": 3,
+          "scored_frames": 0,
+          "excluded_frames": 9092,
+          "overlap_regions_skipped": false,
+          "collar_ms": 0
+        }
+      }
+    },
+    {
+      "session_id": "librispeech-session-03",
+      "condition": "opus_low_bitrate",
+      "media_sha256": "6e2ea2633cdf25597f95965dfc10c1848d866334c4244f992c79ee51a85178c1",
+      "duration_ms": 90900,
+      "reference_speakers": 3,
+      "reference_speech_ms": 84000,
+      "overlapping_reference_ms": 0,
+      "hypothesis_clusters": 3,
+      "hypothesis_turns": 16,
+      "elapsed_ms": 13639,
+      "der": {
+        "overall": {
+          "der": 0.3669047619047619,
+          "missed_ms": 770,
+          "false_alarm_ms": 5740,
+          "confusion_ms": 24310,
+          "total_reference_ms": 84000,
+          "overlapping_reference_ms": 0,
+          "reference_speaker_count": 3,
+          "hypothesis_cluster_count": 3,
+          "scored_frames": 9090,
+          "excluded_frames": 0,
+          "overlap_regions_skipped": false,
+          "collar_ms": 0
+        },
+        "single_speaker": {
+          "der": 0.3669047619047619,
+          "missed_ms": 770,
+          "false_alarm_ms": 5740,
+          "confusion_ms": 24310,
+          "total_reference_ms": 84000,
+          "overlapping_reference_ms": 0,
+          "reference_speaker_count": 3,
+          "hypothesis_cluster_count": 3,
+          "scored_frames": 9090,
+          "excluded_frames": 0,
+          "overlap_regions_skipped": true,
+          "collar_ms": 0
+        },
+        "overlapping": {
+          "der": 0.0,
+          "missed_ms": 0,
+          "false_alarm_ms": 0,
+          "confusion_ms": 0,
+          "total_reference_ms": 0,
+          "overlapping_reference_ms": 0,
+          "reference_speaker_count": 3,
+          "hypothesis_cluster_count": 3,
+          "scored_frames": 0,
+          "excluded_frames": 9090,
+          "overlap_regions_skipped": false,
+          "collar_ms": 0
+        }
+      }
+    },
+    {
+      "session_id": "librispeech-session-03",
+      "condition": "room_impulse_response",
+      "media_sha256": "dd5f102a167f9144f052169838b9f070c1d13bc3581dccbae63fba31a2cd7d4d",
+      "duration_ms": 90900,
+      "reference_speakers": 3,
+      "reference_speech_ms": 84000,
+      "overlapping_reference_ms": 0,
+      "hypothesis_clusters": 2,
+      "hypothesis_turns": 9,
+      "elapsed_ms": 14259,
+      "der": {
+        "overall": {
+          "der": 0.5788095238095238,
+          "missed_ms": 30,
+          "false_alarm_ms": 7180,
+          "confusion_ms": 41410,
+          "total_reference_ms": 84000,
+          "overlapping_reference_ms": 0,
+          "reference_speaker_count": 3,
+          "hypothesis_cluster_count": 2,
+          "scored_frames": 9092,
+          "excluded_frames": 0,
+          "overlap_regions_skipped": false,
+          "collar_ms": 0
+        },
+        "single_speaker": {
+          "der": 0.5788095238095238,
+          "missed_ms": 30,
+          "false_alarm_ms": 7180,
+          "confusion_ms": 41410,
+          "total_reference_ms": 84000,
+          "overlapping_reference_ms": 0,
+          "reference_speaker_count": 3,
+          "hypothesis_cluster_count": 2,
+          "scored_frames": 9092,
+          "excluded_frames": 0,
+          "overlap_regions_skipped": true,
+          "collar_ms": 0
+        },
+        "overlapping": {
+          "der": 0.0,
+          "missed_ms": 0,
+          "false_alarm_ms": 0,
+          "confusion_ms": 0,
+          "total_reference_ms": 0,
+          "overlapping_reference_ms": 0,
+          "reference_speaker_count": 3,
+          "hypothesis_cluster_count": 2,
+          "scored_frames": 0,
+          "excluded_frames": 9092,
+          "overlap_regions_skipped": false,
+          "collar_ms": 0
+        }
+      }
+    }
+  ],
+  "by_condition": [
+    {
+      "condition": "clean",
+      "pooled": {
+        "sessions": 3,
+        "overall": {
+          "der": 0.25508409785932723,
+          "missed_ms": 7770,
+          "false_alarm_ms": 14530,
+          "confusion_ms": 44430,
+          "total_reference_ms": 261600,
+          "scored_frames": 26735
+        },
+        "single_speaker": {
+          "der": 0.25769230769230766,
+          "missed_ms": 7150,
+          "false_alarm_ms": 14530,
+          "confusion_ms": 38620,
+          "total_reference_ms": 234000,
+          "scored_frames": 25355
+        },
+        "overlapping": {
+          "der": 0.23297101449275362,
+          "missed_ms": 620,
+          "false_alarm_ms": 0,
+          "confusion_ms": 5810,
+          "total_reference_ms": 27600,
+          "scored_frames": 1380
+        }
+      }
+    },
+    {
+      "condition": "telephone_bandpass",
+      "pooled": {
+        "sessions": 3,
+        "overall": {
+          "der": 0.29717125382263,
+          "missed_ms": 3760,
+          "false_alarm_ms": 17930,
+          "confusion_ms": 56050,
+          "total_reference_ms": 261600,
+          "scored_frames": 26739
+        },
+        "single_speaker": {
+          "der": 0.29752136752136754,
+          "missed_ms": 1930,
+          "false_alarm_ms": 17930,
+          "confusion_ms": 49760,
+          "total_reference_ms": 234000,
+          "scored_frames": 25359
+        },
+        "overlapping": {
+          "der": 0.2942028985507246,
+          "missed_ms": 1830,
+          "false_alarm_ms": 0,
+          "confusion_ms": 6290,
+          "total_reference_ms": 27600,
+          "scored_frames": 1380
+        }
+      }
+    },
+    {
+      "condition": "opus_low_bitrate",
+      "pooled": {
+        "sessions": 3,
+        "overall": {
+          "der": 0.3212920489296636,
+          "missed_ms": 5200,
+          "false_alarm_ms": 16680,
+          "confusion_ms": 62170,
+          "total_reference_ms": 261600,
+          "scored_frames": 26735
+        },
+        "single_speaker": {
+          "der": 0.32427350427350426,
+          "missed_ms": 3060,
+          "false_alarm_ms": 16360,
+          "confusion_ms": 56460,
+          "total_reference_ms": 234000,
+          "scored_frames": 25355
+        },
+        "overlapping": {
+          "der": 0.2960144927536232,
+          "missed_ms": 2140,
+          "false_alarm_ms": 320,
+          "confusion_ms": 5710,
+          "total_reference_ms": 27600,
+          "scored_frames": 1380
+        }
+      }
+    },
+    {
+      "condition": "room_impulse_response",
+      "pooled": {
+        "sessions": 3,
+        "overall": {
+          "der": 0.4323776758409786,
+          "missed_ms": 3140,
+          "false_alarm_ms": 20500,
+          "confusion_ms": 89470,
+          "total_reference_ms": 261600,
+          "scored_frames": 26737
+        },
+        "single_speaker": {
+          "der": 0.45645299145299145,
+          "missed_ms": 2240,
+          "false_alarm_ms": 19300,
+          "confusion_ms": 85270,
+          "total_reference_ms": 234000,
+          "scored_frames": 25357
+        },
+        "overlapping": {
+          "der": 0.22826086956521738,
+          "missed_ms": 900,
+          "false_alarm_ms": 1200,
+          "confusion_ms": 4200,
+          "total_reference_ms": 27600,
+          "scored_frames": 1380
+        }
+      }
+    }
+  ],
+  "overall": {
+    "sessions": 12,
+    "overall": {
+      "der": 0.32648126911314984,
+      "missed_ms": 19870,
+      "false_alarm_ms": 69640,
+      "confusion_ms": 252120,
+      "total_reference_ms": 1046400,
+      "scored_frames": 106946
+    },
+    "single_speaker": {
+      "der": 0.33398504273504276,
+      "missed_ms": 14380,
+      "false_alarm_ms": 68120,
+      "confusion_ms": 230110,
+      "total_reference_ms": 936000,
+      "scored_frames": 101426
+    },
+    "overlapping": {
+      "der": 0.2628623188405797,
+      "missed_ms": 5490,
+      "false_alarm_ms": 1520,
+      "confusion_ms": 22010,
+      "total_reference_ms": 110400,
+      "scored_frames": 5520
+    }
+  },
+  "release_evidence": {
+    "qualifies": false,
+    "blockers": [
+      "`onnx-pyannote-wespeaker` is not in VALIDATED_PROVIDERS: ADR-0400 admits a provider only once all five conditions are met, and this document closes one of them",
+      "measured on macos-arm64 only; ADR-0400 condition 1 and ADR-0081 §4 also require windows-x64",
+      "inference runs in this process; ADR-0015 and VOICE_PROFILES_SPEC §8.1 require a provider that parses untrusted audio to run out of process before it ships",
+      "the sessions are LibriSpeech-derived synthetic mixes, not meeting-domain audio; AMI and ICSI are the domain gate and are download-on-demand only (VP-182)",
+      "ADR-0400 conditions 2 and 3 are documented for the weights in docs/licensing/third-party-register.md, but no user-facing model-pack download, licence disclosure or consent flow exists for diarization yet"
+    ]
+  },
+  "caveats": [
+    "The audio is a synthetic mix of LibriSpeech read speech: one close-talk channel, digital silence between turns and no conversational dynamics. Meeting audio is harder, so this is an upper bound on the quality of this provider in the field, not a prediction of it.",
+    "DER is scored with a zero collar and overlapping speech included. Published figures that quote a 250 ms collar, or that exclude overlap, are not comparable to the `overall` figures here; the `single_speaker` half is the closer analogue.",
+    "The clustering threshold is a declared default, not a value tuned on these sessions. A tuned threshold measured on the same audio it was tuned on would not be a measurement.",
+    "A cluster is not an identity. These figures say nothing about who anybody is (VOICE_PROFILES_SPEC §17.6).",
+    "Accuracy on read English speech by LibriSpeech readers does not transfer to other languages, accents or recording chains (VP-170)."
+  ]
+}

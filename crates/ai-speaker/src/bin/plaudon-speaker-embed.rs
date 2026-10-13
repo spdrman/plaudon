@@ -26,18 +26,31 @@
 //! the vectors themselves.
 
 use std::collections::BTreeMap;
+use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::Arc;
 use std::time::Instant;
 
 use plaudon_ai_contracts::job::JobContext;
+use plaudon_ai_diarization::contract::SpeakerTurn;
+use plaudon_ai_diarization::der::{diarization_error_rate_by_overlap, DerOptions, ReferenceTurn};
+use plaudon_ai_diarization::report::{
+    open_conditions, ConditionPool, CorpusRecord, DerArtifact, ModelRecord, ParameterRecord,
+    PooledDer, ProviderRecord, ReleaseEvidence, RuntimeRecord, SessionMeasurement,
+    DIARIZATION_DER_REPORT_SCHEMA_VERSION,
+};
 use plaudon_ai_speaker::checkpoint::{ModelArtifact, BUNDLE_TIER, MODEL_SAMPLE_RATE_HZ};
+use plaudon_ai_speaker::diarize::{
+    DiarizationOptions, MemorySamples, OnnxDiarizationProvider, PROVIDER_ID,
+};
 use plaudon_ai_speaker::onnx::{EngineOptions, SpeakerEmbeddingModel};
+use plaudon_ai_speaker::segmentation::SegmentationModel;
 use plaudon_audio::decode::{decode_to_canonical_pcm, CanonicalPcmProfile, MemoryPcmSink, PcmSink};
 use plaudon_audio::validate::{validate_media, ValidationRequest};
 use plaudon_domain::ids::JobId;
 use plaudon_eval::speaker::embeddings::{EmbeddingFile, EMBEDDING_FILE_SCHEMA_VERSION};
-use plaudon_eval::speaker::fixtures::Condition;
+use plaudon_eval::speaker::fixtures::{Condition, SessionPlan, SyntheticSession};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -45,7 +58,17 @@ const USAGE: &str = "\
 plaudon-speaker-embed build-fixtures --librispeech <dir> --plan <plan.json> --out <dir>
                                      [--musan <dir>] [--musan-snr-db <db>] [--ffmpeg <path>]
 plaudon-speaker-embed embed --model <file.onnx> --fixtures <dir> --plan <plan.json>
-                            --out <eval-embeddings.json> [--stats <file.json>] [--threads <n>]";
+                            --out <eval-embeddings.json> [--stats <file.json>] [--threads <n>]
+plaudon-speaker-embed build-session --librispeech <dir> --plan <plan.json>
+                                    --sessions <session-plans.json> --out <dir>
+                                    [--conditions clean,room_impulse_response]
+                                    [--musan <dir>] [--musan-snr-db <db>] [--ffmpeg <path>]
+plaudon-speaker-embed diarize --segmentation <file.onnx> --embedding <file.onnx>
+                              --sessions <dir> --out <der.json> --peak-rss-bytes <n>
+                              [--threads <n>] [--cluster-threshold <f>]
+                              [--window-step-frames <n>] [--min-track-ms <n>]
+                              [--threshold-provenance <text>] [--commit <sha>]
+                              [--measured-on <rfc3339>] [--hypothesis-rttm <dir>]";
 
 fn main() {
     let arguments: Vec<String> = std::env::args().skip(1).collect();
@@ -56,6 +79,8 @@ fn main() {
     let result = match command {
         "build-fixtures" => build_fixtures(&arguments[1..]),
         "embed" => embed(&arguments[1..]),
+        "build-session" => build_session(&arguments[1..]),
+        "diarize" => diarize(&arguments[1..]),
         "--help" | "-h" | "help" => {
             println!("{USAGE}");
             return;
@@ -271,7 +296,7 @@ fn build_fixtures(arguments: &[String]) -> Result<(), String> {
             1
         };
         let (utterances, sources) =
-            cut_utterances(reader, needed as usize, utterance_samples, &ctx)
+            cut_utterances(reader, needed as usize, utterance_samples, false, &ctx)
                 .map_err(|error| format!("speaker {label} ({}): {error}", reader.id))?;
 
         for (index, samples) in utterances.iter().enumerate() {
@@ -444,10 +469,19 @@ type CutUtterances = (Vec<Vec<f32>>, Vec<Vec<String>>);
 /// Material is consumed in corpus order and never reused, so an enrolment
 /// utterance and a trial utterance are different speech from the same reader —
 /// which is the whole point of a verification trial.
+///
+/// `trim_silence` removes the pauses inside the corpus material first. The
+/// speaker-matching fixtures do not want that — a window of read speech with
+/// its natural pauses is what the product embeds — but a diarization session
+/// does: its ground truth says "this speaker is active from here to here", and
+/// a fifth of a 4-second turn that is actually a pause would be scored as
+/// speech the provider missed, which measures the fixture rather than the
+/// provider.
 fn cut_utterances(
     reader: &Reader,
     count: usize,
     samples: usize,
+    trim_silence: bool,
     ctx: &JobContext,
 ) -> Result<CutUtterances, String> {
     let mut utterances = Vec::with_capacity(count);
@@ -460,6 +494,11 @@ fn cut_utterances(
             break;
         }
         let decoded = decode_mono_16k(file, ctx)?;
+        let decoded = if trim_silence {
+            speech_only(&decoded)
+        } else {
+            decoded
+        };
         let name = file
             .file_name()
             .map(|name| name.to_string_lossy().into_owned())
@@ -488,6 +527,62 @@ fn cut_utterances(
         ));
     }
     Ok((utterances, provenance))
+}
+
+/// Analysis frame of the silence gate, in samples: 20 ms at 16 kHz.
+const SILENCE_FRAME_SAMPLES: usize = 320;
+
+/// Cross-fade applied where two kept runs are spliced, in samples: 5 ms.
+const SILENCE_SPLICE_SAMPLES: usize = 80;
+
+/// Drop the pauses from one decoded file, leaving continuous speech.
+///
+/// An energy gate at a fraction of the file's own loud level, so a quiet
+/// reader is not deleted and a noisy one is not kept whole; runs of kept
+/// frames are spliced with a short cross-fade, because a hard splice is a
+/// click and a click is an onset a segmentation model is entitled to believe.
+fn speech_only(samples: &[f32]) -> Vec<f32> {
+    let frames: Vec<f32> = samples
+        .chunks(SILENCE_FRAME_SAMPLES)
+        .map(|frame| {
+            let energy: f64 = frame.iter().map(|s| f64::from(*s) * f64::from(*s)).sum();
+            (energy / frame.len() as f64).sqrt() as f32
+        })
+        .collect();
+    let mut sorted = frames.clone();
+    sorted.sort_by(f32::total_cmp);
+    let loud = sorted
+        .get(sorted.len().saturating_mul(9) / 10)
+        .copied()
+        .unwrap_or_default();
+    let threshold = (loud * 0.1).max(0.002);
+
+    let mut out: Vec<f32> = Vec::with_capacity(samples.len());
+    let mut run: Vec<f32> = Vec::new();
+    let flush = |run: &mut Vec<f32>, out: &mut Vec<f32>| {
+        if run.is_empty() {
+            return;
+        }
+        let fade = SILENCE_SPLICE_SAMPLES.min(run.len()).min(out.len());
+        for (index, sample) in run.drain(..).enumerate() {
+            if index < fade {
+                let weight = (index + 1) as f32 / (fade + 1) as f32;
+                let tail = out.len() - fade + index;
+                out[tail] = out[tail] * (1.0 - weight) + sample * weight;
+            } else {
+                out.push(sample);
+            }
+        }
+    };
+    for (index, frame) in samples.chunks(SILENCE_FRAME_SAMPLES).enumerate() {
+        if frames[index] >= threshold {
+            run.extend_from_slice(frame);
+        } else {
+            flush(&mut run, &mut out);
+        }
+    }
+    flush(&mut run, &mut out);
+    out
 }
 
 fn decode_mono_16k(path: &Path, ctx: &JobContext) -> Result<Vec<f32>, String> {
@@ -1113,4 +1208,726 @@ fn artifact_for(path: &Path) -> Result<&'static ModelArtifact, String> {
                     .join(", ")
             )
         })
+}
+
+// --------------------------------------------------------------- sessions
+
+/// The document that holds the session timelines a diarization run measures.
+///
+/// A timeline, not audio: [`SessionPlan::synthesize`] lays the speakers out
+/// deterministically, so the RTTM is exact by construction rather than
+/// annotated, and the only thing this tool adds is the mix a provider needs as
+/// an input.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SessionPlanFile {
+    schema_version: u32,
+    /// Why these timelines exist, carried in the document itself.
+    notes: String,
+    sessions: Vec<SessionPlan>,
+}
+
+/// Level each utterance is scaled to before it is mixed.
+///
+/// Readers differ by more than 10 dB in LibriSpeech, and an unnormalised mix
+/// would measure "can the segmentation model hear the quiet one through the
+/// loud one" rather than diarization.
+const MIX_TARGET_RMS: f32 = 0.08;
+
+/// Fade at each utterance edge, in samples: 10 ms at 16 kHz.
+///
+/// A hard cut into speech is a click, and a click is an onset the segmentation
+/// model is entitled to call speech. The fade is part of the recipe and is
+/// recorded with it.
+const MIX_FADE_SAMPLES: usize = 160;
+
+/// Peak the finished mix is limited to, so overlapping turns cannot clip.
+const MIX_PEAK_CEILING: f32 = 0.99;
+
+/// One built session file and its exact ground truth.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct SessionRecord {
+    session_id: String,
+    condition: String,
+    path: String,
+    rttm_path: String,
+    sha256: String,
+    duration_ms: u64,
+    speakers: Vec<String>,
+    /// Reference speech, counting overlap once per simultaneous speaker.
+    speech_ms: u64,
+    /// Milliseconds during which two speakers are active at once.
+    overlap_ms: u64,
+    turns: Vec<ReferenceTurn>,
+}
+
+/// The document `build-session` writes beside the mixes.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct SessionManifestOut {
+    schema_version: u32,
+    corpus: String,
+    corpus_licence: String,
+    attribution: String,
+    sample_rate_hz: u32,
+    notes: String,
+    recipe: BTreeMap<String, String>,
+    speaker_assignment: BTreeMap<String, String>,
+    sessions: Vec<SessionRecord>,
+}
+
+fn build_session(arguments: &[String]) -> Result<(), String> {
+    let librispeech = PathBuf::from(required(arguments, "--librispeech")?);
+    let plan_path = PathBuf::from(required(arguments, "--plan")?);
+    let sessions_path = PathBuf::from(required(arguments, "--sessions")?);
+    let out = PathBuf::from(required(arguments, "--out")?);
+    let ffmpeg = value(arguments, "--ffmpeg").unwrap_or("ffmpeg").to_owned();
+    let conditions = conditions_argument(arguments)?;
+    let snr_db: f64 = match value(arguments, "--musan-snr-db") {
+        Some(raw) => raw
+            .parse()
+            .map_err(|_| format!("--musan-snr-db expects a number, got `{raw}`"))?,
+        None => DEFAULT_MUSAN_SNR_DB,
+    };
+    let mut noise_pool = match (
+        conditions.contains(&Condition::NoiseMusan),
+        value(arguments, "--musan"),
+    ) {
+        (true, Some(dir)) => Some(MusanPool::open(Path::new(dir), snr_db)?),
+        (true, None) => {
+            return Err(
+                "`noise_musan` needs the MUSAN corpus: pass --musan <dir> (openslr.org/17), \
+                 or drop the condition"
+                    .to_owned(),
+            )
+        }
+        (false, _) => None,
+    };
+
+    let plan = PlanView::read(&plan_path)?;
+    let text = std::fs::read_to_string(&sessions_path)
+        .map_err(|error| format!("reading {}: {error}", sessions_path.display()))?;
+    let document: SessionPlanFile = serde_json::from_str(&text)
+        .map_err(|error| format!("parsing {}: {error}", sessions_path.display()))?;
+    if document.schema_version != 1 {
+        return Err(format!(
+            "{} declares schema version {}, this tool writes 1",
+            sessions_path.display(),
+            document.schema_version
+        ));
+    }
+
+    let readers = librispeech_readers(&librispeech)?;
+    let wanted = plan.speakers();
+    if readers.len() < wanted.len() {
+        return Err(format!(
+            "the plan needs {} speakers, {} has {}",
+            wanted.len(),
+            librispeech.display(),
+            readers.len()
+        ));
+    }
+    // The same assignment `build-fixtures` makes, so `roster-01` is the same
+    // human in the EER artifact and in this one.
+    let mut assignment = BTreeMap::new();
+    let mut reader_by_label = BTreeMap::new();
+    for (label, reader) in wanted.iter().zip(readers.iter()) {
+        assignment.insert(label.clone(), reader.id.clone());
+        reader_by_label.insert(label.clone(), reader.clone());
+    }
+
+    std::fs::create_dir_all(&out)
+        .map_err(|error| format!("creating {}: {error}", out.display()))?;
+    let ctx = JobContext::new(JobId::new());
+    let mut records = Vec::new();
+
+    for session_plan in &document.sessions {
+        let session = session_plan.synthesize();
+        let utterance_samples =
+            (session_plan.utterance_ms * u64::from(MODEL_SAMPLE_RATE_HZ) / 1_000) as usize;
+
+        let mut material: BTreeMap<String, Vec<Vec<f32>>> = BTreeMap::new();
+        for label in &session_plan.speakers {
+            let reader = reader_by_label
+                .get(label)
+                .ok_or_else(|| format!("`{label}` is not a speaker of {}", plan_path.display()))?;
+            let (utterances, _sources) = cut_utterances(
+                reader,
+                session_plan.utterances_per_speaker as usize,
+                utterance_samples,
+                true,
+                &ctx,
+            )
+            .map_err(|error| format!("speaker {label} ({}): {error}", reader.id))?;
+            material.insert(label.clone(), utterances);
+        }
+
+        let mix = mix_session(&session, session_plan.utterance_ms, &material)?;
+        let rttm_name = format!("{}.rttm", session.session_id);
+        std::fs::write(out.join(&rttm_name), session.rttm())
+            .map_err(|error| format!("writing {rttm_name}: {error}"))?;
+
+        for condition in &conditions {
+            let mut sources = Vec::new();
+            let processed = apply_condition(
+                &mix,
+                *condition,
+                ConditionContext {
+                    scratch: &out,
+                    ffmpeg: &ffmpeg,
+                    noise: noise_pool.as_mut(),
+                    token: &session.session_id,
+                    job: &ctx,
+                },
+                &mut sources,
+            )?;
+            let name = format!("{}-{}.wav", session.session_id, condition.as_str());
+            let path = out.join(&name);
+            write_wav(&path, &processed)?;
+            records.push(SessionRecord {
+                session_id: session.session_id.clone(),
+                condition: condition.as_str().to_owned(),
+                path: name,
+                rttm_path: rttm_name.clone(),
+                sha256: file_digest(&path)?,
+                duration_ms: processed.len() as u64 * 1_000 / u64::from(MODEL_SAMPLE_RATE_HZ),
+                speakers: session_plan.speakers.clone(),
+                speech_ms: session.speech_ms(),
+                overlap_ms: session.overlap_ms(),
+                turns: session.reference_turns(),
+            });
+        }
+    }
+
+    let mut recipe = BTreeMap::new();
+    recipe.insert(
+        "mix".to_owned(),
+        format!(
+            "each speaker's utterances are cut from their LibriSpeech reader in corpus order, \
+             scaled to {MIX_TARGET_RMS} RMS, faded in and out over {MIX_FADE_SAMPLES} samples \
+             and summed into the session timeline at the plan's offsets; the finished mix is \
+             scaled down if its peak exceeds {MIX_PEAK_CEILING}. Between turns the mix is \
+             digital silence."
+        ),
+    );
+    recipe.insert(
+        "ground_truth".to_owned(),
+        "plaudon_eval::speaker::fixtures::SessionPlan::synthesize, written as NIST RTTM beside \
+         the audio; the timeline is the ground truth, so no annotation is involved"
+            .to_owned(),
+    );
+    recipe.insert(
+        "telephone_bandpass".to_owned(),
+        "two-pole RBJ high-pass at 300 Hz followed by a two-pole RBJ low-pass at 3400 Hz, \
+         Q = 0.7071, applied to the finished mix"
+            .to_owned(),
+    );
+    recipe.insert(
+        "room_impulse_response".to_owned(),
+        "image-source impulse response of a 5.0 x 4.0 x 2.7 m room, wall reflection 0.6, \
+         12 image orders, convolved with the finished mix and peak-normalised"
+            .to_owned(),
+    );
+    recipe.insert(
+        "opus_low_bitrate".to_owned(),
+        format!(
+            "{ffmpeg} -i <wav> -c:a libopus -b:a 12k -ar 16000 -ac 1 <ogg>, decoded back to \
+             16 kHz mono PCM by the same binary"
+        ),
+    );
+
+    let manifest = SessionManifestOut {
+        schema_version: 1,
+        corpus: "LibriSpeech test-clean".to_owned(),
+        corpus_licence: "CC-BY-4.0".to_owned(),
+        attribution: "LibriSpeech (Panayotov et al., openslr.org/12), CC-BY-4.0, derived from \
+                      public-domain LibriVox recordings; used as test material only"
+            .to_owned(),
+        sample_rate_hz: MODEL_SAMPLE_RATE_HZ,
+        notes: document.notes,
+        recipe,
+        speaker_assignment: assignment,
+        sessions: records,
+    };
+    let path = out.join("sessions.json");
+    std::fs::write(
+        &path,
+        serde_json::to_string_pretty(&manifest)
+            .map_err(|error| format!("serialising the manifest: {error}"))?,
+    )
+    .map_err(|error| format!("writing {}: {error}", path.display()))?;
+
+    println!(
+        "built {} session file(s) under {}",
+        manifest.sessions.len(),
+        out.display()
+    );
+    Ok(())
+}
+
+/// Mix one laid-out session into a single multi-speaker waveform.
+fn mix_session(
+    session: &SyntheticSession,
+    utterance_ms: u64,
+    material: &BTreeMap<String, Vec<Vec<f32>>>,
+) -> Result<Vec<f32>, String> {
+    let rate = u64::from(MODEL_SAMPLE_RATE_HZ);
+    let total = (session.end_ms() * rate / 1_000) as usize;
+    let mut mix = vec![0.0f32; total];
+
+    for turn in &session.turns {
+        let utterances = material
+            .get(&turn.speaker)
+            .ok_or_else(|| format!("no material cut for `{}`", turn.speaker))?;
+        let samples = utterances.get(turn.utterance as usize).ok_or_else(|| {
+            format!(
+                "`{}` needs utterance {} and only {} were cut",
+                turn.speaker,
+                turn.utterance,
+                utterances.len()
+            )
+        })?;
+        if turn.end_ms - turn.start_ms != utterance_ms {
+            return Err(format!(
+                "turn {}..{} is not the plan's {utterance_ms} ms utterance",
+                turn.start_ms, turn.end_ms
+            ));
+        }
+
+        let gain = {
+            let energy: f64 = samples.iter().map(|s| f64::from(*s) * f64::from(*s)).sum();
+            let rms = (energy / samples.len() as f64).sqrt() as f32;
+            if rms > f32::EPSILON {
+                MIX_TARGET_RMS / rms
+            } else {
+                0.0
+            }
+        };
+        let offset = (turn.start_ms * rate / 1_000) as usize;
+        for (index, sample) in samples.iter().enumerate() {
+            let Some(slot) = mix.get_mut(offset + index) else {
+                break;
+            };
+            let fade = fade_gain(index, samples.len());
+            *slot += sample * gain * fade;
+        }
+    }
+
+    let peak = mix.iter().fold(0.0f32, |peak, s| peak.max(s.abs()));
+    if peak > MIX_PEAK_CEILING {
+        let scale = MIX_PEAK_CEILING / peak;
+        for sample in &mut mix {
+            *sample *= scale;
+        }
+    }
+    Ok(mix)
+}
+
+/// Raised-cosine fade at both edges of one utterance.
+fn fade_gain(index: usize, length: usize) -> f32 {
+    let fade = MIX_FADE_SAMPLES.min(length / 2);
+    if fade == 0 {
+        return 1.0;
+    }
+    let position = if index < fade {
+        index
+    } else if index + fade >= length {
+        length - 1 - index
+    } else {
+        return 1.0;
+    };
+    0.5 - 0.5 * (std::f32::consts::PI * (position as f32 / fade as f32)).cos()
+}
+
+/// Conditions named on the command line, `clean` when none are.
+fn conditions_argument(arguments: &[String]) -> Result<Vec<Condition>, String> {
+    let raw = value(arguments, "--conditions").unwrap_or("clean");
+    raw.split(',')
+        .map(str::trim)
+        .filter(|token| !token.is_empty())
+        .map(|token| {
+            serde_json::from_str::<Condition>(&format!("\"{token}\""))
+                .map_err(|_| format!("`{token}` is not a known condition"))
+        })
+        .collect()
+}
+
+// ------------------------------------------------------------- diarization
+
+fn diarize(arguments: &[String]) -> Result<(), String> {
+    let segmentation_path = PathBuf::from(required(arguments, "--segmentation")?);
+    let embedding_path = PathBuf::from(required(arguments, "--embedding")?);
+    let sessions_dir = PathBuf::from(required(arguments, "--sessions")?);
+    let out = PathBuf::from(required(arguments, "--out")?);
+    let peak_rss_bytes: u64 = required(arguments, "--peak-rss-bytes")?
+        .parse()
+        .map_err(|_| "--peak-rss-bytes expects a number of bytes".to_owned())?;
+    let threads: usize = match value(arguments, "--threads") {
+        Some(raw) => raw
+            .parse()
+            .map_err(|_| format!("--threads expects a number, got `{raw}`"))?,
+        None => 1,
+    };
+    let mut options = DiarizationOptions::default();
+    if let Some(raw) = value(arguments, "--cluster-threshold") {
+        options.cluster.threshold = raw
+            .parse()
+            .map_err(|_| format!("--cluster-threshold expects a number, got `{raw}`"))?;
+    }
+    if let Some(raw) = value(arguments, "--window-step-frames") {
+        options.window_step_frames = raw
+            .parse()
+            .map_err(|_| format!("--window-step-frames expects a number, got `{raw}`"))?;
+    }
+    if let Some(raw) = value(arguments, "--min-track-ms") {
+        options.min_track_ms = raw
+            .parse()
+            .map_err(|_| format!("--min-track-ms expects a number, got `{raw}`"))?;
+    }
+    let threshold_provenance = value(arguments, "--threshold-provenance").unwrap_or(
+        "`pyannote/speaker-diarization-3.1`'s published `clustering.threshold` for this exact \
+         checkpoint pair, with its `centroid` linkage; not tuned on these sessions",
+    );
+
+    let manifest_path = sessions_dir.join("sessions.json");
+    let text = std::fs::read_to_string(&manifest_path)
+        .map_err(|error| format!("reading {}: {error}", manifest_path.display()))?;
+    let manifest: SessionManifestOut = serde_json::from_str(&text)
+        .map_err(|error| format!("parsing {}: {error}", manifest_path.display()))?;
+
+    let engine = EngineOptions {
+        intra_op_threads: threads,
+    };
+    let started = Instant::now();
+    let segmentation = SegmentationModel::open(&segmentation_path, engine)
+        .map_err(|error| format!("opening {}: {error}", segmentation_path.display()))?;
+    let embedder =
+        SpeakerEmbeddingModel::open(&embedding_path, artifact_for(&embedding_path)?, engine)
+            .map_err(|error| format!("opening {}: {error}", embedding_path.display()))?;
+    let startup_ms = started.elapsed().as_millis() as u64;
+
+    let scratch = std::env::temp_dir().join("plaudon-diarize-scratch");
+    let provider =
+        OnnxDiarizationProvider::new(Arc::new(segmentation), Arc::new(embedder), options, scratch);
+    let ctx = JobContext::new(JobId::new());
+
+    let mut measurements = Vec::new();
+    let mut audio_seconds = 0.0f64;
+    let mut run_seconds = 0.0f64;
+    for record in &manifest.sessions {
+        let path = sessions_dir.join(&record.path);
+        let samples = read_wav(&path)?;
+        let digest = file_digest(&path)?;
+        if digest != record.sha256 {
+            return Err(format!(
+                "{} is not the file the manifest recorded",
+                path.display()
+            ));
+        }
+
+        let begun = Instant::now();
+        let (turns, stats) = provider
+            .diarize_samples(&MemorySamples(&samples), None, &ctx)
+            .map_err(|error| format!("diarizing {}: {error}", record.path))?;
+        let elapsed = begun.elapsed();
+        run_seconds += elapsed.as_secs_f64();
+        audio_seconds += samples.len() as f64 / f64::from(MODEL_SAMPLE_RATE_HZ);
+
+        if let Some(directory) = value(arguments, "--hypothesis-rttm") {
+            write_hypothesis_rttm(Path::new(directory), record, &turns)?;
+            let path = Path::new(directory).join(format!(
+                "{}-{}-tracks.json",
+                record.session_id, record.condition
+            ));
+            std::fs::write(
+                &path,
+                serde_json::to_string_pretty(
+                    &stats
+                        .assignments
+                        .iter()
+                        .map(|a| {
+                            serde_json::json!({
+                                "window": a.window,
+                                "local_speaker": a.local_speaker,
+                                "start_ms": a.start_ms,
+                                "end_ms": a.end_ms,
+                                "speech_ms": a.speech_ms,
+                                "fitted": a.fitted,
+                                "cluster": a.cluster,
+                            })
+                        })
+                        .collect::<Vec<_>>(),
+                )
+                .map_err(|error| format!("serialising tracks: {error}"))?,
+            )
+            .map_err(|error| format!("writing {}: {error}", path.display()))?;
+        }
+        let der = diarization_error_rate_by_overlap(&record.turns, &turns, DerOptions::default());
+        println!(
+            "{} [{}]: DER {:.4} ({} cluster(s) from {} track(s), {} assigned, {} dropped, \
+             over {} window(s), overlap DER {:.4}) in {:.1} s",
+            record.session_id,
+            record.condition,
+            der.overall.der,
+            stats.clusters,
+            stats.tracks,
+            stats.tracks_assigned,
+            stats.tracks_dropped,
+            stats.windows,
+            der.overlapping.der,
+            elapsed.as_secs_f64()
+        );
+        measurements.push(SessionMeasurement {
+            session_id: record.session_id.clone(),
+            condition: record.condition.clone(),
+            media_sha256: record.sha256.clone(),
+            duration_ms: record.duration_ms,
+            reference_speakers: record.speakers.len(),
+            reference_speech_ms: der.overall.total_reference_ms,
+            overlapping_reference_ms: der.overall.overlapping_reference_ms,
+            hypothesis_clusters: der.overall.hypothesis_cluster_count,
+            hypothesis_turns: turns.len(),
+            elapsed_ms: elapsed.as_millis() as u64,
+            der,
+        });
+    }
+    if measurements.is_empty() {
+        return Err(format!("{} scored no session", manifest_path.display()));
+    }
+
+    let provider_record = ProviderRecord {
+        provider_id: PROVIDER_ID.to_owned(),
+        provider_version: provider.provider_version(),
+        validated: plaudon_ai_diarization::is_validated(PROVIDER_ID),
+        models: BUNDLE_TIER
+            .iter()
+            .map(|artifact| ModelRecord {
+                model_id: artifact.model_id.to_owned(),
+                version: artifact.version.to_owned(),
+                sha256: artifact.sha256_hex.to_owned(),
+                licence_spdx: artifact.licence_spdx.to_owned(),
+                role: artifact.role.to_owned(),
+            })
+            .collect(),
+        parameters: vec![
+            ParameterRecord {
+                name: "window_step_frames".to_owned(),
+                value: options.window_step_frames.to_string(),
+                provenance: "a tenth of the ten-second window, the step pyannote's own \
+                             pipeline uses"
+                    .to_owned(),
+            },
+            ParameterRecord {
+                name: "min_track_ms".to_owned(),
+                value: options.min_track_ms.to_string(),
+                provenance: "declared floor: a shorter track is embedded and assigned, but may \
+                             not shape where a cluster boundary falls"
+                    .to_owned(),
+            },
+            ParameterRecord {
+                name: "min_embed_ms".to_owned(),
+                value: options.min_embed_ms.to_string(),
+                provenance: "declared floor: below it a vector describes the room, not a voice, \
+                             and the track is dropped"
+                    .to_owned(),
+            },
+            ParameterRecord {
+                name: "cluster.min_cluster_tracks".to_owned(),
+                value: options.cluster.min_cluster_tracks.to_string(),
+                provenance: "`pyannote/speaker-diarization-3.1`'s published \
+                             `clustering.min_cluster_size`"
+                    .to_owned(),
+            },
+            ParameterRecord {
+                name: "embedding_exclude_overlap".to_owned(),
+                value: "true".to_owned(),
+                provenance: "a speaker is embedded from the frames where they are the only \
+                             voice, as `pyannote/speaker-diarization-3.1` does; where a track \
+                             has none, the mixture is embedded and the track may not shape the \
+                             clustering"
+                    .to_owned(),
+            },
+            ParameterRecord {
+                name: "cluster.threshold".to_owned(),
+                value: format!("{:.4}", options.cluster.threshold),
+                provenance: threshold_provenance.to_owned(),
+            },
+            ParameterRecord {
+                name: "assemble.activity_threshold".to_owned(),
+                value: format!("{:.2}", options.assemble.activity_threshold),
+                provenance: "majority of the windows covering a frame".to_owned(),
+            },
+            ParameterRecord {
+                name: "speaker_count_hint".to_owned(),
+                value: "none".to_owned(),
+                provenance: "the speaker count is inferred, never supplied: a hinted run \
+                             would measure an easier problem than the product's"
+                    .to_owned(),
+            },
+        ],
+    };
+    let runtime = RuntimeRecord {
+        platform: platform_token(),
+        host_cpu: host_cpu(),
+        os_build: os_build(),
+        intra_op_threads: threads,
+        peak_rss_bytes,
+        startup_ms,
+        real_time_factor: run_seconds / audio_seconds,
+    };
+    let corpus = CorpusRecord {
+        library_id: "librispeech-session-v1".to_owned(),
+        corpus: "libri_speech_test_clean_derived".to_owned(),
+        licence: manifest.corpus_licence.clone(),
+        attribution: manifest.attribution.clone(),
+        audio_committed: false,
+        recipe: manifest
+            .recipe
+            .get("mix")
+            .cloned()
+            .unwrap_or_else(|| "see the session manifest".to_owned()),
+    };
+
+    let mut blockers = open_conditions(&provider_record, &runtime, &measurements);
+    blockers.push(
+        "inference runs in this process; ADR-0015 and VOICE_PROFILES_SPEC §8.1 require a \
+         provider that parses untrusted audio to run out of process before it ships"
+            .to_owned(),
+    );
+    blockers.push(
+        "the sessions are LibriSpeech-derived synthetic mixes, not meeting-domain audio; \
+         AMI and ICSI are the domain gate and are download-on-demand only (VP-182)"
+            .to_owned(),
+    );
+    blockers.push(
+        "ADR-0400 conditions 2 and 3 are documented for the weights in \
+         docs/licensing/third-party-register.md, but no user-facing model-pack download, \
+         licence disclosure or consent flow exists for diarization yet"
+            .to_owned(),
+    );
+
+    let artifact = DerArtifact {
+        schema_version: DIARIZATION_DER_REPORT_SCHEMA_VERSION,
+        generator: format!("plaudon-speaker-embed {}", env!("CARGO_PKG_VERSION")),
+        measured_on: value(arguments, "--measured-on").map_or_else(now_rfc3339, ToOwned::to_owned),
+        commit: value(arguments, "--commit").map_or_else(head_commit, ToOwned::to_owned),
+        provider: provider_record,
+        runtime,
+        corpus,
+        by_condition: ConditionPool::of(&measurements),
+        overall: PooledDer::of(&measurements),
+        sessions: measurements,
+        release_evidence: ReleaseEvidence::new(blockers),
+        caveats: vec![
+            "The audio is a synthetic mix of LibriSpeech read speech: one close-talk channel, \
+             digital silence between turns and no conversational dynamics. Meeting audio is \
+             harder, so this is an upper bound on the quality of this provider in the field, \
+             not a prediction of it."
+                .to_owned(),
+            "DER is scored with a zero collar and overlapping speech included. Published \
+             figures that quote a 250 ms collar, or that exclude overlap, are not comparable \
+             to the `overall` figures here; the `single_speaker` half is the closer analogue."
+                .to_owned(),
+            "The clustering threshold is a declared default, not a value tuned on these \
+             sessions. A tuned threshold measured on the same audio it was tuned on would \
+             not be a measurement."
+                .to_owned(),
+            "A cluster is not an identity. These figures say nothing about who anybody is \
+             (VOICE_PROFILES_SPEC §17.6)."
+                .to_owned(),
+            "Accuracy on read English speech by LibriSpeech readers does not transfer to \
+             other languages, accents or recording chains (VP-170)."
+                .to_owned(),
+        ],
+    };
+
+    if let Some(parent) = out.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|error| format!("creating {}: {error}", parent.display()))?;
+    }
+    let rendered = serde_json::to_string_pretty(&artifact)
+        .map_err(|error| format!("serialising the artifact: {error}"))?;
+    std::fs::write(&out, format!("{rendered}\n"))
+        .map_err(|error| format!("writing {}: {error}", out.display()))?;
+    println!(
+        "pooled DER {:.4} over {} session(s); overlap {:.4}, single speaker {:.4}; wrote {}",
+        artifact.overall.overall.der,
+        artifact.overall.sessions,
+        artifact.overall.overlapping.der,
+        artifact.overall.single_speaker.der,
+        out.display()
+    );
+    Ok(())
+}
+
+/// Write one session's hypothesis as NIST RTTM beside the reference.
+///
+/// Not part of the artifact: the committed document carries rates and counts,
+/// and a turn list is what somebody re-running the measurement needs in order
+/// to see *where* the errors are rather than how many there were.
+fn write_hypothesis_rttm(
+    directory: &Path,
+    record: &SessionRecord,
+    turns: &[SpeakerTurn],
+) -> Result<(), String> {
+    std::fs::create_dir_all(directory)
+        .map_err(|error| format!("creating {}: {error}", directory.display()))?;
+    let mut out = String::new();
+    for turn in turns {
+        let start = turn.start_ms as f64 / 1_000.0;
+        let duration = (turn.end_ms - turn.start_ms) as f64 / 1_000.0;
+        writeln!(
+            out,
+            "SPEAKER {} 1 {start:.3} {duration:.3} <NA> <NA> {} <NA> <NA>",
+            record.session_id, turn.cluster
+        )
+        .expect("formatting into a String cannot fail");
+    }
+    let path = directory.join(format!(
+        "{}-{}-hypothesis.rttm",
+        record.session_id, record.condition
+    ));
+    std::fs::write(&path, out).map_err(|error| format!("writing {}: {error}", path.display()))
+}
+
+/// Platform token, as the evidence documents spell it.
+fn platform_token() -> String {
+    match (std::env::consts::OS, std::env::consts::ARCH) {
+        ("macos", "aarch64") => "macos-arm64".to_owned(),
+        ("windows", "x86_64") => "windows-x64".to_owned(),
+        (os, arch) => format!("{os}-{arch}"),
+    }
+}
+
+fn host_cpu() -> String {
+    command_output("sysctl", &["-n", "machdep.cpu.brand_string"])
+        .unwrap_or_else(|| std::env::consts::ARCH.to_owned())
+}
+
+fn os_build() -> String {
+    let os = std::env::consts::OS;
+    match command_output("sw_vers", &["-productVersion"]) {
+        Some(version) => match command_output("sw_vers", &["-buildVersion"]) {
+            Some(build) => format!("{os} {version} ({build})"),
+            None => format!("{os} {version}"),
+        },
+        None => os.to_owned(),
+    }
+}
+
+fn head_commit() -> String {
+    command_output("git", &["rev-parse", "HEAD"]).unwrap_or_else(|| "unknown".to_owned())
+}
+
+fn now_rfc3339() -> String {
+    command_output("date", &["-u", "+%Y-%m-%dT%H:%M:%SZ"]).unwrap_or_else(|| "unknown".to_owned())
+}
+
+fn command_output(program: &str, arguments: &[&str]) -> Option<String> {
+    let output = Command::new(program).args(arguments).output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let text = String::from_utf8(output.stdout).ok()?;
+    let trimmed = text.trim().to_owned();
+    (!trimmed.is_empty()).then_some(trimmed)
 }
