@@ -5,30 +5,37 @@
 //! * [`SpeakerEmbeddingModel`] is *a checkpoint plus a function from samples
 //!   to a vector*. It owns the ONNX session and the feature front end, it
 //!   verifies the weights against [`crate::checkpoint`] before the session is
-//!   created, and it knows nothing about profiles, thresholds or scores. The
-//!   evaluation harness measures this.
+//!   created, and it knows nothing about profiles, thresholds or scores. It is
+//!   what runs **inside the sandboxed helper process**
+//!   (`src/bin/plaudon-speaker-helper.rs`), and what the evaluation harness
+//!   measures directly when it is measuring the model rather than the product.
 //! * [`OnnxSpeakerEmbedder`] is the [`SpeakerEmbedder`] the product's pipeline
 //!   consumes. It adds exactly what the trait demands and the model cannot
 //!   supply: media decoding, cancellation at the window boundary, and an
 //!   operating point (thresholds plus AS-Norm cohort) that must come from the
 //!   model pack because a checkpoint's thresholds are measured, never chosen.
+//!   It never loads a checkpoint itself: it holds a
+//!   [`SandboxedModel`][crate::sandboxed::SandboxedModel], so the model file
+//!   is parsed and ONNX Runtime is run in a different process under
+//!   `plaudon_security::sandbox` (ADR-0015, VP-025).
 //!
 //! **This engine is behind the off-by-default `onnx` feature and is not wired
 //! into any composition root.** ADR-0081 §4 lets it ship only once RTF, peak
 //! RSS, startup, DER and EER are recorded on *both* reference platforms; one
 //! platform is measured (`docs/hardware/macos-apple-silicon.md`), Windows x64
-//! is not. Two further conditions are open and are not pretended away here:
-//! inference over untrusted audio must run out of process
-//! (ADR-0015 / `plaudon_security::sandbox`), and the operating point must come
-//! from a harness run whose `is_shippable_default()` is true.
+//! is not. One further condition is open and is not pretended away here: the
+//! operating point must come from a harness run whose `is_shippable_default()`
+//! is true.
+//!
+//! Media *decoding* still happens in this process. That is the EPIC F decoder
+//! boundary (open finding F-012), not this one: what moved out of process here
+//! is model parsing and inference, which is what ADR-0081 §3 names.
 //!
 //! **No vector is ever logged.** Errors carry a reason and never a component,
 //! because a log line that carries an embedding is biometric data in a log
 //! (VP-002, VP-112).
 
 use std::fmt;
-use std::fs::File;
-use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
@@ -50,15 +57,13 @@ use plaudon_domain::media::Sha256Digest;
 
 use crate::checkpoint::{verify_artifact, ArtifactError, ModelArtifact, MODEL_SAMPLE_RATE_HZ};
 use crate::fbank::{FbankComputer, FbankError, FbankOptions};
+use crate::sandboxed::SandboxedModel;
 
 /// ONNX graph input the WeSpeaker checkpoint declares.
 const FEATURE_INPUT: &str = "feats";
 
 /// ONNX graph output the WeSpeaker checkpoint declares.
 const EMBEDDING_OUTPUT: &str = "embs";
-
-/// Bytes of PCM read per window-decode chunk.
-const PCM_CHUNK_BYTES: usize = 64 * 1024;
 
 /// Why the engine could not be opened or could not produce a vector.
 #[derive(Debug, thiserror::Error)]
@@ -140,6 +145,42 @@ impl Default for EngineOptions {
     }
 }
 
+/// Pin the session to the CPU execution provider.
+///
+/// `ort` 2.0.0-rc.14 sets ONNX Runtime's `MAX_EFFICIENCY` device policy on
+/// every session it builds, which on this project's two reference platforms
+/// means CoreML on macOS and DirectML on Windows. Three measured facts made
+/// that unsuitable here, all taken on 2026-10-12 on an Apple M5 (macOS 27.0.1,
+/// release build, ONNX Runtime 1.31.0, this checkpoint, one 3 s window):
+///
+/// 1. **CoreML cannot run in the sandbox.** Its model builder compiles the
+///    graph through Apple's compiler, which needs a working directory inside
+///    the *user's* temporary directory. Under the helper's `(deny default)`
+///    profile that write is denied and the session never opens; granting it
+///    would mean handing an inference helper write access to every other
+///    process's scratch area, which is a worse trade than the one below.
+/// 2. **The cost is small.** CPU: 75 ms start-up, 54.8 ms per window
+///    (RTF 0.018), 92 MB resident. CoreML: 442 ms start-up cold, 16.3 ms per
+///    window (RTF 0.0054), 92 MB resident. For a recording of a few windows
+///    the totals are within milliseconds of each other, and both are far
+///    inside the §8 budget.
+/// 3. **The vectors are the same vectors.** Cosine similarity between the two
+///    providers' output for the same input is **0.999974** (largest component
+///    difference 1.2e-3), so the measured operating point and the committed
+///    EER transfer rather than needing to be re-derived.
+///
+/// The fourth reason is not a measurement but a requirement: a biometric
+/// threshold is a property of a checkpoint (VP-051), and a build that silently
+/// ran a different numerical engine on each platform would make "the same
+/// threshold" a claim nobody checked.
+fn cpu_only(
+    builder: ort::session::builder::SessionBuilder,
+) -> Result<ort::session::builder::SessionBuilder, EngineError> {
+    Ok(builder
+        .with_auto_device(ort::session::builder::AutoDevicePolicy::PreferCPU)?
+        .with_execution_providers([ort::ep::CPU::default().build()])?)
+}
+
 /// A loaded, digest-verified speaker-embedding checkpoint.
 pub struct SpeakerEmbeddingModel {
     artifact: &'static ModelArtifact,
@@ -183,10 +224,10 @@ impl SpeakerEmbeddingModel {
         let environment = ort::environment::init()
             .build()
             .map_err(|error| EngineError::Runtime(error.to_string()))?;
-        let session = Session::builder(&environment)?
+        let builder = Session::builder(&environment)?
             .with_intra_threads(options.intra_op_threads)?
-            .with_inter_threads(1)?
-            .commit_from_file(path)?;
+            .with_inter_threads(1)?;
+        let session = cpu_only(builder)?.commit_from_file(path)?;
 
         let inputs: Vec<&str> = session
             .inputs()
@@ -329,11 +370,13 @@ impl Drop for DecodedMedia {
     }
 }
 
-/// The [`SpeakerEmbedder`] implemented over a real checkpoint.
+/// The [`SpeakerEmbedder`] implemented over a sandboxed checkpoint.
+///
+/// Media decoding, cancellation and the operating point live here; the model
+/// and ONNX Runtime live in the helper process the [`SandboxedModel`] owns.
 pub struct OnnxSpeakerEmbedder {
-    model: Arc<SpeakerEmbeddingModel>,
+    model: Arc<SandboxedModel>,
     checkpoint: Arc<EmbedderCheckpoint>,
-    scratch_dir: PathBuf,
     decoded: Mutex<Option<DecodedMedia>>,
 }
 
@@ -350,16 +393,15 @@ impl fmt::Debug for OnnxSpeakerEmbedder {
 }
 
 impl OnnxSpeakerEmbedder {
-    /// Bind a loaded model to its measured operating point.
+    /// Bind a sandboxed model to its measured operating point.
     ///
-    /// `scratch_dir` holds the canonical PCM derivative of whichever recording
-    /// is being embedded; it is removed when the embedder is dropped.
+    /// The canonical PCM derivative of whichever recording is being embedded
+    /// is written into the model's granted scratch directory — the same
+    /// directory the helper was given read access to, because a grant cannot
+    /// be widened once the process is running — and is removed when the
+    /// embedder is dropped.
     #[must_use]
-    pub fn new(
-        model: Arc<SpeakerEmbeddingModel>,
-        operating_point: OperatingPoint,
-        scratch_dir: PathBuf,
-    ) -> Self {
+    pub fn new(model: Arc<SandboxedModel>, operating_point: OperatingPoint) -> Self {
         let checkpoint = Arc::new(EmbedderCheckpoint {
             binding: model.binding().clone(),
             dim: model.dim(),
@@ -371,7 +413,6 @@ impl OnnxSpeakerEmbedder {
         Self {
             model,
             checkpoint,
-            scratch_dir,
             decoded: Mutex::new(None),
         }
     }
@@ -391,10 +432,11 @@ impl OnnxSpeakerEmbedder {
 
         let media = validate_media(path, &ValidationRequest::manual_import())
             .map_err(|_| EngineError::Undecodable)?;
-        std::fs::create_dir_all(&self.scratch_dir).map_err(|_| EngineError::Undecodable)?;
+        let scratch_dir = self.model.scratch_dir();
+        std::fs::create_dir_all(scratch_dir).map_err(|_| EngineError::Undecodable)?;
         let stem = format!("speaker-{}", media.sha256().to_hex());
         let mut scratch =
-            ScratchPcm::create(&self.scratch_dir, &stem).map_err(|_| EngineError::Undecodable)?;
+            ScratchPcm::create(scratch_dir, &stem).map_err(|_| EngineError::Undecodable)?;
         let profile = CanonicalPcmProfile {
             sample_rate_hz: MODEL_SAMPLE_RATE_HZ,
             channel_policy: plaudon_audio::decode::ChannelPolicy::DownmixToMono,
@@ -412,8 +454,12 @@ impl OnnxSpeakerEmbedder {
         Ok(())
     }
 
-    /// Read one window of the decoded derivative as `f32` samples.
-    fn window_samples(&self, window: &EmbedWindow) -> Result<Vec<f32>, EngineError> {
+    /// Resolve a window to a byte range of the decoded derivative.
+    ///
+    /// The samples themselves are never read here: the helper reads them from
+    /// the file it was granted, which is what keeps a window of attacker-
+    /// chosen audio out of this process's inference path.
+    fn window_range(&self, window: &EmbedWindow) -> Result<(PathBuf, u64, u64), EngineError> {
         let cache = self
             .decoded
             .lock()
@@ -426,26 +472,7 @@ impl OnnxSpeakerEmbedder {
         if end_frame <= start_frame {
             return Err(EngineError::WindowTooShort { samples: 0 });
         }
-        let wanted = (end_frame - start_frame) as usize;
-
-        let mut file = File::open(&decoded.pcm).map_err(|_| EngineError::Undecodable)?;
-        file.seek(SeekFrom::Start(start_frame * 4))
-            .map_err(|_| EngineError::Undecodable)?;
-
-        let mut samples = Vec::with_capacity(wanted);
-        let mut buffer = vec![0u8; PCM_CHUNK_BYTES];
-        while samples.len() < wanted {
-            let remaining = (wanted - samples.len()) * 4;
-            let slice = &mut buffer[..remaining.min(PCM_CHUNK_BYTES)];
-            let read = file.read(slice).map_err(|_| EngineError::Undecodable)?;
-            if read == 0 {
-                break;
-            }
-            for chunk in slice[..read].as_chunks::<4>().0 {
-                samples.push(f32::from_le_bytes(*chunk));
-            }
-        }
-        Ok(samples)
+        Ok((decoded.pcm.clone(), start_frame, end_frame - start_frame))
     }
 }
 
@@ -469,8 +496,11 @@ impl SpeakerEmbedder for OnnxSpeakerEmbedder {
         if ctx.is_cancelled() {
             return Err(EmbedError::Cancelled);
         }
-        let samples = self.window_samples(window)?;
-        let values = self.model.embed_samples(&samples)?;
+        let (pcm, start_frame, frames) = self.window_range(window)?;
+        let values: Vec<f32> = self
+            .model
+            .embed_window(&pcm, start_frame, frames)
+            .map_err(EmbedError::from)?;
         Ok(Embedding::l2_normalise(
             self.checkpoint.binding.clone(),
             &values,

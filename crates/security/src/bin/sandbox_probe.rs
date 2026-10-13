@@ -107,6 +107,11 @@ fn handle(request: HelperRequest, retained: &mut Vec<Vec<u8>>) -> HelperResponse
         HelperRequest::AllocateBytes { bytes, graceful } => {
             allocate(bytes, graceful, retained, operation)
         }
+        // The probe is not an inference helper: it carries no model runtime,
+        // so it says so rather than pretending to have embedded anything.
+        HelperRequest::LoadModel { .. } | HelperRequest::EmbedWindow { .. } => {
+            HelperResponse::Unsupported { operation }
+        }
         HelperRequest::BurnCpu { seconds } => burn_cpu(seconds),
         HelperRequest::SleepMs { ms } => {
             std::thread::sleep(Duration::from_millis(ms));

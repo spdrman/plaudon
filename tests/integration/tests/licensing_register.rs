@@ -288,6 +288,84 @@ fn no_speaker_artifact_carries_an_unreviewed_licence() {
     }
 }
 
+/// The vendored inference runtime's facts exist in four places too.
+///
+/// The build links whatever `ORT_LIB_LOCATION` points at, so the digest in
+/// `crates/ai-speaker/src/runtime.rs` is the only thing standing between "the
+/// reviewed ONNX Runtime" and "whatever was in that directory". A register
+/// row, a `NOTICE` line or a fetch script that disagreed with it would be a
+/// provenance claim about bytes nobody checked.
+#[test]
+fn the_vendored_onnx_runtime_matches_the_register() {
+    let register = read("docs/licensing/third-party-register.md");
+    let notice = read("NOTICE");
+    let fetch_sh = read("scripts/fetch-onnxruntime.sh");
+    let fetch_ps1 = read("scripts/fetch-onnxruntime.ps1");
+
+    for archive in plaudon_ai_speaker::runtime::VENDORED_RUNTIMES {
+        for (document, name) in [
+            (&register, "the licence register"),
+            (&notice, "NOTICE"),
+            (&fetch_sh, "scripts/fetch-onnxruntime.sh"),
+            (&fetch_ps1, "scripts/fetch-onnxruntime.ps1"),
+        ] {
+            assert!(
+                document.contains(archive.sha256_hex),
+                "{} does not pin the {} archive by digest",
+                name,
+                archive.target
+            );
+        }
+        assert!(
+            fetch_sh.contains(archive.url) && fetch_ps1.contains(archive.url),
+            "a fetch script does not name the {} archive by its exact URL",
+            archive.target
+        );
+        assert!(
+            register.contains(&archive.byte_length.to_string())
+                && register.contains(&archive.library_byte_length.to_string()),
+            "the register does not record both sizes for {}",
+            archive.target
+        );
+        assert!(
+            register.contains(archive.library_file_name),
+            "the register does not name the library inside the {} archive",
+            archive.target
+        );
+        assert_eq!(
+            archive.licence_spdx, "MIT",
+            "the ONNX Runtime binary ships under MIT; a different licence needs a review, not an \
+             edit"
+        );
+    }
+
+    // The build must not be able to fetch it: `download-binaries` pulls an
+    // HTTP client into the build graph and makes a release build depend on a
+    // CDN (#283).
+    let workspace = read("Cargo.toml");
+    let ort = workspace
+        .split("ort = {")
+        .nth(1)
+        .expect("the workspace must pin ort");
+    let ort = &ort[..ort.find('}').expect("the ort dependency table must close")];
+    assert!(
+        !ort.contains("download-binaries"),
+        "ort's `download-binaries` feature is back: the build would fetch a runtime over TLS"
+    );
+
+    // And the evidence register must say which target was actually linked.
+    let evidence = read("docs/release/voice-profiles-evidence.md");
+    for archive in plaudon_ai_speaker::runtime::VENDORED_RUNTIMES {
+        if !archive.evidence.is_linked() {
+            assert!(
+                evidence.to_ascii_lowercase().contains("windows"),
+                "{} was never linked here and the release-evidence register does not say so",
+                archive.target
+            );
+        }
+    }
+}
+
 /// The release-evidence register must list what this release cannot prove.
 #[test]
 fn the_release_evidence_register_lists_the_benchmarks_and_the_counsel_review() {

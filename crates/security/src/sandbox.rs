@@ -842,6 +842,8 @@ fn discriminant_of(response: &HelperResponse) -> &'static str {
         HelperResponse::Allocated { .. } => "Allocated",
         HelperResponse::CpuBurned { .. } => "CpuBurned",
         HelperResponse::Slept { .. } => "Slept",
+        HelperResponse::ModelLoaded { .. } => "ModelLoaded",
+        HelperResponse::Embedded { .. } => "Embedded",
         HelperResponse::Refused { .. } => "Refused",
         HelperResponse::Unsupported { .. } => "Unsupported",
     }
