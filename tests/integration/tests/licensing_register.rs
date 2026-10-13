@@ -366,9 +366,11 @@ fn the_vendored_onnx_runtime_matches_the_register() {
     }
 }
 
-/// The release-evidence register must list what this release cannot prove.
+/// The release-evidence register must list what this release cannot prove, and
+/// must state that the software carries no warranty rather than naming a legal
+/// review as a gate.
 #[test]
-fn the_release_evidence_register_lists_the_benchmarks_and_the_counsel_review() {
+fn the_release_evidence_register_lists_the_benchmarks_and_the_no_warranty_statement() {
     let evidence = read("docs/release/voice-profiles-evidence.md");
     for artifact in [
         "speaker-match-wespeaker-resnet34-lm-eer.json",
@@ -382,8 +384,18 @@ fn the_release_evidence_register_lists_the_benchmarks_and_the_counsel_review() {
     }
     let lowercase = evidence.to_ascii_lowercase();
     assert!(
-        lowercase.contains("privacy-counsel") || lowercase.contains("privacy counsel"),
-        "the counsel review is not a listed release-evidence item"
+        lowercase.contains("without\nwarranty")
+            || lowercase.contains("without warranty")
+            || lowercase.contains("no warranty"),
+        "the register does not state that the software is provided without warranty"
+    );
+    assert!(
+        lowercase.contains("own risk"),
+        "the register does not state that users run the software at their own risk"
+    );
+    assert!(
+        !lowercase.contains("counsel"),
+        "a legal review is not a release gate for this project"
     );
     assert!(
         lowercase.contains("windows"),
