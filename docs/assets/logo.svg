@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Plaudon logo, light-theme variant (docs/assets/logo-dark.svg is the dark one;
+  the README selects between them with a <picture> media query).
+
+  Original artwork for this repository. The mark is the application icon
+  (apps/plaudon-egui/packaging/icon.svg) at 180px, unchanged except for scale:
+  five rounded capsules of a waveform on the accent tile, no microphone,
+  because Plaudon never records — it reads recordings that already exist.
+
+  The wordmark is drawn from the same primitives as the mark: circles and
+  capsules on one geometric skeleton, stroke 22 with round caps, so it is the
+  waveform's own vocabulary spelling the name. No font file, no traced outline
+  and no third-party asset is used, here or in the icon, which is why neither
+  needs an entry in docs/licensing/third-party-register.md.
+
+  Colours are the design-system light theme (crates/ui/src/theme/tokens.rs:
+  accent #1a4fa0 on accent-text #ffffff), so the logo cannot drift away from
+  the palette the application paints with.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="790" height="200" viewBox="0 0 790 200">
+  <title>Plaudon</title>
+  <g transform="translate(12 10) scale(0.17578125)">
+    <rect x="0" y="0" width="1024" height="1024" rx="228" ry="228" fill="#1a4fa0"/>
+    <g fill="#ffffff">
+      <rect x="264" y="470" width="64" height="84" rx="32"/>
+      <rect x="372" y="398" width="64" height="228" rx="32"/>
+      <rect x="480" y="286" width="64" height="452" rx="32"/>
+      <rect x="588" y="358" width="64" height="308" rx="32"/>
+      <rect x="696" y="442" width="64" height="140" rx="32"/>
+    </g>
+  </g>
+  <g transform="translate(232 7)" fill="none" stroke="#1a4fa0" stroke-width="22"
+     stroke-linecap="round" stroke-linejoin="round">
+    <path d="M11 139 V51 H39 A28 28 0 0 1 39 107 H11"/>
+    <path d="M97 47 V139"/>
+    <circle cx="158" cy="114" r="25"/>
+    <path d="M183 89 V139"/>
+    <path d="M219 89 V114 A25 25 0 0 0 269 114"/>
+    <path d="M269 89 V139"/>
+    <circle cx="330" cy="114" r="25"/>
+    <path d="M355 47 V139"/>
+    <circle cx="416" cy="114" r="25"/>
+    <path d="M477 139 V114 A25 25 0 0 1 527 114 V139"/>
+  </g>
+</svg>

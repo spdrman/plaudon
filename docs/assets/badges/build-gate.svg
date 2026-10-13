@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- GENERATED FILE: run `python3 scripts/make-readme-badges.py` to regenerate. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="219.1" height="20" viewBox="0 0 219.1 20" role="img" aria-label="build gate: pre-commit (CI disabled)">
+  <title>build gate: pre-commit (CI disabled)</title>
+  <clipPath id="chip">
+    <rect width="219.1" height="20" rx="3"/>
+  </clipPath>
+  <g clip-path="url(#chip)">
+    <rect width="67.1" height="20" fill="#30363d"/>
+    <rect x="67.1" width="152" height="20" fill="#4d5359"/>
+  </g>
+  <g fill="#ffffff" font-family="Verdana,DejaVu Sans,Geneva,sans-serif" font-size="11">
+    <text x="6" y="14" textLength="55.1" lengthAdjust="spacingAndGlyphs">build gate</text>
+    <text x="73.1" y="14" textLength="140" lengthAdjust="spacingAndGlyphs">pre-commit (CI disabled)</text>
+  </g>
+</svg>
