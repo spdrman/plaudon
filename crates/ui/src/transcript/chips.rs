@@ -254,16 +254,15 @@ pub fn speaker(
 
 /// One speaker row as the picker offers it.
 ///
-/// The name is the row's rendered label, qualifier included, so the picker
-/// cannot present an inferred cluster as a person; the machine label travels
-/// as the context line, which is how a renamed row stays identifiable.
+/// The row is named with [`SpeakerChoice::render_with_origin`] — the same
+/// sentence the chip above it announces, qualifier and machine label
+/// included. One fact about a speaker gets one wording: a chip that says
+/// "Dana (inferred cluster), machine label Speaker 1" and a list row that
+/// said it differently would be two namings of the same row for a screen
+/// reader to reconcile. It also means the filter matches the machine label,
+/// which is how a renamed row stays findable.
 fn entry(choice: &SpeakerChoice) -> PickerPerson {
-    let person = PickerPerson::new(choice.id.to_string(), choice.render());
-    if choice.label == choice.machine_label {
-        person
-    } else {
-        person.with_detail(format!("machine label {}", choice.machine_label))
-    }
+    PickerPerson::new(choice.id.to_string(), choice.render_with_origin())
 }
 
 fn elide(text: &str, max_chars: usize) -> String {
