@@ -6,6 +6,9 @@ affiliated with or approved by PLAUD, OpenRouter or Apple.
 
 - [Installing Plaudon](./install.md) — Homebrew, WinGet and manual download,
   what is published today, and what is unsigned.
+
+- [Install and open Plaudon on macOS](./install-macos.md) — verifying the
+  download, and getting an unsigned, not-notarized build past Gatekeeper.
 - [Privacy disclosure](./privacy-disclosure.md) — what leaves your machine, when,
   where to, and under what permission.
 - [Vendor dependency matrix](./vendor-matrix.md) — every external service and
