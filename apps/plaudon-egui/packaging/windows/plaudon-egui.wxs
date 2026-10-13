@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Plaudon Windows installer (EPIC O, tasks O2.6 and O2.10; migration plan §3
+  "Bundling").
+
+  WiX v5, producing a per-user `.msi`. This replaced the NSIS `setup.exe` at
+  O2.10, so that what the release workflow publishes is the artifact Windows'
+  own install, upgrade and uninstall path expects. The licence question the
+  NSIS header used to answer is answered the other way round here, and is
+  recorded honestly in docs/licensing/third-party-register.md and in the
+  2026-10-12 amendment to ADR-0024: WiX is MS-RL, but — unlike the NSIS stub,
+  which was *inside* the artifact we handed to a user — nothing of WiX is
+  redistributed. An `.msi` is a database that the operating system's own
+  installer service interprets; the toolset is a build-time compiler and
+  stays on the build machine.
+
+  What this installer is allowed to do, and nothing more:
+
+    * install per user, into %LOCALAPPDATA%\Programs\Plaudon, with
+      Scope="perUser". No elevation, no service, no scheduled task, no
+      machine-wide registry key, no PATH edit, no autostart, and no custom
+      action that runs code — the two CustomAction rows this package contains
+      are type 51 property assignments (SetProperty/SetDirectory below),
+      which set a string and execute nothing.
+    * claim the `.plaudon` archive extension and the `plaudon://` scheme under
+      HKCU\Software\Classes. Those keys are *generated* by
+      `plaudon_platform::associations::windows_registry_script_with_executable`;
+      `apps/plaudon-egui/tests/packaging.rs` parses this file and fails if a
+      key, value or datum here differs from that generator, so the two cannot
+      drift. `OpenWithProgids` is used rather than a forced default, so
+      Windows' own "choose a default app" flow stays in charge.
+    * remove exactly what it wrote, on uninstall. Every registry key below is
+      written by a component (so Windows Installer removes its values) and is
+      covered by a ForceDeleteOnUninstall key, so no empty shell of a key is
+      left behind either. The packaging test proves that too.
+
+  It deliberately does **not** touch the library directory
+  (%APPDATA%\app.plaudon.desktop): an uninstaller that deletes recordings is
+  a data-loss bug, and the user's library outlives the application.
+
+  Three things the NSIS script did that this one does not, stated rather than
+  glossed over:
+
+    * it broadcast SHCNE_ASSOCCHANGED through System::Call, so Explorer
+      picked the association up without a sign-out. A Windows Installer
+      package cannot do that without a custom action, and a custom action is
+      executable code inside an installer, which is the larger risk. Explorer
+      picks the keys up on its own refresh; we do not claim it is instant.
+    * it offered a directory page. This package installs to the per-user
+      location above; `msiexec /i Plaudon-<version>-x64.msi
+      INSTALLFOLDER="…"` still overrides it, which is why the SetDirectory
+      below is conditional.
+    * it wrote its own Programs-and-Features keys. Windows Installer writes
+      that entry itself for a per-user package; the ARP* properties below are
+      what it displays.
+
+  INSTALLFOLDER is a conditional directory property rather than a
+  Directory/@Name tree for one reason, recorded because it looks unusual:
+  `wix build` canonicalises every Directory/@Name through a Windows-only path
+  routine (`Path.GetFullPath("C:\" + name)`), which fails on any non-Windows
+  host, so a .wxs with a named directory tree cannot be compiled — and
+  therefore cannot be checked — anywhere but Windows. Written this way the
+  file compiles in a Linux container (docs/EGUI_BUILD.md §6), which is where
+  this definition is proved to be valid WiX before a Windows runner ever sees
+  it. The resolved path is identical either way.
+
+  Built by scripts/package-windows-egui.ps1, which passes:
+    -d Version=<semver>  and a bind path pointing at the staged payload.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package
+      Name="Plaudon"
+      Manufacturer="Plaudon"
+      Version="$(var.Version)"
+      Language="1033"
+      Codepage="1252"
+      Compressed="yes"
+      InstallerVersion="500"
+      Scope="perUser"
+      UpgradeCode="BB143690-5F22-43C6-9E83-75E7EE43F005">
+
+    <SummaryInformation
+        Description="Plaudon $(var.Version) (per-user installer)"
+        Manufacturer="Plaudon" />
+
+    <!-- One product line, upgraded in place. The UpgradeCode above is the
+         identity of that line and must never change: changing it would make
+         every future version install beside the current one instead of
+         replacing it. -->
+    <MajorUpgrade
+        AllowSameVersionUpgrades="yes"
+        DowngradeErrorMessage="A newer version of [ProductName] is already installed. Uninstall it first if you really want this older one." />
+
+    <MediaTemplate EmbedCab="yes" />
+
+    <Icon Id="PlaudonIcon" SourceFile="plaudon.ico" />
+
+    <!-- Programs and Features. A per-user package registers itself under
+         HKCU\…\Uninstall\<ProductCode>; these properties are what that entry
+         shows. Modify and Repair are hidden because there is nothing to
+         modify — one feature, no options — and repair is a reinstall. -->
+    <Property Id="ARPPRODUCTICON" Value="PlaudonIcon" />
+    <Property Id="ARPNOMODIFY" Value="1" />
+    <Property Id="ARPNOREPAIR" Value="1" />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/spdrman/plaudon" />
+    <Property Id="ARPHELPLINK" Value="https://github.com/spdrman/plaudon" />
+    <!-- An advertised ("Darwin") shortcut makes the shell call the installer
+         on every launch. This product's shortcut is an ordinary one, pointing
+         straight at the installed executable. -->
+    <Property Id="DISABLEADVTSHORTCUTS" Value="1" />
+
+    <StandardDirectory Id="LocalAppDataFolder">
+      <Directory Id="INSTALLFOLDER" />
+    </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder" />
+
+    <SetDirectory Id="INSTALLFOLDER" Value="[LocalAppDataFolder]Programs\Plaudon" Sequence="both" Condition="NOT INSTALLFOLDER" />
+    <SetProperty Id="ARPINSTALLLOCATION" Value="[INSTALLFOLDER]" After="CostFinalize" Sequence="both" />
+
+    <Feature Id="Main" Title="Plaudon" Level="1" AllowAbsent="no" AllowAdvertise="no">
+      <ComponentGroupRef Id="ApplicationComponents" />
+    </Feature>
+
+    <ComponentGroup Id="ApplicationComponents">
+      <!-- Every component installs into the user's profile, so every
+           component's key path is a registry value under HKCU: that is the
+           rule Windows Installer enforces for a per-user install (ICE38),
+           and it is also what makes the uninstall exact. The GUIDs are
+           written out rather than generated because a component whose
+           identity changes between releases is an upgrade bug. -->
+      <Component Id="MainExecutable" Directory="INSTALLFOLDER" Guid="D7FC996D-40C2-4FE6-A114-502D2D782B39">
+        <File Id="PlaudonEgui" Source="plaudon-egui.exe" KeyPath="no" />
+        <RegistryKey Root="HKCU" Key="Software\Plaudon" ForceDeleteOnUninstall="yes" />
+        <RegistryValue Root="HKCU" Key="Software\Plaudon" Name="InstallDir" Type="string" Value="[INSTALLFOLDER]" KeyPath="yes" />
+      </Component>
+
+      <!-- The user-local automation CLI ships beside the application, not
+           inside it (EPIC M, spec 14.5). It is put on no PATH: whoever wants
+           it runs it from the install directory. -->
+      <Component Id="AutomationCli" Directory="INSTALLFOLDER" Guid="2436BA3B-72A9-4D17-A52F-79D71891DEE7">
+        <File Id="PlaudonCli" Source="plaudon.exe" KeyPath="no" />
+        <RegistryValue Root="HKCU" Key="Software\Plaudon" Name="Version" Type="string" Value="$(var.Version)" KeyPath="yes" />
+      </Component>
+
+      <Component Id="StartMenuShortcut" Directory="INSTALLFOLDER" Guid="764C3E17-FADE-4841-95C5-A9D5A8985F9C">
+        <File Id="PlaudonIconFile" Source="plaudon.ico" KeyPath="no" />
+        <Shortcut
+            Id="PlaudonStartMenuShortcut"
+            Directory="ProgramMenuFolder"
+            Name="Plaudon"
+            Description="Plaudon"
+            Target="[#PlaudonEgui]"
+            WorkingDirectory="INSTALLFOLDER"
+            Icon="PlaudonIcon"
+            IconIndex="0"
+            Advertise="no" />
+        <RegistryValue Root="HKCU" Key="Software\Plaudon" Name="StartMenuShortcut" Type="string" Value="[ProgramMenuFolder]Plaudon.lnk" KeyPath="yes" />
+      </Component>
+
+      <!-- File association and protocol handler.
+           Mirrors plaudon_platform::associations::windows_registry_script
+           with %EXEPATH% resolved to the installed executable, which here is
+           the formatted reference [#PlaudonEgui]. Keep in lockstep; the
+           packaging test enforces it, including that nothing is written
+           outside HKCU. -->
+      <Component Id="FileAssociations" Directory="INSTALLFOLDER" Guid="CAA0DB50-5450-4AED-A8C9-FAD1E9FF1A87">
+        <RegistryKey Root="HKCU" Key="Software\Classes\.plaudon" ForceDeleteOnUninstall="yes" />
+        <RegistryKey Root="HKCU" Key="Software\Classes\Plaudon.Archive" ForceDeleteOnUninstall="yes" />
+        <RegistryKey Root="HKCU" Key="Software\Classes\plaudon" ForceDeleteOnUninstall="yes" />
+
+        <RegistryValue Root="HKCU" Key="Software\Classes\.plaudon" Type="string" Value="Plaudon.Archive" KeyPath="yes" />
+        <RegistryValue Root="HKCU" Key="Software\Classes\.plaudon\OpenWithProgids" Name="Plaudon.Archive" Type="string" Value="" />
+        <RegistryValue Root="HKCU" Key="Software\Classes\Plaudon.Archive" Type="string" Value="Plaudon portable archive" />
+        <RegistryValue Root="HKCU" Key="Software\Classes\Plaudon.Archive\DefaultIcon" Type="string" Value="&quot;[#PlaudonEgui]&quot;,0" />
+        <RegistryValue Root="HKCU" Key="Software\Classes\Plaudon.Archive\shell\open\command" Type="string" Value="&quot;[#PlaudonEgui]&quot; &quot;%1&quot;" />
+        <RegistryValue Root="HKCU" Key="Software\Classes\plaudon" Type="string" Value="URL:Plaudon Protocol" />
+        <RegistryValue Root="HKCU" Key="Software\Classes\plaudon" Name="URL Protocol" Type="string" Value="" />
+        <RegistryValue Root="HKCU" Key="Software\Classes\plaudon\DefaultIcon" Type="string" Value="&quot;[#PlaudonEgui]&quot;,0" />
+        <RegistryValue Root="HKCU" Key="Software\Classes\plaudon\shell\open\command" Type="string" Value="&quot;[#PlaudonEgui]&quot; &quot;%1&quot;" />
+      </Component>
+    </ComponentGroup>
+  </Package>
+</Wix>

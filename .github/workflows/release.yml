@@ -1,0 +1,653 @@
+name: Release
+
+# The two artifacts a user installs, built on the platforms they run on
+# (task O2.10, #250; spec 16.5, 18.4, 19 Phase 9):
+#
+#   macOS   arm64 Plaudon.app, zipped, built by scripts/package-macos-egui.sh
+#   Windows x64 .msi, built by scripts/package-windows-egui.ps1 over WiX
+#
+# A release is cut by moving `main` onto the `release` branch:
+#
+#   git push origin main:release
+#
+# That push is the trigger. This file then does the whole of it — build, tag,
+# release, merge back — with no manual step and no external script beyond the
+# repository's own packaging scripts:
+#
+#   version     reads the workspace version and refuses to run if v<version>
+#               is already tagged
+#   macos       builds and smoke-tests Plaudon.app.zip
+#   windows     builds and smoke-tests the .msi
+#   publish     creates the tag v<version> at the released commit and drafts
+#               the GitHub release with both artifacts, their checksums and
+#               both signing reports
+#   merge-back  merges `release` back into `main` through a pull request
+#
+# `workflow_dispatch` runs the two build jobs and stops there: artifacts, no
+# tag, no release, no merge.
+#
+# Signing is secrets-driven and entirely optional. Without credentials both
+# packaging scripts exit 3 — "built and verifiable, NOT publishable" — and
+# this workflow treats that as success with a warning: the artifacts are
+# uploaded, labelled UNSIGNED / NOT NOTARIZED, and the release is a draft
+# prerelease. It never publishes a stable release for an artifact whose own
+# signing report does not say `verified`, and it never claims notarization
+# that was not performed.
+#
+# Two GitHub behaviours this file is deliberately built around:
+#
+#   * Anything done with GITHUB_TOKEN — the tag, the release, the merge
+#     commit on `main` — raises no workflow event. Nothing here waits for a
+#     downstream workflow, and CI does not re-run on the merge commit; the
+#     commit that was built and released is the one that lands on `main`.
+#   * `gh pr create` from a workflow needs "Allow GitHub Actions to create and
+#     approve pull requests" (repository Settings → Actions → General →
+#     Workflow permissions). The merge-back job detects its absence and prints
+#     exactly what to switch on rather than failing with GitHub's message.
+
+on:
+  push:
+    branches:
+      - release
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  # The packaging legs build and launch the application; nothing in a release
+  # build may reach a network service (spec 22(15)).
+  PLAUDON_LOCAL_ONLY: "1"
+
+jobs:
+  version:
+    name: Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.workspace.outputs.version }}
+      tag: ${{ steps.workspace.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: The release is the workspace version, and it must be new
+        id: workspace
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          if [ -z "$version" ]; then
+            echo "the workspace version could not be read from Cargo.toml" >&2
+            exit 1
+          fi
+          tag="v$version"
+          {
+            echo "version=$version"
+            echo "tag=$tag"
+          } >> "$GITHUB_OUTPUT"
+          echo "workspace version $version, tag $tag"
+          if [ "$EVENT_NAME" != "push" ]; then
+            echo "workflow_dispatch: artifacts only, no tag and no release"
+            exit 0
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+            echo "::error::$tag already exists, so this push to release would publish a version that has already been released." >&2
+            echo "Bump the workspace version in Cargo.toml and push again, or delete the tag if it was a mistake." >&2
+            exit 1
+          fi
+
+  macos:
+    name: macOS arm64 (.app)
+    needs: version
+    runs-on: macos-15
+    env:
+      # Apple silicon runners have three cores; the packaging script would
+      # otherwise use the workstation default of two.
+      CARGO_BUILD_JOBS: "3"
+      # The local whisper engine is what makes a released bundle different
+      # from a development one (docs/EGUI_BUILD.md).
+      #
+      # `apple-bridge` is deliberately **not** here, and that is a gap rather
+      # than a preference: native/apple-bridge's Swift sources use
+      # `SpeechTranscriber`, `AssetInventory` and — under
+      # `#available(macOS 27.0, *)` — `LanguageModelError`, so the bridge only
+      # compiles against the macOS 27 SDK. No hosted runner image has one:
+      # macos-15 carries Xcode 16.4 and macos-26 tops out at Xcode 26.6, and
+      # both were tried. Until an image ships Xcode 27, a released bundle
+      # reports the Apple engines as unavailable in this build, and
+      # `cargo_features` in the signing report says exactly what was built.
+      PLAUDON_RELEASE_FEATURES: local-whisper
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the pinned toolchain
+        run: rustup show
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release-macos-15
+
+      - name: Toolchain report
+        run: |
+          rustc --version --verbose
+          swiftc --version
+          xcodebuild -version
+
+      - name: C++ headers for whisper-rs
+        # Two separate exports: CXXFLAGS has to see the resolved SDKROOT, and
+        # a single `export A=$(…) B="…$A…"` evaluates B against the old A.
+        shell: bash
+        run: |
+          sdk=$(xcrun --show-sdk-path)
+          {
+            echo "SDKROOT=$sdk"
+            echo "CXXFLAGS=-isystem $sdk/usr/include/c++/v1"
+          } >> "$GITHUB_ENV"
+
+      - name: Developer ID keychain
+        # Optional. With no certificate secret the packaging script applies an
+        # ad-hoc signature and reports `adhoc_verified`, which is honest and
+        # not publishable. The keychain is deleted by the final step of this
+        # job, including when the job fails.
+        shell: bash
+        env:
+          CERTIFICATE_BASE64: ${{ secrets.PLAUDON_MACOS_CERTIFICATE_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.PLAUDON_MACOS_CERTIFICATE_PASSWORD }}
+          MACOS_IDENTITY: ${{ secrets.PLAUDON_MACOS_IDENTITY }}
+        run: |
+          if [ -z "$CERTIFICATE_BASE64" ] || [ -z "$MACOS_IDENTITY" ]; then
+            echo "no Developer ID certificate configured; the bundle will be ad-hoc signed and NOT publishable"
+            exit 0
+          fi
+          keychain="$RUNNER_TEMP/plaudon-signing.keychain-db"
+          keychain_password=$(openssl rand -base64 24)
+          certificate="$RUNNER_TEMP/certificate.p12"
+          printf '%s' "$CERTIFICATE_BASE64" | base64 --decode > "$certificate"
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          security import "$certificate" -k "$keychain" -P "$CERTIFICATE_PASSWORD" \
+            -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$keychain_password" "$keychain" > /dev/null
+          security list-keychain -d user -s "$keychain" login.keychain-db
+          rm -f "$certificate"
+          echo "PLAUDON_MACOS_IDENTITY=$MACOS_IDENTITY" >> "$GITHUB_ENV"
+          echo "PLAUDON_SIGNING_KEYCHAIN=$keychain" >> "$GITHUB_ENV"
+          echo "a Developer ID identity is available to codesign"
+
+      - name: Notarization credentials
+        # Also optional, and only useful with a real identity: the packaging
+        # script notarizes when PLAUDON_NOTARY_PROFILE is set *and* the
+        # signature verified. An App Store Connect API key is the only form of
+        # credential that works on a disposable runner.
+        shell: bash
+        env:
+          NOTARY_KEY_BASE64: ${{ secrets.PLAUDON_NOTARY_KEY_BASE64 }}
+          NOTARY_KEY_ID: ${{ secrets.PLAUDON_NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.PLAUDON_NOTARY_ISSUER_ID }}
+        run: |
+          if [ -z "$NOTARY_KEY_BASE64" ] || [ -z "$NOTARY_KEY_ID" ] || [ -z "$NOTARY_ISSUER_ID" ]; then
+            echo "no notarytool credential configured; notarization will be reported as not_verified"
+            exit 0
+          fi
+          if [ -z "${PLAUDON_SIGNING_KEYCHAIN:-}" ]; then
+            echo "a notarytool credential without a Developer ID identity cannot be used" >&2
+            exit 1
+          fi
+          key="$RUNNER_TEMP/notary-key.p8"
+          printf '%s' "$NOTARY_KEY_BASE64" | base64 --decode > "$key"
+          xcrun notarytool store-credentials plaudon-notary \
+            --key "$key" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID" \
+            --keychain "$PLAUDON_SIGNING_KEYCHAIN"
+          rm -f "$key"
+          echo "PLAUDON_NOTARY_PROFILE=plaudon-notary" >> "$GITHUB_ENV"
+
+      - name: Package the bundle
+        # Exit 3 is "built and verifiable, NOT publishable", which is the
+        # expected outcome without credentials. Any other non-zero status is a
+        # real failure.
+        shell: bash
+        run: |
+          set +e
+          scripts/package-macos-egui.sh \
+            --features "$PLAUDON_RELEASE_FEATURES" \
+            --evidence ci-artifacts/evidence
+          status=$?
+          set -e
+          if [ "$status" != "0" ] && [ "$status" != "3" ]; then
+            echo "packaging failed with $status" >&2
+            exit "$status"
+          fi
+          test -f dist/macos-egui/Plaudon.app.zip
+          test -f dist/macos-egui/macos-signing-report.json
+          cat dist/macos-egui/macos-signing-report.json
+
+      - name: Launch smoke test
+        # The artifact, not the build tree: the zip is unpacked somewhere else
+        # and the bundle is launched against a throwaway library, which is
+        # what PLAUDON_DATA_DIR exists for. A bundle that cannot stay up for
+        # ten seconds is not a release candidate.
+        shell: bash
+        run: |
+          smoke="$RUNNER_TEMP/smoke"
+          rm -rf "$smoke" && mkdir -p "$smoke/library"
+          ditto -x -k dist/macos-egui/Plaudon.app.zip "$smoke"
+          binary="$smoke/Plaudon.app/Contents/MacOS/plaudon-egui"
+          test -x "$binary"
+          PLAUDON_DATA_DIR="$smoke/library" "$binary" > "$smoke/launch.log" 2>&1 &
+          pid=$!
+          sleep 10
+          if ! kill -0 "$pid" 2>/dev/null; then
+            echo "the bundle exited within ten seconds:" >&2
+            cat "$smoke/launch.log" >&2
+            exit 1
+          fi
+          kill "$pid" 2>/dev/null || true
+          wait "$pid" 2>/dev/null || true
+          echo "the launched bundle was still running after ten seconds"
+          cat "$smoke/launch.log" || true
+
+      - name: Checksum
+        shell: bash
+        run: |
+          cd dist/macos-egui
+          shasum -a 256 Plaudon.app.zip | tee Plaudon.app.zip.sha256
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-arm64
+          path: |
+            dist/macos-egui/Plaudon.app.zip
+            dist/macos-egui/Plaudon.app.zip.sha256
+            dist/macos-egui/macos-signing-report.json
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Remove the signing keychain
+        if: always()
+        shell: bash
+        run: |
+          if [ -n "${PLAUDON_SIGNING_KEYCHAIN:-}" ]; then
+            security list-keychain -d user -s login.keychain-db
+            security delete-keychain "$PLAUDON_SIGNING_KEYCHAIN" || true
+          fi
+          rm -f "$RUNNER_TEMP/certificate.p12" "$RUNNER_TEMP/notary-key.p8"
+
+  windows:
+    name: Windows x64 (.msi)
+    needs: version
+    runs-on: windows-2025
+    env:
+      CARGO_BUILD_JOBS: "4"
+      # ggml's Vulkan backend nests its CMake scratch directories deep enough
+      # that MSBuild's FileTracker runs past MAX_PATH under the default
+      # D:\a\plaudon\plaudon\target. The packaging script honours this.
+      CARGO_TARGET_DIR: C:\pt
+      # No apple-bridge on Windows; the local whisper engine is what makes a
+      # released installer different from a development build.
+      PLAUDON_RELEASE_FEATURES: local-whisper
+      # The toolset version scripts/package-windows-egui.ps1 insists on.
+      WIX_VERSION: "5.0.2"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the pinned toolchain
+        run: rustup show
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release-windows-2025
+
+      # The icon, version block and side-by-side manifest are linked into the
+      # binary by apps/plaudon-egui/build.rs, which needs a resource compiler.
+      # The Windows SDK ships one; it is not on PATH.
+      - name: Locate the Windows resource compiler
+        shell: pwsh
+        run: |
+          $rc = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter rc.exe -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -match '\\x64\\' } | Select-Object -First 1
+          if (-not $rc) { Write-Error "no rc.exe in the Windows SDK"; exit 1 }
+          "RC=$($rc.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      # whisper-rs links ggml's Vulkan backend on Windows
+      # (crates/ai-whisper/Cargo.toml), and its build script requires the SDK
+      # rather than probing for it. A machine without a Vulkan loader is a
+      # runtime probe failure, which is the engine's business, not a build
+      # failure here.
+      - name: Install the Vulkan SDK
+        shell: pwsh
+        run: |
+          choco install vulkan-sdk --no-progress -y
+          $sdk = Get-ChildItem C:\VulkanSDK -Directory -ErrorAction SilentlyContinue |
+            Sort-Object Name -Descending | Select-Object -First 1
+          if (-not $sdk) { Write-Error "the Vulkan SDK did not install"; exit 1 }
+          Write-Host "Vulkan SDK: $($sdk.FullName)"
+          "VULKAN_SDK=$($sdk.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Install the WiX toolset
+        shell: pwsh
+        run: |
+          dotnet tool install --global wix --version $env:WIX_VERSION
+          "$env:USERPROFILE\.dotnet\tools" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+
+      - name: Authenticode certificate
+        # Optional, exactly like the macOS identity: with no certificate the
+        # packaging script reports `not_verified` and exits 3.
+        shell: pwsh
+        env:
+          CERT_BASE64: ${{ secrets.PLAUDON_WINDOWS_CERT_BASE64 }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:CERT_BASE64)) {
+            Write-Host "no Authenticode certificate configured; the installer will be unsigned and NOT publishable"
+            exit 0
+          }
+          $path = Join-Path $env:RUNNER_TEMP "plaudon-signing.pfx"
+          [IO.File]::WriteAllBytes($path, [Convert]::FromBase64String($env:CERT_BASE64))
+          "PLAUDON_WINDOWS_CERT_PATH=$path" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Package the installer
+        shell: pwsh
+        env:
+          PLAUDON_WINDOWS_CERT_PASSWORD: ${{ secrets.PLAUDON_WINDOWS_CERT_PASSWORD }}
+        run: |
+          pwsh scripts/package-windows-egui.ps1 `
+            -Features $env:PLAUDON_RELEASE_FEATURES `
+            -Evidence ci-artifacts/evidence
+          if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne 3) {
+            Write-Error "packaging failed with $LASTEXITCODE"
+            exit $LASTEXITCODE
+          }
+          Get-Content dist/windows-egui/windows-signing-report.json
+          exit 0
+
+      - name: Smoke test the packaged payload
+        # The GUI executable takes a document path or a plaudon:// link on its
+        # command line and has no --version flag, so the headless check runs
+        # the automation CLI from the same staged payload the .msi contains.
+        # Installing and launching the .msi needs an interactive session and
+        # is not attempted here.
+        shell: pwsh
+        env:
+          WORKSPACE_VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          $cli = "dist/windows-egui/stage/plaudon.exe"
+          $reported = (& $cli --version) -join " "
+          if ($LASTEXITCODE -ne 0) { Write-Error "the packaged CLI failed to run"; exit 1 }
+          Write-Host "packaged CLI reports: $reported"
+          $version = $env:WORKSPACE_VERSION
+          if ($reported -notmatch [regex]::Escape($version)) {
+            Write-Error "the packaged CLI reports '$reported', not the workspace version $version"
+            exit 1
+          }
+
+      - name: Checksum
+        shell: pwsh
+        run: |
+          $msi = Get-ChildItem dist/windows-egui/*.msi | Select-Object -First 1
+          $hash = (Get-FileHash $msi -Algorithm SHA256).Hash.ToLower()
+          "$hash  $($msi.Name)" | Out-File -FilePath "$($msi.FullName).sha256" -Encoding ascii
+          Get-Content "$($msi.FullName).sha256"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64
+          path: |
+            dist/windows-egui/*.msi
+            dist/windows-egui/*.sha256
+            dist/windows-egui/windows-signing-report.json
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Tag and draft the release
+    needs: [version, macos, windows]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/release'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Assemble the release directory
+        id: assemble
+        shell: bash
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          cp "artifacts/macos-arm64/Plaudon.app.zip" "release/Plaudon-$VERSION-macos-arm64.zip"
+          cp artifacts/macos-arm64/macos-signing-report.json release/
+          msi_paths=(artifacts/windows-x64/*.msi)
+          msi="${msi_paths[0]}"
+          cp "$msi" "release/$(basename "$msi")"
+          cp artifacts/windows-x64/windows-signing-report.json release/
+          (cd release && sha256sum ./*.zip ./*.msi > checksums.txt)
+          cat release/checksums.txt
+
+          # Fail closed: a report that is missing, malformed or anything other
+          # than an explicit `verified` means unsigned.
+          status() { jq -r --arg key "$2" '.[$key] // "missing"' "$1" 2>/dev/null || echo missing; }
+          macos_signature=$(status release/macos-signing-report.json signature_status)
+          macos_notarization=$(status release/macos-signing-report.json notarization_status)
+          windows_signature=$(status release/windows-signing-report.json signature_status)
+          echo "macOS signature: $macos_signature, notarization: $macos_notarization"
+          echo "Windows signature: $windows_signature"
+          if [ "$macos_signature" = "verified" ] \
+            && [ "$macos_notarization" = "verified" ] \
+            && [ "$windows_signature" = "verified" ]; then
+            publishable=true
+          else
+            publishable=false
+          fi
+          {
+            echo "publishable=$publishable"
+            echo "macos_signature=$macos_signature"
+            echo "macos_notarization=$macos_notarization"
+            echo "windows_signature=$windows_signature"
+            echo "msi=$(basename "$msi")"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Write the release notes
+        shell: bash
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          PUBLISHABLE: ${{ steps.assemble.outputs.publishable }}
+          MACOS_SIGNATURE: ${{ steps.assemble.outputs.macos_signature }}
+          MACOS_NOTARIZATION: ${{ steps.assemble.outputs.macos_notarization }}
+          WINDOWS_SIGNATURE: ${{ steps.assemble.outputs.windows_signature }}
+          MSI: ${{ steps.assemble.outputs.msi }}
+        run: |
+          set -euo pipefail
+          notes=()
+          if [ "$PUBLISHABLE" != "true" ]; then
+            notes+=(
+              "## ⚠ UNSIGNED / NOT NOTARIZED — development build"
+              ""
+              "These artifacts were built without signing credentials. macOS will refuse to"
+              "open the bundle without an explicit override, Windows will warn about an"
+              "unknown publisher, and **neither file should be treated as a release**."
+              ""
+            )
+          fi
+          notes+=(
+            "## Artifacts"
+            ""
+            "| File | Platform | Signature |"
+            "| --- | --- | --- |"
+            "| \`Plaudon-$VERSION-macos-arm64.zip\` | macOS 13+, Apple Silicon | signature: \`$MACOS_SIGNATURE\`, notarization: \`$MACOS_NOTARIZATION\` |"
+            "| \`$MSI\` | Windows 10/11 x64, per-user install | Authenticode: \`$WINDOWS_SIGNATURE\` |"
+            ""
+            "\`checksums.txt\` carries the SHA-256 of both files; the two signing reports"
+            "record what was and was not verified, in the packaging scripts' own words."
+            ""
+            "## Install"
+            ""
+            "* macOS: unzip and move \`Plaudon.app\` to \`/Applications\`."
+            "* Windows: run the \`.msi\`. It installs per user into"
+            "  \`%LOCALAPPDATA%\Programs\Plaudon\`, needs no elevation, writes only"
+            "  \`HKCU\`, and leaves \`%APPDATA%\app.plaudon.desktop\` — your library —"
+            "  alone when uninstalled."
+            ""
+            "Built from \`$GITHUB_SHA\` by \`.github/workflows/release.yml\`."
+          )
+          printf '%s\n' "${notes[@]}" > release-notes.md
+          cat release-notes.md
+
+      - name: Tag the released commit
+        # The tag is created explicitly rather than left to `gh release
+        # create`, because a *draft* release does not create one: the tag
+        # would appear only when a human published the release, and the
+        # merge-back below would then be merging an untagged commit.
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if gh api "repos/$GH_REPO/git/ref/tags/$TAG" >/dev/null 2>&1; then
+            echo "::error::$TAG was created while this run was building; refusing to move it" >&2
+            exit 1
+          fi
+          gh api "repos/$GH_REPO/git/refs" \
+            -f "ref=refs/tags/$TAG" -f "sha=$GITHUB_SHA" > /dev/null
+          echo "tagged $GITHUB_SHA as $TAG"
+
+      - name: Draft the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.version.outputs.tag }}
+          VERSION: ${{ needs.version.outputs.version }}
+          PUBLISHABLE: ${{ steps.assemble.outputs.publishable }}
+          MSI: ${{ steps.assemble.outputs.msi }}
+        run: |
+          set -euo pipefail
+          # Always a draft: a human decides when a release is published, and
+          # an unsigned build is additionally marked as a prerelease so that
+          # nothing downstream can mistake it for a shipped version.
+          args=(--draft --target "$GITHUB_SHA" --title "Plaudon $TAG" --notes-file release-notes.md)
+          if [ "$PUBLISHABLE" = "true" ]; then
+            macos_label="Plaudon.app (macOS arm64, signed and notarized)"
+            windows_label="Plaudon installer (Windows x64, signed)"
+          else
+            args+=(--prerelease)
+            macos_label="Plaudon.app (macOS arm64) — UNSIGNED / NOT NOTARIZED, development build"
+            windows_label="Plaudon installer (Windows x64) — UNSIGNED, development build"
+          fi
+          gh release create "$TAG" "${args[@]}" \
+            "release/Plaudon-$VERSION-macos-arm64.zip#$macos_label" \
+            "release/$MSI#$windows_label" \
+            "release/checksums.txt#SHA-256 checksums" \
+            "release/macos-signing-report.json#macOS signing report" \
+            "release/windows-signing-report.json#Windows signing report"
+
+  merge-back:
+    name: Merge release back into main
+    needs: [version, publish]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/release'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Merge the released commit back into main
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.version.outputs.tag }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          git fetch --quiet origin main release
+
+          # Idempotent: a re-run after a successful merge, or a release cut
+          # from a commit main already has, has nothing to do.
+          ahead=$(git rev-list --count origin/main..origin/release)
+          if [ "$ahead" -eq 0 ]; then
+            echo "main already contains every commit on release; nothing to merge back"
+            exit 0
+          fi
+          echo "release is $ahead commit(s) ahead of main"
+
+          number=$(gh pr list --head release --base main --state open --json number --jq '.[0].number // empty')
+          if [ -z "$number" ]; then
+            # The repository requires a closing keyword in every pull request
+            # body, so the merge-back gets a tracking issue of its own, which
+            # the merge then closes. An open one from a failed earlier attempt
+            # is reused rather than duplicated.
+            title="Release $TAG merged back"
+            issue=$(gh issue list --state open --search "$title in:title" --json number,title \
+              --jq "[.[] | select(.title == \"$title\")][0].number // empty")
+            if [ -z "$issue" ]; then
+              issue_url=$(gh issue create --title "$title" --label task --body \
+                "Tracks the merge of \`release\` ($TAG) back into \`main\`, opened by the release workflow. Closed by the merge-back pull request. Release run: $RUN_URL")
+              issue="${issue_url##*/}"
+            fi
+            echo "tracking issue #$issue"
+
+            body=$(printf '%s\n' \
+              "The \`release\` branch carries $TAG, which was built, tagged and drafted by $RUN_URL." \
+              "" \
+              "This merges it back so \`main\` and \`release\` do not diverge. It is a merge, not a squash:" \
+              "the released commits keep their identity, which is what the tag points at." \
+              "" \
+              "Closes #$issue")
+            if ! pr_url=$(gh pr create --base main --head release \
+              --title "Merge release $TAG back to main" --body "$body" 2> pr-create.err); then
+              cat pr-create.err >&2
+              if grep -qi "not permitted to create or approve pull requests" pr-create.err; then
+                echo "::error::GitHub Actions is not allowed to open pull requests in this repository, so the merge-back cannot run." >&2
+                echo "Enable it at Settings → Actions → General → Workflow permissions → 'Allow GitHub Actions to create and approve pull requests'." >&2
+                echo "Equivalently: gh api -X PUT repos/$GH_REPO/actions/permissions/workflow -F can_approve_pull_request_reviews=true -f default_workflow_permissions=read" >&2
+                echo "Nothing else about this release is affected: $TAG is tagged and the draft release exists." >&2
+              fi
+              exit 1
+            fi
+            number="${pr_url##*/}"
+          fi
+          echo "merge-back pull request #$number"
+
+          # GitHub computes mergeability asynchronously; UNKNOWN means "ask
+          # again", not "fine".
+          state=UNKNOWN
+          for _ in $(seq 1 12); do
+            state=$(gh pr view "$number" --json mergeable --jq '.mergeable')
+            [ "$state" != "UNKNOWN" ] && break
+            sleep 5
+          done
+          if [ "$state" = "CONFLICTING" ]; then
+            echo "::error::release cannot be merged into main without resolving conflicts. Pull request #$number is left open for a human; the release itself is unaffected." >&2
+            exit 1
+          fi
+          if [ "$state" = "UNKNOWN" ]; then
+            echo "::error::GitHub did not report whether #$number can be merged; it is left open rather than merged blind." >&2
+            exit 1
+          fi
+
+          if ! gh pr merge "$number" --merge 2> pr-merge.err; then
+            cat pr-merge.err >&2
+            echo "::error::#$number could not be merged; it is left open. $TAG is tagged and the draft release exists." >&2
+            exit 1
+          fi
+          echo "merged #$number into main"
+          # A merge made with GITHUB_TOKEN raises no push event, so CI will not
+          # re-run on main for this commit. That is deliberate: this exact tree
+          # is what the macos and windows jobs above built and released.

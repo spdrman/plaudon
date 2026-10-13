@@ -114,16 +114,17 @@ evidence bundle. The Opus format itself is an IETF standard (RFC 6716,
 RFC 7845) and carries no additional notice obligation.
 
 --------------------------------------------------------------------------------
-NSIS installer stub (Windows installer only)
-Present in the bytes of Plaudon-<version>-x64-setup.exe, not in the application.
+Windows installer (no third-party code is redistributed in it)
 --------------------------------------------------------------------------------
 
-Nullsoft Scriptable Install System, Copyright (c) 1995-2009 Contributors.
+Plaudon-<version>-x64.msi is built with the WiX Toolset v5 (MS-RL) from
+apps/plaudon-egui/packaging/windows/plaudon-egui.wxs. An .msi is a database
+that Windows' own installer service interprets: it contains the application,
+the automation CLI and the icon, and no code from WiX, so WiX is a build tool
+here rather than something we redistribute, and MS-RL imposes no notice
+obligation on this file.
 
-The Windows installer is produced by NSIS 3 from
-apps/plaudon-egui/packaging/windows/plaudon-egui.nsi, so the installer
-executable contains NSIS's own stub code. NSIS is distributed under the
-zlib/libpng licence, with its compression components (LZMA SDK, bzip2) under
-their own permissive terms; the full texts ship with NSIS and are reproduced
-in the release evidence bundle. Nothing of NSIS is linked into plaudon-egui
-itself, and the macOS bundle contains no installer code at all.
+Until O2.10 this installer was an NSIS setup.exe, which did carry NSIS's
+installer stub and therefore a notice obligation. It no longer exists, and
+that notice has been removed rather than left to imply that something of
+NSIS still ships.
