@@ -12,38 +12,35 @@
 //! unverified statement that looks verified (§4.5).
 
 use egui::Ui;
-use plaudon_app::command::AppCommand;
 use plaudon_app::dto::{
-    ClaimDto, ConfirmSpeakerRequest, ListOutputsResponse, ListSpeakersResponse, OutputDto,
-    RenameSpeakerRequest, RenderedClaimFields, ResetSpeakerRequest,
+    ClaimDto, ListOutputsResponse, ListSpeakersResponse, OutputDto, RenderedClaimFields,
 };
 use plaudon_app::tone::Tone;
-use plaudon_domain::speaker::MAX_NAME_CHARS;
 
 use super::review::{claim_state_badge, stale_badge};
+use super::speakers::{SpeakerPanel, VoiceContext};
 use super::{fact, AiOutput, Badge, RecordingContext};
-
-/// One speaker's name field between frames.
-#[derive(Debug)]
-struct NameEdit {
-    /// The row this buffer belongs to.
-    speaker_id: String,
-    /// What the user has typed.
-    text: String,
-    /// The stored name the buffer was seeded from, so a rename, a reset or
-    /// an answer that arrived from elsewhere reseeds it instead of leaving
-    /// a stale draft behind.
-    seeded_from: Option<String>,
-}
 
 /// Reading the generated outputs of one recording.
 #[derive(Debug, Default)]
 pub struct OutputsViewer {
     output_index: usize,
-    speaker_edits: Vec<NameEdit>,
+    speakers: SpeakerPanel,
 }
 
 impl OutputsViewer {
+    /// The speaker panel underneath, for the binding that routes answers to
+    /// it and for a test that reads its state.
+    #[must_use]
+    pub const fn speaker_panel(&self) -> &SpeakerPanel {
+        &self.speakers
+    }
+
+    /// The speaker panel, mutably, so an answer can be folded in.
+    pub const fn speaker_panel_mut(&mut self) -> &mut SpeakerPanel {
+        &mut self.speakers
+    }
+
     /// Draw the viewer.
     pub fn ui(
         &mut self,
@@ -51,6 +48,7 @@ impl OutputsViewer {
         context: RecordingContext<'_>,
         outputs: Option<&ListOutputsResponse>,
         speakers: Option<&ListSpeakersResponse>,
+        voice: VoiceContext<'_>,
         now_ms: i128,
     ) -> AiOutput {
         let _ = now_ms;
@@ -82,149 +80,8 @@ impl OutputsViewer {
         }
 
         ui.separator();
-        output.extend(self.speakers(ui, context, speakers));
+        output.extend(self.speakers.ui(ui, context, speakers, voice));
         output
-    }
-
-    fn speakers(
-        &mut self,
-        ui: &mut Ui,
-        context: RecordingContext<'_>,
-        speakers: Option<&ListSpeakersResponse>,
-    ) -> AiOutput {
-        let mut output = AiOutput::default();
-        ui.label(egui::RichText::new("Speaker identification").heading());
-        let Some(response) = speakers else {
-            ui.label("Speakers have not been read yet.");
-            return output;
-        };
-        if response.speakers.is_empty() {
-            ui.label("No speaker was identified for this recording.");
-            return output;
-        }
-        for speaker in &response.speakers {
-            let speaker_id = speaker.speaker_id.to_string();
-            let slot = self.name_slot(&speaker_id, speaker.name.as_deref());
-            ui.push_id(speaker_id.clone(), |ui| {
-                ui.group(|ui| {
-                    // One wording, shared with the export bundle: an
-                    // unconfirmed row is a cluster whatever has been typed
-                    // into it (`plaudon_domain::speaker::display`).
-                    fact(
-                        ui,
-                        "Speaker",
-                        &plaudon_domain::speaker::display(
-                            &speaker.label,
-                            speaker.name.as_deref(),
-                            speaker.confirmed,
-                        ),
-                    );
-                    fact(ui, "Machine label", &speaker.original_label);
-                    if speaker.confirmed {
-                        Badge::new("✓", "Confirmed by you", Tone::Success).ui(ui);
-                    } else {
-                        if let Some(name) = speaker.name.as_deref() {
-                            fact(ui, "Name you typed, not yet confirmed", name);
-                        }
-                        Badge::new("?", "Not confirmed", Tone::Neutral)
-                            .description(
-                                "The engine proposed this cluster; nobody has confirmed whose \
-                                 voice it is.",
-                            )
-                            .ui(ui);
-                    }
-
-                    ui.horizontal(|ui| {
-                        let name_label = ui.label("Speaker name");
-                        ui.add(
-                            egui::TextEdit::singleline(&mut self.speaker_edits[slot].text)
-                                .desired_width(180.0)
-                                .char_limit(MAX_NAME_CHARS),
-                        )
-                        .labelled_by(name_label.id)
-                        .on_hover_text(format!("At most {MAX_NAME_CHARS} characters."));
-
-                        // A command that is known to be refused is not sent:
-                        // the store rejects a blank name, so the control
-                        // that would send one is disabled and says why.
-                        let typed = self.speaker_edits[slot].text.trim();
-                        if ui
-                            .add_enabled(!typed.is_empty(), egui::Button::new("Rename speaker"))
-                            .on_disabled_hover_text(
-                                "Type a name first — a speaker cannot be given an empty name.",
-                            )
-                            .clicked()
-                        {
-                            output.command(AppCommand::RenameSpeaker(RenameSpeakerRequest {
-                                recording_id: context.recording_id.to_owned(),
-                                speaker_id: speaker_id.clone(),
-                                name: typed.to_owned(),
-                            }));
-                        }
-
-                        // §17.6: there is nothing to confirm until a human
-                        // has supplied a name.
-                        if !speaker.confirmed
-                            && ui
-                                .add_enabled(
-                                    speaker.name.is_some(),
-                                    egui::Button::new("Confirm speaker"),
-                                )
-                                .on_disabled_hover_text(
-                                    "Name this speaker first; confirming is your claim that the \
-                                     name is right.",
-                                )
-                                .clicked()
-                        {
-                            output.command(AppCommand::ConfirmSpeaker(ConfirmSpeakerRequest {
-                                recording_id: context.recording_id.to_owned(),
-                                speaker_id: speaker_id.clone(),
-                            }));
-                        }
-
-                        let named = speaker.name.is_some() || speaker.confirmed;
-                        if ui
-                            .add_enabled(named, egui::Button::new("Reset to the machine label"))
-                            .on_disabled_hover_text(
-                                "This speaker still carries the label the engine gave it.",
-                            )
-                            .clicked()
-                        {
-                            output.command(AppCommand::ResetSpeaker(ResetSpeakerRequest {
-                                recording_id: context.recording_id.to_owned(),
-                                speaker_id: speaker_id.clone(),
-                            }));
-                        }
-                    });
-                });
-            });
-        }
-        output
-    }
-
-    /// The edit buffer for one speaker, reseeded whenever the stored name
-    /// moved underneath it.
-    ///
-    /// Without the reseed a reset would leave the discarded name sitting in
-    /// the field, one click away from being stored again.
-    fn name_slot(&mut self, speaker_id: &str, stored: Option<&str>) -> usize {
-        if let Some(index) = self
-            .speaker_edits
-            .iter()
-            .position(|edit| edit.speaker_id == speaker_id)
-        {
-            if self.speaker_edits[index].seeded_from.as_deref() != stored {
-                self.speaker_edits[index].seeded_from = stored.map(ToOwned::to_owned);
-                self.speaker_edits[index].text = stored.unwrap_or_default().to_owned();
-            }
-            return index;
-        }
-        self.speaker_edits.push(NameEdit {
-            speaker_id: speaker_id.to_owned(),
-            text: stored.unwrap_or_default().to_owned(),
-            seeded_from: stored.map(ToOwned::to_owned),
-        });
-        self.speaker_edits.len() - 1
     }
 }
 

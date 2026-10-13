@@ -46,7 +46,8 @@ impl Migration {
 /// EPIC F (audio/STT), 0300-0399 the desktop shell, 0400-0449 transcript
 /// tools and automation, 0450-0499 cloud AI, 0500-0599 direct-device import,
 /// 0600-0699 meeting intelligence, 0700-0799 export, portable archive and
-/// deletion, 0800-0899 source reconciliation and watched folders. Claim a
+/// deletion, 0800-0899 source reconciliation and watched folders, 0900-0999
+/// EPIC P (voice profiles: the people roster and its biometric tier). Claim a
 /// range in this comment before using it.
 pub const MIGRATIONS: &[Migration] = &[
     Migration {
@@ -115,6 +116,36 @@ pub const MIGRATIONS: &[Migration] = &[
         version: 800,
         name: "source_reconciliation",
         sql: include_str!("../migrations/0800_source_reconciliation.sql"),
+    },
+    // 900+ is EPIC P's range: the people roster and the voice-profile
+    // biometric tier (VOICE_PROFILES_SPEC VP-070).
+    Migration {
+        version: 900,
+        name: "voice_profiles",
+        sql: include_str!("../migrations/0900_voice_profiles.sql"),
+    },
+    // The resumable speaker-matching job's per-job scratch: sealed cluster
+    // embeddings and match reports, so a crash between stages resumes instead
+    // of recomputing (VP-100..VP-105).
+    Migration {
+        version: 901,
+        name: "speaker_match_runs",
+        sql: include_str!("../migrations/0901_speaker_match_runs.sql"),
+    },
+    // Retention expiry, wholesale erasure and the sweep journal (VP-095,
+    // VP-130). Still EPIC P's range.
+    Migration {
+        version: 902,
+        name: "voice_retention_and_erasure",
+        sql: include_str!("../migrations/0902_voice_retention_and_erasure.sql"),
+    },
+    // The activation half of the consent gate: the versioned disclosure the
+    // user accepted, journalled rather than only held in the gate row
+    // (VP-120..VP-122). Still EPIC P's range.
+    Migration {
+        version: 903,
+        name: "voice_consent_journal",
+        sql: include_str!("../migrations/0903_voice_consent_journal.sql"),
     },
 ];
 

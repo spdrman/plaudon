@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/list_speaker_suggestions.response.schema.json",
+  "title": "list_speaker_suggestions.response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "suggestions",
+    "pending_count"
+  ],
+  "properties": {
+    "suggestions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/suggestion"
+      }
+    },
+    "pending_count": {
+      "type": "integer",
+      "minimum": 0
+    }
+  },
+  "$defs": {
+    "suggestion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "suggestion_id",
+        "recording_id",
+        "recording_title",
+        "diarization_run_id",
+        "cluster_key",
+        "speaker_id",
+        "speaker_label",
+        "person",
+        "score",
+        "score_kind",
+        "band",
+        "state",
+        "created_at"
+      ],
+      "properties": {
+        "suggestion_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "recording_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "recording_title": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "diarization_run_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "cluster_key": {
+          "type": "string",
+          "minLength": 1
+        },
+        "speaker_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid"
+        },
+        "speaker_label": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "person": {
+          "$ref": "#/$defs/person_ref"
+        },
+        "score": {
+          "type": "number"
+        },
+        "score_kind": {
+          "type": "string",
+          "enum": [
+            "cosine_similarity_asnorm"
+          ]
+        },
+        "band": {
+          "type": "string",
+          "enum": [
+            "suggest",
+            "weak"
+          ]
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "confirmed",
+            "rejected",
+            "corrected",
+            "expired"
+          ]
+        },
+        "created_at": {
+          "type": "integer"
+        }
+      }
+    },
+    "person_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "person_id",
+        "display_name"
+      ],
+      "properties": {
+        "person_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "display_name": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

@@ -555,8 +555,16 @@ mod tests {
             panic!("a claimed document type opens");
         };
         assert_eq!(classified.archives.len(), 1);
-        assert!(classified.audio.is_empty());
-        assert!(classified.rejected.is_empty());
+        assert!(
+            classified.audio.is_empty(),
+            "an archive drop classifies no audio: {:?}",
+            classified.audio
+        );
+        assert!(
+            classified.rejected.is_empty(),
+            "an archive drop rejects nothing: {:?}",
+            classified.rejected
+        );
     }
 
     #[test]

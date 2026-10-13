@@ -260,7 +260,7 @@ fn onboarding_gates_the_shell_until_setup_is_complete() {
 }
 
 #[test]
-fn the_six_destinations_are_tabs_and_clicking_one_navigates() {
+fn every_destination_is_a_tab_and_clicking_one_navigates() {
     let (_dir, mut harness) = ready();
 
     let tabs: Vec<String> = a11y::nodes(&harness)
@@ -268,7 +268,11 @@ fn the_six_destinations_are_tabs_and_clicking_one_navigates() {
         .filter(|node| node.role == "Tab")
         .filter_map(|node| node.label)
         .collect();
-    assert_eq!(tabs.len(), 6, "six destinations, got {tabs:?}");
+    assert_eq!(
+        tabs.len(),
+        Destination::ALL.len(),
+        "every destination is a tab, got {tabs:?}"
+    );
     for destination in Destination::ALL {
         assert!(
             tabs.iter()
@@ -574,7 +578,7 @@ fn a_narrow_window_collapses_the_rail_and_explains_itself() {
         .filter(|node| node.role == "Tab")
         .filter_map(|node| node.label)
         .collect();
-    assert_eq!(tabs.len(), 6, "{tabs:?}");
+    assert_eq!(tabs.len(), Destination::ALL.len(), "{tabs:?}");
     assert!(tabs.iter().any(|label| label.starts_with("Library")));
 }
 

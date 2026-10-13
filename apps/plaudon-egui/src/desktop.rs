@@ -447,7 +447,10 @@ mod tests {
         let Some(DesktopEvent::Open(classified)) = event else {
             panic!("the refusal is still reported");
         };
-        assert!(classified.is_empty());
+        assert!(
+            classified.is_empty(),
+            "expected classified to be empty, got {classified:?}"
+        );
         assert_eq!(classified.rejected.len(), 1);
     }
 

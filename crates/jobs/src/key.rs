@@ -121,6 +121,13 @@ impl SourceKind {
 pub enum ProcessingStage {
     Transcribe,
     Diarize,
+    /// Speaker embeddings over a diarized recording (VOICE_PROFILES_SPEC
+    /// VP-100). Local-only by construction: a voice embedding has no
+    /// dispatchable form.
+    SpeakerEmbed,
+    /// Open-set matching of a recording's clusters against enrolled voice
+    /// profiles, producing suggestions (VP-100). Also local-only.
+    SpeakerMatch,
     Normalize,
     SectionSummary,
     ConsolidatedSummary,
@@ -135,6 +142,8 @@ impl ProcessingStage {
         match self {
             ProcessingStage::Transcribe => "transcribe",
             ProcessingStage::Diarize => "diarize",
+            ProcessingStage::SpeakerEmbed => "speaker_embed",
+            ProcessingStage::SpeakerMatch => "speaker_match",
             ProcessingStage::Normalize => "normalize",
             ProcessingStage::SectionSummary => "section_summary",
             ProcessingStage::ConsolidatedSummary => "consolidated_summary",

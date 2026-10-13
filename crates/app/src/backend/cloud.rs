@@ -1048,6 +1048,9 @@ impl LocalBackend {
             audio_sha256: media.sha256.to_hex(),
             cloud,
             cost_acknowledged: request.cost_acknowledged,
+            transcript_revision: None,
+            model_version: None,
+            normalization: std::collections::BTreeMap::new(),
         };
         let job_id = self.enqueue_stage(&stage).await?;
         Ok(StartProcessingResponse {

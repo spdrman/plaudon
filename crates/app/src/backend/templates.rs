@@ -1593,7 +1593,11 @@ mod tests {
             .await
             .expect("checking a document never fails");
         assert!(checked.valid, "{:?}", checked.problems);
-        assert!(checked.problems.is_empty());
+        assert!(
+            checked.problems.is_empty(),
+            "expected checked.problems to be empty, got {:?}",
+            checked.problems
+        );
 
         // A built-in document is a legitimate template but not a storable copy.
         let built_in = backend

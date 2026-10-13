@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/start_speaker_matching.request.schema.json",
+  "title": "start_speaker_matching.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "recording_ids"
+  ],
+  "properties": {
+    "recording_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "uuid"
+      }
+    }
+  }
+}

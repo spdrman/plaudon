@@ -89,6 +89,33 @@ pub enum RegisterSecretError {
     RegistryFull,
 }
 
+/// Maximum number of display names that may be registered at once (VP-112).
+///
+/// Large enough for a real roster, bounded so a hostile or runaway caller
+/// cannot turn every log line into a scan over an unbounded alternation.
+pub const MAX_PROFILE_NAMES: usize = 512;
+
+/// Shortest registerable display name, in characters.
+///
+/// Shorter than a registered secret deliberately: a person really can be
+/// called `Jo`, and the match is anchored at word boundaries, so a two-letter
+/// name does not scrub the middle of other words.
+pub const MIN_PROFILE_NAME_CHARS: usize = 2;
+
+/// Longest registerable display name, in bytes.
+pub const MAX_PROFILE_NAME_BYTES: usize = 128;
+
+/// Why a display name could not be registered.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum RegisterProfileNameError {
+    #[error("display name is shorter than the {MIN_PROFILE_NAME_CHARS}-character minimum")]
+    TooShort,
+    #[error("display name is longer than the {MAX_PROFILE_NAME_BYTES}-byte maximum")]
+    TooLong,
+    #[error("the redactor already holds {MAX_PROFILE_NAMES} display names")]
+    RegistryFull,
+}
+
 /// One match of a pattern (or of a registered secret) in the *original* record.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Finding {
@@ -146,6 +173,147 @@ impl Default for Redactor {
 /// handle (panic payloads, notifications). It only ever grows knowledge, so
 /// sharing it is safe; code that needs isolation constructs its own.
 static SHARED: LazyLock<Redactor> = LazyLock::new(Redactor::new);
+
+/* ------------------------------------------------ profile names (VP-112) */
+
+/// Display names that must never appear in a log line, crash report or
+/// notification (VOICE_PROFILES_SPEC VP-112).
+///
+/// This registry is process-wide rather than per-[`Redactor`], and that is the
+/// point: the three text paths out of this process use three different
+/// redactors — the log sink's, [`Redactor::shared`] for panics and
+/// notifications, and a scanner's — and a name that is sensitive on one of
+/// them is sensitive on all of them. A per-handle registry would leave the
+/// crash hook printing what the sink scrubs.
+///
+/// Unlike a registered secret, a name is kept in memory as text: matching a
+/// name needs word-boundary and whitespace-flexible comparison, which a digest
+/// cannot do. The roster is already in memory in the process that registers
+/// it, so this adds no new plaintext lifetime — it is zeroized on removal.
+static PROFILE_NAMES: LazyLock<RwLock<NameRegistry>> =
+    LazyLock::new(|| RwLock::new(NameRegistry::default()));
+
+#[derive(Debug, Default)]
+struct NameRegistry {
+    /// Normalised (trimmed, whitespace-collapsed) names, longest first.
+    names: Vec<Zeroizing<String>>,
+    /// One case-insensitive alternation over `names`, rebuilt when the set
+    /// changes so the hot path is a single pass.
+    matcher: Option<Regex>,
+}
+
+impl NameRegistry {
+    fn rebuild(&mut self) {
+        if self.names.is_empty() {
+            self.matcher = None;
+            return;
+        }
+        // Longest first so `Dana Scully` wins over a registered `Dana`: the
+        // alternation is leftmost-first, and the longer span is the safer one.
+        self.names
+            .sort_by(|a, b| b.len().cmp(&a.len()).then(a.cmp(b)));
+        let alternation = self
+            .names
+            .iter()
+            .map(|name| {
+                name.split_whitespace()
+                    .map(regex::escape)
+                    .collect::<Vec<_>>()
+                    .join(r"\s+")
+            })
+            .collect::<Vec<_>>()
+            .join("|");
+        // Built from `regex::escape`d literals, so this cannot fail to compile;
+        // if it somehow does, the registry stays empty rather than panicking in
+        // a log path.
+        self.matcher = Regex::new(&format!("(?i)(?:{alternation})")).ok();
+    }
+}
+
+/// Normalise a display name the way the matcher compares it: trimmed, with
+/// internal whitespace runs collapsed to one space.
+fn normalise_name(name: &str) -> Zeroizing<String> {
+    Zeroizing::new(name.split_whitespace().collect::<Vec<_>>().join(" "))
+}
+
+/// Register a person's display name or alias so no log path prints it
+/// (VP-112).
+///
+/// Matching is case-insensitive, tolerant of the whitespace between name
+/// parts, and anchored at word boundaries, so registering `Jo` does not scrub
+/// the `jo` inside `job`. Registering the same name twice is a no-op.
+///
+/// The stated limit: a name is matched as it was registered. A log line that
+/// prints only the first word of a two-word display name is scrubbed only if
+/// that word was itself registered — which is what aliases are for.
+pub fn register_profile_name(name: &str) -> Result<(), RegisterProfileNameError> {
+    let normalised = normalise_name(name);
+    if normalised.chars().count() < MIN_PROFILE_NAME_CHARS {
+        return Err(RegisterProfileNameError::TooShort);
+    }
+    if normalised.len() > MAX_PROFILE_NAME_BYTES {
+        return Err(RegisterProfileNameError::TooLong);
+    }
+    let mut registry = lock_write(&PROFILE_NAMES);
+    if registry
+        .names
+        .iter()
+        .any(|held| held.eq_ignore_ascii_case(&normalised))
+    {
+        return Ok(());
+    }
+    if registry.names.len() >= MAX_PROFILE_NAMES {
+        return Err(RegisterProfileNameError::RegistryFull);
+    }
+    registry.names.push(normalised);
+    registry.rebuild();
+    Ok(())
+}
+
+/// Number of registered display names.
+#[must_use]
+pub fn registered_profile_names() -> usize {
+    lock_read(&PROFILE_NAMES).names.len()
+}
+
+/// Forget every registered display name (library closed, roster erased).
+pub fn forget_profile_names() {
+    let mut registry = lock_write(&PROFILE_NAMES);
+    registry.names.clear();
+    registry.rebuild();
+}
+
+/// Rank of a name match: behind every shape marker, because a shape marker
+/// carries more context and overlapping spans are merged into their union.
+const PROFILE_NAME_RANK: usize = 900;
+
+fn scan_profile_names(view: &View, out: &mut Vec<Finding>) {
+    let registry = lock_read(&PROFILE_NAMES);
+    let Some(matcher) = registry.matcher.as_ref() else {
+        return;
+    };
+    for found in matcher.find_iter(&view.text) {
+        if !is_word_boundary(&view.text, found.start(), found.end()) {
+            continue;
+        }
+        let (orig_start, orig_end) = view.span(found.start(), found.end());
+        out.push(Finding {
+            pattern: patterns::PROFILE_NAME,
+            start: orig_start,
+            end: orig_end,
+            marker: "<redacted:profile_name>".to_owned(),
+            rank: PROFILE_NAME_RANK,
+        });
+    }
+}
+
+/// True when `text[start..end]` is not embedded inside a longer word.
+fn is_word_boundary(text: &str, start: usize, end: usize) -> bool {
+    let before = text[..start].chars().next_back();
+    let after = text[end..].chars().next();
+    let is_word = |c: char| c.is_alphanumeric() || c == '_';
+    !before.is_some_and(is_word) && !after.is_some_and(is_word)
+}
 
 impl Redactor {
     /// The process-wide redactor (see [`SHARED`]).
@@ -293,6 +461,14 @@ impl Redactor {
                     scan_registered(&registry, &View::identity(input), &mut out);
                 }
             }
+        }
+
+        // Registered display names (VP-112). Scanned on the decoded view, and
+        // on the untouched record when decoding changed it, for the same
+        // reason registered secrets are: an escaped name is still the name.
+        scan_profile_names(&decoded, &mut out);
+        if decoded.text != input {
+            scan_profile_names(&View::identity(input), &mut out);
         }
 
         // Markers emitted by an earlier pass are inert: redaction composes
@@ -659,12 +835,12 @@ fn salted_digest(salt: &[u8; 32], bytes: &[u8]) -> [u8; 32] {
     hasher.finalize().into()
 }
 
-fn lock_read(lock: &RwLock<Registry>) -> std::sync::RwLockReadGuard<'_, Registry> {
+fn lock_read<T>(lock: &RwLock<T>) -> std::sync::RwLockReadGuard<'_, T> {
     lock.read()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
-fn lock_write(lock: &RwLock<Registry>) -> std::sync::RwLockWriteGuard<'_, Registry> {
+fn lock_write<T>(lock: &RwLock<T>) -> std::sync::RwLockWriteGuard<'_, T> {
     lock.write()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
 }

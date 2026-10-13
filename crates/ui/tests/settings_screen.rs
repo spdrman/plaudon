@@ -95,7 +95,10 @@ fn the_screen_opens_by_reading_exactly_what_its_sections_render() {
             "get_capabilities",
             "get_shortcuts",
             "list_local_models",
-            "get_update_status"
+            "get_update_status",
+            // The Privacy section's voice-profile block (VP-090) renders
+            // from this one, and it is off by default until it answers.
+            "get_voice_profile_settings"
         ]
     );
 }
@@ -351,7 +354,7 @@ fn an_intent_that_is_not_a_command_is_not_counted_as_one() {
     out.push(SettingsIntent::CopyText("sha256:abc".to_owned()));
     assert_eq!(out.command_names(), Vec::<&str>::new());
     assert_eq!(out.drain().len(), 2);
-    assert!(out.is_empty());
+    assert!(out.is_empty(), "expected out to be empty, got {out:?}");
 }
 
 #[test]

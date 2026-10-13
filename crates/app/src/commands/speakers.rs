@@ -6,12 +6,13 @@
 
 use plaudon_app_core::speakers::Speaker;
 use plaudon_domain::error::AppError;
-use plaudon_domain::ids::{RecordingId, SpeakerId};
+use plaudon_domain::ids::{RecordingId, SpeakerId, TranscriptRevisionId};
 use plaudon_domain::time::Timestamp;
 
 use crate::dto::{
     ConfirmSpeakerRequest, ListSpeakersRequest, ListSpeakersResponse, RenameSpeakerRequest,
-    ResetSpeakerRequest, SpeakerDto, SpeakerOperationResponse,
+    ResetSpeakerRequest, SetSegmentSpeakerRequest, SetSegmentSpeakerResponse, SpeakerDto,
+    SpeakerOperationResponse,
 };
 use crate::validate::parse_id;
 use crate::AppPorts;
@@ -21,6 +22,11 @@ fn dto(speaker: &Speaker) -> SpeakerDto {
     SpeakerDto {
         speaker_id: speaker.id,
         recording_id: speaker.recording_id,
+        cluster_key: speaker
+            .cluster_key
+            .as_ref()
+            .map(|key| key.as_str().to_owned()),
+        person_id: speaker.person_id,
         label: speaker.label.clone(),
         name: speaker.name.clone(),
         confirmed: speaker.user_confirmed,
@@ -86,5 +92,38 @@ pub async fn reset_speaker(
         .await?;
     Ok(SpeakerOperationResponse {
         speaker: dto(&speaker),
+    })
+}
+
+/// Attribute one segment to a speaker, or to nobody (spec §4.1, VP-031).
+///
+/// This is a user's decision being recorded, not an inference: the command
+/// writes the row the user picked and never derives one from audio. A
+/// `speaker_id` of `None` clears the attribution, which is the honest answer
+/// when a segment is two people at once or nobody identifiable.
+pub async fn set_segment_speaker(
+    ports: &AppPorts,
+    request: SetSegmentSpeakerRequest,
+) -> Result<SetSegmentSpeakerResponse, AppError> {
+    let recording_id: RecordingId = parse_id("recording_id", &request.recording_id)?;
+    let revision_id: TranscriptRevisionId =
+        parse_id("transcript_revision_id", &request.transcript_revision_id)?;
+    let speaker_id: Option<SpeakerId> = request
+        .speaker_id
+        .as_deref()
+        .map(|value| parse_id("speaker_id", value))
+        .transpose()?;
+
+    let assignment = ports
+        .speakers
+        .set_segment_speaker(recording_id, revision_id, request.seq_index, speaker_id)
+        .await?;
+
+    Ok(SetSegmentSpeakerResponse {
+        recording_id,
+        transcript_revision_id: revision_id,
+        seq_index: request.seq_index,
+        speaker_id: assignment.speaker_id,
+        speaker_label: assignment.speaker_label,
     })
 }

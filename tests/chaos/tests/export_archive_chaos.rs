@@ -118,6 +118,7 @@ async fn source_archive(dir: &Path) -> (PathBuf, library::SeededLibrary) {
                 destination: backups,
                 password: None,
                 sensitive_profile: false,
+                include_voice_profiles: false,
             },
             NOW,
         )

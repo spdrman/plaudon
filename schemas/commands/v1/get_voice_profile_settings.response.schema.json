@@ -1,0 +1,154 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/get_voice_profile_settings.response.schema.json",
+  "title": "get_voice_profile_settings.response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "enabled",
+    "consent",
+    "disclosure",
+    "enrolled_people",
+    "exemplars",
+    "pending_suggestions",
+    "roster_people",
+    "key_available",
+    "embedder_available",
+    "enrol_speech_ms",
+    "exemplar_speech_ms"
+  ],
+  "properties": {
+    "enabled": {
+      "type": "boolean"
+    },
+    "consent": {
+      "$ref": "#/$defs/consent_gate"
+    },
+    "disclosure": {
+      "$ref": "#/$defs/activation_disclosure"
+    },
+    "enrolled_people": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "exemplars": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "pending_suggestions": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "roster_people": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "key_available": {
+      "type": "boolean"
+    },
+    "embedder_available": {
+      "type": "boolean"
+    },
+    "enrol_speech_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "exemplar_speech_ms": {
+      "type": "integer",
+      "minimum": 0
+    }
+  },
+  "$defs": {
+    "consent_gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "reason",
+        "accepted_version",
+        "accepted_at",
+        "required_version"
+      ],
+      "properties": {
+        "state": {
+          "type": "string",
+          "enum": [
+            "off",
+            "disclosure_required",
+            "active"
+          ]
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "never_accepted",
+            "version_changed",
+            "restored_library",
+            null
+          ]
+        },
+        "accepted_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "accepted_at": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "required_version": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "activation_disclosure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "title",
+        "body",
+        "two_tier_sentence",
+        "responsibility_sentence",
+        "retention_default_months"
+      ],
+      "properties": {
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "body": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "two_tier_sentence": {
+          "type": "string",
+          "minLength": 1
+        },
+        "responsibility_sentence": {
+          "type": "string",
+          "minLength": 1
+        },
+        "retention_default_months": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 12
+        }
+      }
+    }
+  }
+}

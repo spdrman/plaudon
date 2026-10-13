@@ -365,18 +365,18 @@ impl ShellStateStore {
     pub fn save(&self, state: &ShellState) -> Result<(), AppError> {
         let body = state.to_json()?;
         if let Some(parent) = self.path.parent() {
-            std::fs::create_dir_all(parent).map_err(|err| storage_error("directory", err))?;
+            std::fs::create_dir_all(parent).map_err(|err| storage_error("directory", &err))?;
         }
         let temporary = self.path.with_extension("json.tmp");
-        std::fs::write(&temporary, body.as_bytes()).map_err(|err| storage_error("file", err))?;
+        std::fs::write(&temporary, body.as_bytes()).map_err(|err| storage_error("file", &err))?;
         std::fs::rename(&temporary, &self.path).map_err(|err| {
             let _ = std::fs::remove_file(&temporary);
-            storage_error("file", err)
+            storage_error("file", &err)
         })
     }
 }
 
-fn storage_error(what: &str, err: std::io::Error) -> AppError {
+fn storage_error(what: &str, err: &std::io::Error) -> AppError {
     AppError::new(
         AppErrorCode::StorageUnavailable,
         format!("the shell state {what} could not be written: {err}"),

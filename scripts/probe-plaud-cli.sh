@@ -19,7 +19,7 @@ if [[ -z "${out}" ]]; then
 fi
 
 echo "This launches the vendor CLI you installed and reads your PLAUD account."
-echo "It runs only 'plaud --version' and 'plaud files'. It never signs in for"
+echo "It runs only 'plaud version' and 'plaud files'. It never signs in for"
 echo "you, never deletes anything and never writes to your account."
 echo
 echo "The capture will contain your recording titles. Review it for personal"

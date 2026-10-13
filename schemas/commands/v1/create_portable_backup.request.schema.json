@@ -16,6 +16,9 @@
     },
     "sensitive_profile": {
       "type": "boolean"
+    },
+    "include_voice_profiles": {
+      "type": "boolean"
     }
   }
 }

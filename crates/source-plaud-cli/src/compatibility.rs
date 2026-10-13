@@ -57,6 +57,17 @@ pub enum PaginationEvidence {
         /// Items returned per page.
         page_size: u32,
     },
+    /// Numbered pages were observed in a real session: the release takes a
+    /// 1-based page number and an explicit page size, and returns an empty
+    /// page once the account is exhausted.
+    PageNumber {
+        /// Flag that carries the page number, verbatim.
+        page_flag: String,
+        /// Flag that carries the page size, verbatim.
+        page_size_flag: String,
+        /// Items requested per page.
+        page_size: u32,
+    },
     /// Pagination was not observed. Enumeration is single-page and labelled
     /// possibly incomplete; we never guess a cursor flag.
     NotObserved,
@@ -66,7 +77,18 @@ impl PaginationEvidence {
     /// Whether the connector may request a second page.
     #[must_use]
     pub const fn is_observed(&self) -> bool {
-        matches!(self, Self::Observed { .. })
+        matches!(self, Self::Observed { .. } | Self::PageNumber { .. })
+    }
+
+    /// Items per page, when a page size was observed.
+    #[must_use]
+    pub const fn page_size(&self) -> Option<u32> {
+        match self {
+            Self::Observed { page_size, .. } | Self::PageNumber { page_size, .. } => {
+                Some(*page_size)
+            }
+            Self::NotObserved => None,
+        }
     }
 }
 
@@ -156,14 +178,27 @@ impl CliCompatibilityRow {
         {
             return reject("fixture_sha256 must be a 64-character hex digest");
         }
-        if let PaginationEvidence::Observed {
-            cursor_flag,
-            page_size,
-        } = &self.pagination
-        {
-            if cursor_flag.is_empty() || *page_size == 0 {
-                return reject("observed pagination needs a cursor flag and a page size");
+        match &self.pagination {
+            PaginationEvidence::Observed {
+                cursor_flag,
+                page_size,
+            } => {
+                if cursor_flag.is_empty() || *page_size == 0 {
+                    return reject("observed pagination needs a cursor flag and a page size");
+                }
             }
+            PaginationEvidence::PageNumber {
+                page_flag,
+                page_size_flag,
+                page_size,
+            } => {
+                if page_flag.is_empty() || page_size_flag.is_empty() || *page_size == 0 {
+                    return reject(
+                        "numbered pagination needs a page flag, a page-size flag and a page size",
+                    );
+                }
+            }
+            PaginationEvidence::NotObserved => {}
         }
         if self.evidence_level == CliEvidenceLevel::ObservedOnIdentifiedRelease
             && (self.verified_on.is_none() || self.host_os.is_empty())
@@ -197,10 +232,10 @@ impl CliCompatibilityRow {
             // the host rather than of the CLI release.
             supports_resume: Tri::No,
             supports_vendor_artifacts: self.vendor_artifacts,
-            page_size: match &self.pagination {
-                PaginationEvidence::Observed { page_size, .. } => Known::Known(*page_size),
-                PaginationEvidence::NotObserved => Known::Unknown,
-            },
+            page_size: self
+                .pagination
+                .page_size()
+                .map_or(Known::Unknown, Known::Known),
         }
     }
 
@@ -241,7 +276,7 @@ pub enum VersionVerdict {
         /// Version string as reported.
         reported: String,
     },
-    /// `plaud --version` produced output we could not read as a version.
+    /// `plaud version` produced output we could not read as a version.
     Unreadable,
 }
 
@@ -392,15 +427,61 @@ mod tests {
     }
 
     #[test]
-    fn the_committed_table_declares_no_usable_release_yet() {
-        // Spec 2.1: we have not been permitted to assume an output contract,
-        // and no release has been exercised. This assertion is what makes the
-        // connector fail closed rather than guess; a future validated row is
-        // expected to change it deliberately, together with a golden fixture.
+    fn the_committed_table_declares_exactly_the_exercised_release() {
+        // Spec 2.1: only a release that was actually installed and run may be
+        // here. 0.3.15 was exercised on macOS arm64 on 2026-10-12; changing
+        // this list means exercising another release and committing its
+        // golden fixture alongside it.
         assert_eq!(
             CliCompatibilityTable::committed().usable_versions(),
-            Vec::<&str>::new()
+            ["0.3.15"]
         );
+        let row = CliCompatibilityTable::committed()
+            .verdict(Some(&CliVersion::new("0.3.15")))
+            .row()
+            .cloned()
+            .expect("0.3.15 is validated");
+        assert_eq!(row.listing_format, ListingFormat::PlaudTable03);
+        assert_eq!(
+            row.pagination,
+            PaginationEvidence::PageNumber {
+                page_flag: "-p".to_owned(),
+                page_size_flag: "-s".to_owned(),
+                page_size: 20,
+            }
+        );
+        // The release scrapes a human-readable table, so the compatibility
+        // warning stays on, and nothing was promised about vendor artifacts or
+        // about signing the user out.
+        assert!(row.needs_scraping_warning());
+        assert!(!row.listing_may_be_incomplete());
+        assert_eq!(row.vendor_artifacts, Tri::Unknown);
+        assert_eq!(row.logout_command, Tri::Unknown);
+        assert_eq!(row.host_os, ["macos"]);
+        assert_eq!(row.verified_on.as_deref(), Some("2026-10-12"));
+    }
+
+    #[test]
+    fn the_committed_paging_flags_are_in_the_static_vocabulary() {
+        // A row cannot introduce a command-line flag: spec 7.2 wants that to
+        // be a code change with a test, and this is the test.
+        for row in &CliCompatibilityTable::committed().versions {
+            match &row.pagination {
+                PaginationEvidence::Observed { cursor_flag, .. } => assert!(
+                    crate::invocation::SUPPORTED_CURSOR_FLAGS.contains(&cursor_flag.as_str())
+                ),
+                PaginationEvidence::PageNumber {
+                    page_flag,
+                    page_size_flag,
+                    ..
+                } => {
+                    assert!(crate::invocation::SUPPORTED_PAGE_FLAGS.contains(&page_flag.as_str()));
+                    assert!(crate::invocation::SUPPORTED_PAGE_SIZE_FLAGS
+                        .contains(&page_size_flag.as_str()));
+                }
+                PaginationEvidence::NotObserved => {}
+            }
+        }
     }
 
     #[test]

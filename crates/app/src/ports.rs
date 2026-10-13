@@ -13,6 +13,7 @@ use plaudon_domain::error::AppError;
 use plaudon_domain::ids::{ClaimId, JobId, OutputId, RecordingId};
 use plaudon_domain::transcript::AlignmentOrigin;
 use plaudon_persistence::intelligence::OutputHeader;
+use plaudon_persistence::people::PersonDraft;
 
 use crate::dto::SourceAddFolderRequest;
 use crate::dto::{
@@ -27,6 +28,13 @@ use crate::dto::{
     SaveTranscriptRevisionResponse, SetModelPreferenceResponse, SourceAddFolderResponse,
     SourceReconcileResponse, SourceSyncResponse, StartProcessingResponse, SyncTrigger,
     TranscriptPage, TranscriptRevisionRef, VerifyLocalModelResponse, VerifyModelResponse,
+};
+use crate::dto::{
+    AssignClusterPersonResponse, ClusterSpeechDto, DeletePersonResponse,
+    DeleteVoiceEnrollmentResponse, ForgetAllVoiceProfilesResponse, ListPeopleResponse,
+    ListSpeakerSuggestionsResponse, ListVoiceExemplarsResponse, MergePeopleResponse, PersonDto,
+    SpeakerSuggestionDecisionDto, SplitVoiceEnrollmentResponse, StartSpeakerMatchingResponse,
+    VoiceEnrollmentDto, VoiceProfileSettingsDto,
 };
 use crate::secrets::SecretValue;
 use crate::settings_presentation::UpdateStatus;
@@ -405,6 +413,29 @@ pub trait SpeakersPort: Send + Sync {
         recording_id: plaudon_domain::ids::RecordingId,
         speaker_id: plaudon_domain::ids::SpeakerId,
     ) -> Result<plaudon_app_core::speakers::Speaker, AppError>;
+
+    /// Attribute one segment of a revision to a speaker row, or to nobody
+    /// (spec §4.1, VP-031).
+    ///
+    /// The assignment is the user's, never the machine's: this writes what a
+    /// human picked and infers nothing from the audio.
+    async fn set_segment_speaker(
+        &self,
+        recording_id: plaudon_domain::ids::RecordingId,
+        revision_id: plaudon_domain::ids::TranscriptRevisionId,
+        seq_index: u32,
+        speaker_id: Option<plaudon_domain::ids::SpeakerId>,
+    ) -> Result<SegmentSpeakerAssignment, AppError>;
+}
+
+/// What a segment is attributed to after [`SpeakersPort::set_segment_speaker`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SegmentSpeakerAssignment {
+    /// Speaker row the segment now points at, `None` when the attribution was
+    /// cleared.
+    pub speaker_id: Option<plaudon_domain::ids::SpeakerId>,
+    /// That row's current label, resolved for display.
+    pub speaker_label: Option<String>,
 }
 
 /// Cloud AI over OpenRouter BYOK (spec §10, ADR-0022): model catalogue, usage
@@ -648,6 +679,7 @@ pub trait ArchivePort: Send + Sync {
         destination: crate::validate::ValidatedDirectory,
         password: Option<String>,
         sensitive_profile: bool,
+        include_voice_profiles: bool,
     ) -> Result<crate::dto::CreateBackupResponse, AppError>;
 
     /// Validate an archive and report what it holds, writing nothing.
@@ -765,4 +797,201 @@ pub trait TemplatesPort: Send + Sync {
         &self,
         template_id: String,
     ) -> Result<crate::dto::ListTemplateVersionsResponse, AppError>;
+}
+
+/// The people roster: the one master speaker list (`VOICE_PROFILES_SPEC` §9A,
+/// VP-010, VP-011).
+///
+/// Ungated on purpose. Every method here works in a library where biometric
+/// matching was never turned on, where the OS credential store is locked, and
+/// where no speaker-embedding model exists — because a typed name is ordinary
+/// personal data and the roster is the assignment vocabulary of the whole app
+/// (§12.2A). Nothing in this trait can reach an embedder: the only type that
+/// authorises that is `plaudon_app_core::voice_profiles::ConsentProof`, which
+/// no method here produces or accepts.
+#[async_trait]
+pub trait PeoplePort: Send + Sync {
+    /// The roster, optionally filtered, with per-person counts and the
+    /// same-name groups a screen may offer as merge candidates (VP-214).
+    async fn list_people(&self, query: Option<&str>) -> Result<ListPeopleResponse, AppError>;
+
+    /// Add a roster entry.
+    async fn create_person(&self, draft: &PersonDraft) -> Result<PersonDto, AppError>;
+
+    /// Edit a roster entry's name, aliases and plain contacts.
+    async fn update_person(
+        &self,
+        person_id: plaudon_domain::ids::PersonId,
+        draft: &PersonDraft,
+    ) -> Result<PersonDto, AppError>;
+
+    /// Merge two entries, or disclose what that would move (VP-213c).
+    async fn merge_people(
+        &self,
+        loser: plaudon_domain::ids::PersonId,
+        survivor: plaudon_domain::ids::PersonId,
+        apply: bool,
+    ) -> Result<MergePeopleResponse, AppError>;
+
+    /// Delete an entry, or disclose what that would reach (VP-080).
+    async fn delete_person(
+        &self,
+        person_id: plaudon_domain::ids::PersonId,
+        apply: bool,
+    ) -> Result<DeletePersonResponse, AppError>;
+
+    /// Assign one cluster of one recording to a person, or clear it (VP-211).
+    async fn assign_cluster_person(
+        &self,
+        assignment: &ClusterAssignment,
+    ) -> Result<AssignClusterPersonResponse, AppError>;
+}
+
+/// A validated `assign_cluster_person` (VP-210, VP-211).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClusterAssignment {
+    /// Recording the cluster belongs to. Nothing beyond it is touched.
+    pub recording_id: RecordingId,
+    /// Speaker row standing for the cluster.
+    pub speaker_id: plaudon_domain::ids::SpeakerId,
+    /// Person to assign, or `None` for "Unknown/none".
+    pub person_id: Option<plaudon_domain::ids::PersonId>,
+    /// Whether to overwrite segments that were attributed individually.
+    pub overwrite_segment_exceptions: bool,
+}
+
+/// A validated enrolment or exemplar addition (VP-094).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EnrolmentRequest {
+    /// Person the speech is attributed to.
+    pub person_id: plaudon_domain::ids::PersonId,
+    /// Recording the speech is in.
+    pub recording_id: RecordingId,
+    /// Cluster within that recording's latest diarization run.
+    pub cluster_key: String,
+    /// The attestation, for an enrolment. `None` extends an existing one,
+    /// which was attested when it was created.
+    pub attestation: Option<plaudon_app_core::voice_profiles::EnrolmentAttestation>,
+}
+
+/// A validated `split_voice_enrollment` (§3.5).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SplitRequest {
+    /// Enrolment to split.
+    pub person_id: plaudon_domain::ids::PersonId,
+    /// Exemplars to move.
+    pub exemplar_ids: Vec<plaudon_domain::ids::VoiceExemplarId>,
+    /// Where they go.
+    pub target: SplitTarget,
+    /// The attestation for the target person.
+    pub attestation: plaudon_app_core::voice_profiles::EnrolmentAttestation,
+}
+
+/// Who a split's exemplars move to.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SplitTarget {
+    /// An entry already on the roster.
+    Existing(plaudon_domain::ids::PersonId),
+    /// A new entry to create with this display name.
+    New(String),
+}
+
+/// The biometric tier: the consent gate, enrolments and suggestions
+/// (`VOICE_PROFILES_SPEC` §8, §12.2).
+///
+/// Every method that could lead to an embedding first reads the stored gate
+/// and refuses when it is closed, so "off by default" (VP-003) and "no embed
+/// call is reachable while ungated or while matching is off" (VP-011, VP-215)
+/// are properties of this implementation rather than of its callers.
+#[async_trait]
+pub trait VoiceProfilesPort: Send + Sync {
+    /// The feature's state: the toggle, the gate, the disclosure and the
+    /// counts a settings block shows (VP-090).
+    async fn voice_profile_settings(&self) -> Result<VoiceProfileSettingsDto, AppError>;
+
+    /// Turn biometric matching on — which requires accepting the current
+    /// disclosure — or off (VP-120, VP-121).
+    async fn set_voice_profiles_enabled(
+        &self,
+        enabled: bool,
+        accepted_disclosure_version: Option<&str>,
+    ) -> Result<VoiceProfileSettingsDto, AppError>;
+
+    /// Attach an enrolment to a roster person from one cluster (VP-094).
+    async fn enroll_person_voice(
+        &self,
+        request: &EnrolmentRequest,
+    ) -> Result<VoiceEnrollmentDto, AppError>;
+
+    /// Extend an enrolment from another recording's cluster (§6.5).
+    async fn add_voice_exemplar(
+        &self,
+        request: &EnrolmentRequest,
+    ) -> Result<VoiceEnrollmentDto, AppError>;
+
+    /// Split an enrolment's exemplars by provenance onto another person.
+    async fn split_voice_enrollment(
+        &self,
+        request: &SplitRequest,
+    ) -> Result<SplitVoiceEnrollmentResponse, AppError>;
+
+    /// One enrolment's exemplars: ids, provenance and durations, never the
+    /// vectors, so a user can see what a profile is made of and split it
+    /// (VP-091, §3.5).
+    async fn list_voice_exemplars(
+        &self,
+        person_id: plaudon_domain::ids::PersonId,
+    ) -> Result<ListVoiceExemplarsResponse, AppError>;
+
+    /// The clean speech one cluster offers, for the enrolment meter (VP-094).
+    async fn cluster_speech(
+        &self,
+        recording_id: RecordingId,
+        cluster_key: &str,
+    ) -> Result<ClusterSpeechDto, AppError>;
+
+    /// Delete one person's voiceprint, or disclose what that destroys. The
+    /// roster entry stays (VP-080, VP-123).
+    async fn delete_voice_enrollment(
+        &self,
+        person_id: plaudon_domain::ids::PersonId,
+        apply: bool,
+        reason: Option<&str>,
+    ) -> Result<DeleteVoiceEnrollmentResponse, AppError>;
+
+    /// "Forget everyone": every enrolment, exemplar, suggestion and the key
+    /// (VP-095). The roster survives.
+    async fn forget_all_voice_profiles(
+        &self,
+        apply: bool,
+    ) -> Result<ForgetAllVoiceProfilesResponse, AppError>;
+
+    /// Pending suggestions for one recording, or the global review queue.
+    async fn list_speaker_suggestions(
+        &self,
+        recording_id: Option<RecordingId>,
+        limit: u32,
+    ) -> Result<ListSpeakerSuggestionsResponse, AppError>;
+
+    /// Confirm a suggestion: assign the person through the assignment path.
+    async fn confirm_speaker_suggestion(
+        &self,
+        suggestion_id: plaudon_domain::ids::SpeakerSuggestionId,
+        overwrite_segment_exceptions: bool,
+    ) -> Result<SpeakerSuggestionDecisionDto, AppError>;
+
+    /// Reject a suggestion, optionally naming who it actually was (VP-216).
+    async fn reject_speaker_suggestion(
+        &self,
+        suggestion_id: plaudon_domain::ids::SpeakerSuggestionId,
+        corrected_person_id: Option<plaudon_domain::ids::PersonId>,
+        overwrite_segment_exceptions: bool,
+    ) -> Result<SpeakerSuggestionDecisionDto, AppError>;
+
+    /// Queue the §10 match job for an explicit selection of recordings
+    /// (VP-007).
+    async fn start_speaker_matching(
+        &self,
+        recording_ids: &[RecordingId],
+    ) -> Result<StartSpeakerMatchingResponse, AppError>;
 }

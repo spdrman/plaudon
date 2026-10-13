@@ -228,6 +228,27 @@ impl EngineConfig {
         self
     }
 
+    /// Replace the diarizer, the speaker embedder and the credential store
+    /// the voice-profile tier uses.
+    ///
+    /// Tests use this to run enrolment and matching with no model file and no
+    /// OS keychain. This build ships no ONNX tier, so without it a match job
+    /// parks in `waiting_for_model` (VP-042).
+    #[must_use]
+    pub fn with_voice_engines(
+        mut self,
+        diarizer: Arc<dyn plaudon_ai_diarization::contract::DiarizationProvider>,
+        embedder: Arc<dyn plaudon_app_core::voice_profiles::embedder::SpeakerEmbedder>,
+        secrets: Arc<dyn plaudon_security::secrets::SecretStore>,
+    ) -> Self {
+        self.engines.voice = Some(crate::VoiceEngines {
+            diarizer,
+            embedder,
+            secrets,
+        });
+        self
+    }
+
     /// Replace the text model every summarization and tool run uses.
     #[must_use]
     pub fn with_text_model(
@@ -331,27 +352,24 @@ impl AppEngine {
         // then travels the ordinary event stream instead of focusing a window
         // the application layer knows nothing about.
         let publisher: Arc<Mutex<Option<EventPublisher>>> = Arc::new(Mutex::new(None));
-        let notifier = match config.notifier {
-            Some(notifier) => notifier,
-            None => {
-                let activation_publisher = Arc::clone(&publisher);
-                let handle = runtime.handle().clone();
-                let on_activated: notify::ActivationHandler = Arc::new(move |target| {
-                    let Some(target) = target else {
-                        return;
-                    };
-                    let events = activation_publisher.lock().clone();
-                    let Some(events) = events else {
-                        tracing::debug!("notification activated before the library was open");
-                        return;
-                    };
-                    handle.spawn(async move {
-                        notify::publish_activation(&events, target).await;
-                    });
+        let notifier = config.notifier.unwrap_or_else(|| {
+            let activation_publisher = Arc::clone(&publisher);
+            let handle = runtime.handle().clone();
+            let on_activated: notify::ActivationHandler = Arc::new(move |target| {
+                let Some(target) = target else {
+                    return;
+                };
+                let events = activation_publisher.lock().clone();
+                let Some(events) = events else {
+                    tracing::debug!("notification activated before the library was open");
+                    return;
+                };
+                handle.spawn(async move {
+                    notify::publish_activation(&events, target).await;
                 });
-                notify::platform_notifier(on_activated)
-            }
-        };
+            });
+            notify::platform_notifier(on_activated)
+        });
         // Preferences are loaded by the backend; the dispatcher starts
         // disabled so nothing can be delivered before they are applied.
         let notifications = Arc::new(NotificationDispatcher::new(
@@ -609,7 +627,9 @@ mod tests {
                 assert_eq!(answered, id);
                 assert_eq!(command, "list_recordings");
                 match (*result).expect("an empty library lists successfully") {
-                    AppResponse::ListRecordings(page) => assert!(page.items.is_empty()),
+                    AppResponse::ListRecordings(page) => {
+                        assert!(page.items.is_empty(), "an empty library lists no items");
+                    }
                     other => panic!("unexpected {other:?}"),
                 }
             }

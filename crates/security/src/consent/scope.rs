@@ -56,9 +56,10 @@ impl fmt::Display for ConsentPurpose {
 /// What would actually leave the device. The *content* half of a grant.
 ///
 /// This is the consent-facing projection of [`PayloadClass`]: the payload
-/// classes that carry no consentable user content ([`PayloadClass::None`]) or
+/// classes that carry no consentable user content ([`PayloadClass::None`]),
 /// that are a credential rather than recording-derived content
-/// ([`PayloadClass::Credential`]) have no [`ContentType`].
+/// ([`PayloadClass::Credential`]), or that may never leave the machine at all
+/// ([`PayloadClass::VoiceBiometric`], VP-110) have no [`ContentType`].
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
 )]
@@ -144,12 +145,16 @@ impl SecurityError for PayloadClassNotConsentable {
 impl TryFrom<PayloadClass> for ContentType {
     type Error = PayloadClassNotConsentable;
 
+    /// [`PayloadClass::VoiceBiometric`] is listed here beside the classes that
+    /// simply have no content type, and that is what makes it unconsentable:
+    /// a grant is built from a [`ContentType`], so there is no value a caller
+    /// could put in a [`ConsentGrant`] that would cover a biometric payload.
     fn try_from(value: PayloadClass) -> Result<Self, Self::Error> {
         match value {
             PayloadClass::AudioBytes => Ok(ContentType::AudioBytes),
             PayloadClass::TranscriptText => Ok(ContentType::TranscriptText),
             PayloadClass::Metadata => Ok(ContentType::MetadataOnly),
-            PayloadClass::None | PayloadClass::Credential => {
+            PayloadClass::None | PayloadClass::Credential | PayloadClass::VoiceBiometric => {
                 Err(PayloadClassNotConsentable { payload: value })
             }
         }

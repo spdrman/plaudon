@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/start_speaker_matching.response.schema.json",
+  "title": "start_speaker_matching.response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "jobs",
+    "refusals"
+  ],
+  "properties": {
+    "jobs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "recording_id",
+          "job_id"
+        ],
+        "properties": {
+          "recording_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "job_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      }
+    },
+    "refusals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "recording_id",
+          "reason"
+        ],
+        "properties": {
+          "recording_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  }
+}

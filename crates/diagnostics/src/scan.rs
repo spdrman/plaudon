@@ -371,13 +371,21 @@ impl Scanner {
                 used.insert(index);
                 continue;
             }
-            let description = crate::patterns::pattern_set()
+            let pattern = crate::patterns::pattern_set()
                 .iter()
-                .find(|p| p.names().any(|n| n == finding.pattern))
-                .map_or(
-                    "registered live secret",
-                    crate::patterns::Pattern::description,
-                );
+                .find(|p| p.names().any(|n| n == finding.pattern));
+            // A shape the sink redacts is not automatically a secret in a
+            // file: the VP-112 catch-alls match any long opaque run of bytes,
+            // and a committed device fixture is full of them. Those patterns
+            // are redaction-only and say so in the table.
+            if pattern.is_some_and(|p| p.scan_scope() == crate::patterns::ScanScope::RedactionOnly)
+            {
+                continue;
+            }
+            let description = pattern.map_or(
+                "registered live secret",
+                crate::patterns::Pattern::description,
+            );
             report.findings.push(ScanFinding {
                 path: display.clone(),
                 pattern: finding.pattern.to_owned(),

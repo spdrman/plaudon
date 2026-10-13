@@ -18,11 +18,12 @@
 //! # What this crate does not claim
 //!
 //! Redaction is pattern- and registry-based. It reliably removes the shapes in
-//! [`patterns`] and any exactly registered live secret. It cannot recognise an
-//! arbitrary unregistered secret that has no distinctive shape, and it cannot
-//! stop a caller from writing user content (a transcript) into a log message.
-//! Those remain the caller's responsibility; the scanner exists precisely
-//! because redaction is not a proof.
+//! [`patterns`], any exactly registered live secret, and any display name
+//! registered with [`register_profile_name`] (VOICE_PROFILES_SPEC VP-112). It
+//! cannot recognise an arbitrary unregistered secret that has no distinctive
+//! shape, and it cannot stop a caller from writing user content (a transcript)
+//! into a log message. Those remain the caller's responsibility; the scanner
+//! exists precisely because redaction is not a proof.
 
 pub mod crash;
 pub mod device_metrics;
@@ -45,7 +46,10 @@ pub use logging::{
 };
 pub use metrics::{MetricSeries, MetricsRegistry, WatcherMetric, WatcherMetricsSnapshot};
 pub use notification::redact_notification;
-pub use redact::{Finding, Redactor, RegisterSecretError};
+pub use redact::{
+    forget_profile_names, register_profile_name, registered_profile_names, Finding, Redactor,
+    RegisterProfileNameError, RegisterSecretError,
+};
 #[cfg(feature = "scanner")]
 pub use scan::{
     Allowlist, AllowlistEntry, ScanError, ScanFinding, ScanOptions, ScanReport, Scanner,

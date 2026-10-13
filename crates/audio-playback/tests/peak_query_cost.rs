@@ -15,6 +15,20 @@ use std::time::Instant;
 use plaudon_audio_playback::peaks::{PeakBucket, PeakLevel, PeakParams, PeakPyramid};
 use plaudon_audio_playback::time::{Micros, TimeSpan};
 
+/// Whether this process is running under coverage instrumentation.
+///
+/// `cargo llvm-cov` sets `LLVM_PROFILE_FILE` for every test process it
+/// starts. Instrumentation adds a counter update to every region executed,
+/// which multiplies the per-bucket constant of these queries by enough to
+/// turn the loose wall-clock ratios below into noise: the scrub ratio
+/// measured 11× under instrumentation and 1.2× without it on the same
+/// machine. The bucket *counts* above are exact and stay asserted either
+/// way; the clock-based claims are left to the uninstrumented test runs,
+/// which is where they mean something.
+fn instrumented() -> bool {
+    std::env::var_os("LLVM_PROFILE_FILE").is_some()
+}
+
 /// A pyramid of the right *shape* for `seconds` of audio, filled with a
 /// deterministic pattern. Built directly rather than decoded: the subject is
 /// the query, and folding 170 million samples in a debug build would make
@@ -115,6 +129,10 @@ fn a_three_hour_query_touches_no_more_buckets_than_a_one_minute_one() {
 
 #[test]
 fn full_width_query_time_is_independent_of_recording_length() {
+    if instrumented() {
+        eprintln!("skipped: wall-clock ratios are meaningless under coverage instrumentation");
+        return;
+    }
     let params = PeakParams::default();
     let columns = 1_200u32;
     let short = synthetic(60, params);
@@ -131,6 +149,10 @@ fn full_width_query_time_is_independent_of_recording_length() {
 
 #[test]
 fn scrubbing_cost_is_independent_of_recording_length() {
+    if instrumented() {
+        eprintln!("skipped: wall-clock ratios are meaningless under coverage instrumentation");
+        return;
+    }
     // A scrub is a sequence of queries over a moving window, which is what
     // the waveform does while the pointer is down.
     let params = PeakParams::default();
@@ -163,6 +185,10 @@ fn scrubbing_cost_is_independent_of_recording_length() {
 
 #[test]
 fn zooming_all_the_way_in_stays_cheap_on_a_three_hour_recording() {
+    if instrumented() {
+        eprintln!("skipped: wall-clock ratios are meaningless under coverage instrumentation");
+        return;
+    }
     let params = PeakParams::default();
     let columns = 1_200u32;
     let long = synthetic(3 * 3_600, params);

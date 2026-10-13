@@ -473,7 +473,7 @@ mod tests {
     #[test]
     fn pinned_models_start_unverified() {
         let registry = registry();
-        assert!(!registry.is_empty());
+        assert!(!registry.is_empty(), "expected registry to be non-empty");
         for card in registry.for_task(ModelTask::Transcription) {
             assert_eq!(
                 card.verification,

@@ -323,13 +323,15 @@ mod tests {
             input_sha256: canonical_transcript_digest(&base),
             stale: true,
         }]);
-        assert!(graph
-            .stale_closure(
-                &[base.id],
-                StaleReason::TranscriptEdited,
-                Timestamp::from_millis(1)
-            )
-            .is_empty());
+        let marked = graph.stale_closure(
+            &[base.id],
+            StaleReason::TranscriptEdited,
+            Timestamp::from_millis(1),
+        );
+        assert!(
+            marked.is_empty(),
+            "already-stale output re-marked: {marked:?}"
+        );
     }
 
     #[test]
@@ -342,13 +344,15 @@ mod tests {
             input_sha256: canonical_transcript_digest(&untouched),
             stale: false,
         }]);
-        assert!(graph
-            .stale_closure(
-                &[touched.id],
-                StaleReason::TranscriptEdited,
-                Timestamp::from_millis(1)
-            )
-            .is_empty());
+        let marked = graph.stale_closure(
+            &[touched.id],
+            StaleReason::TranscriptEdited,
+            Timestamp::from_millis(1),
+        );
+        assert!(
+            marked.is_empty(),
+            "untouched revision's output marked: {marked:?}"
+        );
     }
 
     #[test]
@@ -390,7 +394,11 @@ mod tests {
         // paying for it again.
         let sections = vec![section(0, 0..2, range_digest(&base, &(0..2)))];
         let plan = plan_regeneration(OutputId::new(), &base, &edited, &sections, range_digest);
-        assert!(plan.recompute_ranges.is_empty());
+        assert!(
+            plan.recompute_ranges.is_empty(),
+            "identical text should recompute nothing, got {:?}",
+            plan.recompute_ranges
+        );
         assert!(plan.reuses_anything());
     }
 

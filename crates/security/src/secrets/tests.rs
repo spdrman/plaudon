@@ -335,6 +335,57 @@ fn scope_accounts_are_namespaced_and_distinct() {
 }
 
 #[test]
+fn the_voice_profile_key_is_its_own_entry_and_binds_to_no_device() {
+    // VP-071: one feature-scoped data key per library, in the OS vault, under
+    // an account string that cannot collide with any other scope.
+    let scope = SecretScope::VoiceProfileKey;
+    assert_eq!(scope.service(), SECRET_SERVICE);
+    assert_eq!(scope.account(), "voiceprofiles.data_key");
+    assert_ne!(scope.account(), SecretScope::OpenRouterApiKey.account());
+    assert_ne!(scope.account(), device_scope("plaud-note-0001").account());
+    assert_eq!(scope.device_id(), None);
+    assert!(scope.label().contains("voice-profile"));
+
+    // The fingerprint is scope-salted, so the same bytes stored under two
+    // scopes cannot be correlated across them.
+    let key = SecretString::new("a".repeat(64));
+    assert_ne!(
+        SecretRef::fingerprint_of(&scope, &key),
+        SecretRef::fingerprint_of(&SecretScope::OpenRouterApiKey, &key)
+    );
+}
+
+#[test]
+fn a_locked_store_refuses_the_voice_profile_key_without_a_plaintext_fallback() {
+    // ADR-0014 applied to the biometric tier: an unavailable vault locks the
+    // feature. There is no file, no cache and no in-process fallback that
+    // could hand out this key instead.
+    let store = store_with_fixed_clock();
+    let scope = SecretScope::VoiceProfileKey;
+    let key = SecretString::new("b".repeat(64));
+    store.store(&scope, &key).unwrap();
+    store.set_locked(true);
+
+    for error in [
+        store.load(&scope).unwrap_err(),
+        store.store(&scope, &key).unwrap_err(),
+        store.status(&scope).unwrap_err(),
+        store.delete(&scope).unwrap_err(),
+    ] {
+        assert!(error.is_locked_state(), "unexpected error: {error}");
+        assert_eq!(error.envelope_parts().code, SECRET_STORE_LOCKED);
+    }
+
+    store.set_locked(false);
+    assert!(store.status(&scope).unwrap().present);
+
+    // An unsupported platform answers the same way, never with a value.
+    let unsupported = UnsupportedSecretStore::new();
+    assert!(unsupported.load(&scope).unwrap_err().is_locked_state());
+    assert!(unsupported.status(&scope).unwrap_err().is_locked_state());
+}
+
+#[test]
 fn device_id_validation_is_the_only_constructor() {
     assert!(DeviceId::new("plaud-note-0001").is_ok());
     assert!(DeviceId::new("*").is_err());

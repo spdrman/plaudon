@@ -364,7 +364,11 @@ mod tests {
         };
         let result = validate_study_artifacts(&payload, &revision);
         assert_eq!(result.accepted.flashcards.len(), 1);
-        assert!(result.rejected.is_empty());
+        assert!(
+            result.rejected.is_empty(),
+            "expected result.rejected to be empty, got {:?}",
+            result.rejected
+        );
         assert_eq!(result.accepted.flashcards[0].anchors.len(), 1);
     }
 
@@ -381,7 +385,11 @@ mod tests {
             ..Default::default()
         };
         let result = validate_study_artifacts(&payload, &revision);
-        assert!(result.accepted.quiz.is_empty());
+        assert!(
+            result.accepted.quiz.is_empty(),
+            "expected result.accepted.quiz to be empty, got {:?}",
+            result.accepted.quiz
+        );
         assert_eq!(
             result.rejected,
             vec![RejectedItem {
@@ -408,7 +416,11 @@ mod tests {
             ..Default::default()
         };
         let result = validate_study_artifacts(&payload, &revision);
-        assert!(result.accepted.definitions.is_empty());
+        assert!(
+            result.accepted.definitions.is_empty(),
+            "expected result.accepted.definitions to be empty, got {:?}",
+            result.accepted.definitions
+        );
         assert!(matches!(
             result.rejected[0].reason,
             RejectionReason::AllAnchorsRejected { .. }

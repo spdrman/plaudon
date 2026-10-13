@@ -13,28 +13,36 @@ workspace = true
 
 [dependencies]
 async-trait = { workspace = true }
+chacha20poly1305 = { workspace = true }
 plaudon-ai-contracts = { workspace = true }
 plaudon-ai-diarization = { workspace = true }
 plaudon-ai-tools = { workspace = true }
 plaudon-domain = { workspace = true }
 plaudon-jobs = { workspace = true }
 plaudon-persistence = { workspace = true }
+plaudon-security = { workspace = true }
 fs4 = { workspace = true }
 jsonschema = { workspace = true }
 hex = { workspace = true }
+rand = { workspace = true }
 sqlx = { workspace = true }
 uuid = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 thiserror = { workspace = true }
+zeroize = { workspace = true }
 
 [dev-dependencies]
 async-trait = { workspace = true }
 plaudon-ai-contracts = { workspace = true }
+plaudon-security = { workspace = true, features = ["test-support"] }
 parking_lot = { workspace = true }
 sqlx = { workspace = true }
 uuid = { workspace = true }
 proptest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 tempfile = { workspace = true }
+tokio-util = { workspace = true }
 tokio = { workspace = true }

@@ -144,6 +144,22 @@ typed_id!(
     /// Identity of one transcript-tool run (spec 13.3 `tool_runs`).
     ToolRunId
 );
+typed_id!(
+    /// Identity of a person on the master speaker list, the library-wide
+    /// roster that recordings assign speakers from (VOICE_PROFILES_SPEC
+    /// VP-010). A roster entry is a name, not a voiceprint.
+    PersonId
+);
+typed_id!(
+    /// Identity of one stored voice exemplar, i.e. one encrypted embedding
+    /// with its provenance (VOICE_PROFILES_SPEC VP-070).
+    VoiceExemplarId
+);
+typed_id!(
+    /// Identity of one speaker-match suggestion. A suggestion is a score
+    /// awaiting a human decision, never an identity (ADR-0082).
+    SpeakerSuggestionId
+);
 
 #[cfg(test)]
 mod tests {

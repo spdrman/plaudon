@@ -17,17 +17,15 @@ fn workspace_root() -> PathBuf {
         .to_path_buf()
 }
 
+/// The emitter built for this test run.
+///
+/// `CARGO_BIN_EXE_<name>` is cargo's own answer and the only one that stays
+/// right when the artifact layout changes: deriving the path from
+/// `current_exe()` assumed `<profile>/deps/<test>`, which stopped holding the
+/// moment the test was compiled under a build-directory layout (the coverage
+/// run on nightly puts test binaries in `<profile>/build/<pkg>/<hash>/out/`).
 fn emitter() -> PathBuf {
-    let mut path = std::env::current_exe().expect("test executable");
-    path.pop();
-    if path.ends_with("deps") {
-        path.pop();
-    }
-    path.join(if cfg!(windows) {
-        "quality_metrics.exe"
-    } else {
-        "quality_metrics"
-    })
+    PathBuf::from(env!("CARGO_BIN_EXE_quality_metrics"))
 }
 
 fn schema() -> jsonschema::Validator {

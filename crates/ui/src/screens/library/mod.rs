@@ -182,7 +182,7 @@ impl LibraryScreen {
     }
 
     /// Import paths the host obtained from the OS picker.
-    pub fn import_paths(&mut self, paths: Vec<String>, send: Sender<'_>) {
+    pub fn import_paths(&mut self, paths: &[String], send: Sender<'_>) {
         self.import.start(paths, DuplicatePolicy::Ask, send);
     }
 
@@ -286,7 +286,8 @@ impl LibraryScreen {
             self.import.note_unrepresentable(dropped.unrepresentable);
         }
         if !dropped.paths.is_empty() {
-            self.import.start(dropped.paths, DuplicatePolicy::Ask, send);
+            self.import
+                .start(&dropped.paths, DuplicatePolicy::Ask, send);
         }
     }
 
@@ -400,7 +401,7 @@ impl LibraryScreen {
         match import::import_results_panel(ui, &mut self.import) {
             Some(ImportIntent::PickFiles) => intents.push(LibraryIntent::PickFiles),
             Some(ImportIntent::RetryPath(path)) => {
-                self.import.start(vec![path], DuplicatePolicy::Ask, send);
+                self.import.start(&[path], DuplicatePolicy::Ask, send);
             }
             Some(ImportIntent::OpenRecording(recording_id)) => {
                 intents.push(LibraryIntent::OpenRecording(recording_id));

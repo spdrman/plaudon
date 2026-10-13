@@ -307,6 +307,47 @@ mod tests {
         assert!(!app.detail().contains("/v1/audio"), "{}", app.detail());
     }
 
+    /// VP-110/VP-112: the refusal reaches the user as an error, and that error
+    /// may not carry the thing it refused. The detail is the fixed vocabulary
+    /// of labels, never a name, a score or a vector.
+    #[test]
+    fn a_voice_biometric_denial_carries_labels_and_no_biometric_content() {
+        for policy in [
+            OutboundPolicy::local_only(),
+            OutboundPolicy::network_permitted(
+                NetworkGrant::new(ApprovalSource::TestHarness, 0, "privacy-v1")
+                    .with_allowed_hosts(vec!["openrouter.ai".to_owned()]),
+            ),
+        ] {
+            let denied = policy
+                .authorize(&EgressRequest::new(
+                    Subsystem::OpenRouter,
+                    Destination::url("https://openrouter.ai/api/v1/embeddings").unwrap(),
+                    EgressPurpose::InferenceDispatch,
+                    PayloadClass::VoiceBiometric,
+                ))
+                .unwrap_err();
+            assert_eq!(denied.reason, DenyReason::VoiceBiometricNeverEgresses);
+
+            let app: AppError = denied.into();
+            // Not `LOCAL_ONLY_MODE`: that code offers the user a setting to
+            // change, and no setting changes this one.
+            assert_eq!(app.code(), AppErrorCode::EgressDenied);
+            assert!(
+                app.detail().contains("voice_biometric_never_egresses"),
+                "{}",
+                app.detail()
+            );
+            for forbidden in ["Dana", "0.97", "embedding=", "[0."] {
+                assert!(
+                    !app.detail().contains(forbidden),
+                    "detail carried `{forbidden}`: {}",
+                    app.detail()
+                );
+            }
+        }
+    }
+
     #[test]
     fn missing_confirmation_maps_to_confirmation_required() {
         let error = crate::local_only::SettingsError::ConfirmationRequired;

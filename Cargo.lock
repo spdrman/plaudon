@@ -4418,6 +4418,7 @@ name = "plaudon-app-core"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "chacha20poly1305",
  "fs4",
  "hex",
  "jsonschema",
@@ -4428,7 +4429,9 @@ dependencies = [
  "plaudon-domain",
  "plaudon-jobs",
  "plaudon-persistence",
+ "plaudon-security",
  "proptest",
+ "rand 0.8.8",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -4436,7 +4439,9 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.21",
  "tokio",
+ "tokio-util",
  "uuid",
+ "zeroize",
 ]
 
 [[package]]
@@ -4502,6 +4507,7 @@ dependencies = [
  "hex",
  "plaudon-ai-apple",
  "plaudon-ai-contracts",
+ "plaudon-ai-diarization",
  "plaudon-ai-openrouter",
  "plaudon-app-core",
  "plaudon-domain",
@@ -4509,6 +4515,7 @@ dependencies = [
  "plaudon-integration-tests",
  "plaudon-jobs",
  "plaudon-persistence",
+ "plaudon-security",
  "serde_json",
  "sha2 0.10.9",
  "sqlx",
@@ -4612,6 +4619,7 @@ dependencies = [
  "async-trait",
  "eframe",
  "egui",
+ "image",
  "muda",
  "objc2 0.6.5",
  "objc2-app-kit 0.3.2",
@@ -4643,6 +4651,8 @@ name = "plaudon-eval"
 version = "0.1.0"
 dependencies = [
  "jsonschema",
+ "plaudon-ai-diarization",
+ "plaudon-app-core",
  "plaudon-domain",
  "serde",
  "serde_json",
@@ -4658,6 +4668,7 @@ name = "plaudon-export"
 version = "0.1.0"
 dependencies = [
  "argon2",
+ "base64 0.22.1",
  "chacha20poly1305",
  "flate2",
  "hex",
@@ -5059,6 +5070,7 @@ dependencies = [
  "plaudon-audio-playback",
  "plaudon-craft-ui",
  "plaudon-domain",
+ "plaudon-source-plaud-cli",
  "plaudon-transcript-doc",
  "plaudon-ui-testkit",
  "serde_json",

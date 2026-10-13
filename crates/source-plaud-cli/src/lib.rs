@@ -52,8 +52,13 @@ pub use compatibility::{
 pub use connector::{ListingResult, PlaudCloudCliConnector};
 pub use diagnostics::{ConnectorDiagnostics, DisconnectCopy, NextAction};
 pub use discovery::{CliDiscovery, DiscoveredCli, DiscoveryError, DiscoveryOrigin, UserApproval};
-pub use download::{DownloadPolicy, DownloadRejection, RangeSupport, UrlContract};
-pub use invocation::{CliCommand, PLAUD_SUBCOMMANDS, SUPPORTED_CURSOR_FLAGS};
+pub use download::{
+    DownloadPolicy, DownloadRejection, RangeSupport, UrlContract, OBSERVED_AUDIO_HOSTS,
+};
+pub use invocation::{
+    CliCommand, FilesPaging, MAX_PAGE_NUMBER, MAX_PAGE_SIZE, PLAUD_SUBCOMMANDS,
+    SUPPORTED_CURSOR_FLAGS, SUPPORTED_PAGE_FLAGS, SUPPORTED_PAGE_SIZE_FLAGS,
+};
 pub use parser::{
     CliVersion, ListingCompleteness, ListingFormat, ParsedListing, ParsedListingPage, ParserError,
     VersionedParser,

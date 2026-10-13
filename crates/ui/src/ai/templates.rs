@@ -229,7 +229,7 @@ impl TemplateManager {
             let selected = self.selected.as_deref() == Some(summary.template_id.as_str());
             let chosen = ui.radio(selected, summary.display_name.as_str()).clicked();
             ui.indent(summary.template_id.as_str(), |ui| {
-                Self::summary_row(ui, summary)
+                Self::summary_row(ui, summary);
             });
             if chosen && !selected {
                 self.select(&summary.template_id, output);

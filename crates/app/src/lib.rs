@@ -61,8 +61,9 @@ use crate::backend::LocalBackend;
 use crate::events::EventSink;
 use crate::ports::{
     ActivityPort, ArchivePort, CapabilitiesPort, CloudPort, DeletionPort, DevicesPort, ExportPort,
-    ImportPort, JobsPort, LibraryPort, MediaExportPort, ModelsPort, OutputsPort, SearchPort,
-    SettingsPort, SourcesPort, SpeakersPort, TemplatesPort, ToolsPort, TranscriptPort, UpdatePort,
+    ImportPort, JobsPort, LibraryPort, MediaExportPort, ModelsPort, OutputsPort, PeoplePort,
+    SearchPort, SettingsPort, SourcesPort, SpeakersPort, TemplatesPort, ToolsPort, TranscriptPort,
+    UpdatePort, VoiceProfilesPort,
 };
 use crate::secrets::SecretStore;
 
@@ -109,6 +110,10 @@ pub struct AppPorts {
     pub search: Arc<dyn SearchPort>,
     /// Speaker labelling and confirmation.
     pub speakers: Arc<dyn SpeakersPort>,
+    /// The people roster: the master speaker list, ungated (VP-011).
+    pub people: Arc<dyn PeoplePort>,
+    /// The biometric tier: consent gate, enrolments and suggestions.
+    pub voice_profiles: Arc<dyn VoiceProfilesPort>,
     /// Locally installed models.
     pub models: Arc<dyn ModelsPort>,
     /// Read-only update facts.
@@ -233,6 +238,40 @@ pub struct EngineOverrides {
     /// only way to tell "no request was made" from "a request was made and
     /// failed".
     pub cloud_transport: Option<Arc<dyn plaudon_ai_openrouter::transport::AsyncHttpTransport>>,
+    /// The voice-profile engines, when a caller substitutes them.
+    ///
+    /// `None` is this build's production arrangement: no diarizer, no
+    /// embedder, and the OS credential store.
+    pub voice: Option<VoiceEngines>,
+}
+
+/// The voice-profile engines and key store a hermetic run substitutes.
+///
+/// The three travel together because they are useless apart: a match job
+/// needs a diarizer and an embedder to produce a score at all, and the
+/// enrolment it scores against is sealed with a key from the credential
+/// store, so a run with a scripted embedder and the real OS keychain would
+/// still touch the host. Production supplies none of them: this build ships
+/// no ONNX tier, so a match job parks in `waiting_for_model` rather than
+/// pretending a model could run (VP-042).
+#[derive(Clone)]
+pub struct VoiceEngines {
+    /// Provider the matching executor diarizes with.
+    pub diarizer: Arc<dyn plaudon_ai_diarization::contract::DiarizationProvider>,
+    /// Embedder the matching executor scores clusters with.
+    pub embedder: Arc<dyn plaudon_app_core::voice_profiles::embedder::SpeakerEmbedder>,
+    /// Credential store the voice-profile data key lives in (VP-071).
+    ///
+    /// Separate from the application's own OpenRouter-key port, which is a
+    /// different trait: the biometric tier needs the
+    /// `plaudon_security::secrets` scope API (ADR-0014).
+    pub secrets: Arc<dyn plaudon_security::secrets::SecretStore>,
+}
+
+impl std::fmt::Debug for VoiceEngines {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("VoiceEngines")
+    }
 }
 
 impl std::fmt::Debug for EngineOverrides {
@@ -241,6 +280,7 @@ impl std::fmt::Debug for EngineOverrides {
             .field("stt", &self.stt.len())
             .field("text", &self.text.is_some())
             .field("cloud_transport", &self.cloud_transport.is_some())
+            .field("voice", &self.voice.is_some())
             .finish()
     }
 }
@@ -281,6 +321,11 @@ pub async fn build_ports_with(
     if let Some(text) = engines.text {
         opened = opened.with_text_model(text);
     }
+    if let Some(voice) = engines.voice {
+        opened = opened
+            .with_voice_engines(voice.diarizer, voice.embedder)
+            .with_voice_secrets(voice.secrets);
+    }
     let backend = Arc::new(opened);
     // Spec §13.3A, §14.3, §14.7: the import journal, the cloud ledger and the
     // job engine are all reconciled against what is actually on disk before
@@ -291,8 +336,7 @@ pub async fn build_ports_with(
             "startup reconciliation did not complete"
         );
     }
-    let processing =
-        crate::backend::processing::ProcessingHandle::start(Arc::clone(&backend), None);
+    let processing = crate::backend::processing::ProcessingHandle::start(&backend, None);
     let events = backend.events().clone();
     // The library is open, so a real radio can now be given the committer it
     // needs. A supplied radio passes straight through.
@@ -336,6 +380,8 @@ pub async fn build_ports_with(
         export: Arc::clone(&backend) as Arc<dyn ExportPort>,
         search: Arc::clone(&backend) as Arc<dyn SearchPort>,
         speakers: Arc::clone(&backend) as Arc<dyn SpeakersPort>,
+        people: Arc::clone(&backend) as Arc<dyn PeoplePort>,
+        voice_profiles: Arc::clone(&backend) as Arc<dyn VoiceProfilesPort>,
         models: Arc::new(crate::backend::models::ModelsBackend::new(
             app_data_dir,
             events.clone(),

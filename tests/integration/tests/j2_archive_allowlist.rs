@@ -36,6 +36,14 @@ const PIPELINE: &str =
 const CONVERSATION: &str =
     "per-install tool conversation history; the archive carries outputs, not the chat";
 const SEARCH_INDEX: &str = "full-text index shadow table, rebuilt from the restored transcripts";
+const SUGGESTION: &str =
+    "a pending decision about a diarization run; runs are never archived, so a restored library has nothing to attach one to and re-running matching recomputes it (VP-078)";
+const CONSENT_JOURNAL: &str =
+    "the local consent and deletion journal; it is evidence about what happened in this library, not library content, and it must not follow a profile onto another machine (VP-079)";
+const MATCH_EMBEDDING: &str =
+    "sealed cluster embeddings, the embed stage's scratch for one matching job; they are biometric material with no owner yet — enrolment is what promotes an embedding to an exemplar — and the executor discards them when the job settles, so no archive has anything to carry (VP-020, VP-022, VP-078)";
+const MATCH_REPORT: &str =
+    "the match stage's scratch for one matching job: scores and bands against a diarization run that is itself never archived, discarded when the job settles and recomputed by re-running matching (VP-020, VP-102)";
 
 #[allow(clippy::too_many_lines)]
 fn decisions() -> Vec<(&'static str, Vec<(&'static str, Decision)>)> {
@@ -221,6 +229,7 @@ fn decisions() -> Vec<(&'static str, Vec<(&'static str, Decision)>)> {
                 ("name", Carried("annotations/<id>.json")),
                 ("provenance", Carried("annotations/<id>.json")),
                 ("user_confirmed", Carried("annotations/<id>.json")),
+                ("person_id", Carried("annotations/<id>.json")),
                 ("cluster_key", Excluded(DERIVED)),
                 ("original_label", Excluded(LABELLING)),
                 ("renamed_at", Excluded(LABELLING)),
@@ -1012,6 +1021,123 @@ fn decisions() -> Vec<(&'static str, Vec<(&'static str, Decision)>)> {
                 ("created_at", Excluded(LOCAL)),
             ],
         ),
+        (
+            "people",
+            vec![
+                ("id", Carried("people/<id>.json")),
+                ("display_name", Carried("people/<id>.json")),
+                ("aliases_json", Carried("people/<id>.json")),
+                ("email", Carried("people/<id>.json")),
+                ("organisation", Carried("people/<id>.json")),
+                ("status", Carried("people/<id>.json")),
+                ("created_at", Carried("people/<id>.json")),
+                ("updated_at", Carried("people/<id>.json")),
+            ],
+        ),
+        (
+            "person_voice_enrollments",
+            vec![
+                ("person_id", Carried("voiceprofiles/<person id>.json")),
+                ("consent_version", Carried("voiceprofiles/<person id>.json")),
+                ("consent_note", Carried("voiceprofiles/<person id>.json")),
+                (
+                    "retention_months",
+                    Carried("voiceprofiles/<person id>.json"),
+                ),
+                ("last_matched_at", Carried("voiceprofiles/<person id>.json")),
+                ("status", Carried("voiceprofiles/<person id>.json")),
+                ("expired_at", Carried("voiceprofiles/<person id>.json")),
+                ("created_at", Carried("voiceprofiles/<person id>.json")),
+            ],
+        ),
+        (
+            "voice_exemplars",
+            vec![
+                ("id", Carried("voiceprofiles/<person id>.json")),
+                ("person_id", Carried("voiceprofiles/<person id>.json")),
+                ("recording_id", Carried("voiceprofiles/<person id>.json")),
+                ("diarization_run_id", Excluded(PIPELINE)),
+                ("cluster_key", Carried("voiceprofiles/<person id>.json")),
+                ("source_start_ms", Carried("voiceprofiles/<person id>.json")),
+                ("source_end_ms", Carried("voiceprofiles/<person id>.json")),
+                ("speech_ms", Carried("voiceprofiles/<person id>.json")),
+                ("model_id", Carried("voiceprofiles/<person id>.json")),
+                ("model_version", Carried("voiceprofiles/<person id>.json")),
+                ("model_sha256", Carried("voiceprofiles/<person id>.json")),
+                ("embedding_dim", Carried("voiceprofiles/<person id>.json")),
+                (
+                    "embedding_cipher",
+                    Carried("voiceprofiles/<person id>.json"),
+                ),
+                ("embedding_nonce", Carried("voiceprofiles/<person id>.json")),
+                ("created_at", Carried("voiceprofiles/<person id>.json")),
+            ],
+        ),
+        (
+            "speaker_suggestions",
+            vec![
+                ("id", Excluded(SUGGESTION)),
+                ("recording_id", Excluded(SUGGESTION)),
+                ("diarization_run_id", Excluded(SUGGESTION)),
+                ("cluster_key", Excluded(SUGGESTION)),
+                ("person_id", Excluded(SUGGESTION)),
+                ("score", Excluded(SUGGESTION)),
+                ("score_kind", Excluded(SUGGESTION)),
+                ("band", Excluded(SUGGESTION)),
+                ("state", Excluded(SUGGESTION)),
+                ("corrected_person_id", Excluded(SUGGESTION)),
+                ("decided_at", Excluded(SUGGESTION)),
+                ("model_id", Excluded(SUGGESTION)),
+                ("model_version", Excluded(SUGGESTION)),
+                ("created_at", Excluded(SUGGESTION)),
+            ],
+        ),
+        (
+            "speaker_match_cluster_embeddings",
+            vec![
+                ("job_id", Excluded(MATCH_EMBEDDING)),
+                ("diarization_run_id", Excluded(MATCH_EMBEDDING)),
+                ("cluster_key", Excluded(MATCH_EMBEDDING)),
+                ("speech_ms", Excluded(MATCH_EMBEDDING)),
+                ("model_id", Excluded(MATCH_EMBEDDING)),
+                ("model_version", Excluded(MATCH_EMBEDDING)),
+                ("embedding_dim", Excluded(MATCH_EMBEDDING)),
+                ("embedding_cipher", Excluded(MATCH_EMBEDDING)),
+                ("embedding_nonce", Excluded(MATCH_EMBEDDING)),
+                ("created_at", Excluded(MATCH_EMBEDDING)),
+            ],
+        ),
+        (
+            "speaker_match_reports",
+            vec![
+                ("job_id", Excluded(MATCH_REPORT)),
+                ("diarization_run_id", Excluded(MATCH_REPORT)),
+                ("cluster_key", Excluded(MATCH_REPORT)),
+                ("report_json", Excluded(MATCH_REPORT)),
+                ("created_at", Excluded(MATCH_REPORT)),
+            ],
+        ),
+        (
+            "voice_profile_events",
+            vec![
+                ("id", Excluded(CONSENT_JOURNAL)),
+                ("person_id", Excluded(CONSENT_JOURNAL)),
+                ("kind", Excluded(CONSENT_JOURNAL)),
+                ("detail_json", Excluded(CONSENT_JOURNAL)),
+                ("created_at", Excluded(CONSENT_JOURNAL)),
+            ],
+        ),
+        (
+            "voice_retention_sweeps",
+            vec![
+                ("id", Excluded(TRANSIENT)),
+                ("planned_at", Excluded(TRANSIENT)),
+                ("state", Excluded(TRANSIENT)),
+                ("expired_count", Excluded(TRANSIENT)),
+                ("purged_count", Excluded(TRANSIENT)),
+                ("completed_at", Excluded(TRANSIENT)),
+            ],
+        ),
     ]
 }
 
@@ -1103,7 +1229,13 @@ fn the_carried_documents_are_exactly_the_spec_namespaces() {
             "transcripts",
             "outputs",
             "sources",
-            "tools"
+            "tools",
+            // VP-077: the roster is ordinary library data and travels like the
+            // rest of it.
+            "people",
+            // VP-078: biometric material has a namespace of its own, writable
+            // only under `Protection::Encrypted`.
+            "voiceprofiles",
         ])
     );
 }

@@ -166,6 +166,7 @@ impl ArchivePort for LocalBackend {
         destination: ValidatedDirectory,
         password: Option<String>,
         sensitive_profile: bool,
+        include_voice_profiles: bool,
     ) -> Result<CreateBackupResponse, AppError> {
         let response = self
             .export_service()
@@ -174,6 +175,7 @@ impl ArchivePort for LocalBackend {
                     destination: destination.path,
                     password,
                     sensitive_profile,
+                    include_voice_profiles,
                 },
                 Timestamp::now(),
             )
@@ -193,6 +195,7 @@ impl ArchivePort for LocalBackend {
             integrity_note: response.integrity_note,
             manifest_schema_version: response.manifest_schema_version,
             nonportable_settings: response.nonportable_settings,
+            voice_profiles_included: response.voice_profiles_included,
         })
     }
 

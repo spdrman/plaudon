@@ -383,8 +383,16 @@ mod tests {
                     summary.id
                 );
             }
-            assert!(!template.purpose.trim().is_empty());
-            assert!(!template.instructions.extraction.trim().is_empty());
+            assert!(
+                !template.purpose.trim().is_empty(),
+                "{} has an empty purpose",
+                summary.id
+            );
+            assert!(
+                !template.instructions.extraction.trim().is_empty(),
+                "{} has empty extraction instructions",
+                summary.id
+            );
             assert!(template.rendering.show_anchors);
         }
     }

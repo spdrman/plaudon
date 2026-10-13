@@ -25,6 +25,7 @@ pub mod import;
 pub mod jobs;
 pub mod models;
 pub mod outputs;
+pub mod people;
 pub mod processing;
 pub mod sources;
 pub mod store;
@@ -32,6 +33,7 @@ pub mod templates;
 pub mod tools;
 pub mod update;
 pub(crate) mod verify_text;
+pub mod voice_profiles;
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -98,6 +100,9 @@ pub struct LocalBackend {
     events: EventPublisher,
     notifications: NotificationService,
     secrets: Arc<dyn SecretStore>,
+    /// The OS vault the voice-profile data key lives in (ADR-0014, VP-071).
+    /// A separate port from `secrets`, which is the OpenRouter-key one.
+    voice_secrets: Arc<dyn plaudon_security::secrets::SecretStore>,
     approved_roots: Vec<PathBuf>,
     source_runtime: sources::SourcesRuntime,
     cloud: cloud::CloudRuntime,
@@ -132,6 +137,7 @@ impl LocalBackend {
             approved_roots,
             source_runtime: sources::SourcesRuntime::production(),
             cloud,
+            voice_secrets: Arc::from(plaudon_security::secrets::os_store()),
             processing,
             store,
         };
@@ -167,9 +173,40 @@ impl LocalBackend {
         self
     }
 
+    /// Replace the diarization provider and speaker embedder the matching
+    /// executor would otherwise find absent.
+    ///
+    /// This build ships neither — the ONNX tier is a later phase of EPIC P —
+    /// so without this seam a match job parks in `waiting_for_model` instead
+    /// of pretending a model could run (VP-042).
+    #[must_use]
+    pub fn with_voice_engines(
+        mut self,
+        diarizer: Arc<dyn plaudon_ai_diarization::contract::DiarizationProvider>,
+        embedder: Arc<dyn plaudon_app_core::voice_profiles::embedder::SpeakerEmbedder>,
+    ) -> Self {
+        self.processing = self.processing.with_voice_engines(diarizer, embedder);
+        self
+    }
+
+    /// Replace the OS credential store the voice-profile data key lives in.
+    ///
+    /// Separate from [`LocalBackend::secrets`], which is the application's own
+    /// OpenRouter-key port: the biometric tier needs the
+    /// `plaudon_security::secrets` scope API (ADR-0014, VP-071), and a test
+    /// must be able to run it without touching a real keychain.
+    #[must_use]
+    pub fn with_voice_secrets(
+        mut self,
+        store: Arc<dyn plaudon_security::secrets::SecretStore>,
+    ) -> Self {
+        self.voice_secrets = store;
+        self
+    }
+
     /// Reconcile the work a crash interrupted (spec §13.3A, §14.3, §14.7).
     ///
-    /// Three sweeps, in the order a restart needs them:
+    /// Four sweeps, in the order a restart needs them:
     ///
     /// 1. the import journal, against the bytes actually on disk;
     /// 2. the job engine, which is the only component allowed to move a job
@@ -177,7 +214,12 @@ impl LocalBackend {
     ///    dispatch with no recorded response becomes possibly billed, a
     ///    half-cancelled job finishes cancelling;
     /// 3. the cloud ledger, for any attempt left in flight by a job the
-    ///    engine does not own.
+    ///    engine does not own;
+    /// 4. voice-profile retention (VP-130), which expires profiles nobody has
+    ///    used for their retention term and removes tombstones older than the
+    ///    visibility window. It is last because it is maintenance rather than
+    ///    recovery, and it resumes an interrupted pass rather than starting a
+    ///    new one.
     ///
     /// Runs before the worker pool starts: the reconciler assumes nothing is
     /// running.
@@ -193,7 +235,20 @@ impl LocalBackend {
             + report.jobs_outcome_unknown.len()
             + report.jobs_cancelled.len();
         let parked = self.reconcile_cloud_attempts().await?;
-        Ok(outcomes.len() + recovered + parked)
+        let retention = self.sweep_voice_retention().await?;
+        Ok(outcomes.len() + recovered + parked + retention)
+    }
+
+    /// Expire voice profiles whose retention term has elapsed (VP-130).
+    ///
+    /// Returns how many enrolments and tombstones this pass destroyed, so the
+    /// startup reconciler can report that it did something.
+    pub async fn sweep_voice_retention(&self) -> Result<usize, AppError> {
+        let report = plaudon_app_core::VoiceRetentionService::new(self.store.db().clone())
+            .sweep(Timestamp::now())
+            .await
+            .map_err(AppError::from)?;
+        Ok((report.expired + report.purged) as usize)
     }
 
     /// The connection pool.
@@ -254,6 +309,12 @@ impl LocalBackend {
     #[must_use]
     pub fn secrets(&self) -> &Arc<dyn SecretStore> {
         &self.secrets
+    }
+
+    /// The credential store holding the voice-profile data key (VP-071).
+    #[must_use]
+    pub fn voice_secrets(&self) -> &Arc<dyn plaudon_security::secrets::SecretStore> {
+        &self.voice_secrets
     }
 
     /// Roots the user has approved for import.
@@ -408,7 +469,8 @@ impl LocalBackend {
         let rows = sqlx::query(
             "SELECT ts.seq_index AS seq_index, ts.text AS text, ts.start_ms AS start_ms, \
              ts.end_ms AS end_ms, ts.alignment_origin AS alignment_origin, \
-             ts.confidence AS confidence, sp.label AS speaker_label \
+             ts.confidence AS confidence, ts.speaker_id AS speaker_id, \
+             sp.label AS speaker_label \
              FROM transcript_segments ts \
              LEFT JOIN speakers sp ON sp.id = ts.speaker_id \
              WHERE ts.transcript_revision_id = ?1 ORDER BY ts.seq_index ASC LIMIT ?2 OFFSET ?3",
@@ -634,6 +696,7 @@ fn row_to_segment(
                 value,
             }),
         speaker_label: row.get("speaker_label"),
+        speaker_id: row.get("speaker_id"),
         // Annotations are produced by the truthfulness pipeline (spec §8.6A),
         // which the STT EPIC owns; this port stores none and invents none.
         annotations: Vec::new(),
@@ -1432,7 +1495,7 @@ impl SpeakersPort for LocalBackend {
             // the current label here rather than read as NOT NULL: such a row
             // has never been renamed — no rename ever reached the database
             // before this column did — so its label still is the machine's.
-            "SELECT id, recording_id, cluster_key, \
+            "SELECT id, recording_id, cluster_key, person_id, \
              COALESCE(original_label, label) AS original_label, label, name, \
              provenance, user_confirmed, renamed_at, confirmed_at \
              FROM speakers WHERE recording_id = ?1 \
@@ -1447,6 +1510,7 @@ impl SpeakersPort for LocalBackend {
         for row in rows {
             let id: String = row.get("id");
             let cluster_key: Option<String> = row.get("cluster_key");
+            let person_id: Option<String> = row.get("person_id");
             let provenance: String = row.get("provenance");
 
             speakers.push(plaudon_app_core::speakers::Speaker {
@@ -1455,6 +1519,13 @@ impl SpeakersPort for LocalBackend {
                     .map_err(|_| internal("stored speaker id is not a uuid"))?,
                 recording_id,
                 cluster_key: cluster_key.map(plaudon_ai_diarization::ClusterKey::new),
+                person_id: person_id
+                    .map(|value| {
+                        value
+                            .parse()
+                            .map_err(|_| internal("stored speaker person id is not a uuid"))
+                    })
+                    .transpose()?,
                 original_label: row.get("original_label"),
                 label: row.get("label"),
                 name: row.get("name"),
@@ -1576,6 +1647,85 @@ impl SpeakersPort for LocalBackend {
         .map_err(|err| storage_error("cannot reset speaker", &err))?;
 
         Ok(speaker.clone())
+    }
+
+    async fn set_segment_speaker(
+        &self,
+        recording_id: RecordingId,
+        revision_id: TranscriptRevisionId,
+        seq_index: u32,
+        speaker_id: Option<SpeakerId>,
+    ) -> Result<crate::ports::SegmentSpeakerAssignment, AppError> {
+        // The revision has to be this recording's: a segment id plus a
+        // speaker id from two different recordings would otherwise write an
+        // attribution nobody could see or undo.
+        let owner = self.revision_recording(revision_id).await?;
+        if owner != recording_id {
+            return Err(AppError::new(
+                AppErrorCode::RecordNotFound,
+                "no such revision for this recording",
+            ));
+        }
+
+        // A revision with a child is history. Editing it would change what an
+        // export or a citation already quoted.
+        let superseded: i64 = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM transcript_revisions WHERE parent_id = ?1)",
+        )
+        .bind(revision_id.to_string())
+        .fetch_one(self.pool())
+        .await
+        .map_err(|err| storage_error("cannot read a revision's successors", &err))?;
+        if superseded != 0 {
+            return Err(AppError::new(
+                AppErrorCode::Conflict,
+                "this revision has been superseded, so it is read-only",
+            ));
+        }
+
+        // The speaker row is validated against the recording, not merely
+        // parsed: an id from another recording is a refusal, not a write.
+        let speaker_label: Option<String> = match speaker_id {
+            Some(id) => {
+                let label: Option<String> = sqlx::query_scalar(
+                    "SELECT label FROM speakers WHERE id = ?1 AND recording_id = ?2",
+                )
+                .bind(id.to_string())
+                .bind(recording_id.to_string())
+                .fetch_optional(self.pool())
+                .await
+                .map_err(|err| storage_error("cannot read a speaker", &err))?;
+                Some(label.ok_or_else(|| {
+                    AppError::new(
+                        AppErrorCode::InvalidArgument,
+                        "no such speaker in this recording",
+                    )
+                })?)
+            }
+            None => None,
+        };
+
+        let written = sqlx::query(
+            "UPDATE transcript_segments SET speaker_id = ?1 \
+             WHERE transcript_revision_id = ?2 AND seq_index = ?3",
+        )
+        .bind(speaker_id.map(|id| id.to_string()))
+        .bind(revision_id.to_string())
+        .bind(i64::from(seq_index))
+        .execute(self.pool())
+        .await
+        .map_err(|err| storage_error("cannot attribute a segment", &err))?;
+        if written.rows_affected() == 0 {
+            return Err(AppError::new(
+                AppErrorCode::RecordNotFound,
+                "no such segment in this revision",
+            ));
+        }
+
+        Ok(crate::ports::SegmentSpeakerAssignment {
+            speaker_id,
+            speaker_label,
+        })
     }
 }
 

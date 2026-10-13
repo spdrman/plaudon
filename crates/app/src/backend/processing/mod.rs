@@ -26,6 +26,7 @@
 //! unknown lands in `CloudOutcomeUnknown`, which the state machine only lets a
 //! user leave with an explicit cost acknowledgement (§14.3, §14.7).
 
+pub mod speaker_match;
 pub mod stt;
 pub mod text;
 
@@ -34,7 +35,7 @@ mod progress;
 #[cfg(test)]
 mod tests;
 
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -94,6 +95,7 @@ pub struct ProcessingEngine {
     wake: Arc<Notify>,
     inflight: Arc<parking_lot::Mutex<HashSet<JobId>>>,
     seam: stt::EngineSeam,
+    voice: speaker_match::VoiceSeam,
 }
 
 impl std::fmt::Debug for ProcessingEngine {
@@ -102,7 +104,8 @@ impl std::fmt::Debug for ProcessingEngine {
             .field("engine", &self.engine)
             .field("in_flight", &self.inflight.lock().len())
             .field("engines", &self.seam)
-            .finish()
+            .field("voice", &self.voice)
+            .finish_non_exhaustive()
     }
 }
 
@@ -128,6 +131,7 @@ impl ProcessingEngine {
             wake: Arc::new(Notify::new()),
             inflight: Arc::new(parking_lot::Mutex::new(HashSet::new())),
             seam: stt::EngineSeam::default(),
+            voice: speaker_match::VoiceSeam::default(),
         })
     }
 
@@ -139,6 +143,33 @@ impl ProcessingEngine {
     ) -> Self {
         self.seam = stt::EngineSeam::substituted(engines);
         self
+    }
+
+    /// Replace the diarization provider and speaker embedder a worker would
+    /// otherwise find absent.
+    #[must_use]
+    pub(super) fn with_voice_engines(
+        mut self,
+        diarizer: Arc<dyn plaudon_ai_diarization::contract::DiarizationProvider>,
+        embedder: Arc<dyn plaudon_app_core::voice_profiles::embedder::SpeakerEmbedder>,
+    ) -> Self {
+        self.voice = speaker_match::VoiceSeam::substituted(diarizer, embedder);
+        self
+    }
+
+    /// The speaker embedder this build runs, when it has one.
+    ///
+    /// `None` is the honest answer on a host: no ONNX speaker-embedding model
+    /// ships yet, so enrolment and matching report the model as unavailable
+    /// rather than failing halfway through (VP-042, §14.4).
+    #[must_use]
+    pub(crate) fn voice_embedder(
+        &self,
+    ) -> Option<Arc<dyn plaudon_app_core::voice_profiles::embedder::SpeakerEmbedder>> {
+        match &self.voice {
+            speaker_match::VoiceSeam::Host => None,
+            speaker_match::VoiceSeam::Substituted { embedder, .. } => Some(Arc::clone(embedder)),
+        }
     }
 
     /// The durable job engine.
@@ -210,12 +241,12 @@ impl ProcessingHandle {
     /// [`crate::build_ports_with`] does not take — is outside this crate and
     /// therefore cannot call a crate-private constructor. `stop` and
     /// `is_running` were already public; only the constructor was not.
-    pub fn start(backend: Arc<LocalBackend>, workers: Option<usize>) -> Self {
+    pub fn start(backend: &Arc<LocalBackend>, workers: Option<usize>) -> Self {
         let shutdown = CancellationToken::new();
         let count = workers.unwrap_or(DEFAULT_WORKERS).max(1);
         let mut handles = Vec::with_capacity(count);
         for _ in 0..count {
-            let backend = Arc::clone(&backend);
+            let backend = Arc::clone(backend);
             let shutdown = shutdown.clone();
             handles.push(tokio::spawn(
                 async move { run_worker(backend, shutdown).await },
@@ -433,6 +464,7 @@ async fn dispatch_executor(run: &RunContext, kind: JobKind) -> Result<Completion
     match kind {
         JobKind::Transcribe => stt::transcribe(run).await,
         JobKind::Summarize => text::summarize(run).await,
+        JobKind::SpeakerMatch => speaker_match::match_speakers(run).await,
         other => Err(AppError::new(
             AppErrorCode::CapabilityUnverified,
             format!("this build has no executor for {} jobs", other.as_str()),
@@ -602,6 +634,12 @@ impl StagePlan {
                 cloud || stt::a_local_engine_is_installed(backend),
             ),
             JobKind::Summarize => (if cloud { "sending" } else { "summarizing" }, true),
+            // Local by construction: a voice embedding has no dispatchable
+            // form, so there is no cloud label here (VP-002, VP-110).
+            JobKind::SpeakerMatch => (
+                "matching speakers",
+                speaker_match::an_embedder_is_installed(backend),
+            ),
             _ => return None,
         };
         Some(Self {
@@ -771,6 +809,18 @@ pub struct StageRequest {
     pub cloud: bool,
     /// Whether the user acknowledged a cost that cannot be calculated.
     pub cost_acknowledged: bool,
+    /// Transcript revision the stage consumes, when it consumes one.
+    ///
+    /// Keyed (§14.2): speaker matching reconciles turns against one revision,
+    /// so the same audio against a corrected transcript is different work.
+    pub transcript_revision: Option<String>,
+    /// Model version, when the engine exposes one (VP-026, VP-101).
+    pub model_version: Option<String>,
+    /// Further keyed dimensions this stage depends on, as a sorted map so the
+    /// key encoding is order-free: for speaker matching the diarization
+    /// provider, the threshold-set version and the enrolled-profile-set digest
+    /// (VP-101).
+    pub normalization: BTreeMap<String, String>,
 }
 
 impl StageRequest {
@@ -779,22 +829,30 @@ impl StageRequest {
         json!({
             "engine": self.engine,
             "model_id": self.model_id,
+            "model_version": self.model_version,
             "stage": self.stage,
             "label": self.label,
             "recording_id": self.recording_id.to_string(),
             "audio_sha256": self.audio_sha256,
             "cost_acknowledged": self.cost_acknowledged,
+            "transcript_revision": self.transcript_revision,
+            "normalization": self.normalization,
         })
     }
 
     /// The canonical key this stage deduplicates on (§14.2).
     fn key(&self) -> ProcessingJobKey {
-        ProcessingJobKey::new(
+        let mut key = ProcessingJobKey::new(
             self.audio_sha256.clone(),
             processing_stage(self.kind),
             self.engine.clone(),
             self.model_id.clone().unwrap_or_default(),
-        )
+        );
+        key.transcript_revision
+            .clone_from(&self.transcript_revision);
+        key.model_version.clone_from(&self.model_version);
+        key.normalization_config.clone_from(&self.normalization);
+        key
     }
 
     /// Rebuild a request from the durable snapshot of an earlier run.
@@ -805,12 +863,25 @@ impl StageRequest {
             kind,
             engine: text("engine")?,
             model_id: text("model_id"),
+            model_version: text("model_version"),
             stage: text("stage").unwrap_or_else(|| kind.as_str().to_owned()),
             label: text("label").unwrap_or_else(|| kind.as_str().to_owned()),
             audio_sha256: text("audio_sha256")?,
             cloud: config.get("cloud").and_then(Value::as_bool) == Some(true),
             cost_acknowledged: config.get("cost_acknowledged").and_then(Value::as_bool)
                 == Some(true),
+            transcript_revision: text("transcript_revision"),
+            normalization: config
+                .get("normalization")
+                .and_then(Value::as_object)
+                .map(|map| {
+                    map.iter()
+                        .filter_map(|(key, value)| {
+                            value.as_str().map(|value| (key.clone(), value.to_owned()))
+                        })
+                        .collect()
+                })
+                .unwrap_or_default(),
         })
     }
 }
@@ -819,6 +890,7 @@ impl StageRequest {
 const fn processing_stage(kind: JobKind) -> ProcessingStage {
     match kind {
         JobKind::Summarize => ProcessingStage::StructuredExtraction,
+        JobKind::SpeakerMatch => ProcessingStage::SpeakerMatch,
         _ => ProcessingStage::Transcribe,
     }
 }

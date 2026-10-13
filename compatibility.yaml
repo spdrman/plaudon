@@ -12,12 +12,15 @@
 #   * a firmware or OS change invalidates the cell; use `demoted()` rather than
 #     editing a stale row in place.
 #
-# As of 2026-10-11 no cell is `supported`. No PLAUD hardware has been attached
-# to this build, so every device row is `not_evaluated` or `known_unsupported`
-# on vendor documentation. This is a finding, not an omission.
+# As of 2026-10-12 no device cell is `supported`. No PLAUD hardware has been
+# attached to this build, so every device row is `not_evaluated` or
+# `known_unsupported` on vendor documentation. This is a finding, not an
+# omission. The official PLAUD Cloud CLI row is `experimental`: one release
+# (0.3.15) was exercised end to end on one macOS host, which is an opt-in
+# diagnostic level of evidence, not support.
 
 schema_version: 1
-updated_at: "2026-10-11"
+updated_at: "2026-10-12"
 
 cells:
   # ---- Direct BLE (spec 2.5A, 7.7, App. B.3) ----
@@ -184,20 +187,26 @@ cells:
     hardware_revision: null
     firmware_range: ["n/a"]
     host_os: macos
-    os_version_range: ["26.0", "27.0"]
+    os_version_range: ["27.0"]
     auth_mode: browser_login
     provisioning_method: vendor_cli_login
     transport: https
     codec: unknown
     quality_class: vendor_cloud_export
-    evidence_level: proposed
-    status: not_evaluated
+    evidence_level: observed_on_identified_hardware
+    status: experimental
     test_run_id: null
-    last_verified_at: null
-    verified_import_recorded: false
+    last_verified_at: "2026-10-12"
+    verified_import_recorded: true
     known_limitations:
-      - "No release of the official CLI has been exercised by this build; the committed table crates/source-plaud-cli/cli-compatibility.yaml is deliberately empty, so every version fails closed as CLI_UNSUPPORTED (ADR-0050)."
-      - "JSON mode, stable tabular output, pagination, exit codes and a stable download URL format are all unverified (spec 2.1)."
+      - "Exactly one release has been exercised: @plaud-ai/cli 0.3.15 on macOS 27.0 (arm64). The committed table crates/source-plaud-cli/cli-compatibility.yaml holds that single row and matches versions exactly, so every other release fails closed as CLI_UNSUPPORTED (ADR-0050)."
+      - "The tool offers no JSON or other machine-readable mode, so the listing is scraped from its human-readable table under a version lock, and the scraping compatibility warning stays on."
+      - "Listing dates are day-precision with no timezone, so no capture time is recorded for an imported recording; the listing also carries no byte length and no transcript column, and names are truncated by the vendor at 35 characters."
+      - "Vendor session revocation (plaud logout) has never been exercised against a real account by this build."
+      - "Vendor transcripts and summaries are unverified: this build fetches and imports no vendor artifacts."
+      - "Windows and Linux hosts are unverified; only macOS 27.0 was exercised."
+      - "Resume of an interrupted download is not implemented; an interrupted transfer restarts from zero, even though a Range request was observed to answer 206 with a strong validator."
+      - "Rate-limit and session-expiry behaviour was never provoked, so those vendor error codes are unverified."
       - "The npm package listing declares no license; we neither bundle nor redistribute it."
       - "Whether a Google or Apple PLAUD login works with the CLI is unverified; no token-paste workaround will be offered."
 

@@ -62,6 +62,30 @@ the name from the harness's own `pixels_per_point` — never from an argument �
 different before the pixels are. `builder()` and `assert_snapshot` are unchanged, so every
 pre-existing baseline keeps its unscaled name.
 
+### 2.2 Tests that drive a real engine (#275)
+
+`crates/ui/tests/shell_adapters.rs` runs real shell adapters against a real `AppEngine` over a
+temporary library, because an adapter is the seam between a screen and the shell and has no honest
+stub on either side. The engine answers on worker threads, so a command a frame dispatched is
+answered on whichever *later* frame a worker happens to finish in — and on a loaded machine that is
+a different frame every run. Two rules keep such a test off the scheduler:
+
+1. **A screen's first-frame load is one fetch, not two.** The shell fans a
+   `ResyncReason::Subscribed` out to every screen before the first frame, and every adapter also
+   loads on its first `ui` call. The adapters latch `loaded` *inside* the fetch
+   (`JobsShellScreen::load`, `ActivityShellScreen::refresh`, `SourcesShellScreen::probe`,
+   `SettingsShellScreen::load`), so the two cannot put two answers to the same command in flight.
+   Two answers is the defect, not the duplicate work: the second one overwrites whatever the first
+   produced, at a moment no test can predict.
+2. **Seeding an answer takes that command over.** `ScreenApp::answer` hands the adapter the answer
+   the test wants to assert on and records the command; from then on the harness counts the
+   engine's own answers to that command but does not deliver them. A fixture under assertion can
+   then not be overwritten by an answer still in flight.
+
+Waiting longer is not a third rule. `pump` runs frames until the named commands have been answered,
+under a 60-second deadline; the deadline is a timeout, not a synchronisation point, and a test that
+needs a *sleep* to pass is reporting a race it has not fixed.
+
 ## 3. Accessibility assertions replace axe
 
 egui has no axe equivalent, and pretending otherwise would be the easiest way to claim a WCAG 2.2 AA

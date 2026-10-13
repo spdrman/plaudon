@@ -356,17 +356,30 @@ non-zero. There is no flag that turns a red gate green.
 
 ---
 
-## 8. CI
+## 8. CI — currently disabled; the gate is the pre-commit hook
 
-| Job (`.github/workflows/ci.yml`) | Runner | What it does |
-| --- | --- | --- |
-| `rust` | macos-15, windows-2025 | fmt, clippy, `cargo test --workspace --all-features` |
-| `egui-desktop` | macos-15, windows-2025 | the kittest suites through cargo, then `package-macos-egui.sh` / `package-windows-egui.ps1`; exit 3 is the expected unsigned outcome, and the job asserts the report says `publishable: false` |
-| — | — | the `desktop-ui` job that ran the Tauri/React suites was deleted with `apps/desktop` at the cutover; no job in the pipeline needs node |
-| `acceptance`, `supply-chain`, `coverage`, `release-gates`, `pipeline-selftest` | as before | unchanged |
+**`CI`, `Apple bridge` and `Extraction Evaluation` are switched off** (`gh workflow disable`,
+#257). The workflow files below are unchanged and can be re-enabled with `gh workflow enable`, but
+until then nothing runs on push. What runs instead is
+[`scripts/pre-commit.sh`](../scripts/pre-commit.sh), installed by
+[`scripts/install-hooks.sh`](../scripts/install-hooks.sh); for this document the relevant checks
+are `egui-suites` (the kittest suites, on the runner), `tests`/`clippy` (split between the runner
+and this Mac, because `--all-features` enables `apple-bridge`) and `package-macos` (the `.app`,
+the `.zip` and the signing report). The Windows legs below have **no local equivalent at all**.
+[`docs/PRECOMMIT.md`](PRECOMMIT.md) has the full mapping.
+
+| Job (`.github/workflows/ci.yml`) | Runner | What it does | Local stand-in |
+| --- | --- | --- | --- |
+| `rust` | macos-15, windows-2025 | fmt, clippy, `cargo test --workspace --all-features` | `fmt`, `clippy`, `tests`, `persistence`, `chaos`, `build-metadata` — macOS leg only |
+| `egui-desktop` | macos-15, windows-2025 | the kittest suites through cargo, then `package-macos-egui.sh` / `package-windows-egui.ps1`; exit 3 is the expected unsigned outcome, and the job asserts the report says `publishable: false` | `egui-suites` and `package-macos` — macOS leg only |
+| — | — | the `desktop-ui` job that ran the Tauri/React suites was deleted with `apps/desktop` at the cutover; no job in the pipeline needs node | — |
+| `acceptance`, `supply-chain`, `coverage`, `release-gates`, `pipeline-selftest` | as before | unchanged | `acceptance`, `deny`/`licence-register`/`sbom`, `coverage`, `compat-matrix`/`doc-lint`/`scenarios`, `ci-selftest` |
 
 The Windows leg of `egui-desktop` locates the SDK's `rc.exe` and exports `RC` before building, and
-installs the pinned WiX toolset as a .NET global tool.
+installs the pinned WiX toolset as a .NET global tool. Neither it nor the Windows legs of `rust`
+and `acceptance` can be reproduced off a Windows machine — spec 18.4 forbids calling a Windows leg
+green from anywhere else, and while Actions is disabled the Windows side of this document rests on
+the release workflow's own runs (§9).
 
 ## 9. Releases
 
