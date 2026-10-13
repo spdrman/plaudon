@@ -139,7 +139,9 @@ DER to every digit, which is what makes a regression visible.
 
 ## Results
 
-macOS 27.0.1 (build 26A434) on an Apple M5, one intra-op thread, release build,
+macOS 27.0.1 (build 26A434) on an Apple M5, one intra-op thread, CPU execution
+provider (#283's policy: a measured operating point belongs to one numerical
+engine), release build linking the vendored ONNX Runtime,
 2026-10-13. Zero collar, overlapping speech included, no speaker-count hint.
 
 ### Pooled over all twelve runs
@@ -171,10 +173,10 @@ macOS 27.0.1 (build 26A434) on an Apple M5, one intra-op thread, release build,
 
 | Figure | Value | How it was taken |
 |---|---|---|
-| Startup | **398 ms** | Digest verification of both checkpoints plus two ONNX Runtime sessions, timed in the tool. |
-| Real-time factor | **0.0754** | 80.6 s of work for 1 069.2 s of audio, segmentation and embedding together, one thread. |
-| Peak RSS | **486 096 896 bytes (464 MiB)** | `/usr/bin/time -l`, whole process. Five identical runs peaked at 339, 371, 360, 464 and 355 MiB — ONNX Runtime's arena does not settle on one number — and the artifact records the largest of them. |
-| Per session | 5.3–7.9 s | 75–103 windows of segmentation plus 112–203 embeddings each. |
+| Startup | **75 ms** | Digest verification of both checkpoints plus two ONNX Runtime sessions, timed in the tool. |
+| Real-time factor | **0.142** | 152.0 s of work for 1 069.2 s of audio, segmentation and embedding together, one thread, CPU execution provider. |
+| Peak RSS | **318 439 424 bytes (304 MiB)** | `/usr/bin/time -l`, whole process, over all twelve runs. Two identical runs peaked at 304 and 286 MiB; the artifact records the larger. |
+| Per session | 9.6–14.4 s | 75–103 windows of segmentation plus 112–203 embeddings each. |
 
 ## What these numbers say
 

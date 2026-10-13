@@ -384,13 +384,14 @@ dependency of this repository.
 ## Speaker diarization (EPIC P, ADR-0400 condition 4)
 
 Same machine, same build policy and the same two checkpoints as the speaker
-embedding run above; measured 2026-10-13 at commit `83388f0`. The provider is
+embedding run above; measured 2026-10-13 at commit `0a6b775`. The provider is
 `plaudon_ai_speaker::diarize::OnnxDiarizationProvider` (feature `onnx`), and it
 is **not** in `VALIDATED_PROVIDERS`.
 
 ```sh
 export SDKROOT="$(xcrun --show-sdk-path)"
 export CXXFLAGS="-isystem $SDKROOT/usr/include/c++/v1"
+export ORT_LIB_LOCATION="$PWD/vendor/onnxruntime/aarch64-apple-darwin"
 
 ./target/release/plaudon-speaker-embed build-session \
   --librispeech /tmp/p282-corpus \
@@ -404,15 +405,15 @@ export CXXFLAGS="-isystem $SDKROOT/usr/include/c++/v1"
   --embedding /tmp/speaker-models/wespeaker_en_voxceleb_resnet34_LM.onnx \
   --sessions /tmp/p282-sessions \
   --out docs/benchmarks/diarization-onnx-pyannote-wespeaker-der.json \
-  --peak-rss-bytes 486096896 \
+  --peak-rss-bytes 318439424 \
   --commit "$(git rev-parse HEAD)" --measured-on "$(date -u +%FT%TZ)"
 ```
 
 | Figure | Value | How it was taken |
 |---|---|---|
-| Startup | **398 ms** | Digest verification of both checkpoints plus two ONNX Runtime sessions, timed inside the tool. |
-| Real-time factor | **0.0754** | 80.6 s of segmentation and embedding work for 1 069.2 s of audio, one intra-op thread. |
-| Peak RSS | **486 096 896 bytes (464 MiB)** | `/usr/bin/time -l`, whole process. Five identical runs peaked at 339, 371, 360, 464 and 355 MiB; the committed artifact records the largest. |
+| Startup | **75 ms** | Digest verification of both checkpoints plus two ONNX Runtime sessions, timed inside the tool. |
+| Real-time factor | **0.142** | 152.0 s of segmentation and embedding work for 1 069.2 s of audio, one intra-op thread, CPU execution provider. |
+| Peak RSS | **318 439 424 bytes (304 MiB)** | `/usr/bin/time -l`, whole process. Two identical runs peaked at 304 and 286 MiB; the committed artifact records the larger. |
 | Session mix build | 37.2 s | 12 wav files: FLAC decode, silence trim, mixing, band-pass, impulse response, Opus round trip. |
 
 Accuracy, the caveats and the per-condition breakdown are in
