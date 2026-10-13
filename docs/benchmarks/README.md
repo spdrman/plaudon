@@ -68,3 +68,5 @@ for exactly that reason.
 |---|---|---|
 | [`extraction-eval.md`](extraction-eval.md) | `plaudon-extraction-eval` | see that document |
 | [`speaker-match-eval.md`](speaker-match-eval.md) and `speaker-match-scripted-synthetic-eer.json` | `plaudon-eval speaker-match` (VOICE_PROFILES_SPEC §17.2, ADR-0081 §4) | **no model measured**: the committed artifact runs on scripted embeddings and is not release evidence |
+| [`speaker-match-wespeaker-resnet34-lm-eer.json`](speaker-match-wespeaker-resnet34-lm-eer.json) | `plaudon-speaker-embed` plus `plaudon-eval speaker-match` | **measured** on macOS arm64 only; ADR-0081 §4 is a two-platform gate |
+| [`diarization-eval.md`](diarization-eval.md) and [`diarization-onnx-pyannote-wespeaker-der.json`](diarization-onnx-pyannote-wespeaker-der.json) | `plaudon-speaker-embed build-session` and `diarize` (ADR-0400 condition 4) | **measured** on macOS arm64 only; the provider stays out of `VALIDATED_PROVIDERS` until every ADR-0400 condition is met |

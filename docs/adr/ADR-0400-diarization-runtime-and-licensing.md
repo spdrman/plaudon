@@ -67,3 +67,32 @@ A future provider may be added to the allowlist when ALL of these conditions are
 - Real diarization remains unavailable until a provider passes all five conditions.
 - NO real-runtime DER measurement has been taken for this build; the harness is validated only against synthetic deterministic fixtures.
 - A future EPIC that adds pyannote must include the user token flow, the Hugging Face disclosure, Python runtime detection/setup instructions, and measured DER on labelled audio including overlapping speech.
+
+## Addendum, 2026-10-13: condition 4 measured for `onnx-pyannote-wespeaker` (#282)
+
+The sentence "NO real-runtime DER measurement has been taken for this build" is
+no longer true, and the decision it supported is unchanged.
+
+`plaudon_ai_speaker::diarize::OnnxDiarizationProvider` (feature `onnx`, off by
+default, in no composition root) implements the sherpa-onnx-style option this
+ADR surveyed: ONNX Runtime only, no Python, no gated token — sliding-window
+`pyannote-segmentation-3.0` inference, powerset decoding, WeSpeaker
+ResNet34-LM embeddings of each window-local speaker, constrained clustering and
+Hamming-weighted aggregation. Its DER is measured and committed as
+`docs/benchmarks/diarization-onnx-pyannote-wespeaker-der.json`, with the recipe
+and the reading in `docs/benchmarks/diarization-eval.md`: pooled **32.65%**
+over twelve session-and-condition runs on macOS arm64, 1 046.4 s of reference
+speech of which 110.4 s is overlapping, overlap reported separately
+(**26.29%** on overlapping frames, 33.40% on single-speaker frames), zero
+collar, no speaker-count hint, at `pyannote/speaker-diarization-3.1`'s
+published operating point.
+
+**The provider is not added to `VALIDATED_PROVIDERS`.** Condition 4 is one of
+five, and the artifact's own `release_evidence.blockers` lists what remains:
+Windows x64 is unmeasured (conditions 1 and 5), inference runs in the
+application process rather than under `plaudon_security::sandbox` (ADR-0015),
+the fixtures are LibriSpeech-derived synthetic mixes rather than meeting-domain
+audio, and no user-facing model-pack download, licence disclosure or consent
+flow exists for diarization (conditions 2 and 3). `crates/ai-speaker` carries a
+test that the provider id is absent from the allowlist, so closing one
+condition cannot silently close the gate.
