@@ -23,3 +23,7 @@ target/hardware-evidence/
 # Release and CI working artifacts
 ci-artifacts/
 dist/
+
+# The Tauri/React frontend was removed at the egui cutover (ADR-0024); never commit its leftovers.
+node_modules/
+apps/desktop/
