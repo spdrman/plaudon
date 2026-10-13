@@ -48,7 +48,14 @@ impl ActivityShellScreen {
     }
 
     /// Read the first page again.
+    ///
+    /// This is the screen's whole first-frame load, so it latches `loaded`:
+    /// the subscription resynchronisation the shell fans out before the first
+    /// frame asks for exactly this read, and reading again from [`Screen::ui`]
+    /// would put two `list_activity` answers in flight for one startup — the
+    /// later of which overwrites the page the earlier one drew.
     fn refresh(&mut self, cx: &mut ScreenCtx<'_>) {
+        self.loaded = true;
         cx.send(AppCommand::ListActivity(self.log.refresh_request()));
     }
 
@@ -67,7 +74,6 @@ impl Screen for ActivityShellScreen {
 
     fn ui(&mut self, ui: &mut egui::Ui, cx: &mut ScreenCtx<'_>) {
         if !self.loaded {
-            self.loaded = true;
             self.refresh(cx);
         }
 
