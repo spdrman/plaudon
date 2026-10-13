@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "generator": "plaudon-eval 0.1.0",
-  "measured_on": "2026-10-13T00:28:42Z",
-  "commit": "eb694e64442aa1724adacb1e59dc7cebb3ecf54e",
+  "measured_on": "2026-10-13T01:48:37Z",
+  "commit": "546462ddf0cb17b2f2ffbfabf5becb1154a9db86",
   "model": {
     "model_id": "wespeaker-resnet34-lm",
     "model_version": "voxceleb-2022-10",
@@ -13,9 +13,9 @@
   "runtime": {
     "platform": "macos-arm64",
     "host_cpu": "Apple M5",
-    "peak_rss_bytes": 224509952,
-    "startup_ms": 481,
-    "real_time_factor": 0.0124
+    "peak_rss_bytes": 91242496,
+    "startup_ms": 103,
+    "real_time_factor": 0.0143
   },
   "release_evidence": {
     "qualifies": true,
@@ -23,90 +23,95 @@
   },
   "fixtures": {
     "library_id": "librispeech-test-clean-v1",
-    "manifest_sha256": "03b856464ab50114707601d0ef60b2715a87ea05f436983a4cfbf7b7c96f9672",
-    "fixtures": 4,
+    "manifest_sha256": "3ae8f18a627a50308b6b4374255842ccb8d6fa02a09619221f35a350450c37b6",
+    "fixtures": 5,
     "speakers": 36,
     "attributions": [
       {
         "corpus": "libri_speech_test_clean_derived",
         "licence": "CC-BY-4.0",
         "attribution": "LibriSpeech (Panayotov et al., openslr.org/12), CC-BY-4.0, derived from public-domain LibriVox recordings; used as test material only"
+      },
+      {
+        "corpus": "musan",
+        "licence": "CC-BY-4.0",
+        "attribution": "MUSAN (Snyder et al., openslr.org/17), CC-BY-4.0"
       }
     ]
   },
   "overall": {
     "condition": "overall",
-    "targets": 240,
-    "nontargets": 2640,
-    "false_accept_resolution": 0.0003787878787878788,
+    "targets": 300,
+    "nontargets": 3300,
+    "false_accept_resolution": 0.00030303030303030303,
     "equal_error_rate": {
-      "rate": 0.006060606060606061,
-      "threshold": 5.464564626867121,
-      "exact": false
+      "rate": 0.006666666666666667,
+      "threshold": 5.411614894866943,
+      "exact": true
     },
     "operating_points": [
       {
-        "threshold": -0.9400573968887329,
+        "threshold": -0.9384849667549133,
         "false_accept_rate": 0.5,
         "false_reject_rate": 0.0,
         "max_false_accept_rate": 0.5
       },
       {
-        "threshold": 0.5441474318504333,
+        "threshold": 0.5380616188049316,
         "false_accept_rate": 0.2,
         "false_reject_rate": 0.0,
         "max_false_accept_rate": 0.2
       },
       {
-        "threshold": 1.671083927154541,
+        "threshold": 1.6925413608551025,
         "false_accept_rate": 0.1,
         "false_reject_rate": 0.0,
         "max_false_accept_rate": 0.1
       },
       {
-        "threshold": 2.7995660305023193,
+        "threshold": 2.806011199951172,
         "false_accept_rate": 0.05,
         "false_reject_rate": 0.0,
         "max_false_accept_rate": 0.05
       },
       {
-        "threshold": 4.125874042510986,
-        "false_accept_rate": 0.019696969696969695,
+        "threshold": 4.26468563079834,
+        "false_accept_rate": 0.02,
         "false_reject_rate": 0.0,
         "max_false_accept_rate": 0.02
       },
       {
-        "threshold": 4.990978240966797,
-        "false_accept_rate": 0.009848484848484848,
-        "false_reject_rate": 0.004166666666666667,
+        "threshold": 5.037905216217041,
+        "false_accept_rate": 0.01,
+        "false_reject_rate": 0.006666666666666667,
         "max_false_accept_rate": 0.01
       },
       {
-        "threshold": 5.825878143310547,
-        "false_accept_rate": 0.004924242424242424,
-        "false_reject_rate": 0.016666666666666666,
+        "threshold": 5.8793206214904785,
+        "false_accept_rate": 0.0048484848484848485,
+        "false_reject_rate": 0.023333333333333334,
         "max_false_accept_rate": 0.005
       },
       {
-        "threshold": 6.414407253265381,
-        "false_accept_rate": 0.001893939393939394,
-        "false_reject_rate": 0.05416666666666667,
+        "threshold": 6.733549118041992,
+        "false_accept_rate": 0.0018181818181818182,
+        "false_reject_rate": 0.07,
         "max_false_accept_rate": 0.002
       },
       {
-        "threshold": 6.791702747344971,
-        "false_accept_rate": 0.0007575757575757576,
-        "false_reject_rate": 0.06666666666666667,
+        "threshold": 6.791834354400635,
+        "false_accept_rate": 0.0009090909090909091,
+        "false_reject_rate": 0.07333333333333333,
         "max_false_accept_rate": 0.001
       }
     ],
     "bands": {
-      "target_suggest": 239,
-      "target_weak": 1,
+      "target_suggest": 298,
+      "target_weak": 2,
       "target_none": 0,
-      "nontarget_suggest": 26,
-      "nontarget_weak": 238,
-      "nontarget_none": 2376
+      "nontarget_suggest": 33,
+      "nontarget_weak": 297,
+      "nontarget_none": 2970
     }
   },
   "conditions": [
@@ -117,54 +122,54 @@
       "false_accept_resolution": 0.0015151515151515152,
       "equal_error_rate": {
         "rate": 0.0030303030303030303,
-        "threshold": 6.136723735115745,
+        "threshold": 6.13867881081321,
         "exact": false
       },
       "operating_points": [
         {
-          "threshold": -0.9098486304283142,
+          "threshold": -0.919053316116333,
           "false_accept_rate": 0.5,
           "false_reject_rate": 0.0,
           "max_false_accept_rate": 0.5
         },
         {
-          "threshold": 0.6402599811553955,
+          "threshold": 0.6372361183166504,
           "false_accept_rate": 0.2,
           "false_reject_rate": 0.0,
           "max_false_accept_rate": 0.2
         },
         {
-          "threshold": 1.7458536624908447,
+          "threshold": 1.7407296895980835,
           "false_accept_rate": 0.1,
           "false_reject_rate": 0.0,
           "max_false_accept_rate": 0.1
         },
         {
-          "threshold": 2.9099130630493164,
+          "threshold": 2.914024829864502,
           "false_accept_rate": 0.05,
           "false_reject_rate": 0.0,
           "max_false_accept_rate": 0.05
         },
         {
-          "threshold": 4.270380020141602,
+          "threshold": 4.26468563079834,
           "false_accept_rate": 0.019696969696969695,
           "false_reject_rate": 0.0,
           "max_false_accept_rate": 0.02
         },
         {
-          "threshold": 5.313442230224609,
+          "threshold": 5.303614616394043,
           "false_accept_rate": 0.00909090909090909,
           "false_reject_rate": 0.0,
           "max_false_accept_rate": 0.01
         },
         {
-          "threshold": 6.003899097442627,
+          "threshold": 5.997034072875977,
           "false_accept_rate": 0.004545454545454545,
           "false_reject_rate": 0.0,
           "max_false_accept_rate": 0.005
         },
         {
-          "threshold": 6.471445083618164,
+          "threshold": 6.467306613922119,
           "false_accept_rate": 0.0015151515151515152,
           "false_reject_rate": 0.03333333333333333,
           "max_false_accept_rate": 0.002
@@ -180,60 +185,129 @@
       }
     },
     {
+      "condition": "noise_musan",
+      "targets": 60,
+      "nontargets": 660,
+      "false_accept_resolution": 0.0015151515151515152,
+      "equal_error_rate": {
+        "rate": 0.015151515151515152,
+        "threshold": 4.665166247974742,
+        "exact": false
+      },
+      "operating_points": [
+        {
+          "threshold": -0.9309790730476379,
+          "false_accept_rate": 0.5,
+          "false_reject_rate": 0.0,
+          "max_false_accept_rate": 0.5
+        },
+        {
+          "threshold": 0.5065091848373413,
+          "false_accept_rate": 0.2,
+          "false_reject_rate": 0.0,
+          "max_false_accept_rate": 0.2
+        },
+        {
+          "threshold": 1.828614354133606,
+          "false_accept_rate": 0.1,
+          "false_reject_rate": 0.0,
+          "max_false_accept_rate": 0.1
+        },
+        {
+          "threshold": 2.9063947200775146,
+          "false_accept_rate": 0.05,
+          "false_reject_rate": 0.0,
+          "max_false_accept_rate": 0.05
+        },
+        {
+          "threshold": 4.466761112213135,
+          "false_accept_rate": 0.019696969696969695,
+          "false_reject_rate": 0.0,
+          "max_false_accept_rate": 0.02
+        },
+        {
+          "threshold": 5.414982318878174,
+          "false_accept_rate": 0.00909090909090909,
+          "false_reject_rate": 0.016666666666666666,
+          "max_false_accept_rate": 0.01
+        },
+        {
+          "threshold": 6.405696392059326,
+          "false_accept_rate": 0.004545454545454545,
+          "false_reject_rate": 0.06666666666666667,
+          "max_false_accept_rate": 0.005
+        },
+        {
+          "threshold": 6.803470611572266,
+          "false_accept_rate": 0.0015151515151515152,
+          "false_reject_rate": 0.1,
+          "max_false_accept_rate": 0.002
+        }
+      ],
+      "bands": {
+        "target_suggest": 59,
+        "target_weak": 1,
+        "target_none": 0,
+        "nontarget_suggest": 8,
+        "nontarget_weak": 63,
+        "nontarget_none": 589
+      }
+    },
+    {
       "condition": "telephone_bandpass",
       "targets": 60,
       "nontargets": 660,
       "false_accept_resolution": 0.0015151515151515152,
       "equal_error_rate": {
         "rate": 0.004545454545454545,
-        "threshold": 5.859666564247825,
+        "threshold": 5.859275904568759,
         "exact": false
       },
       "operating_points": [
         {
-          "threshold": -0.9302595853805542,
+          "threshold": -0.9304255247116089,
           "false_accept_rate": 0.5,
           "false_reject_rate": 0.0,
           "max_false_accept_rate": 0.5
         },
         {
-          "threshold": 0.5221136212348938,
+          "threshold": 0.5215810537338257,
           "false_accept_rate": 0.2,
           "false_reject_rate": 0.0,
           "max_false_accept_rate": 0.2
         },
         {
-          "threshold": 1.593601107597351,
+          "threshold": 1.5919474363327026,
           "false_accept_rate": 0.1,
           "false_reject_rate": 0.0,
           "max_false_accept_rate": 0.1
         },
         {
-          "threshold": 2.841674327850342,
+          "threshold": 2.8351378440856934,
           "false_accept_rate": 0.05,
           "false_reject_rate": 0.0,
           "max_false_accept_rate": 0.05
         },
         {
-          "threshold": 4.37103271484375,
+          "threshold": 4.372841835021973,
           "false_accept_rate": 0.019696969696969695,
           "false_reject_rate": 0.0,
           "max_false_accept_rate": 0.02
         },
         {
-          "threshold": 5.240622043609619,
+          "threshold": 5.236451148986816,
           "false_accept_rate": 0.00909090909090909,
           "false_reject_rate": 0.0,
           "max_false_accept_rate": 0.01
         },
         {
-          "threshold": 5.825878143310547,
+          "threshold": 5.826373100280762,
           "false_accept_rate": 0.004545454545454545,
           "false_reject_rate": 0.0,
           "max_false_accept_rate": 0.005
         },
         {
-          "threshold": 7.166557312011719,
+          "threshold": 7.173039436340332,
           "false_accept_rate": 0.0015151515151515152,
           "false_reject_rate": 0.06666666666666667,
           "max_false_accept_rate": 0.002
@@ -243,9 +317,9 @@
         "target_suggest": 60,
         "target_weak": 0,
         "target_none": 0,
-        "nontarget_suggest": 7,
+        "nontarget_suggest": 6,
         "nontarget_weak": 55,
-        "nontarget_none": 598
+        "nontarget_none": 599
       }
     },
     {
@@ -255,54 +329,54 @@
       "false_accept_resolution": 0.0015151515151515152,
       "equal_error_rate": {
         "rate": 0.006060606060606061,
-        "threshold": 5.083172277970747,
+        "threshold": 5.083336136557839,
         "exact": false
       },
       "operating_points": [
         {
-          "threshold": -0.9776718616485596,
+          "threshold": -0.9760498404502869,
           "false_accept_rate": 0.5,
           "false_reject_rate": 0.0,
           "max_false_accept_rate": 0.5
         },
         {
-          "threshold": 0.4921989142894745,
+          "threshold": 0.49194133281707764,
           "false_accept_rate": 0.2,
           "false_reject_rate": 0.0,
           "max_false_accept_rate": 0.2
         },
         {
-          "threshold": 1.5614897012710571,
+          "threshold": 1.5596410036087036,
           "false_accept_rate": 0.1,
           "false_reject_rate": 0.0,
           "max_false_accept_rate": 0.1
         },
         {
-          "threshold": 2.6062028408050537,
+          "threshold": 2.611593008041382,
           "false_accept_rate": 0.05,
           "false_reject_rate": 0.0,
           "max_false_accept_rate": 0.05
         },
         {
-          "threshold": 3.8017070293426514,
+          "threshold": 3.7976880073547363,
           "false_accept_rate": 0.019696969696969695,
           "false_reject_rate": 0.0,
           "max_false_accept_rate": 0.02
         },
         {
-          "threshold": 4.763710975646973,
+          "threshold": 4.757152557373047,
           "false_accept_rate": 0.00909090909090909,
           "false_reject_rate": 0.0,
           "max_false_accept_rate": 0.01
         },
         {
-          "threshold": 5.4107184410095215,
+          "threshold": 5.411614894866943,
           "false_accept_rate": 0.004545454545454545,
           "false_reject_rate": 0.016666666666666666,
           "max_false_accept_rate": 0.005
         },
         {
-          "threshold": 6.414407253265381,
+          "threshold": 6.414275646209717,
           "false_accept_rate": 0.0015151515151515152,
           "false_reject_rate": 0.08333333333333333,
           "max_false_accept_rate": 0.002
@@ -313,8 +387,8 @@
         "target_weak": 1,
         "target_none": 0,
         "nontarget_suggest": 4,
-        "nontarget_weak": 58,
-        "nontarget_none": 598
+        "nontarget_weak": 55,
+        "nontarget_none": 601
       }
     },
     {
@@ -324,54 +398,54 @@
       "false_accept_resolution": 0.0015151515151515152,
       "equal_error_rate": {
         "rate": 0.006060606060606061,
-        "threshold": 5.540825627066872,
+        "threshold": 5.540425994179466,
         "exact": false
       },
       "operating_points": [
         {
-          "threshold": -0.9334512948989868,
+          "threshold": -0.9336388111114502,
           "false_accept_rate": 0.5,
           "false_reject_rate": 0.0,
           "max_false_accept_rate": 0.5
         },
         {
-          "threshold": 0.5663019418716431,
+          "threshold": 0.5624164342880249,
           "false_accept_rate": 0.2,
           "false_reject_rate": 0.0,
           "max_false_accept_rate": 0.2
         },
         {
-          "threshold": 1.771846890449524,
+          "threshold": 1.7715137004852295,
           "false_accept_rate": 0.1,
           "false_reject_rate": 0.0,
           "max_false_accept_rate": 0.1
         },
         {
-          "threshold": 2.7747089862823486,
+          "threshold": 2.775467872619629,
           "false_accept_rate": 0.05,
           "false_reject_rate": 0.0,
           "max_false_accept_rate": 0.05
         },
         {
-          "threshold": 4.322412490844727,
+          "threshold": 4.3221354484558105,
           "false_accept_rate": 0.019696969696969695,
           "false_reject_rate": 0.0,
           "max_false_accept_rate": 0.02
         },
         {
-          "threshold": 5.204318523406982,
+          "threshold": 5.199056625366211,
           "false_accept_rate": 0.00909090909090909,
           "false_reject_rate": 0.0,
           "max_false_accept_rate": 0.01
         },
         {
-          "threshold": 5.828707695007324,
+          "threshold": 5.824167728424072,
           "false_accept_rate": 0.004545454545454545,
           "false_reject_rate": 0.016666666666666666,
           "max_false_accept_rate": 0.005
         },
         {
-          "threshold": 6.773693084716797,
+          "threshold": 6.7756171226501465,
           "false_accept_rate": 0.0015151515151515152,
           "false_reject_rate": 0.03333333333333333,
           "max_false_accept_rate": 0.002
@@ -382,8 +456,8 @@
         "target_weak": 0,
         "target_none": 0,
         "nontarget_suggest": 8,
-        "nontarget_weak": 63,
-        "nontarget_none": 589
+        "nontarget_weak": 62,
+        "nontarget_none": 590
       }
     }
   ],
@@ -392,22 +466,22 @@
       "status": "derived"
     },
     "suggest": {
-      "threshold": 4.990978240966797,
-      "false_accept_rate": 0.009848484848484848,
-      "false_reject_rate": 0.004166666666666667,
+      "threshold": 5.037905216217041,
+      "false_accept_rate": 0.01,
+      "false_reject_rate": 0.006666666666666667,
       "max_false_accept_rate": 0.01
     },
     "floor": {
-      "threshold": 1.671083927154541,
+      "threshold": 1.6925413608551025,
       "false_accept_rate": 0.1,
       "false_reject_rate": 0.0,
       "max_false_accept_rate": 0.1
     },
-    "max_profile_offset": 0.8299736,
+    "max_profile_offset": 0.83634096,
     "equal_error_rate": {
-      "rate": 0.006060606060606061,
-      "threshold": 5.464564626867121,
-      "exact": false
+      "rate": 0.006666666666666667,
+      "threshold": 5.411614894866943,
+      "exact": true
     },
     "provenance": {
       "embedding_source": "model_pack",
@@ -415,10 +489,10 @@
       "model_version": "voxceleb-2022-10",
       "model_sha256": "e9848563da86f263117134dfd7ad63c92355b37de492b55e325400c9d9c39012",
       "library_id": "librispeech-test-clean-v1",
-      "manifest_sha256": "03b856464ab50114707601d0ef60b2715a87ea05f436983a4cfbf7b7c96f9672",
-      "targets": 240,
-      "nontargets": 2640,
-      "false_accept_resolution": 0.0003787878787878788
+      "manifest_sha256": "3ae8f18a627a50308b6b4374255842ccb8d6fa02a09619221f35a350450c37b6",
+      "targets": 300,
+      "nontargets": 3300,
+      "false_accept_resolution": 0.00030303030303030303
     }
   },
   "diarization": {
@@ -438,37 +512,37 @@
       "cluster_key": "roster-01/4/clean",
       "person_id": "roster-01",
       "band": "suggest",
-      "score": 9.27244758605957
+      "score": 9.275982856750488
     },
     {
       "cluster_key": "roster-01/4/clean",
       "person_id": "roster-02",
       "band": "weak",
-      "score": 2.166930675506592
+      "score": 2.1644175052642822
     },
     {
       "cluster_key": "roster-01/4/clean",
       "person_id": "roster-10",
       "band": "weak",
-      "score": 2.016049861907959
+      "score": 2.0190253257751465
     },
     {
       "cluster_key": "roster-02/4/clean",
       "person_id": "roster-02",
       "band": "suggest",
-      "score": 7.419144630432129
+      "score": 7.419131278991699
     },
     {
       "cluster_key": "roster-03/4/clean",
       "person_id": "roster-03",
       "band": "suggest",
-      "score": 23.01154899597168
+      "score": 22.962278366088867
     },
     {
       "cluster_key": "roster-03/4/clean",
       "person_id": "roster-12",
       "band": "suggest",
-      "score": 5.313442230224609
+      "score": 5.303614616394043
     }
   ],
   "caveats": [

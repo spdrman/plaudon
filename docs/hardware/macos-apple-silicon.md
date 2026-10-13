@@ -229,38 +229,48 @@ leg will also be.
 
 ```sh
 export SDKROOT="$(xcrun --show-sdk-path)"
+scripts/fetch-onnxruntime.sh   # verifies and extracts the vendored runtime
+export ORT_LIB_LOCATION="$PWD/vendor/onnxruntime/aarch64-apple-darwin"
 scripts/fetch-speaker-models.sh --dir /tmp/speaker-models
 
 # LibriSpeech test-clean, 346 663 984 bytes,
 # sha256 39fde525e59672dc6d1551919b1478f724438a95aa55f874b576be21967e6c23
 curl -L -o test-clean.tar.gz https://www.openslr.org/resources/12/test-clean.tar.gz
-tar xzf test-clean.tar.gz -C /tmp/p248-corpus
+tar xzf test-clean.tar.gz -C /tmp/p284-corpus
+
+# MUSAN, 11 086 114 085 bytes,
+# sha256 86d1061c7e15b5c9e906777685c519701df51bfde3001e1070dcc9ffac955ee1
+# (openslr.org and its ELDA mirror serve byte-identical files; only the
+# `noise` subset is unpacked, 930 wavs, 686 MiB)
+curl -L -o musan.tar.gz https://www.openslr.org/resources/17/musan.tar.gz
+tar xzf musan.tar.gz -C /tmp/p284-musan musan/noise
 
 cargo build -j2 --release -p plaudon-ai-speaker --features onnx \
   --bin plaudon-speaker-embed
 
 ./target/release/plaudon-speaker-embed build-fixtures \
-  --librispeech /tmp/p248-corpus \
+  --librispeech /tmp/p284-corpus \
+  --musan /tmp/p284-musan/musan \
   --plan tests/fixtures/speaker-eval/librispeech-plan.json \
-  --out /tmp/p248-fixtures
+  --out /tmp/p284-fixtures
 
 /usr/bin/time -l ./target/release/plaudon-speaker-embed embed \
   --model /tmp/speaker-models/wespeaker_en_voxceleb_resnet34_LM.onnx \
-  --fixtures /tmp/p248-fixtures \
+  --fixtures /tmp/p284-fixtures \
   --plan tests/fixtures/speaker-eval/librispeech-plan.json \
-  --out /tmp/p248-run/eval-embeddings.json \
-  --stats /tmp/p248-run/runtime-stats.json --threads 1
+  --out /tmp/p284-run/eval-embeddings.json \
+  --stats /tmp/p284-run/runtime-stats.json --threads 1
 
 cargo run -j2 --release -q -p plaudon-eval --bin plaudon-eval -- speaker-match \
   --plan tests/fixtures/speaker-eval/librispeech-plan.json \
-  --model-pack /tmp/p248-run \
+  --model-pack /tmp/p284-run \
   --out docs/benchmarks/speaker-match-wespeaker-resnet34-lm-eer.json \
   --commit "$(git rev-parse HEAD)" --measured-on "$(date -u +%FT%TZ)" \
   --platform macos-arm64 --host-cpu "Apple M5" \
-  --peak-rss-bytes 224509952 --startup-ms 481 --real-time-factor 0.0124
+  --peak-rss-bytes 91242496 --startup-ms 103 --real-time-factor 0.0143
 ```
 
-`eval-embeddings.json` is **not** committed and must not be: it is 312 voice
+`eval-embeddings.json` is **not** committed and must not be: it is 372 voice
 embeddings of real readers (VP-002, VP-112). The committed outputs are the
 report and the fixture manifest, neither of which contains a vector.
 
@@ -268,31 +278,34 @@ report and the fixture manifest, neither of which contains a vector.
 
 | Figure | Value | How it was taken |
 |---|---|---|
-| Startup | **481 ms** | Digest verification of the 26 530 550-byte checkpoint plus ONNX Runtime session creation, timed inside `SpeakerEmbeddingModel::open`. |
-| Real-time factor, embedding only | **0.0124** | 11.581 s of CPU-bound work for 936.0 s of audio (312 windows of 3 s). |
-| Real-time factor, decode + embed | **0.0127** | 11.881 s for the same audio, including WAV decode through `plaudon-audio`. |
-| Per window | **37.1 ms** mean, **201.0 ms** max | The maximum is the first window, which pays the lazy allocator and page-in cost. |
-| Peak RSS | **224 509 952 bytes (214 MiB)** | `/usr/bin/time -l`, whole process, across the full 312-window run. |
-| Fixture build | 28.7 s | 312 files: FLAC decode, concatenation, band-pass, impulse-response convolution, Opus round trip. |
+| Startup | **103 ms** | Digest verification of the 26 530 550-byte checkpoint plus ONNX Runtime session creation, timed inside `SpeakerEmbeddingModel::open`, CPU execution provider. |
+| Real-time factor, embedding only | **0.0143** | 15.922 s of CPU-bound work for 1 116.0 s of audio (372 windows of 3 s). |
+| Real-time factor, decode + embed | **0.0145** | 16.218 s for the same audio, including WAV decode through `plaudon-audio`. |
+| Per window | **42.8 ms** mean, **67.5 ms** max | 372 windows, one intra-op thread. |
+| Peak RSS | **91 242 496 bytes (87 MiB)** | `/usr/bin/time -l`, whole process, across the full 372-window run. |
+| Fixture build | 22.1 s | 372 files: FLAC decode, concatenation, MUSAN mixing, band-pass, impulse-response convolution, Opus round trip. |
 
 A 60-minute recording with 25% speech in 3-second windows is roughly 300
-windows: about 11 s of embedding work on this machine, bounded in memory by the
+windows: about 13 s of embedding work on this machine, bounded in memory by the
 window rather than the recording, because the canonical PCM derivative lives on
 disk and windows are read by seeking.
 
-#### What #283 changed about these numbers
+#### The provider this table describes, and what #283 changed
 
-The table above was measured **in the application process, under ONNX
-Runtime's own provider selection** — which on this machine is CoreML, as the
-481 ms start-up shows: that is an Apple model compilation, not a graph load.
-Since #283 the pipeline runs inference in a sandboxed helper
-(`plaudon-speaker-helper`) and pins the session to the CPU execution provider,
-because CoreML's compiler needs a working directory inside the user's
-temporary directory and the helper's `(deny default)` profile does not grant
-one. Both halves of that change were measured here on 2026-10-12, release
-build, same checkpoint, one 3 s window, best of five:
+These figures are **in-process inference pinned to the CPU execution
+provider**, which is what `SpeakerEmbeddingModel::open` has done since #283:
+CoreML's model builder needs a working directory inside the user's temporary
+directory and the sandboxed helper's `(deny default)` profile does not grant
+one, so the provider choice was made for the helper and applies everywhere.
+The earlier 312-window run (#248) predates that and used ONNX Runtime's own
+provider selection — CoreML on this machine — which is why its start-up was
+481 ms (an Apple model compilation, not a graph load) and its resident set
+214 MiB against 87 MiB here.
 
-| Figure | Pre-#283: in process, CoreML | Now: in process, CPU | Now: through the sandboxed helper |
+Measured here on 2026-10-12, release build, same checkpoint, one 3 s window,
+best of five:
+
+| Figure | Pre-#283: in process, CoreML | In process, CPU | Through the sandboxed helper |
 |---|---|---|---|
 | Session start-up | 442 ms cold, 147 ms with a warm model cache | 75–89 ms | 80 ms (reported by the helper) |
 | One 3 s window | 13.0–16.3 ms | 48.4–54.8 ms | 76.8 ms (86.2 ms for the first) |
@@ -301,15 +314,15 @@ build, same checkpoint, one 3 s window, best of five:
 
 Two consequences, stated rather than averaged away:
 
-* **The accuracy figures below still describe this engine.** The two
-  providers' vectors for the same input agree to a cosine similarity of
-  **0.999974** (largest component difference 1.2e-3), which is three orders of
-  magnitude below the margin between the derived operating point and the
-  nearest trial score, so the EER and the thresholds were not re-derived.
-* **The runtime figures above are no longer the shipped configuration's.** The
-  honest replacement is a re-run of the whole 312-window harness through the
-  helper, which needs the LibriSpeech corpus this machine no longer holds; it
-  is listed as an open item in
+* **The provider does not move the accuracy figures.** The two providers'
+  vectors for the same input agree to a cosine similarity of **0.999974**
+  (largest component difference 1.2e-3), and the #284 re-run confirms it end to
+  end: the CPU-provider embeddings give exactly the per-condition EERs the
+  CoreML run gave on the same fixtures (pooled 0.67%, clean 0.30%).
+* **The table above is still not the shipped configuration's.** The product
+  runs the model in `plaudon-speaker-helper`; `plaudon-speaker-embed` opens it
+  in process. The honest replacement is a re-run of the 372-window harness
+  through the helper; it is listed as an open item in
   [`docs/release/voice-profiles-evidence.md`](../release/voice-profiles-evidence.md).
   The per-window and start-up measurements in this sub-section are
   microbenchmarks on one synthetic window, taken by
@@ -319,20 +332,21 @@ Two consequences, stated rather than averaged away:
 ### Accuracy on licence-clean audio
 
 From `docs/benchmarks/speaker-match-wespeaker-resnet34-lm-eer.json`: 12 enrolled
-speakers, 24 AS-Norm cohort speakers, 240 target and 2 640 non-target trials,
+speakers, 24 AS-Norm cohort speakers, 300 target and 3 300 non-target trials,
 LibriSpeech `test-clean` derived, 3-second utterances, enrolment and trial
 material disjoint.
 
 | Condition | EER | Trials (target / non-target) |
 |---|---|---|
-| Pooled | **0.61%** | 240 / 2 640 |
+| Pooled | **0.67%** | 300 / 3 300 |
 | Clean | 0.30% | 60 / 660 |
+| MUSAN noise at 10 dB SNR | 1.52% | 60 / 660 |
 | Telephone band-pass (300–3400 Hz) | 0.45% | 60 / 660 |
 | Opus 12 kbit/s round trip | 0.61% | 60 / 660 |
 | Room impulse response | 0.61% | 60 / 660 |
 
-Derived operating point: `T_suggest` 4.991 (false accept 0.98%, false reject
-0.42%), `T_floor` 1.671 at a 10% false-accept rate.
+Derived operating point: `T_suggest` 5.038 (false accept 1.00%, false reject
+0.67%), `T_floor` 1.693 at a 10% false-accept rate.
 
 Three honest limits on these numbers:
 
@@ -340,8 +354,11 @@ Three honest limits on these numbers:
    audio is not. These figures bound what the checkpoint can do on easy
    material; they are not a product accuracy claim, and VP-170/VP-171 forbid
    quoting a pooled figure as an advertised accuracy.
-2. **`noise_musan` is absent**, because the corpus was not downloaded. A
-   missing condition is reported as missing.
+2. **`noise_musan` is one SNR and one noise subset.** The condition mixes a
+   single MUSAN `noise` file into each trial utterance at 10 dB; MUSAN's music
+   and babble material, lower SNRs and real far-field capture are not measured,
+   and the 1.52% figure is the error rate of that one mixture, not of "noisy
+   audio" in general.
 3. **The DER in the same artifact is not a diarizer's.** It scores a scripted
    hypothesis against exact synthetic ground truth, which measures
    `crates/ai-diarization::der`. No real diarization provider exists yet.

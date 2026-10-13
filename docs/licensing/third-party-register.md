@@ -166,7 +166,7 @@ including in free text.
 | Corpus | Licence | Redistribution | Attribution | Decision |
 |---|---|---|---|---|
 | LibriSpeech `test-clean` (openslr.org/12) | CC-BY-4.0, derived from public-domain LibriVox recordings | never vendored; a contributor downloads it and builds fixtures locally | "LibriSpeech (Panayotov et al.), CC-BY-4.0" in any artifact built from it | Allowed as the source of seeded multi-speaker sessions with exact RTTM. Real readers' voices, so the consent-free tier stays TTS-only (§17.5). |
-| MUSAN (openslr.org/17) | CC-BY-4.0 | never vendored; local noise variants only | "MUSAN (Snyder et al.), CC-BY-4.0" | Allowed as the noise condition. |
+| MUSAN (openslr.org/17) | CC-BY-4.0 | never vendored; local noise variants only | "MUSAN (Snyder et al.), CC-BY-4.0" | Allowed as the noise condition, and used as one: the measured run mixes its `noise` subset at 10 dB SNR. |
 | Kokoro-82M TTS (`hexgrad/Kokoro-82M`) | Apache-2.0 | never vendored; generated locally | "Kokoro-82M, Apache-2.0" | Allowed as the zero-human-voices smoke tier. |
 | Scripted vectors (`plaudon-eval`) | n/a — generated from a seed | committed (no recorded material) | none | The hermetic CI tier. Produces no accuracy claim about any model. |
 | AMI, ICSI | CC-BY-4.0 | **download-on-demand, developer-local only** | required if figures are published | Never in the repository and never in CI: gigabytes of real meetings, used as an accuracy gate a developer runs deliberately. |
@@ -177,13 +177,14 @@ including in free text.
 The measured tier is built locally by `plaudon-speaker-embed build-fixtures`
 (`crates/ai-speaker`): it decodes LibriSpeech `test-clean` with the product's
 own decoder, cuts fixed-length single-speaker utterances, and derives the
-channel conditions. Three of the four are pure Rust in that tool (clean,
-telephone band-pass, room impulse response); the low-bitrate Opus condition
-shells out to a developer-local **FFmpeg** (`-c:a libopus -b:a 12k`), which is
-never redistributed and never linked — the same standing as `rsvg-convert`
-above. The MUSAN condition is **not built**: the corpus is an 11 GB download
-this run did not take, so `noise_musan` is absent from the measured plan rather
-than approximated. Every built file's digest is in
+channel conditions. Four of the five are pure Rust in that tool (clean, MUSAN
+noise mix, telephone band-pass, room impulse response); the low-bitrate Opus
+condition shells out to a developer-local **FFmpeg** (`-c:a libopus -b:a 12k`),
+which is never redistributed and never linked — the same standing as
+`rsvg-convert` above. The MUSAN condition needs the corpus itself (an 11 GB
+download, `--musan`); the tool refuses to synthesise a stand-in, so the
+condition is either built from MUSAN or absent. Which MUSAN files it used, with
+their digests and the SNR, and every built file's digest, are in
 [docs/benchmarks/speaker-match-wespeaker-fixtures.json](../benchmarks/speaker-match-wespeaker-fixtures.json);
 no audio and no embedding is committed.
 
