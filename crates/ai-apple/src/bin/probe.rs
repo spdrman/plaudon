@@ -12,6 +12,7 @@
 //!     --json --locale en-US --audio tests/fixtures/audio/speech.wav
 //! ```
 
+use std::fmt::Write as _;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -216,11 +217,10 @@ fn main() -> std::process::ExitCode {
                 .as_ref()
                 .is_ok_and(|probe| probe.available),
             locale: options.locale.unwrap_or_else(|| "system".to_owned()),
-            asset_status: availability
-                .speech
-                .as_ref()
-                .map(|probe| format!("{:?}", probe.asset_status).to_lowercase())
-                .unwrap_or_else(|_| "unsupported".to_owned()),
+            asset_status: availability.speech.as_ref().map_or_else(
+                |_| "unsupported".to_owned(),
+                |probe| format!("{:?}", probe.asset_status).to_lowercase(),
+            ),
             speech_transcribed,
             text_generated,
             // The probe binary exercises Apple only; the whisper.cpp leg of a
@@ -359,7 +359,7 @@ fn sha256_hex(bytes: &[u8]) -> String {
     }
     message.extend_from_slice(&bit_length.to_be_bytes());
 
-    for block in message.chunks_exact(64) {
+    for block in message.as_chunks::<64>().0 {
         let mut w = [0u32; 64];
         for (index, word) in w.iter_mut().take(16).enumerate() {
             let at = index * 4;
@@ -404,5 +404,8 @@ fn sha256_hex(bytes: &[u8]) -> String {
             *slot = slot.wrapping_add(value);
         }
     }
-    h.iter().map(|word| format!("{word:08x}")).collect()
+    h.iter().fold(String::with_capacity(64), |mut hex, word| {
+        let _ = write!(hex, "{word:08x}");
+        hex
+    })
 }
