@@ -88,8 +88,12 @@ or can access voiceprints, and the public privacy documents say so affirmatively
 - Users carry the legal duty to obtain attendee consent; the product's job is to make that duty
   visible, dischargeable (templates, exportable consent records) and bounded (retention
   auto-expiry). This is stated bluntly in-product; it cannot be engineered away.
-- A privacy-counsel review of the spec's §12 is a release-evidence item before the feature reaches
-  a public build.
+- Legal review is **not** a release gate. Plaudon is open-source software under the MIT licence,
+  provided "AS IS" without warranty of any kind, including any warranty of legal compliance; the
+  owner has accepted the remaining legal uncertainty around biometric and recording-consent law
+  and users run it at their own risk. The engineering safeguards above — off by default, local
+  only, consent gates, retention auto-expiry, the published disclosure in `docs/public/` — stand
+  on their own and are not conditional on any review.
 - **Implemented so far (P2.3):** the export/backup/deletion leg of this decision now exists.
   A recording export carries display-name text only; portable backups carry the name-only roster
   like any other library data and exclude the biometric tier unless the user opts in to an
