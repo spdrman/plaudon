@@ -6,7 +6,7 @@
 # deleted it along with the rest of `apps/desktop`. There is no bundler in the
 # egui build, so this script *is* the bundler: it lays out the bundle,
 # composes the Info.plist from a committed template plus the generated file
-# associations, builds the icon, signs, audits and reports.
+# associations, installs the brand kit icon, signs, audits and reports.
 #
 # Honest failure modes, in order of preference:
 #   1. A Developer ID identity and notarytool credentials are present: the
@@ -55,7 +55,7 @@ if [ "$(uname -s)" != "Darwin" ]; then
   echo "reason=unsupported_platform: the macOS package builds on macOS only" >&2
   exit 1
 fi
-for tool in sips iconutil plutil codesign /usr/libexec/PlistBuddy; do
+for tool in iconutil plutil codesign /usr/libexec/PlistBuddy; do
   command -v "$tool" >/dev/null 2>&1 || { echo "reason=missing_tool: $tool is required" >&2; exit 1; }
 done
 
@@ -104,19 +104,19 @@ cp "$BINARY" "$APP_PATH/Contents/MacOS/$EXECUTABLE"
 chmod 755 "$APP_PATH/Contents/MacOS/$EXECUTABLE"
 printf 'APPL????' > "$APP_PATH/Contents/PkgInfo"
 
-# Icon: built here from the committed master raster, so the bundle cannot
-# carry an icon that no longer matches apps/plaudon-egui/packaging/icon.svg.
-ICON_MASTER="$PACKAGING/icon-1024.png"
-[ -f "$ICON_MASTER" ] || { echo "reason=missing_binary: $ICON_MASTER is absent; run scripts/make-app-icon.sh" >&2; exit 1; }
+# Icon: the brand kit's `.icns`, copied in verbatim. The kit is the single
+# source of truth for the artwork (brand/kit/README.txt), so the bundle icon
+# is the brand icon byte-for-byte and nothing re-renders it at package time.
+# It is validated before it is installed: `iconutil` round-trips a real
+# `.icns` and rejects anything else.
+ICNS_SOURCE="$REPO_ROOT/brand/kit/icons/desktop/plaudon.icns"
+[ -f "$ICNS_SOURCE" ] || { echo "reason=missing_binary: $ICNS_SOURCE is absent; the brand kit must be checked out" >&2; exit 1; }
 ICONSET="$OUT/plaudon.iconset"
-rm -rf "$ICONSET"; mkdir -p "$ICONSET"
-for size in 16 32 128 256 512; do
-  sips -z "$size" "$size" "$ICON_MASTER" --out "$ICONSET/icon_${size}x${size}.png" >/dev/null
-  double=$((size * 2))
-  sips -z "$double" "$double" "$ICON_MASTER" --out "$ICONSET/icon_${size}x${size}@2x.png" >/dev/null
-done
-iconutil -c icns "$ICONSET" -o "$APP_PATH/Contents/Resources/plaudon.icns"
 rm -rf "$ICONSET"
+iconutil -c iconset "$ICNS_SOURCE" -o "$ICONSET" >/dev/null || {
+  echo "reason=missing_binary: $ICNS_SOURCE is not a readable .icns" >&2; exit 1; }
+rm -rf "$ICONSET"
+cp "$ICNS_SOURCE" "$APP_PATH/Contents/Resources/plaudon.icns"
 
 # Info.plist: template + generated associations, merged into one dictionary.
 VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' "$REPO_ROOT/Cargo.toml" | head -1)"

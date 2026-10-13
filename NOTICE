@@ -12,6 +12,12 @@ modifications made) is in the file's own header and in the directory's
 README.md. Binary and model dependencies that are resolved at build time rather
 than vendored are recorded in docs/licensing/third-party-register.md.
 
+The brand kit (brand/kit: the logo SVGs and the icon exports the application
+and its installers ship) is the copyright holder's own artwork, licensed under
+the MIT License with the rest of this repository. It contains no third-party
+icon set, font, trace or template, so it imposes no attribution obligation on
+anyone who redistributes Plaudon.
+
 ---------------------------------------------------------------------------
 third_party/craft-ui
 ---------------------------------------------------------------------------

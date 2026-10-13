@@ -31,6 +31,14 @@ fn packaging_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("packaging")
 }
 
+fn repo_root() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(2)
+        .expect("the repository root")
+        .to_path_buf()
+}
+
 fn read(relative: &str) -> String {
     let path = packaging_dir().join(relative);
     std::fs::read_to_string(&path).unwrap_or_else(|error| panic!("{}: {error}", path.display()))
@@ -573,11 +581,12 @@ fn the_application_manifest_asks_for_no_privilege() {
 }
 
 #[test]
-fn the_resource_script_links_the_icon_and_the_manifest_that_exist() {
+fn the_resource_script_links_the_brand_icon_and_the_manifest_that_exist() {
     let rc = read("windows/plaudon-egui.rc");
+    let icon_reference = "../../../../brand/kit/icons/desktop/plaudon.ico";
     assert!(
-        rc.contains("plaudon.ico"),
-        "the executable must carry its icon"
+        rc.contains(icon_reference),
+        "the executable must carry the brand kit's icon, not a copy of it"
     );
     assert!(
         rc.contains("1 24 \"plaudon-egui.exe.manifest\""),
@@ -587,33 +596,99 @@ fn the_resource_script_links_the_icon_and_the_manifest_that_exist() {
         rc.contains("VERSIONINFO"),
         "package-windows-egui.ps1 reads the version block back to prove the resources linked"
     );
-    for referenced in ["plaudon.ico", "plaudon-egui.exe.manifest"] {
+    // `build.rs` compiles the .rc with packaging/windows as the working
+    // directory, so both paths are resolved from there.
+    for referenced in [icon_reference, "plaudon-egui.exe.manifest"] {
         assert!(
             packaging_dir().join("windows").join(referenced).exists(),
-            "{referenced} is referenced by the .rc but not committed"
+            "{referenced} is referenced by the .rc but is not there"
         );
     }
 }
 
 // ----------------------------------------------------------------- icon ----
+//
+// `brand/kit/icons/desktop/` is the only place the application artwork lives:
+// the Windows resource script links the kit's `.ico`, the macOS script copies
+// the kit's `.icns`, and the window icon is the kit's 256px PNG embedded by
+// `apps/plaudon-egui/src/icon.rs`. These tests assert what each platform
+// needs of those files, and that no second copy has reappeared under
+// `packaging/`.
+
+fn brand_icons_dir() -> PathBuf {
+    repo_root().join("brand/kit/icons/desktop")
+}
+
+#[test]
+fn the_brand_kit_is_the_only_copy_of_the_application_icon() {
+    for stale in [
+        "icon.svg",
+        "icon-1024.png",
+        "windows/plaudon.ico",
+        "icon-256.png",
+    ] {
+        assert!(
+            !packaging_dir().join(stale).exists(),
+            "packaging/{stale} is a second copy of the brand artwork; the kit is the source of truth"
+        );
+    }
+    assert!(
+        !repo_root().join("scripts/make-app-icon.sh").exists(),
+        "the icons are exported by the brand kit, not regenerated from a packaging SVG"
+    );
+}
 
 #[test]
 fn the_master_raster_is_a_1024_square() {
-    let png = std::fs::read(packaging_dir().join("icon-1024.png")).expect("the committed master");
+    let png = std::fs::read(brand_icons_dir().join("plaudon-icon-1024.png"))
+        .expect("the brand kit master");
     assert_eq!(&png[1..4], b"PNG", "the master raster must be a PNG");
     let width = u32::from_be_bytes(png[16..20].try_into().expect("IHDR width"));
     let height = u32::from_be_bytes(png[20..24].try_into().expect("IHDR height"));
     assert_eq!(
         (width, height),
         (1024, 1024),
-        "macOS scales 1024 down to every icns size"
+        "1024 is the size every other export is cut from"
+    );
+}
+
+#[test]
+fn the_window_icon_is_the_brand_png_the_shell_embeds() {
+    let png = std::fs::read(brand_icons_dir().join("plaudon-icon-256.png"))
+        .expect("the brand kit window icon");
+    assert_eq!(&png[1..4], b"PNG");
+    let width = u32::from_be_bytes(png[16..20].try_into().expect("IHDR width"));
+    let height = u32::from_be_bytes(png[20..24].try_into().expect("IHDR height"));
+    assert_eq!((width, height), (256, 256), "src/icon.rs embeds this file");
+}
+
+#[test]
+fn the_macos_bundle_icon_is_a_real_icns() {
+    let icns = std::fs::read(brand_icons_dir().join("plaudon.icns")).expect("the brand kit icns");
+    assert_eq!(
+        &icns[0..4],
+        b"icns",
+        "an .icns starts with the 'icns' magic"
+    );
+    let declared = u32::from_be_bytes(icns[4..8].try_into().expect("icns length"));
+    assert_eq!(
+        declared as usize,
+        icns.len(),
+        "the header length must match the file; a truncated .icns gives a blank Dock tile"
+    );
+    // The script copies this file verbatim to Contents/Resources/plaudon.icns,
+    // which is what CFBundleIconFile ("plaudon") names.
+    let script = std::fs::read_to_string(repo_root().join("scripts/package-macos-egui.sh"))
+        .expect("the macOS packaging script");
+    assert!(
+        script.contains("brand/kit/icons/desktop/plaudon.icns"),
+        "the bundle icon must come from the brand kit"
     );
 }
 
 #[test]
 fn the_windows_icon_carries_the_sizes_explorer_asks_for() {
-    let ico =
-        std::fs::read(packaging_dir().join("windows/plaudon.ico")).expect("the committed ico");
+    let ico = std::fs::read(brand_icons_dir().join("plaudon.ico")).expect("the brand kit ico");
     assert_eq!(
         &ico[0..4],
         &[0, 0, 1, 0],
@@ -638,14 +713,30 @@ fn the_windows_icon_carries_the_sizes_explorer_asks_for() {
     }
 }
 
+#[test]
+fn the_windows_installer_stages_the_brand_icon() {
+    let script = std::fs::read_to_string(repo_root().join("scripts/package-windows-egui.ps1"))
+        .expect("the Windows packaging script");
+    assert!(
+        script.contains("brand/kit/icons/desktop/plaudon.ico"),
+        "the ARP icon and the Start menu shortcut must use the brand icon"
+    );
+    let wxs = read("windows/plaudon-egui.wxs");
+    assert!(
+        wxs.contains("<Icon Id=\"PlaudonIcon\" SourceFile=\"plaudon.ico\" />"),
+        "WiX resolves the staged icon by name from the bind path"
+    );
+    assert!(
+        wxs.contains("ARPPRODUCTICON"),
+        "Add/Remove Programs must show the brand icon"
+    );
+}
+
 // -------------------------------------------------------------- scripts ----
 
 #[test]
 fn both_packaging_scripts_fail_closed_without_credentials() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .ancestors()
-        .nth(2)
-        .expect("the repository root");
+    let root = repo_root();
     let macos = std::fs::read_to_string(root.join("scripts/package-macos-egui.sh"))
         .expect("the macOS packaging script");
     let windows = std::fs::read_to_string(root.join("scripts/package-windows-egui.ps1"))
