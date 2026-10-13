@@ -1584,7 +1584,8 @@ fn diarize(arguments: &[String]) -> Result<(), String> {
             .map_err(|_| format!("--min-track-ms expects a number, got `{raw}`"))?;
     }
     let threshold_provenance = value(arguments, "--threshold-provenance").unwrap_or(
-        "sherpa-onnx's documented default for this checkpoint pair; not tuned on these sessions",
+        "`pyannote/speaker-diarization-3.1`'s published `clustering.threshold` for this exact \
+         checkpoint pair, with its `centroid` linkage; not tuned on these sessions",
     );
 
     let manifest_path = sessions_dir.join("sessions.json");
@@ -1718,7 +1719,32 @@ fn diarize(arguments: &[String]) -> Result<(), String> {
             ParameterRecord {
                 name: "min_track_ms".to_owned(),
                 value: options.min_track_ms.to_string(),
-                provenance: "declared floor: a shorter track is not embedded at all".to_owned(),
+                provenance: "declared floor: a shorter track is embedded and assigned, but may \
+                             not shape where a cluster boundary falls"
+                    .to_owned(),
+            },
+            ParameterRecord {
+                name: "min_embed_ms".to_owned(),
+                value: options.min_embed_ms.to_string(),
+                provenance: "declared floor: below it a vector describes the room, not a voice, \
+                             and the track is dropped"
+                    .to_owned(),
+            },
+            ParameterRecord {
+                name: "cluster.min_cluster_tracks".to_owned(),
+                value: options.cluster.min_cluster_tracks.to_string(),
+                provenance: "`pyannote/speaker-diarization-3.1`'s published \
+                             `clustering.min_cluster_size`"
+                    .to_owned(),
+            },
+            ParameterRecord {
+                name: "embedding_exclude_overlap".to_owned(),
+                value: "true".to_owned(),
+                provenance: "a speaker is embedded from the frames where they are the only \
+                             voice, as `pyannote/speaker-diarization-3.1` does; where a track \
+                             has none, the mixture is embedded and the track may not shape the \
+                             clustering"
+                    .to_owned(),
             },
             ParameterRecord {
                 name: "cluster.threshold".to_owned(),
