@@ -9,18 +9,23 @@
 //!
 //! The one rule these tests exist to enforce: the Windows installer's
 //! registry writes are the *same* claim that
-//! `plaudon_platform::associations::windows_registry_script` generates. NSIS
-//! cannot `reg import` a file whose paths are only known at install time, so
-//! the keys are written twice — once as the committed `.reg` artifact, once
-//! as `WriteRegStr` lines. This test is what stops the two from drifting.
+//! `plaudon_platform::associations::windows_registry_script` generates. A
+//! `.msi` cannot import a `.reg` file whose paths are only known at install
+//! time, so the keys are written twice — once as the committed `.reg`
+//! artifact, once as `RegistryValue` rows in the WiX source. This test is
+//! what stops the two from drifting.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use plaudon_platform::associations;
 
-/// The installed executable the NSIS script substitutes for `%EXEPATH%`.
-const INSTALLED_EXECUTABLE: &str = r"$INSTDIR\plaudon-egui.exe";
+/// The installed executable the WiX source substitutes for `%EXEPATH%`.
+///
+/// `[#FileId]` is Windows Installer's formatted reference to the full path a
+/// file is installed to, which is the only thing either installer could use:
+/// the install directory is not known when the package is built.
+const INSTALLED_EXECUTABLE: &str = "[#PlaudonEgui]";
 
 fn packaging_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("packaging")
@@ -199,112 +204,101 @@ fn no_hardened_runtime_escape_hatch_is_requested() {
 
 // -------------------------------------------------------------- Windows ----
 
-/// `!define NAME "value"` pairs, so `${NAME}` can be expanded.
-fn nsis_defines(script: &str) -> Vec<(String, String)> {
-    script
-        .lines()
-        .map(str::trim)
-        .filter_map(|line| line.strip_prefix("!define "))
-        .filter_map(|rest| {
-            let mut tokens = nsis_tokens(rest);
-            let name = tokens.next()?;
-            let value = tokens.next().unwrap_or_default();
-            Some((name, value))
-        })
-        .collect()
-}
-
-fn expand(value: &str, defines: &[(String, String)]) -> String {
-    let mut out = value.to_owned();
-    // Defines may refer to earlier defines, so iterate until stable.
-    for _ in 0..4 {
-        let mut next = out.clone();
-        for (name, replacement) in defines {
-            next = next.replace(&format!("${{{name}}}"), replacement);
-        }
-        if next == out {
+/// The attributes of one XML element, in source order.
+///
+/// A real parser is unnecessary and would hide what is being asserted: the
+/// installer definition is a flat list of self-closing elements, and what
+/// matters is every attribute of every `RegistryValue`, `RegistryKey` and
+/// `Shortcut` exactly as written.
+fn attributes(element: &str) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    let mut rest = element;
+    while let Some(equals) = rest.find('=') {
+        let name = rest[..equals]
+            .rsplit(|c: char| c.is_whitespace())
+            .next()
+            .unwrap_or_default()
+            .to_owned();
+        let after = &rest[equals + 1..];
+        let Some(open) = after.find('"') else { break };
+        let Some(close) = after[open + 1..].find('"') else {
             break;
+        };
+        let value = &after[open + 1..open + 1 + close];
+        if !name.is_empty() {
+            out.push((name, unescape_xml(value)));
         }
-        out = next;
+        rest = &after[open + 1 + close + 1..];
     }
     out
 }
 
-/// Split an NSIS argument list, honouring `"…"`, `'…'` and the `$\"` escape.
-fn nsis_tokens(line: &str) -> impl Iterator<Item = String> + '_ {
-    let mut chars = line.chars().peekable();
-    std::iter::from_fn(move || {
-        while chars.peek().is_some_and(|c| c.is_whitespace()) {
-            chars.next();
-        }
-        let first = *chars.peek()?;
-        let mut token = String::new();
-        if first == '"' || first == '\'' {
-            chars.next();
-            while let Some(c) = chars.next() {
-                if c == '$' && chars.peek() == Some(&'\\') {
-                    chars.next();
-                    if let Some(escaped) = chars.next() {
-                        token.push(escaped);
-                    }
-                } else if c == first {
-                    break;
-                } else {
-                    token.push(c);
-                }
-            }
-        } else {
-            while let Some(&c) = chars.peek() {
-                if c.is_whitespace() {
-                    break;
-                }
-                token.push(c);
-                chars.next();
-            }
-        }
-        Some(token)
-    })
+/// The predefined XML entities that can appear in an attribute value.
+fn unescape_xml(value: &str) -> String {
+    value
+        .replace("&quot;", "\"")
+        .replace("&apos;", "'")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&amp;", "&")
 }
 
-/// Every `WriteRegStr HKCU "key" "name" "data"` as (key, name, data).
+/// Every element of one name, as its attribute list.
 ///
-/// `defines` comes from the whole file, because a section parsed on its own
-/// cannot see the `!define` block above it.
-fn nsis_registry_writes(
-    script: &str,
-    defines: &[(String, String)],
-) -> BTreeSet<(String, String, String)> {
-    script
-        .lines()
-        .map(str::trim)
-        .filter_map(|line| line.strip_prefix("WriteRegStr "))
-        .map(|rest| {
-            let tokens: Vec<String> = nsis_tokens(rest).collect();
-            let [hive, key, name, data] = tokens.as_slice() else {
-                panic!("WriteRegStr takes four arguments: {rest}");
-            };
-            assert_eq!(hive, "HKCU", "the installer is per-user: {rest}");
+/// `<Name …>` and `<Name …/>` both match; `<NameSomethingElse …>` does not.
+fn elements(source: &str, name: &str) -> Vec<Vec<(String, String)>> {
+    let open = format!("<{name}");
+    let mut out = Vec::new();
+    let mut rest = source;
+    while let Some(at) = rest.find(&open) {
+        let after = &rest[at + open.len()..];
+        let boundary = after.chars().next();
+        let end = after.find('>').expect("an element is closed");
+        if boundary.is_some_and(|c| c.is_whitespace() || c == '/' || c == '>') {
+            out.push(attributes(&after[..end]));
+        }
+        rest = &after[end..];
+    }
+    out
+}
+
+fn attribute(element: &[(String, String)], name: &str) -> Option<String> {
+    element
+        .iter()
+        .find(|(key, _)| key == name)
+        .map(|(_, value)| value.clone())
+}
+
+/// Every `RegistryValue` row as (key under the hive, value name, data).
+///
+/// The hive is asserted here rather than returned: a per-user package writes
+/// `HKCU` and nothing else, and a row that says otherwise is a bug this
+/// function refuses to hand on to a comparison that might tolerate it.
+fn wix_registry_writes(source: &str) -> BTreeSet<(String, String, String)> {
+    elements(source, "RegistryValue")
+        .iter()
+        .map(|element| {
+            let key = attribute(element, "Key").expect("a RegistryValue names its key");
+            let root = attribute(element, "Root").expect("a RegistryValue names its hive");
+            assert_eq!(root, "HKCU", "the installer is per-user: {key}");
             (
-                expand(key, defines),
-                expand(name, defines),
-                expand(data, defines),
+                key,
+                attribute(element, "Name").unwrap_or_default(),
+                attribute(element, "Value").unwrap_or_default(),
             )
         })
         .collect()
 }
 
-/// Every `DeleteRegKey HKCU "key"`.
-fn nsis_registry_deletes(script: &str, defines: &[(String, String)]) -> BTreeSet<String> {
-    script
-        .lines()
-        .map(str::trim)
-        .filter_map(|line| line.strip_prefix("DeleteRegKey "))
-        .filter_map(|rest| {
-            let tokens: Vec<String> = nsis_tokens(rest).collect();
-            let [_hive, key] = tokens.as_slice() else {
-                return None;
-            };
-            Some(expand(key, defines))
+/// Every key the package deletes on uninstall (`ForceDeleteOnUninstall`).
+fn wix_registry_deletes(source: &str) -> BTreeSet<String> {
+    elements(source, "RegistryKey")
+        .iter()
+        .filter(|element| attribute(element, "ForceDeleteOnUninstall").as_deref() == Some("yes"))
+        .map(|element| {
+            let root = attribute(element, "Root").expect("a RegistryKey names its hive");
+            assert_eq!(root, "HKCU", "the installer is per-user");
+            attribute(element, "Key").expect("a RegistryKey names its key")
         })
         .collect()
 }
@@ -359,14 +353,14 @@ fn unquote_reg(value: &str) -> String {
 
 #[test]
 fn the_installer_writes_exactly_the_generated_association_claim() {
-    let script = read("windows/plaudon-egui.nsi");
-    let written = nsis_registry_writes(&script, &nsis_defines(&script));
+    let source = read("windows/plaudon-egui.wxs");
+    let written = wix_registry_writes(&source);
     let expected = generated_registry_claim();
 
     for triple in &expected {
         assert!(
             written.contains(triple),
-            "the installer does not write {triple:?}; regenerate the WriteRegStr block from \
+            "the installer does not write {triple:?}; regenerate the RegistryValue block from \
              plaudon_platform::associations::windows_registry_script"
         );
     }
@@ -388,48 +382,172 @@ fn the_installer_writes_exactly_the_generated_association_claim() {
 
 #[test]
 fn the_uninstaller_removes_every_key_the_installer_wrote() {
-    let script = read("windows/plaudon-egui.nsi");
-    let (installer, uninstaller) = script
-        .split_once("Section \"Uninstall\"")
-        .expect("the script has an uninstall section");
-    let defines = nsis_defines(&script);
-    let written = nsis_registry_writes(installer, &defines);
-    let deleted = nsis_registry_deletes(uninstaller, &defines);
+    // Windows Installer removes the *values* a component wrote when that
+    // component is uninstalled, but it leaves the key itself behind if
+    // anything else ever wrote to it. ForceDeleteOnUninstall is what removes
+    // the key, and every key this package touches must be covered by one.
+    let source = read("windows/plaudon-egui.wxs");
+    let written = wix_registry_writes(&source);
+    let deleted = wix_registry_deletes(&source);
+    assert!(
+        !deleted.is_empty(),
+        "nothing in the package removes a registry key on uninstall"
+    );
     for (key, _, _) in &written {
         assert!(
             deleted
                 .iter()
                 .any(|removed| key == removed || key.starts_with(&format!("{removed}\\"))),
-            "nothing in the uninstall section removes {key}"
+            "nothing removes {key} on uninstall"
         );
     }
 }
 
 #[test]
 fn the_installer_is_per_user_and_leaves_the_library_alone() {
-    let script = read("windows/plaudon-egui.nsi");
+    let source = read("windows/plaudon-egui.wxs");
     assert!(
-        script.contains("RequestExecutionLevel user"),
+        source.contains(r#"Scope="perUser""#),
         "a per-user install must not ask for elevation"
     );
-    assert!(
-        !script.contains("HKLM") && !script.contains("HKEY_LOCAL_MACHINE"),
-        "machine-wide keys would need elevation and would outlive the user's install"
-    );
-    assert!(
-        !script.contains("$APPDATA\\app.plaudon.desktop"),
-        "the uninstaller must never touch the library directory"
-    );
-    for forbidden in [
-        "SetAutoStart",
-        "$SMSTARTUP",
-        "WriteRegStr HKCU \"Software\\Microsoft\\Windows\\CurrentVersion\\Run",
-    ] {
+    for forbidden in ["perMachine", "HKLM", "HKEY_LOCAL_MACHINE", "HKMU", "HKCR"] {
         assert!(
-            !script.contains(forbidden),
-            "the installer must not add an autostart entry ({forbidden})"
+            !source.contains(forbidden),
+            "machine-wide keys ({forbidden}) would need elevation and would outlive the user's \
+             install"
         );
     }
+    // HKCR and HKMU resolve to a per-user hive only as a side effect of the
+    // install scope; every row in this package names the hive it means.
+    for element in elements(&source, "RegistryValue")
+        .iter()
+        .chain(elements(&source, "RegistryKey").iter())
+    {
+        assert_eq!(
+            attribute(element, "Root").as_deref(),
+            Some("HKCU"),
+            "every registry row names HKCU explicitly: {element:?}"
+        );
+    }
+    // The library lives in the roaming application-data folder. Nothing in
+    // the package may name it, and nothing in the package may delete a file
+    // or a folder it did not install — those are the two ways an uninstall
+    // becomes a data-loss bug.
+    for forbidden in [
+        r#"Id="AppDataFolder""#,
+        "[AppDataFolder]",
+        "<RemoveFile",
+        "<RemoveFolder",
+        "RemoveFolderEx",
+    ] {
+        assert!(
+            !source.contains(forbidden),
+            "the uninstaller must never touch the library directory ({forbidden})"
+        );
+    }
+    for forbidden in [
+        "StartupFolder",
+        r"Software\Microsoft\Windows\CurrentVersion\Run",
+        "ServiceInstall",
+        "ScheduledTask",
+        "<Environment",
+    ] {
+        assert!(
+            !source.contains(forbidden),
+            "the installer must not add an autostart, a service or a PATH edit ({forbidden})"
+        );
+    }
+}
+
+#[test]
+fn the_package_upgrades_itself_rather_than_installing_beside_itself() {
+    let source = read("windows/plaudon-egui.wxs");
+    let package = elements(&source, "Package")
+        .into_iter()
+        .next()
+        .expect("the installer defines a package");
+    let upgrade_code = attribute(&package, "UpgradeCode").expect("the package has an upgrade code");
+    assert_eq!(
+        upgrade_code, "BB143690-5F22-43C6-9E83-75E7EE43F005",
+        "the UpgradeCode is the identity of the product line; changing it makes the next release \
+         install beside this one instead of replacing it"
+    );
+    assert!(
+        !elements(&source, "MajorUpgrade").is_empty(),
+        "without MajorUpgrade the previous version is never removed"
+    );
+    assert_eq!(
+        attribute(&package, "Version").as_deref(),
+        Some("$(var.Version)"),
+        "the package version comes from the workspace version the packaging script reads"
+    );
+    // Component GUIDs are written out so that a component keeps its identity
+    // across releases; a generated one can change under a rename and break
+    // the upgrade.
+    for component in elements(&source, "Component") {
+        let id = attribute(&component, "Id").expect("a component is named");
+        let guid = attribute(&component, "Guid")
+            .unwrap_or_else(|| panic!("component {id} has no explicit GUID"));
+        assert_eq!(
+            guid.len(),
+            36,
+            "component {id} has a malformed GUID: {guid}"
+        );
+    }
+}
+
+#[test]
+fn the_package_runs_no_code_of_its_own() {
+    // A custom action is executable code inside an installer, which is the
+    // thing a per-user package has no excuse for. The two property
+    // assignments this package does make are type 51 rows: they set a string
+    // and execute nothing.
+    let source = read("windows/plaudon-egui.wxs");
+    for forbidden in [
+        "<CustomAction",
+        "<Binary",
+        "BinaryRef",
+        "ExeCommand",
+        "<InstallExecuteSequence",
+    ] {
+        assert!(
+            !source.contains(forbidden),
+            "{forbidden} introduces code or a sequence override into the installer"
+        );
+    }
+    for element in elements(&source, "SetProperty")
+        .iter()
+        .chain(elements(&source, "SetDirectory").iter())
+    {
+        assert!(
+            attribute(element, "Value").is_some(),
+            "a property assignment sets a value and nothing else: {element:?}"
+        );
+    }
+}
+
+#[test]
+fn the_shortcut_points_at_the_installed_executable() {
+    let source = read("windows/plaudon-egui.wxs");
+    let shortcut = elements(&source, "Shortcut")
+        .into_iter()
+        .next()
+        .expect("the installer writes a Start Menu shortcut");
+    assert_eq!(
+        attribute(&shortcut, "Target").as_deref(),
+        Some(INSTALLED_EXECUTABLE),
+        "the shortcut must resolve to the file the package installs, not to a guessed path"
+    );
+    assert_eq!(
+        attribute(&shortcut, "Directory").as_deref(),
+        Some("ProgramMenuFolder"),
+        "the shortcut belongs in the Start Menu and nowhere else"
+    );
+    assert_eq!(
+        attribute(&shortcut, "Advertise").as_deref(),
+        Some("no"),
+        "an advertised shortcut makes the shell call the installer on every launch"
+    );
 }
 
 #[test]
