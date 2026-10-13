@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="199 159 650 763" role="img" aria-labelledby="plaudon-title">
+  <title id="plaudon-title">Plaudon</title>
+  <defs>
+  <style>
+      .body0 { stop-color: #0585fc; }
+      .body1 { stop-color: #0166f5; }
+      .body2 { stop-color: #0045dc; }
+      .body3 { stop-color: #0029b0; }
+      .hi0 { stop-color: #46c9fc; }
+      .hi1 { stop-color: #42b8fb; }
+      .fold0 { stop-color: #04185a; }
+      .fold1 { stop-color: #032c92; }
+      .fold2 { stop-color: #032893; }
+      .glow { stop-color: #0040c4; }
+
+    @media (prefers-color-scheme: dark) {
+      .body0 { stop-color: #5cb4ff; }
+      .body1 { stop-color: #4b94ff; }
+      .body2 { stop-color: #4a7bf8; }
+      .body3 { stop-color: #5470ee; }
+      .hi0 { stop-color: #8be0ff; }
+      .hi1 { stop-color: #78cfff; }
+      .fold0 { stop-color: #3a58cc; }
+      .fold1 { stop-color: #3a5fd4; }
+      .fold2 { stop-color: #3f66dc; }
+      .glow { stop-color: #3f66dc; }
+    }
+  </style>
+    <linearGradient id="plaudon-body" gradientUnits="userSpaceOnUse" x1="420" y1="159" x2="700" y2="710">
+      <stop class="body0" offset="0"/>
+      <stop class="body1" offset="0.35"/>
+      <stop class="body2" offset="0.7"/>
+      <stop class="body3" offset="1"/>
+    </linearGradient>
+    <linearGradient id="plaudon-hi" gradientUnits="userSpaceOnUse" x1="230" y1="159" x2="560" y2="400">
+      <stop class="hi0" offset="0"/>
+      <stop class="hi1" offset="1"/>
+    </linearGradient>
+    <linearGradient id="plaudon-fold" gradientUnits="userSpaceOnUse" x1="440" y1="620" x2="205" y2="850">
+      <stop class="fold0" offset="0"/>
+      <stop class="fold1" offset="0.5"/>
+      <stop class="fold2" offset="1"/>
+    </linearGradient>
+    <radialGradient id="plaudon-glow" gradientUnits="userSpaceOnUse" cx="222" cy="730" r="215">
+      <stop class="glow" offset="0" stop-opacity="0.95"/>
+      <stop class="glow" offset="1" stop-opacity="0"/>
+    </radialGradient>
+    <clipPath id="plaudon-mark">
+      <path clip-rule="evenodd" d="M305,159H590C735,159 848,290 848,434.5C848,579 735,710 590,710H482Q461,710 461,731V819C461,875 419,921 359,921H302C246,921 200,875 200,819V264C200,206 247,159 305,159ZM409,384H412A30,30 0 0 1 442,414V461A30,30 0 0 1 412,491H409A30,30 0 0 1 379,461V414A30,30 0 0 1 409,384ZM495,335H497A30,30 0 0 1 527,365V511A30,30 0 0 1 497,541H495A30,30 0 0 1 465,511V365A30,30 0 0 1 495,335ZM579,277H582A30,30 0 0 1 612,307V575A30,30 0 0 1 582,605H579A30,30 0 0 1 549,575V307A30,30 0 0 1 579,277ZM665,334H667A30,30 0 0 1 697,364V516A30,30 0 0 1 667,546H665A30,30 0 0 1 635,516V364A30,30 0 0 1 665,334ZM751,386H753A30,30 0 0 1 783,416V461A30,30 0 0 1 753,491H751A30,30 0 0 1 721,461V416A30,30 0 0 1 751,386Z"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#plaudon-mark)">
+    <rect x="185" y="140" width="680" height="800" fill="url(#plaudon-body)"/>
+    <path d="M185,140H600L588,159C540,182 490,213 448,240C380,285 300,333 262,368C232,396 206,430 199,480H185Z" fill="url(#plaudon-hi)"/>
+    <path d="M185,470L199,482C203,520 240,552 298,579C360,612 400,632 426,662C448,688 461,712 461,745V940H185Z" fill="url(#plaudon-fold)"/>
+    <path d="M185,470L199,482C203,520 240,552 298,579C360,612 400,632 426,662C448,688 461,712 461,745V940H185Z" fill="url(#plaudon-glow)"/>
+  </g>
+</svg>

@@ -1,8 +1,5 @@
 <h1 align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/logo-dark.svg">
-    <img src="docs/assets/logo.svg" alt="Plaudon" width="340">
-  </picture>
+  <img src="brand/kit/logo/plaudon-ribbon-pulse-lockup.svg" alt="Plaudon: private audio, searchable knowledge" width="420">
 </h1>
 
 <p align="center">

@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Plaudon Branding Kit</title>
+  <link rel="icon" href="../icons/web/favicon-32x32.png" sizes="32x32" />
+  <style>
+    :root {
+  --plaudon-navy: #071B73;
+  --plaudon-royal: #0B57FF;
+  --plaudon-azure: #2F86FF;
+  --plaudon-sky: #56C9FF;
+  --plaudon-teal: #17C7C7;
+  --plaudon-ink: #172544;
+  --plaudon-slate: #5B6786;
+  --plaudon-mist: #EEF4FF;
+  --plaudon-paper: #FFFFFF;
+  --plaudon-night: #091224;
+
+  --font-display: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-body: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "SFMono-Regular", ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas, monospace;
+
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+  --radius-xl: 32px;
+  --shadow-soft: 0 12px 32px rgba(10, 26, 77, 0.12);
+  --shadow-card: 0 8px 24px rgba(23, 37, 68, 0.08);
+  --gradient-brand: linear-gradient(135deg, var(--plaudon-sky) 0%, var(--plaudon-azure) 38%, var(--plaudon-royal) 68%, #0735D9 100%);
+  --gradient-surface: linear-gradient(180deg, #ffffff 0%, #f7faff 100%);
+}
+
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: var(--font-body); color: var(--plaudon-ink); background: linear-gradient(180deg, #f4f8ff 0%, #ffffff 34%, #f6f9ff 100%); }
+    .wrap { max-width: 1180px; margin: 0 auto; padding: 40px 24px 80px; }
+    .hero { display: grid; grid-template-columns: 140px 1fr; gap: 28px; align-items: center; padding: 32px; background: rgba(255,255,255,0.9); border: 1px solid rgba(11,87,255,0.08); border-radius: 32px; box-shadow: var(--shadow-soft); backdrop-filter: blur(6px); }
+    .hero img { width: 140px; height: 140px; }
+    h1, h2, h3 { margin: 0 0 12px; font-family: var(--font-display); }
+    h1 { font-size: clamp(2.2rem, 5vw, 4rem); letter-spacing: -0.04em; }
+    h2 { font-size: 1.6rem; letter-spacing: -0.02em; margin-top: 34px; }
+    p { margin: 0 0 12px; line-height: 1.6; color: var(--plaudon-slate); }
+    .lede { font-size: 1.1rem; max-width: 65ch; }
+    .grid { display: grid; gap: 18px; }
+    .grid.cols-2 { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+    .grid.cols-4 { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+    .card { background: white; border-radius: 24px; border: 1px solid rgba(23,37,68,0.08); box-shadow: var(--shadow-card); padding: 20px; }
+    .swatch { height: 84px; border-radius: 18px; margin-bottom: 12px; }
+    code, pre { font-family: var(--font-mono); }
+    .token { display: inline-block; background: var(--plaudon-mist); color: var(--plaudon-ink); padding: 6px 10px; border-radius: 999px; margin: 4px 6px 0 0; font-size: 0.92rem; }
+    .logo-row { display: flex; flex-wrap: wrap; gap: 20px; align-items: center; }
+    .logo-box { flex: 1 1 240px; min-width: 240px; background: var(--gradient-surface); border-radius: 24px; padding: 24px; border: 1px solid rgba(11,87,255,0.08); display: grid; place-items: center; }
+    .logo-box.dark { background: #08132d; }
+    .logo-box img { max-width: 100%; max-height: 200px; }
+    .sample-ui { display: grid; grid-template-columns: 290px 1fr; gap: 20px; }
+    .sidebar { background: #0b1326; color: white; border-radius: 24px; padding: 24px; }
+    .sidebar .pill { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.92); }
+    .panel { background: white; border-radius: 24px; padding: 24px; border: 1px solid rgba(23,37,68,0.08); }
+    .pill { display: inline-block; border-radius: 999px; padding: 8px 12px; background: var(--plaudon-mist); font-size: 0.92rem; margin: 6px 8px 0 0; }
+    .button-row { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
+    .btn { border: none; border-radius: 14px; padding: 12px 18px; font: inherit; cursor: default; }
+    .btn.primary { color: white; background: var(--gradient-brand); box-shadow: 0 8px 18px rgba(11,87,255,0.24); }
+    .btn.secondary { color: var(--plaudon-royal); background: rgba(11,87,255,0.08); }
+    .btn.ghost { color: var(--plaudon-ink); background: #f3f7ff; }
+    .icon-wall { display: grid; grid-template-columns: repeat(auto-fit,minmax(112px,1fr)); gap: 16px; margin-top: 14px; }
+    .icon-tile { border-radius: 18px; border: 1px solid rgba(23,37,68,0.08); background: white; padding: 14px; text-align: center; }
+    .icon-tile img { width: 64px; height: 64px; object-fit: contain; }
+    .footer { margin-top: 34px; padding-top: 24px; border-top: 1px solid rgba(23,37,68,0.08); font-size: 0.95rem; color: var(--plaudon-slate); }
+    @media (max-width: 800px) { .hero, .sample-ui { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="hero">
+      <img src="../logo/plaudon-ribbon-pulse.svg" alt="Plaudon logo" />
+      <div>
+        <h1>Plaudon Branding Kit</h1>
+        <p class="lede">A modern identity system for Plaudon built around privacy-first audio, searchable transcription, and linked knowledge. The Ribbon Pulse mark combines a <strong>P</strong> monogram with a waveform motif.</p>
+        <div>
+          <span class="token">Local-first</span>
+          <span class="token">Private by design</span>
+          <span class="token">Audio → insight</span>
+          <span class="token">Desktop utility</span>
+        </div>
+      </div>
+    </section>
+
+    <h2>Logo system</h2>
+    <div class="logo-row">
+      <div class="logo-box"><img src="../logo/plaudon-ribbon-pulse.svg" alt="Full color logo" /></div>
+      <div class="logo-box"><img src="../logo/plaudon-ribbon-pulse-lockup.svg" alt="Horizontal lockup" /></div>
+      <div class="logo-box dark"><img src="../logo/plaudon-ribbon-pulse-monochrome-white.svg" alt="White monochrome logo" /></div>
+    </div>
+
+    <h2>Color themes</h2>
+    <div class="grid cols-4">
+      <div class="card"><div class="swatch" style="background:#071B73"></div><h3>Navy</h3><p>#071B73</p></div>
+      <div class="card"><div class="swatch" style="background:#0B57FF"></div><h3>Royal</h3><p>#0B57FF</p></div>
+      <div class="card"><div class="swatch" style="background:#2F86FF"></div><h3>Azure</h3><p>#2F86FF</p></div>
+      <div class="card"><div class="swatch" style="background:#56C9FF"></div><h3>Sky</h3><p>#56C9FF</p></div>
+      <div class="card"><div class="swatch" style="background:#17C7C7"></div><h3>Teal</h3><p>#17C7C7</p></div>
+      <div class="card"><div class="swatch" style="background:#172544"></div><h3>Ink</h3><p>#172544</p></div>
+      <div class="card"><div class="swatch" style="background:#EEF4FF"></div><h3>Mist</h3><p>#EEF4FF</p></div>
+      <div class="card"><div class="swatch" style="background:#091224"></div><h3>Night</h3><p>#091224</p></div>
+    </div>
+
+    <h2>Typography</h2>
+    <div class="grid cols-2">
+      <div class="card">
+        <h3>Recommended pairing</h3>
+        <p><strong>Display & UI:</strong> Inter / system sans</p>
+        <p><strong>Code & technical labels:</strong> SF Mono / Cascadia / system monospace</p>
+        <div class="token">Readable</div><div class="token">Neutral</div><div class="token">Technical</div>
+      </div>
+      <div class="card">
+        <h3>Voice & visual tone</h3>
+        <p>Clean, calm, trustworthy, and quietly intelligent. Avoid loud gradients outside the core brand family; keep UI surfaces bright with deep ink text and compact blue accents.</p>
+      </div>
+    </div>
+
+    <h2>UI styling sample</h2>
+    <div class="sample-ui">
+      <div class="sidebar">
+        <img src="../logo/plaudon-ribbon-pulse-monochrome-white.svg" alt="Plaudon" style="width:72px;height:72px;" />
+        <h3 style="color:white; margin-top:12px;">Plaudon</h3>
+        <p style="color:rgba(255,255,255,0.78)">Private recordings and summaries.</p>
+        <div class="pill">Library</div><div class="pill">Transcripts</div><div class="pill">Linked notes</div>
+      </div>
+      <div class="panel">
+        <h3 style="margin-bottom:8px;">Recording details</h3>
+        <p>A sample application surface using the Plaudon design tokens.</p>
+        <div class="button-row">
+          <button class="btn primary">Primary action</button>
+          <button class="btn secondary">Secondary</button>
+          <button class="btn ghost">Tertiary</button>
+        </div>
+        <div style="margin-top:20px; background:linear-gradient(180deg, #ffffff 0%, #f6f9ff 100%); border-radius:18px; padding:18px; border:1px solid rgba(23,37,68,0.08)">
+          <strong style="display:block; margin-bottom:6px;">Transcript excerpt</strong>
+          <p style="margin:0;">Key points are extracted locally, with source-linked references back to the original recording.</p>
+        </div>
+      </div>
+    </div>
+
+    <h2>Icon exports</h2>
+    <div class="icon-wall">
+      <div class="icon-tile"><img src="../icons/web/favicon-32x32.png" alt="favicon" /><p>Favicon 32</p></div>
+      <div class="icon-tile"><img src="../icons/web/apple-touch-icon.png" alt="Apple Touch Icon" /><p>Apple Touch 180</p></div>
+      <div class="icon-tile"><img src="../icons/web/android-chrome-192x192.png" alt="Android Chrome 192" /><p>Web 192</p></div>
+      <div class="icon-tile"><img src="../icons/web/android-chrome-512x512.png" alt="Android Chrome 512" /><p>Web 512</p></div>
+      <div class="icon-tile"><img src="../icons/mobile/ios-app-icon-1024.png" alt="iOS icon" /><p>iOS 1024</p></div>
+      <div class="icon-tile"><img src="../icons/mobile/android-adaptive-icon-512.png" alt="Android adaptive icon" /><p>Android adaptive</p></div>
+      <div class="icon-tile"><img src="../icons/desktop/plaudon-icon-256.png" alt="Desktop icon 256" /><p>Desktop 256</p></div>
+      <div class="icon-tile"><img src="../icons/desktop/plaudon-icon-512.png" alt="Desktop icon 512" /><p>Desktop 512</p></div>
+    </div>
+
+    <div class="footer">
+      Assets included in this kit: SVG masters, PNG exports, favicon set, web manifest, mobile icons, desktop icons, and reusable design token files.<br/>
+      Suggested clear space: at least 0.25× icon height around the symbol. Minimum digital size: 16 px icon or 96 px horizontal lockup.
+    </div>
+  </div>
+</body>
+</html>
