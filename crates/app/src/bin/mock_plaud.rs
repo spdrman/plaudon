@@ -92,6 +92,14 @@ fn emit(response: &Response) -> i32 {
     response.exit_code
 }
 
+/// The page number a `files` invocation asked for, when it used numbered
+/// paging.
+fn page_argument(args: &[String]) -> Option<u32> {
+    args.windows(2)
+        .find(|pair| pair[0] == "-p" || pair[0] == "--page")
+        .and_then(|pair| pair[1].parse().ok())
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let script: Script = std::fs::read_to_string(script_path())
@@ -112,11 +120,13 @@ fn main() {
     }
 
     let code = match args.first().map(String::as_str) {
-        Some("--version") => emit(&script.version),
+        Some("version") => emit(&script.version),
         Some("login") => emit(&script.login),
         Some("logout") => emit(&script.logout),
         Some("files") => {
-            if args.len() > 1 {
+            // Page two is selected either by a cursor argument or by the
+            // numbered paging the real 0.3.x releases use (`-p N -s N`).
+            if page_argument(&args).map_or(args.len() > 1, |page| page >= 2) {
                 emit(&script.files_page_2)
             } else {
                 emit(&script.files)

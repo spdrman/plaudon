@@ -1,0 +1,33 @@
+{
+  "completeness": "complete",
+  "next_cursor": "2",
+  "items": [
+    {
+      "external_id": "of_1a2b3c4d5e6f708192a3b4c5d6e7f801",
+      "display_name": "2026-10-12 09:15:00",
+      "duration_ms": 2467000,
+      "declared_byte_length": null,
+      "captured_at_ms": null,
+      "remote_version": null,
+      "vendor_transcript_available": false
+    },
+    {
+      "external_id": "of_2b3c4d5e6f708192a3b4c5d6e7f80192",
+      "display_name": "Synthetic fixture recording with a…",
+      "duration_ms": 63000,
+      "declared_byte_length": null,
+      "captured_at_ms": null,
+      "remote_version": null,
+      "vendor_transcript_available": false
+    },
+    {
+      "external_id": "of_3c4d5e6f708192a3b4c5d6e7f8019203",
+      "display_name": "2026-10-11 16:40:12",
+      "duration_ms": 4500000,
+      "declared_byte_length": null,
+      "captured_at_ms": null,
+      "remote_version": null,
+      "vendor_transcript_available": false
+    }
+  ]
+}

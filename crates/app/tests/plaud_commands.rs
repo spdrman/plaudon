@@ -210,8 +210,8 @@ struct Harness {
 }
 
 impl Harness {
-    /// A library with a scripted CLI. `version` is the stdout of `--version`,
-    /// or `None` for an installation with no `plaud` at all.
+    /// A library with a scripted CLI. `version` is the stdout of the `version`
+    /// subcommand, or `None` for an installation with no `plaud` at all.
     async fn new(version: Option<&str>) -> Self {
         let cli = tempfile::tempdir().expect("tempdir");
         let library = tempfile::tempdir().expect("tempdir");
@@ -266,6 +266,8 @@ impl Harness {
             sources: Arc::clone(&backend) as Arc<dyn SourcesPort>,
             search: Arc::clone(&backend) as Arc<dyn SearchPort>,
             speakers: Arc::clone(&backend) as Arc<dyn SpeakersPort>,
+            people: Arc::clone(&backend) as Arc<dyn plaudon_app::ports::PeoplePort>,
+            voice_profiles: Arc::clone(&backend) as Arc<dyn plaudon_app::ports::VoiceProfilesPort>,
             cloud: Arc::clone(&backend) as Arc<dyn CloudPort>,
             devices: Arc::new(plaudon_app::backend::devices::DevicesBackend::new(
                 plaudon_app::backend::devices::DevicesDeps::production(
@@ -302,7 +304,7 @@ impl Harness {
             // the worker finds nothing claimable and only the commands under
             // test write to the job table.
             processing: plaudon_app::backend::processing::ProcessingHandle::start(
-                Arc::clone(&backend),
+                &backend,
                 Some(1),
             ),
         };
@@ -448,7 +450,10 @@ async fn cli_missing_is_a_typed_envelope_and_the_panel_offers_the_install_link()
     assert_eq!(probe.status.last_error, Some(AppErrorCode::CliMissing));
     assert_eq!(probe.diagnostics.next_action, PlaudNextAction::InstallCli);
     assert_eq!(probe.diagnostics.compatibility, PlaudCompatibility::Unknown);
-    assert!(!probe.diagnostics.headline.is_empty());
+    assert!(
+        !probe.diagnostics.headline.is_empty(),
+        "expected probe.diagnostics.headline to be non-empty"
+    );
 
     let envelope = harness.connect().await.expect_err("connect fails");
     assert_envelope(
@@ -493,7 +498,7 @@ async fn an_untested_version_blocks_listing_and_keeps_manual_import() {
     assert!(harness
         .invocations()
         .iter()
-        .all(|line| line.starts_with("--version")));
+        .all(|line| line.starts_with("version")));
     harness.assert_no_vendor_text_anywhere(&harness.probe().await);
 }
 
@@ -817,7 +822,11 @@ async fn a_listed_recording_is_downloaded_verified_and_committed_once() {
     )
     .await
     .expect("artifacts");
-    assert!(artifacts.artifacts.is_empty());
+    assert!(
+        artifacts.artifacts.is_empty(),
+        "expected artifacts.artifacts to be empty, got {:?}",
+        artifacts.artifacts
+    );
     let missing = to_command_result(
         sources::list_source_artifacts(
             &harness.ports,
@@ -881,7 +890,11 @@ async fn an_empty_account_is_an_advisory_not_an_error() {
         .list()
         .await
         .expect("an empty listing is not an error");
-    assert!(listing.items.is_empty());
+    assert!(
+        listing.items.is_empty(),
+        "expected listing.items to be empty, got {:?}",
+        listing.items
+    );
     let advisory = listing.empty_account_advisory.expect("advisory");
     assert!(advisory.contains("regional"));
     assert!(advisory
@@ -998,7 +1011,11 @@ async fn a_paged_complete_listing_is_reconciled_and_a_partial_one_is_not() {
     .expect("reconciled");
     assert_eq!(reconciled.source_kind, SyncedSourceKind::PlaudCloud);
     assert_eq!(reconciled.listing_complete, Some(false));
-    assert!(reconciled.decisions.is_empty());
+    assert!(
+        reconciled.decisions.is_empty(),
+        "expected reconciled.decisions to be empty, got {:?}",
+        reconciled.decisions
+    );
 
     // The cloud never syncs unattended.
     let envelope = to_command_result(

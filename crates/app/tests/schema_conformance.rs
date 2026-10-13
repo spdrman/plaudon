@@ -33,14 +33,15 @@ use plaudon_app::dto::{
     RetryJobRequest, RevokeCloudConsentRequest, SaveTranscriptRevisionRequest,
     SaveTranscriptRevisionResponse, SegmentConfidence, SegmentEdit, SetCloudBudgetRequest,
     SetLocalOnlyModeRequest, SetModelPreferenceRequest, SetModelPreferenceResponse,
-    SetNotificationSettingsRequest, SortDirection, SourceKind, StartProcessingRequest,
-    StartProcessingResponse, StatusResponse, StorageCapability, TranscriptAnnotation,
-    TranscriptPage, TranscriptRevisionRef, TranscriptSegmentDto, TranscriptionStatus, TriState,
-    UiEvent, UsageAttempt, UsageByModel, UsageTotals, VerifyModelRequest, VerifyModelResponse,
+    SetNotificationSettingsRequest, SetSegmentSpeakerRequest, SetSegmentSpeakerResponse,
+    SortDirection, SourceKind, StartProcessingRequest, StartProcessingResponse, StatusResponse,
+    StorageCapability, TranscriptAnnotation, TranscriptPage, TranscriptRevisionRef,
+    TranscriptSegmentDto, TranscriptionStatus, TriState, UiEvent, UsageAttempt, UsageByModel,
+    UsageTotals, VerifyModelRequest, VerifyModelResponse,
 };
 use plaudon_domain::capability::CapabilityStatus;
 use plaudon_domain::error::{AppError, AppErrorCode, DiagnosticLog, ErrorEnvelope};
-use plaudon_domain::ids::{JobId, OutputId, RecordingId, TranscriptRevisionId};
+use plaudon_domain::ids::{JobId, OutputId, RecordingId, SpeakerId, TranscriptRevisionId};
 use plaudon_domain::media::Sha256Digest;
 use plaudon_domain::time::Timestamp;
 use plaudon_domain::transcript::AlignmentOrigin;
@@ -380,6 +381,7 @@ fn every_response_dto_matches_its_schema() {
                     value: -0.2,
                 }),
                 speaker_label: Some("Speaker 1".into()),
+                speaker_id: Some(SpeakerId::new().to_string()),
                 annotations: vec![TranscriptAnnotation {
                     kind: AnnotationKind::LowConfidence,
                     reason: "engine reported low confidence".into(),
@@ -390,6 +392,40 @@ fn every_response_dto_matches_its_schema() {
             }],
             next_cursor: None,
             total_segments: 1,
+        }),
+    );
+
+    let recording_id = RecordingId::new();
+    let revision_id = TranscriptRevisionId::new();
+    let speaker_id = SpeakerId::new();
+    validate(
+        "set_segment_speaker.request",
+        &to_value(&SetSegmentSpeakerRequest {
+            recording_id: recording_id.to_string(),
+            transcript_revision_id: revision_id.to_string(),
+            seq_index: 3,
+            speaker_id: Some(speaker_id.to_string()),
+        }),
+    );
+    // Clearing an attribution is a published shape too: `null` is how a
+    // segment says nobody could be told apart.
+    validate(
+        "set_segment_speaker.request",
+        &to_value(&SetSegmentSpeakerRequest {
+            recording_id: recording_id.to_string(),
+            transcript_revision_id: revision_id.to_string(),
+            seq_index: 3,
+            speaker_id: None,
+        }),
+    );
+    validate(
+        "set_segment_speaker.response",
+        &to_value(&SetSegmentSpeakerResponse {
+            recording_id,
+            transcript_revision_id: revision_id,
+            seq_index: 3,
+            speaker_id: Some(speaker_id),
+            speaker_label: Some("Speaker 1".into()),
         }),
     );
 
@@ -826,6 +862,462 @@ fn every_cloud_response_dto_matches_its_schema() {
             items: vec![job],
             next_cursor: None,
             state_counts: BTreeMap::new(),
+        }),
+    );
+}
+
+/* -------------------------- voice profiles and the roster (P1.5, §8, §9A) */
+
+fn person_dto() -> plaudon_app::dto::PersonDto {
+    plaudon_app::dto::PersonDto {
+        person_id: plaudon_domain::ids::PersonId::new(),
+        display_name: "Priya Raman".into(),
+        aliases: vec!["Priya".into()],
+        email: Some("priya@example.test".into()),
+        organisation: None,
+        status: "active".into(),
+        created_at: Timestamp::EPOCH,
+        updated_at: Timestamp::EPOCH,
+        recordings: 14,
+        pending_suggestions: 1,
+        voice: Some(plaudon_app::dto::PersonVoiceDto {
+            status: "active".into(),
+            exemplars: 2,
+            source_recordings: 2,
+            total_speech_ms: 24_000,
+            retention_months: 12,
+            consent_version: "voice-matching-v1".into(),
+            enrolled_at: Timestamp::EPOCH,
+            last_matched_at: None,
+            expires_at: Some(Timestamp::EPOCH),
+        }),
+    }
+}
+
+fn speaker_dto() -> plaudon_app::dto::SpeakerDto {
+    plaudon_app::dto::SpeakerDto {
+        speaker_id: SpeakerId::new(),
+        recording_id: RecordingId::new(),
+        cluster_key: Some("S1".into()),
+        person_id: Some(plaudon_domain::ids::PersonId::new()),
+        label: "Priya Raman".into(),
+        name: Some("Priya Raman".into()),
+        confirmed: true,
+        original_label: "Speaker 1".into(),
+        renamed_at: None,
+        confirmed_at: Some(Timestamp::EPOCH),
+    }
+}
+
+#[test]
+fn the_roster_commands_match_their_schemas() {
+    use plaudon_app::dto::{
+        AssignClusterPersonRequest, AssignClusterPersonResponse, CreatePersonRequest,
+        DeletePersonRequest, DeletePersonResponse, ListPeopleRequest, ListPeopleResponse,
+        MergeCandidateGroupDto, MergePeopleRequest, MergePeopleResponse, PersonRefDto,
+        PersonResponse, UpdatePersonRequest,
+    };
+
+    let person = person_dto();
+    let reference = PersonRefDto {
+        person_id: person.person_id,
+        display_name: person.display_name.clone(),
+    };
+    validate(
+        "list_people.request",
+        &to_value(&ListPeopleRequest {
+            query: Some("pri".into()),
+        }),
+    );
+    validate(
+        "list_people.response",
+        &to_value(&ListPeopleResponse {
+            people: vec![person.clone()],
+            merge_candidates: vec![MergeCandidateGroupDto {
+                normalised_name: "priya raman".into(),
+                people: vec![reference.clone(), reference.clone()],
+            }],
+        }),
+    );
+    validate(
+        "create_person.request",
+        &to_value(&CreatePersonRequest {
+            display_name: "Priya".into(),
+            aliases: Vec::new(),
+            email: None,
+            organisation: None,
+        }),
+    );
+    validate(
+        "create_person.response",
+        &to_value(&PersonResponse {
+            person: person.clone(),
+        }),
+    );
+    validate(
+        "update_person.request",
+        &to_value(&UpdatePersonRequest {
+            person_id: person.person_id.to_string(),
+            display_name: "Priya Raman".into(),
+            aliases: vec!["Priya".into()],
+            email: None,
+            organisation: Some("Acme".into()),
+        }),
+    );
+    validate(
+        "update_person.response",
+        &to_value(&PersonResponse {
+            person: person.clone(),
+        }),
+    );
+    validate(
+        "merge_people.request",
+        &to_value(&MergePeopleRequest {
+            loser_person_id: plaudon_domain::ids::PersonId::new().to_string(),
+            survivor_person_id: person.person_id.to_string(),
+            apply: false,
+        }),
+    );
+    validate(
+        "merge_people.response",
+        &to_value(&MergePeopleResponse {
+            applied: true,
+            speaker_links: 3,
+            recordings: 2,
+            exemplars: 1,
+            pending_suggestions: 0,
+            enrollment_moved: true,
+            survivor: Some(person.clone()),
+        }),
+    );
+    validate(
+        "delete_person.request",
+        &to_value(&DeletePersonRequest {
+            person_id: person.person_id.to_string(),
+            apply: true,
+        }),
+    );
+    validate(
+        "delete_person.response",
+        &to_value(&DeletePersonResponse {
+            applied: true,
+            severed_speaker_links: 3,
+            recordings: 2,
+            exemplars: 1,
+            suggestions: 4,
+        }),
+    );
+    validate(
+        "assign_cluster_person.request",
+        &to_value(&AssignClusterPersonRequest {
+            recording_id: RecordingId::new().to_string(),
+            speaker_id: SpeakerId::new().to_string(),
+            person_id: Some(person.person_id.to_string()),
+            overwrite_segment_exceptions: true,
+        }),
+    );
+    validate(
+        "assign_cluster_person.response",
+        &to_value(&AssignClusterPersonResponse {
+            applied: true,
+            speaker: speaker_dto(),
+            person: Some(reference),
+            assigned_segments: vec![0, 1, 4],
+            segment_exceptions: 3,
+        }),
+    );
+}
+
+#[test]
+fn the_voice_profile_commands_match_their_schemas() {
+    use plaudon_app::dto::{
+        ActivationDisclosureDto, AddVoiceExemplarRequest, ClusterSpeechDto,
+        ConfirmSpeakerSuggestionRequest, ConsentGateDto, DeleteVoiceEnrollmentRequest,
+        DeleteVoiceEnrollmentResponse, EmptyRequest, EnrollPersonVoiceRequest, EnrolmentConsentDto,
+        ForgetAllVoiceProfilesRequest, ForgetAllVoiceProfilesResponse, GetClusterSpeechRequest,
+        ListSpeakerSuggestionsRequest, ListSpeakerSuggestionsResponse, ListVoiceExemplarsRequest,
+        ListVoiceExemplarsResponse, PersonRefDto, RejectSpeakerSuggestionRequest,
+        SetVoiceProfilesEnabledRequest, SpeakerMatchJobDto, SpeakerMatchRefusalDto,
+        SpeakerSuggestionDecisionDto, SpeakerSuggestionDto, SplitVoiceEnrollmentRequest,
+        SplitVoiceEnrollmentResponse, StartSpeakerMatchingRequest, StartSpeakerMatchingResponse,
+        VoiceEnrollmentDto, VoiceExemplarDto, VoiceProfileSettingsDto,
+    };
+
+    let person = person_dto();
+    let reference = PersonRefDto {
+        person_id: person.person_id,
+        display_name: person.display_name.clone(),
+    };
+    let settings = VoiceProfileSettingsDto {
+        enabled: true,
+        consent: ConsentGateDto {
+            state: "active".into(),
+            reason: None,
+            accepted_version: Some("voice-matching-v1".into()),
+            accepted_at: Some(Timestamp::EPOCH),
+            required_version: "voice-matching-v1".into(),
+        },
+        disclosure: ActivationDisclosureDto {
+            version: "voice-matching-v1".into(),
+            title: "Turn on voice matching?".into(),
+            body: vec!["A voiceprint is biometric data.".into()],
+            two_tier_sentence: "Keeping a list of names needs no special consent.".into(),
+            responsibility_sentence: "People you enrol must agree first.".into(),
+            retention_default_months: 12,
+        },
+        enrolled_people: 2,
+        exemplars: 5,
+        pending_suggestions: 3,
+        roster_people: 9,
+        key_available: true,
+        embedder_available: false,
+        enrol_speech_ms: 10_000,
+        exemplar_speech_ms: 3_000,
+    };
+    let enrolment = VoiceEnrollmentDto {
+        person_id: person.person_id,
+        exemplar_id: plaudon_domain::ids::VoiceExemplarId::new(),
+        exemplars: 2,
+        speech_ms: 12_000,
+        total_speech_ms: 24_000,
+        source_recordings: 2,
+        model_id: "scripted-deterministic".into(),
+        model_version: "1.0".into(),
+        retention_months: 12,
+        expires_at: Some(Timestamp::EPOCH),
+    };
+    let consent = EnrolmentConsentDto {
+        disclosure_version: "voice-matching-v1".into(),
+        person_attested: true,
+        retention_months: Some(6),
+        consent_note: Some("signed release".into()),
+    };
+    let decision = SpeakerSuggestionDecisionDto {
+        suggestion_id: plaudon_domain::ids::SpeakerSuggestionId::new(),
+        state: "confirmed".into(),
+        applied: true,
+        speaker: Some(speaker_dto()),
+        person: Some(reference.clone()),
+        assigned_segments: vec![2, 3],
+        segment_exceptions: 0,
+    };
+
+    validate(
+        "get_voice_profile_settings.request",
+        &to_value(&EmptyRequest {}),
+    );
+    validate("get_voice_profile_settings.response", &to_value(&settings));
+    validate(
+        "set_voice_profiles_enabled.request",
+        &to_value(&SetVoiceProfilesEnabledRequest {
+            enabled: true,
+            accept_disclosure_version: Some("voice-matching-v1".into()),
+        }),
+    );
+    validate("set_voice_profiles_enabled.response", &to_value(&settings));
+    validate(
+        "enroll_person_voice.request",
+        &to_value(&EnrollPersonVoiceRequest {
+            person_id: person.person_id.to_string(),
+            recording_id: RecordingId::new().to_string(),
+            cluster_key: "S1".into(),
+            consent: consent.clone(),
+        }),
+    );
+    validate("enroll_person_voice.response", &to_value(&enrolment));
+    validate(
+        "add_voice_exemplar.request",
+        &to_value(&AddVoiceExemplarRequest {
+            person_id: person.person_id.to_string(),
+            recording_id: RecordingId::new().to_string(),
+            cluster_key: "S2".into(),
+        }),
+    );
+    validate("add_voice_exemplar.response", &to_value(&enrolment));
+    validate(
+        "split_voice_enrollment.request",
+        &to_value(&SplitVoiceEnrollmentRequest {
+            person_id: person.person_id.to_string(),
+            exemplar_ids: vec![plaudon_domain::ids::VoiceExemplarId::new().to_string()],
+            target_person_id: None,
+            new_person_display_name: Some("Sam".into()),
+            consent,
+        }),
+    );
+    validate(
+        "split_voice_enrollment.response",
+        &to_value(&SplitVoiceEnrollmentResponse {
+            source_person_id: person.person_id,
+            target_person_id: plaudon_domain::ids::PersonId::new(),
+            exemplars_moved: 1,
+            exemplars_remaining: 1,
+            target: person.clone(),
+        }),
+    );
+    validate(
+        "list_voice_exemplars.request",
+        &to_value(&ListVoiceExemplarsRequest {
+            person_id: person.person_id.to_string(),
+        }),
+    );
+    let exemplars = ListVoiceExemplarsResponse {
+        person_id: person.person_id,
+        exemplars: vec![
+            VoiceExemplarDto {
+                exemplar_id: plaudon_domain::ids::VoiceExemplarId::new(),
+                recording_id: Some(RecordingId::new()),
+                recording_title: Some("Monday stand-up".into()),
+                cluster_key: Some("S1".into()),
+                source_start_ms: Some(12_000),
+                source_end_ms: Some(96_000),
+                speech_ms: 24_000,
+                model_id: "ecapa".into(),
+                model_version: "1".into(),
+                created_at: Timestamp::from_millis(1_770_000_000_000),
+            },
+            // A deleted recording nulls the provenance and keeps the
+            // exemplar (VP-080), so the schema has to accept that shape too.
+            VoiceExemplarDto {
+                exemplar_id: plaudon_domain::ids::VoiceExemplarId::new(),
+                recording_id: None,
+                recording_title: None,
+                cluster_key: None,
+                source_start_ms: None,
+                source_end_ms: None,
+                speech_ms: 18_000,
+                model_id: "ecapa".into(),
+                model_version: "1".into(),
+                created_at: Timestamp::from_millis(1_770_000_000_000),
+            },
+        ],
+        total_speech_ms: 42_000,
+        source_recordings: 1,
+    };
+    assert!(
+        !to_value(&exemplars).to_string().contains("embedding"),
+        "an exemplar listing must never carry a vector (VP-085)"
+    );
+    validate("list_voice_exemplars.response", &to_value(&exemplars));
+    validate(
+        "get_cluster_speech.request",
+        &to_value(&GetClusterSpeechRequest {
+            recording_id: RecordingId::new().to_string(),
+            cluster_key: "S1".into(),
+        }),
+    );
+    validate(
+        "get_cluster_speech.response",
+        &to_value(&ClusterSpeechDto {
+            recording_id: RecordingId::new(),
+            cluster_key: "S1".into(),
+            clean_speech_ms: 12_000,
+            spans: 3,
+            first_span_start_ms: Some(12_000),
+            last_span_end_ms: Some(96_000),
+            enrol_speech_ms: 10_000,
+            exemplar_speech_ms: 3_000,
+            meets_enrol_minimum: true,
+            meets_exemplar_minimum: true,
+        }),
+    );
+    validate(
+        "delete_voice_enrollment.request",
+        &to_value(&DeleteVoiceEnrollmentRequest {
+            person_id: person.person_id.to_string(),
+            apply: true,
+            reason: Some("withdrew consent".into()),
+        }),
+    );
+    validate(
+        "delete_voice_enrollment.response",
+        &to_value(&DeleteVoiceEnrollmentResponse {
+            applied: true,
+            exemplars: 2,
+            suggestions: 1,
+            person_kept: true,
+            person: person.clone(),
+        }),
+    );
+    validate(
+        "forget_all_voice_profiles.request",
+        &to_value(&ForgetAllVoiceProfilesRequest { apply: false }),
+    );
+    validate(
+        "forget_all_voice_profiles.response",
+        &to_value(&ForgetAllVoiceProfilesResponse {
+            applied: false,
+            enrollments: 2,
+            exemplars: 5,
+            suggestions: 3,
+            people_kept: 9,
+            key_present: true,
+            key_destroyed: false,
+            feature_disabled: false,
+            limits: vec!["Names are not voiceprints.".into()],
+        }),
+    );
+    validate(
+        "list_speaker_suggestions.request",
+        &to_value(&ListSpeakerSuggestionsRequest {
+            recording_id: None,
+            limit: Some(50),
+        }),
+    );
+    validate(
+        "list_speaker_suggestions.response",
+        &to_value(&ListSpeakerSuggestionsResponse {
+            suggestions: vec![SpeakerSuggestionDto {
+                suggestion_id: plaudon_domain::ids::SpeakerSuggestionId::new(),
+                recording_id: RecordingId::new(),
+                recording_title: Some("Stand-up".into()),
+                diarization_run_id: uuid::Uuid::now_v7().to_string(),
+                cluster_key: "S1".into(),
+                speaker_id: Some(SpeakerId::new()),
+                speaker_label: Some("Speaker 1".into()),
+                person: reference,
+                score: 0.82,
+                score_kind: "cosine_similarity_asnorm".into(),
+                band: "suggest".into(),
+                state: "pending".into(),
+                created_at: Timestamp::EPOCH,
+            }],
+            pending_count: 1,
+        }),
+    );
+    validate(
+        "confirm_speaker_suggestion.request",
+        &to_value(&ConfirmSpeakerSuggestionRequest {
+            suggestion_id: plaudon_domain::ids::SpeakerSuggestionId::new().to_string(),
+            overwrite_segment_exceptions: false,
+        }),
+    );
+    validate("confirm_speaker_suggestion.response", &to_value(&decision));
+    validate(
+        "reject_speaker_suggestion.request",
+        &to_value(&RejectSpeakerSuggestionRequest {
+            suggestion_id: plaudon_domain::ids::SpeakerSuggestionId::new().to_string(),
+            corrected_person_id: Some(person.person_id.to_string()),
+            overwrite_segment_exceptions: false,
+        }),
+    );
+    validate("reject_speaker_suggestion.response", &to_value(&decision));
+    validate(
+        "start_speaker_matching.request",
+        &to_value(&StartSpeakerMatchingRequest {
+            recording_ids: vec![RecordingId::new().to_string()],
+        }),
+    );
+    validate(
+        "start_speaker_matching.response",
+        &to_value(&StartSpeakerMatchingResponse {
+            jobs: vec![SpeakerMatchJobDto {
+                recording_id: RecordingId::new(),
+                job_id: JobId::new(),
+            }],
+            refusals: vec![SpeakerMatchRefusalDto {
+                recording_id: RecordingId::new(),
+                reason: "This recording has no transcript yet.".into(),
+            }],
         }),
     );
 }

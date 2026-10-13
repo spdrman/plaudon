@@ -9,16 +9,20 @@
 //! tables; those hold credential handles, routing snapshots and transient
 //! state that spec 13.6 excludes.
 
+use base64::engine::general_purpose::STANDARD as BASE64;
+use base64::Engine as _;
+use plaudon_persistence::voice_profiles::MAX_RETENTION_MONTHS;
 use plaudon_persistence::{Database, PersistenceError};
 use sqlx::Row;
 
 use super::documents::{
     AnnotationDocument, ClaimRow, EvidenceRow, MediaAssetRow, MediaRevisionRow, OutputDocument,
-    OutputRow, RecordDocument, RecordingMediaRow, RecordingRow, SegmentRow, SourceDocument,
-    SourceItemRow, SpeakerRow, ToolDocument, TranscriptAnnotationRow, TranscriptDocument,
-    TranscriptRow, WordRow, ANNOTATION_SCHEMA, OUTPUT_SCHEMA, RECORD_SCHEMA, SOURCE_SCHEMA,
-    TOOL_SCHEMA, TRANSCRIPT_SCHEMA,
+    OutputRow, PersonDocument, RecordDocument, RecordingMediaRow, RecordingRow, SegmentRow,
+    SourceDocument, SourceItemRow, SpeakerRow, ToolDocument, TranscriptAnnotationRow,
+    TranscriptDocument, TranscriptRow, WordRow, ANNOTATION_SCHEMA, OUTPUT_SCHEMA, PERSON_SCHEMA,
+    RECORD_SCHEMA, SOURCE_SCHEMA, TOOL_SCHEMA, TRANSCRIPT_SCHEMA,
 };
+use super::voiceprofiles::{EnrollmentRow, ExemplarRow, VoiceProfileDocument, VOICEPROFILE_SCHEMA};
 use crate::error::{ExportError, ExportResult};
 
 /// Reads archive documents from a library database.
@@ -192,7 +196,7 @@ impl LibrarySnapshot {
                 .collect();
 
         let speakers = sqlx::query(
-            "SELECT id, label, name, provenance, user_confirmed
+            "SELECT id, label, name, provenance, user_confirmed, person_id
              FROM speakers WHERE recording_id = ?1 ORDER BY label, id",
         )
         .bind(recording_id)
@@ -206,6 +210,7 @@ impl LibrarySnapshot {
             name: row.get("name"),
             provenance: row.get("provenance"),
             user_confirmed: row.get::<i64, _>("user_confirmed") == 1,
+            person_id: row.get("person_id"),
         })
         .collect();
 
@@ -491,6 +496,121 @@ impl LibrarySnapshot {
                 output_schema_version: row.get("output_schema_version"),
             })
             .collect())
+    }
+
+    /// The people roster: names, aliases and plain contacts (VP-077).
+    ///
+    /// Ordinary library data, carried by every portable backup. Nothing here is
+    /// derived from anybody's voice — the enrolment that may hang off the same
+    /// person is [`Self::voice_profile_documents`], a separate namespace with a
+    /// separate rule.
+    pub async fn people_documents(&self) -> ExportResult<Vec<PersonDocument>> {
+        if !self.table_exists("people").await? {
+            return Ok(Vec::new());
+        }
+        let rows = sqlx::query(
+            "SELECT id, display_name, aliases_json, email, organisation, status, created_at,
+                    updated_at
+             FROM people ORDER BY created_at, id",
+        )
+        .fetch_all(self.db.pool())
+        .await
+        .map_err(PersistenceError::from)?;
+        rows.iter()
+            .map(|row| {
+                let aliases_json: String = row.get("aliases_json");
+                let aliases: Vec<String> =
+                    serde_json::from_str(&aliases_json).map_err(ExportError::Serialization)?;
+                Ok(PersonDocument {
+                    schema_version: PERSON_SCHEMA.to_owned(),
+                    id: row.get("id"),
+                    display_name: row.get("display_name"),
+                    aliases,
+                    email: row.get("email"),
+                    organisation: row.get("organisation"),
+                    status: row.get("status"),
+                    created_at: row.get("created_at"),
+                    updated_at: row.get("updated_at"),
+                })
+            })
+            .collect()
+    }
+
+    /// Enrolments and their sealed exemplars, one document per person (VP-078).
+    ///
+    /// Reading this is not the same as exporting it: the caller still needs a
+    /// [`VoiceProfilePermit`](super::voiceprofiles::VoiceProfilePermit), which
+    /// only an encrypted archive can produce. The query exists here, beside the
+    /// other document queries, because the column allowlist discipline is the
+    /// same — `speaker_suggestions` is absent on purpose (a pending decision
+    /// about a diarization run, and runs are not archived).
+    pub async fn voice_profile_documents(&self) -> ExportResult<Vec<VoiceProfileDocument>> {
+        if !self.table_exists("person_voice_enrollments").await? {
+            return Ok(Vec::new());
+        }
+        let enrollments = sqlx::query(
+            "SELECT person_id, consent_version, consent_note, retention_months, last_matched_at,
+                    status, expired_at, created_at
+             FROM person_voice_enrollments ORDER BY created_at, person_id",
+        )
+        .fetch_all(self.db.pool())
+        .await
+        .map_err(PersistenceError::from)?;
+
+        let mut documents = Vec::with_capacity(enrollments.len());
+        for row in &enrollments {
+            let person_id: String = row.get("person_id");
+            let retention: i64 = row.get("retention_months");
+            let exemplar_rows = sqlx::query(
+                "SELECT id, recording_id, cluster_key, source_start_ms, source_end_ms, speech_ms,
+                        model_id, model_version, model_sha256, embedding_dim, embedding_cipher,
+                        embedding_nonce, created_at
+                 FROM voice_exemplars WHERE person_id = ?1 ORDER BY created_at, id",
+            )
+            .bind(&person_id)
+            .fetch_all(self.db.pool())
+            .await
+            .map_err(PersistenceError::from)?;
+
+            let exemplars = exemplar_rows
+                .iter()
+                .map(|row| ExemplarRow {
+                    id: row.get("id"),
+                    recording_id: row.get("recording_id"),
+                    cluster_key: row.get("cluster_key"),
+                    source_start_ms: row
+                        .get::<Option<i64>, _>("source_start_ms")
+                        .and_then(|value| u64::try_from(value).ok()),
+                    source_end_ms: row
+                        .get::<Option<i64>, _>("source_end_ms")
+                        .and_then(|value| u64::try_from(value).ok()),
+                    speech_ms: u64::try_from(row.get::<i64, _>("speech_ms")).unwrap_or(0),
+                    model_id: row.get("model_id"),
+                    model_version: row.get("model_version"),
+                    model_sha256: row.get("model_sha256"),
+                    embedding_dim: u32::try_from(row.get::<i64, _>("embedding_dim")).unwrap_or(0),
+                    embedding_cipher_b64: BASE64.encode(row.get::<Vec<u8>, _>("embedding_cipher")),
+                    embedding_nonce_b64: BASE64.encode(row.get::<Vec<u8>, _>("embedding_nonce")),
+                    created_at: row.get("created_at"),
+                })
+                .collect();
+
+            documents.push(VoiceProfileDocument {
+                schema_version: VOICEPROFILE_SCHEMA.to_owned(),
+                person_id,
+                enrollment: EnrollmentRow {
+                    consent_version: row.get("consent_version"),
+                    consent_note: row.get("consent_note"),
+                    retention_months: u8::try_from(retention).unwrap_or(MAX_RETENTION_MONTHS),
+                    last_matched_at: row.get("last_matched_at"),
+                    status: row.get("status"),
+                    expired_at: row.get("expired_at"),
+                    created_at: row.get("created_at"),
+                },
+                exemplars,
+            });
+        }
+        Ok(documents)
     }
 
     /// Archive-relative library path of a media asset.

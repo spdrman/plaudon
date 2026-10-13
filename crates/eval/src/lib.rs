@@ -26,6 +26,7 @@ pub mod hypothesis;
 pub mod metrics;
 pub mod report;
 pub mod runner;
+pub mod speaker;
 
 pub use corpus::{ClearanceRejection, ConsentStatus, CorpusError, CorpusManifest, ItemRejection};
 pub use gate::{evaluate_claim, Claim, GateDecision, GateError, GateRequest, GoldenCorpus};
@@ -34,6 +35,10 @@ pub use hypothesis::{
 };
 pub use report::{EvaluationReport, FrozenThresholds, REPORT_SCHEMA_VERSION};
 pub use runner::{run, CloudPolicy, RunContext, RunError};
+pub use speaker::{
+    evaluate, DetCurve, HarnessPlan, ScriptedEmbeddings, SpeakerMatchReport,
+    SPEAKER_MATCH_REPORT_SCHEMA_VERSION,
+};
 
 /// Cargo package name of this crate, used by the workspace layout conformance test.
 pub const PACKAGE_NAME: &str = "plaudon-eval";

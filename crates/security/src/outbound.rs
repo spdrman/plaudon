@@ -191,15 +191,27 @@ pub enum PayloadClass {
     AudioBytes,
     /// A credential being validated against the provider.
     Credential,
+    /// A speaker embedding, or anything derived closely enough from one to
+    /// carry the same biometric identity (VOICE_PROFILES_SPEC VP-110,
+    /// ADR-0080).
+    ///
+    /// This class is **unconsentable by construction**: it has no
+    /// [`ContentType`](crate::consent::ContentType), so no consent grant can
+    /// name it, and [`OutboundPolicy::decide`] refuses it before it looks at
+    /// the network mode, the grant, the subsystem or the destination. There is
+    /// no setting, scope or future grant that turns the refusal off; removing
+    /// it would take a code change to this module, which is the point.
+    VoiceBiometric,
 }
 
 impl PayloadClass {
-    pub const ALL: [PayloadClass; 5] = [
+    pub const ALL: [PayloadClass; 6] = [
         PayloadClass::None,
         PayloadClass::Metadata,
         PayloadClass::TranscriptText,
         PayloadClass::AudioBytes,
         PayloadClass::Credential,
+        PayloadClass::VoiceBiometric,
     ];
 
     #[must_use]
@@ -210,6 +222,7 @@ impl PayloadClass {
             PayloadClass::TranscriptText => "transcript_text",
             PayloadClass::AudioBytes => "audio_bytes",
             PayloadClass::Credential => "credential",
+            PayloadClass::VoiceBiometric => "voice_biometric",
         }
     }
 
@@ -218,8 +231,19 @@ impl PayloadClass {
     pub const fn is_user_content(self) -> bool {
         matches!(
             self,
-            PayloadClass::TranscriptText | PayloadClass::AudioBytes
+            PayloadClass::TranscriptText | PayloadClass::AudioBytes | PayloadClass::VoiceBiometric
         )
+    }
+
+    /// True when no mode, grant or consent scope may ever let this payload
+    /// leave the machine (VP-110).
+    ///
+    /// The refusal is structural rather than configured: it is checked first in
+    /// [`OutboundPolicy::decide`], so an allow cannot be reached by any
+    /// combination of mode, grant, subsystem, purpose or destination.
+    #[must_use]
+    pub const fn never_egressable(self) -> bool {
+        matches!(self, PayloadClass::VoiceBiometric)
     }
 }
 
@@ -444,6 +468,13 @@ pub enum DenyReason {
     /// The subsystem/purpose combination is nonsensical and is refused rather
     /// than guessed.
     PurposeNotValidForSubsystem,
+    /// The body would carry biometric voice data, which this application never
+    /// transmits (VOICE_PROFILES_SPEC VP-110, ADR-0080).
+    ///
+    /// Unlike every other reason here, this one does not depend on the network
+    /// mode, the grant or the destination: there is no configuration under
+    /// which the same request would be allowed.
+    VoiceBiometricNeverEgresses,
 }
 
 impl DenyReason {
@@ -460,6 +491,7 @@ impl DenyReason {
             DenyReason::ModelDownloadNotApproved => "model_download_not_approved",
             DenyReason::TelemetryNotOptedIn => "telemetry_not_opted_in",
             DenyReason::PurposeNotValidForSubsystem => "purpose_not_valid_for_subsystem",
+            DenyReason::VoiceBiometricNeverEgresses => "voice_biometric_never_egresses",
         }
     }
 
@@ -494,6 +526,10 @@ impl DenyReason {
             }
             DenyReason::PurposeNotValidForSubsystem => {
                 "The request did not match an operation this part of the app may perform."
+            }
+            DenyReason::VoiceBiometricNeverEgresses => {
+                "Voice recognition data stays on this computer. The app refused to send it, \
+                 and there is no setting that allows it."
             }
         }
     }
@@ -694,6 +730,18 @@ pub struct EffectiveNetworkPolicy {
     /// Explicit statement of what this boundary does **not** guarantee
     /// (§16.2A: no unverifiable promises about unrelated processes).
     pub not_guaranteed: Vec<String>,
+    /// Payload classes this build refuses in **every** mode, with the sentence
+    /// the UI shows. Unlike [`Self::disabled_capabilities`], these entries do
+    /// not change when the user permits the network (VP-110).
+    pub always_refused: Vec<AlwaysRefusedPayload>,
+}
+
+/// A payload class that no mode, grant or consent scope can release.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct AlwaysRefusedPayload {
+    pub payload: PayloadClass,
+    pub reason: DenyReason,
+    pub explanation: String,
 }
 
 /// A capability the UI must show as unavailable, with an honest reason.
@@ -713,6 +761,13 @@ pub const NOT_GUARANTEED: [&str; 5] = [
     "Legacy PLAUD BLE sessions may be unencrypted on the radio link; disabling internet access does not add radio-layer confidentiality.",
     "In-process memory cannot be perfectly protected from privileged malware on the same machine.",
 ];
+
+/// Payload classes refused in every mode, in the order the UI lists them.
+///
+/// Kept beside [`NOT_GUARANTEED`] because the two together are the honest
+/// description of the boundary: what it cannot promise, and the one thing it
+/// promises unconditionally.
+pub const ALWAYS_REFUSED: [PayloadClass; 1] = [PayloadClass::VoiceBiometric];
 
 /// The single egress gate.
 #[derive(Debug)]
@@ -808,7 +863,17 @@ impl OutboundPolicy {
     /// Pure decision function, no logging. Kept separate so the decision table
     /// can be exhaustively tested.
     fn decide(&self, request: &EgressRequest) -> Result<(), DenyReason> {
-        // 1. Local-only Mode refuses unconditionally. This check is first so no
+        // 0. A payload class that may never leave the machine is refused before
+        //    anything else is considered — mode, grant, subsystem, purpose and
+        //    destination are all irrelevant to it (VP-110, ADR-0080). Being
+        //    first also means the refusal always reports its own reason:
+        //    `LocalOnlyMode` would be the wrong answer, because it implies
+        //    that turning Local-only Mode off would permit the request.
+        if request.payload.never_egressable() {
+            return Err(DenyReason::VoiceBiometricNeverEgresses);
+        }
+
+        // 1. Local-only Mode refuses unconditionally. This check is next so no
         //    later rule can accidentally permit traffic (§1.2(15), §6.3(15)).
         if self.mode.is_local_only() {
             return Err(DenyReason::LocalOnlyMode);
@@ -938,6 +1003,34 @@ impl OutboundPolicy {
             ))
             .is_ok();
 
+        // Probed through the same decision function rather than asserted from a
+        // table, so this snapshot cannot drift from what the gate actually does.
+        let always_refused = ALWAYS_REFUSED
+            .into_iter()
+            .map(|payload| {
+                let reason = self
+                    .decide(&EgressRequest::new(
+                        Subsystem::OpenRouter,
+                        Destination::Network {
+                            scheme: "https".to_owned(),
+                            host: representative_host(Subsystem::OpenRouter).to_owned(),
+                            port: 443,
+                        },
+                        EgressPurpose::InferenceDispatch,
+                        payload,
+                    ))
+                    .err()
+                    .unwrap_or_else(|| {
+                        unreachable!("{} is listed as always refused", payload.label())
+                    });
+                AlwaysRefusedPayload {
+                    payload,
+                    reason,
+                    explanation: reason.explanation().to_owned(),
+                }
+            })
+            .collect();
+
         EffectiveNetworkPolicy {
             mode: self.mode,
             disabled_capabilities: disabled,
@@ -947,6 +1040,7 @@ impl OutboundPolicy {
             },
             cloud_cli_launchable,
             not_guaranteed: NOT_GUARANTEED.iter().map(|s| (*s).to_owned()).collect(),
+            always_refused,
         }
     }
 }

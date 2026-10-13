@@ -58,6 +58,9 @@ const ATTACK_CLASSES: &[&str] = &[
 ];
 
 #[derive(Debug, Deserialize)]
+// Mirrors the boolean fields of the injection fixture JSON one for one;
+// collapsing them into enums would stop it deserializing.
+#[allow(clippy::struct_excessive_bools)]
 struct Expectation {
     directive_detected: bool,
     #[allow(dead_code)]

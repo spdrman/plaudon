@@ -1,6 +1,6 @@
 Plaudon
-Copyright (c) 2026 the Plaudon authors.
-Licensed under the Apache License, Version 2.0 (LICENSE).
+Copyright (c) 2026 Roman Goldmann.
+Licensed under the MIT License (LICENSE).
 
 Third-party material bundled in this repository
 ===============================================
@@ -38,7 +38,7 @@ revision 7b6c134472287db4367fca80bcb498240ba36567) and EffectCraft
 (`crates/ui-egui/src/dock.rs`, revision
 2a460986ee7a4b32656a3d434849693904b486bc), both
 Copyright (c) 2026 ArtCraft Team and their respective contributors, both
-licensed MIT OR Apache-2.0. That attribution is carried here as Apache-2.0 §4(d)
+licensed MIT OR Apache-2.0. That attribution is carried here as upstream
 requires; the full upstream NOTICE is at third_party/craft-ui/NOTICE.
 
 ---------------------------------------------------------------------------

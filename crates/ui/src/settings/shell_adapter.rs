@@ -63,6 +63,7 @@ const fn route_for(destination: SettingsDestination) -> Route {
         SettingsDestination::Sources => Route::SettingsSources,
         SettingsDestination::Activity => Route::SettingsActivity,
         SettingsDestination::Jobs => Route::Jobs,
+        SettingsDestination::People => Route::People,
     }
 }
 
@@ -182,14 +183,20 @@ impl SettingsShellScreen {
         }
     }
 
+    /// Read everything the settings screen renders.
+    ///
+    /// This is the screen's whole first-frame load, so it latches `loaded`:
+    /// the subscription resynchronisation the shell fans out before the first
+    /// frame asks for exactly these reads, and sending them again from
+    /// [`Screen::ui`] would answer one startup twice over.
     fn load(&mut self, cx: &mut ScreenCtx<'_>) {
+        self.loaded = true;
         for command in SettingsScreen::initial_commands() {
             cx.send(command);
         }
         if self.screen.data().shortcut_specs.is_empty() {
             self.screen.data_mut().shortcut_specs = shortcut_specs(&builtin_commands());
         }
-        self.loaded = true;
     }
 }
 
@@ -224,9 +231,7 @@ impl Screen for SettingsShellScreen {
     }
 
     fn on_resync(&mut self, _reason: ResyncReason, cx: &mut ScreenCtx<'_>) {
-        for command in SettingsScreen::initial_commands() {
-            cx.send(command);
-        }
+        self.load(cx);
     }
 
     fn on_open_archive(&mut self, path: &str, _cx: &mut ScreenCtx<'_>) -> bool {
@@ -324,6 +329,7 @@ mod tests {
             Route::SettingsActivity
         );
         assert_eq!(route_for(SettingsDestination::Jobs), Route::Jobs);
+        assert_eq!(route_for(SettingsDestination::People), Route::People);
     }
 
     #[test]

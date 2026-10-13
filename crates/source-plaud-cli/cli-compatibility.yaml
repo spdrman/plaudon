@@ -18,20 +18,58 @@
 #     under `tests/integration/fixtures/plaud-cli/<fixture_id>/` whose
 #     `files.stdout` hashes to `fixture_sha256`. The golden test fails if the
 #     fixture, the hash or the parser drift apart.
-#   * `pagination: observed` requires a cursor flag and a page size that were
-#     seen in a real session. Spec 7.2: pagination behaviour is never guessed.
+#   * `pagination` is recorded only as seen in a real session. Spec 7.2:
+#     pagination behaviour is never guessed. The flags a row names must also
+#     exist in this build's static vocabulary (`SUPPORTED_PAGE_FLAGS`,
+#     `SUPPORTED_PAGE_SIZE_FLAGS`, `SUPPORTED_CURSOR_FLAGS`), so a row cannot
+#     introduce a new command-line flag without a code change and a test.
 #   * `vendor_artifacts` and `logout_command` default to `unknown`; `yes`
 #     requires an officially documented, exercised command (spec 7.5, 4.2.7).
 #   * `evidence_level: observed_on_identified_release` requires `verified_on`
 #     and a non-empty `host_os` list.
-#
-# As of 2026-10-11 the list is empty. No release of the official CLI has been
-# installed against this build: the npm package listing declares no license, so
-# we neither bundle nor redistribute it, and spec 2.1 forbids assuming its
-# output contract. That is a recorded finding, not an omission — see
-# docs/adr/ADR-0050-plaud-cli-compatibility-table.md for how to add a row.
 
 schema_version: 1
-updated_at: "2026-10-11"
+updated_at: "2026-10-12"
 
-versions: []
+versions:
+  # @plaud-ai/cli 0.3.15, commit 0fa20ec, built 2026-10-08T07:14:57.467Z.
+  #
+  # Exercised on macOS 27.0 arm64 on 2026-10-12 against a real, signed-in
+  # account: `plaud version`, `plaud files` (pages 1, 2 and a page past the
+  # end), `plaud file <id>`, `plaud audio <id>` and one real download.
+  #
+  # What this release does, as observed, not as documented:
+  #   * `--version` is rejected as an unknown option; `version` prints
+  #     `plaud 0.3.15` on the first line.
+  #   * `files` prints a human-readable table on stdout and its progress
+  #     spinner on stderr. There is no JSON mode: neither `plaud files --help`
+  #     nor `plaud file --help` offers one.
+  #   * Paging is by 1-based page number (`-p`) with an explicit page size
+  #     (`-s`, accepted range 10..=100). A page past the end is not an error:
+  #     it prints `Files on this page: 0` and exits 0, which is how
+  #     enumeration terminates.
+  #   * The listing carries no byte length, no transcript column and no
+  #     capture time — only a day-precision `DATE` with no timezone, which is
+  #     why `captured_at_ms` stays empty rather than being invented.
+  #   * `logout` exists in `plaud --help`, but this run never exercised it:
+  #     signing the operator out of their own account is not something a
+  #     compatibility run may do. It stays `unknown`, so the application keeps
+  #     saying it cannot revoke the vendor session.
+  #   * `transcript` and `summary` subcommands exist, but vendor artifacts are
+  #     not imported by this build and none was fetched, so `unknown`.
+  - version: "0.3.15"
+    listing_format: plaud_table_0_3
+    pagination:
+      kind: page_number
+      page_flag: "-p"
+      page_size_flag: "-s"
+      page_size: 20
+    vendor_artifacts: unknown
+    logout_command: unknown
+    machine_readable: "no"
+    evidence_level: observed_on_identified_release
+    fixture_id: v0.3.15-plaud-table
+    fixture_sha256: ab8a78c9a69f5cbefb000e0f5f0b8bc50e3ae92fd5cd97c735babf91fc41b6f8
+    verified_on: "2026-10-12"
+    host_os:
+      - macos

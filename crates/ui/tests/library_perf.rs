@@ -128,7 +128,7 @@ fn ten_thousand_rows_arrive_as_a_hundred_pages_and_render_once_each() {
         let id = harness.state().next_id;
         harness.state_mut().respond(
             id,
-            Ok(AppResponse::ListRecordings(page(
+            &Ok(AppResponse::ListRecordings(page(
                 items,
                 next.as_deref(),
                 SCALE_ROWS as u64,
@@ -187,14 +187,14 @@ impl ScreenApp {
     fn respond(
         &mut self,
         id: u64,
-        result: Result<AppResponse, plaudon_domain::error::ErrorEnvelope>,
+        result: &Result<AppResponse, plaudon_domain::error::ErrorEnvelope>,
     ) {
         let Self { screen, next_id } = self;
         let mut send = |_command: AppCommand| {
             *next_id += 1;
             CommandId::from_raw(*next_id)
         };
-        screen.on_response(CommandId::from_raw(id), &result, &mut send);
+        screen.on_response(CommandId::from_raw(id), result, &mut send);
     }
 
     fn load_more(&mut self) {

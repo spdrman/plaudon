@@ -377,3 +377,125 @@ async fn deleting_twice_is_refused_rather_than_destructive() {
         plaudon_app_core::deletion::DeletionError::RecordNotFound
     ));
 }
+
+#[tokio::test]
+async fn deleting_a_recording_cascades_its_suggestions_and_keeps_the_enrolment() {
+    // VP-080: a suggestion is a statement about this recording and dies with
+    // it; an exemplar belongs to the person the user enrolled and survives with
+    // its provenance forgotten. The disclosure says both, with exact counts.
+    let dir = tempfile::tempdir().unwrap();
+    let library = library::seed(&dir.path().join("library"), false).await;
+    let person = "018f3b3a-7b4f-7c21-9a3e-2b1f0c5d6e7a";
+    sqlx::query(
+        "INSERT INTO people (id, display_name, created_at, updated_at, status)
+         VALUES (?1, 'Priya', 1, 1, 'active')",
+    )
+    .bind(person)
+    .execute(library.db.pool())
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO person_voice_enrollments
+             (person_id, consent_version, retention_months, status, created_at)
+         VALUES (?1, 'voice-consent/1', 12, 'active', 1)",
+    )
+    .bind(person)
+    .execute(library.db.pool())
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO voice_exemplars
+             (id, person_id, recording_id, cluster_key, source_start_ms, source_end_ms, speech_ms,
+              model_id, model_version, model_sha256, embedding_dim, embedding_cipher,
+              embedding_nonce, created_at)
+         VALUES ('x1', ?1, ?2, 'c0', 0, 9000, 9000, 'wespeaker-resnet34-lm', '1.0', ?3, 192, ?4,
+                 ?5, 1)",
+    )
+    .bind(person)
+    .bind(library.recording_id.to_string())
+    .bind("b".repeat(64))
+    .bind(vec![3u8; 800])
+    .bind(vec![7u8; 24])
+    .execute(library.db.pool())
+    .await
+    .unwrap();
+    let run_id = uuid::Uuid::now_v7().to_string();
+    sqlx::query(
+        "INSERT INTO diarization_runs
+             (id, recording_id, media_asset_id, provider_id, privacy_class, status, input_sha256,
+              created_at)
+         VALUES (?1, ?2, ?3, 'local', 'local_only', 'succeeded', ?4, 1)",
+    )
+    .bind(&run_id)
+    .bind(library.recording_id.to_string())
+    .bind(library.original_asset.to_string())
+    .bind("c".repeat(64))
+    .execute(library.db.pool())
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO speaker_suggestions
+             (id, recording_id, diarization_run_id, cluster_key, person_id, score, score_kind,
+              band, state, model_id, model_version, created_at)
+         VALUES ('s1', ?1, ?2, 'c0', ?3, 0.84, 'cosine_similarity_asnorm', 'suggest', 'pending',
+                 'wespeaker-resnet34-lm', '1.0', 1)",
+    )
+    .bind(library.recording_id.to_string())
+    .bind(&run_id)
+    .bind(person)
+    .execute(library.db.pool())
+    .await
+    .unwrap();
+
+    let service = DeletionService::new(library.db.clone(), library.archive.clone());
+    let disclosure = service.disclose(library.recording_id).await.unwrap();
+    assert_eq!(disclosure.counts.speaker_suggestions, 1);
+    assert_eq!(disclosure.counts.voice_exemplars_provenance_cleared, 1);
+    assert!(
+        disclosure
+            .limits
+            .iter()
+            .any(|line| line.contains("Voice profiles you enrolled are not deleted")),
+        "the disclosure explains why the exemplar survives: {:?}",
+        disclosure.limits
+    );
+
+    // The diarization run holds a RESTRICT reference, so it goes the way the
+    // matching job's own cleanup would take it before the recording can go.
+    sqlx::query("DELETE FROM diarization_runs WHERE id = ?1")
+        .bind(&run_id)
+        .execute(library.db.pool())
+        .await
+        .unwrap();
+    let confirmation = confirm(&service, &library).await;
+    service
+        .delete(library.recording_id, &confirmation, NOW)
+        .await
+        .unwrap();
+
+    let suggestions: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM speaker_suggestions")
+        .fetch_one(library.db.pool())
+        .await
+        .unwrap();
+    assert_eq!(suggestions, 0, "suggestions cascade with the recording");
+
+    let row = sqlx::query(
+        "SELECT recording_id, diarization_run_id, cluster_key, source_start_ms, source_end_ms
+         FROM voice_exemplars WHERE id = 'x1'",
+    )
+    .fetch_one(library.db.pool())
+    .await
+    .unwrap();
+    assert!(row.get::<Option<String>, _>("recording_id").is_none());
+    assert!(row.get::<Option<String>, _>("diarization_run_id").is_none());
+    assert!(row.get::<Option<String>, _>("cluster_key").is_none());
+    assert!(row.get::<Option<i64>, _>("source_start_ms").is_none());
+    assert!(row.get::<Option<i64>, _>("source_end_ms").is_none());
+
+    let enrolments: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM person_voice_enrollments")
+        .fetch_one(library.db.pool())
+        .await
+        .unwrap();
+    assert_eq!(enrolments, 1, "the enrolment the user made survives");
+    assert_eq!(dangling_references(&library.db).await, Vec::<String>::new());
+}

@@ -20,9 +20,10 @@ use egui::Ui;
 use plaudon_app::cloud_presentation::ProcessingStage;
 use plaudon_app::command::{AppCommand, AppResponse};
 use plaudon_app::dto::{
-    Capabilities, EventKind, ExportMediaResponse, JobKind, JobPage, JobSummary, ListJobsRequest,
-    ListModelsRequest, ListModelsResponse, ListOutputsRequest, ListOutputsResponse,
-    ListSpeakersResponse, RecordingDetail, SpeakerDto, UiEvent,
+    Capabilities, EmptyRequest, EventKind, ExportMediaResponse, JobKind, JobPage, JobSummary,
+    ListJobsRequest, ListModelsRequest, ListModelsResponse, ListOutputsRequest,
+    ListOutputsResponse, ListPeopleRequest, ListSpeakerSuggestionsRequest, ListSpeakersResponse,
+    RecordingDetail, SpeakerDto, SpeakerSuggestionDto, UiEvent, VoiceProfileSettingsDto,
 };
 use plaudon_domain::error::ErrorEnvelope;
 use plaudon_domain::ids::RecordingId;
@@ -30,11 +31,16 @@ use plaudon_domain::transcript::AlignmentOrigin;
 
 use crate::ai::{
     AiOutput, ExportMenu, OutputsViewer, ProcessingHistory, RecordingContext, ReviewPanel,
-    SummarizationPanel, TranscriptionPanel,
+    SummarizationPanel, TranscriptionPanel, VoiceContext,
 };
+use crate::screens::people::{picker_person, PickerPerson};
 
 /// Jobs asked for per page of the processing history.
 pub const JOB_PAGE_SIZE: u32 = 50;
+
+/// Suggestions asked for per recording. One cluster has at most one pending
+/// suggestion per person, so a recording's panel never needs a page.
+pub const SUGGESTION_PAGE_SIZE: u32 = 100;
 
 /// Which tab of the outputs column is on screen.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -97,6 +103,13 @@ pub struct AiBinding {
     speakers: Option<ListSpeakersResponse>,
     jobs: Option<JobPage>,
     media_export: Option<ExportMediaResponse>,
+    /// The roster, as the person picker offers it (VP-210).
+    people: Vec<PickerPerson>,
+    /// The voice-profile settings. `None` until they have been read, which
+    /// reads as matching off.
+    voice_settings: Option<VoiceProfileSettingsDto>,
+    /// Pending suggestions for this recording.
+    suggestions: Vec<SpeakerSuggestionDto>,
     error: Option<ErrorEnvelope>,
 }
 
@@ -126,8 +139,23 @@ impl AiBinding {
             speakers: None,
             jobs: None,
             media_export: None,
+            people: Vec::new(),
+            voice_settings: None,
+            suggestions: Vec::new(),
             error: None,
         }
+    }
+
+    /// The roster this recording's pickers offer, for a test.
+    #[must_use]
+    pub fn people(&self) -> &[PickerPerson] {
+        &self.people
+    }
+
+    /// Pending suggestions for this recording, for a test.
+    #[must_use]
+    pub fn suggestions(&self) -> &[SpeakerSuggestionDto] {
+        &self.suggestions
     }
 
     /// The capability report, once it has arrived.
@@ -153,7 +181,13 @@ impl AiBinding {
             return;
         }
         let capabilities = self.capabilities.take();
+        let people = std::mem::take(&mut self.people);
+        let voice_settings = self.voice_settings.take();
         *self = Self::new();
+        // The roster and the feature's state are the library's, not this
+        // recording's, so they are kept; everything else is read again.
+        self.people = people;
+        self.voice_settings = voice_settings;
         // The machine inventory does not change with the recording, so it is
         // kept; everything else is per recording and is read again.
         self.capabilities = capabilities;
@@ -185,6 +219,29 @@ impl AiBinding {
             states: Vec::new(),
             kinds: Vec::new(),
         }));
+        // The roster is the assignment vocabulary of every picker in this
+        // recording, and it works with biometric matching off (VP-011).
+        out.command(AppCommand::ListPeople(ListPeopleRequest { query: None }));
+        out.command(AppCommand::GetVoiceProfileSettings(EmptyRequest {}));
+        if self.matching_on() {
+            out.command(self.suggestions_command());
+        }
+    }
+
+    /// Whether biometric matching is on. Unknown settings read as off.
+    #[must_use]
+    pub fn matching_on(&self) -> bool {
+        self.voice_settings
+            .as_ref()
+            .is_some_and(|settings| settings.enabled)
+    }
+
+    /// `list_speaker_suggestions` for the open recording.
+    fn suggestions_command(&self) -> AppCommand {
+        AppCommand::ListSpeakerSuggestions(ListSpeakerSuggestionsRequest {
+            recording_id: self.recording_id.map(|id| id.to_string()),
+            limit: Some(SUGGESTION_PAGE_SIZE),
+        })
     }
 
     /// Route a dispatcher answer. Returns whether it was this binding's.
@@ -192,7 +249,80 @@ impl AiBinding {
         &mut self,
         command: &'static str,
         result: &Result<AppResponse, ErrorEnvelope>,
+        out: &mut AiOutput,
     ) -> bool {
+        for follow_up in self
+            .outputs_viewer
+            .speaker_panel_mut()
+            .on_response(command, result)
+        {
+            out.command(follow_up);
+        }
+        match result {
+            Ok(AppResponse::ListPeople(people)) => {
+                self.people = people.people.iter().map(picker_person).collect();
+                return true;
+            }
+            Ok(
+                AppResponse::GetVoiceProfileSettings(settings)
+                | AppResponse::SetVoiceProfilesEnabled(settings),
+            ) => {
+                let was_on = self.matching_on();
+                self.voice_settings = Some(settings.clone());
+                if settings.enabled {
+                    if !was_on {
+                        out.command(self.suggestions_command());
+                    }
+                } else {
+                    // Matching is off: there is no suggestion to have an
+                    // opinion about, and the panel must not show one (VP-215).
+                    self.suggestions.clear();
+                }
+                return true;
+            }
+            Ok(AppResponse::ListSpeakerSuggestions(suggestions)) => {
+                self.suggestions = suggestions
+                    .suggestions
+                    .iter()
+                    .filter(|row| Some(row.recording_id) == self.recording_id)
+                    .cloned()
+                    .collect();
+                return true;
+            }
+            Ok(AppResponse::AssignClusterPerson(answer)) => {
+                // The answer is the stored row, so the panel and the chips
+                // are right in this frame; only the suggestions that stood
+                // against this cluster are now stale.
+                self.patch_speaker(&answer.speaker);
+                if self.matching_on() {
+                    out.command(self.suggestions_command());
+                }
+                return true;
+            }
+            Ok(
+                AppResponse::ConfirmSpeakerSuggestion(decision)
+                | AppResponse::RejectSpeakerSuggestion(decision),
+            ) => {
+                if let Some(speaker) = decision.speaker.as_ref() {
+                    self.patch_speaker(speaker);
+                }
+                if self.matching_on() {
+                    out.command(self.suggestions_command());
+                }
+                return true;
+            }
+            Ok(AppResponse::EnrollPersonVoice(_)) => {
+                // An enrolment changes future matching only; nothing on
+                // screen is stale (VP-213e).
+                return true;
+            }
+            Ok(AppResponse::GetClusterSpeech(_)) => {
+                // The clean-speech measurement of the enrolment meter; the
+                // panel has already taken it (VP-094).
+                return true;
+            }
+            _ => {}
+        }
         match result {
             Ok(AppResponse::GetCapabilities(capabilities)) => {
                 self.capabilities = Some(capabilities.clone());
@@ -284,6 +414,12 @@ impl AiBinding {
                 out.command(AppCommand::GetCapabilities);
                 self.models_for = None;
             }
+            EventKind::PersonChanged => {
+                out.command(AppCommand::ListPeople(ListPeopleRequest { query: None }));
+            }
+            EventKind::VoiceProfileSuggestionsReady if self.matching_on() => {
+                out.command(self.suggestions_command());
+            }
             _ => {}
         }
     }
@@ -358,13 +494,24 @@ impl AiBinding {
                     now_ms,
                 )
             }
-            OutputsTab::Outputs => self.outputs_viewer.ui(
-                ui,
-                context,
-                self.outputs.as_ref(),
-                self.speakers.as_ref(),
-                now_ms,
-            ),
+            OutputsTab::Outputs => {
+                // Borrowed for the rest of the frame: nothing may mutate the
+                // binding after this point, which is the same rule the model
+                // catalogue above follows.
+                let voice = VoiceContext {
+                    people: &self.people,
+                    settings: self.voice_settings.as_ref(),
+                    suggestions: &self.suggestions,
+                };
+                self.outputs_viewer.ui(
+                    ui,
+                    context,
+                    self.outputs.as_ref(),
+                    self.speakers.as_ref(),
+                    voice,
+                    now_ms,
+                )
+            }
             OutputsTab::Review => self.review.ui(ui, context, self.outputs.as_ref()),
             OutputsTab::History => self.history.ui(ui, history_page.as_ref(), now_ms),
             OutputsTab::Export => self.export.ui(ui, context, self.media_export.as_ref()),
@@ -431,6 +578,14 @@ fn is_ours(command: &'static str) -> bool {
             | "confirm_speaker"
             | "reset_speaker"
             | "export_media"
+            | "list_people"
+            | "get_voice_profile_settings"
+            | "list_speaker_suggestions"
+            | "assign_cluster_person"
+            | "confirm_speaker_suggestion"
+            | "reject_speaker_suggestion"
+            | "enroll_person_voice"
+            | "get_cluster_speech"
             | "export_recording"
             | "start_processing"
             | "review_claim"

@@ -20,10 +20,12 @@ use serde::{Deserialize, Serialize};
 
 /// The only subcommands this adapter will ever invoke.
 ///
-/// Documented in spec 2.1 from the vendor help center: `plaud login`
-/// authenticates through a browser, `plaud files` enumerates recordings and
-/// `plaud audio <id>` yields a temporary download URL.
-pub const PLAUD_SUBCOMMANDS: &[&str] = &["--version", "login", "logout", "files", "audio"];
+/// Observed on `@plaud-ai/cli` 0.3.15 (macOS arm64, 2026-10-12): `plaud login`
+/// authenticates through a browser, `plaud files` enumerates recordings,
+/// `plaud audio <id>` prints a temporary download URL and `plaud version`
+/// reports the release. That release rejects `--version` as an unknown
+/// option, so the version probe is a subcommand like every other call.
+pub const PLAUD_SUBCOMMANDS: &[&str] = &["version", "login", "logout", "files", "audio"];
 
 /// Subcommands that mutate anything on the vendor side. Only the session.
 pub const SESSION_MUTATING_SUBCOMMANDS: &[&str] = &["login", "logout"];
@@ -44,14 +46,12 @@ pub enum CliCommand {
     Logout,
     /// Enumerate recordings.
     Files {
-        /// Opaque cursor from a previous page.
+        /// How this call asks for a page.
         ///
-        /// Only ever `Some` when the validated row records observed
-        /// pagination, because spec 7.2 forbids guessing a cursor flag.
-        cursor: Option<String>,
-        /// The flag that carries the cursor, taken verbatim from the
-        /// compatibility row rather than invented here.
-        cursor_flag: Option<String>,
+        /// Only ever anything but [`FilesPaging::Default`] when the validated
+        /// compatibility row records observed pagination, because spec 7.2
+        /// forbids guessing how a release pages.
+        paging: FilesPaging,
     },
     /// Request a temporary download URL for one recording.
     Audio {
@@ -60,22 +60,73 @@ pub enum CliCommand {
     },
 }
 
+/// How one `files` call asks for a page.
+///
+/// Both paging shapes exist because both have been seen: an opaque cursor is
+/// what a machine-readable release would carry in its own output, and numbered
+/// pages are what `@plaud-ai/cli` 0.3.15 actually implements (`-p`, `-s`).
+/// Neither is ever used unless the compatibility row records it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case", tag = "paging")]
+pub enum FilesPaging {
+    /// No paging arguments: whatever one bare `files` call returns.
+    Default,
+    /// An opaque cursor from a previous page, behind an observed flag.
+    Cursor {
+        /// The flag that carries the cursor, taken verbatim from the
+        /// compatibility row rather than invented here.
+        flag: String,
+        /// Opaque cursor from a previous page.
+        cursor: String,
+    },
+    /// A 1-based page number and an explicit page size, behind observed flags.
+    Page {
+        /// Flag that carries the page number.
+        page_flag: String,
+        /// 1-based page number.
+        page: u32,
+        /// Flag that carries the page size.
+        page_size_flag: String,
+        /// Items requested per page.
+        page_size: u32,
+    },
+}
+
 impl CliCommand {
-    /// Enumerate a single page with no cursor.
+    /// Enumerate with no paging arguments.
     #[must_use]
     pub const fn files() -> Self {
         Self::Files {
-            cursor: None,
-            cursor_flag: None,
+            paging: FilesPaging::Default,
         }
     }
 
     /// Enumerate a page using an observed cursor flag.
     #[must_use]
-    pub fn files_page(cursor_flag: impl Into<String>, cursor: impl Into<String>) -> Self {
+    pub fn files_cursor(cursor_flag: impl Into<String>, cursor: impl Into<String>) -> Self {
         Self::Files {
-            cursor: Some(cursor.into()),
-            cursor_flag: Some(cursor_flag.into()),
+            paging: FilesPaging::Cursor {
+                flag: cursor_flag.into(),
+                cursor: cursor.into(),
+            },
+        }
+    }
+
+    /// Enumerate a numbered page using observed page and page-size flags.
+    #[must_use]
+    pub fn files_numbered(
+        page_flag: impl Into<String>,
+        page: u32,
+        page_size_flag: impl Into<String>,
+        page_size: u32,
+    ) -> Self {
+        Self::Files {
+            paging: FilesPaging::Page {
+                page_flag: page_flag.into(),
+                page,
+                page_size_flag: page_size_flag.into(),
+                page_size,
+            },
         }
     }
 
@@ -83,7 +134,7 @@ impl CliCommand {
     #[must_use]
     pub const fn label(&self) -> &'static str {
         match self {
-            Self::Version => "--version",
+            Self::Version => "version",
             Self::Login => "login",
             Self::Logout => "logout",
             Self::Files { .. } => "files",
@@ -103,24 +154,28 @@ impl CliCommand {
     /// the permitted charset.
     pub fn args(&self) -> Result<Vec<CliArg>, ArgError> {
         let args = match self {
-            Self::Version => vec![CliArg::Literal("--version")],
+            Self::Version => vec![CliArg::Literal("version")],
             Self::Login => vec![CliArg::Literal("login")],
             Self::Logout => vec![CliArg::Literal("logout")],
-            Self::Files {
-                cursor,
-                cursor_flag,
-            } => {
+            Self::Files { paging } => {
                 let mut args = vec![CliArg::Literal("files")];
-                match (cursor_flag, cursor) {
-                    (Some(flag), Some(value)) => {
-                        args.push(cursor_flag_arg(flag)?);
-                        args.push(CliArg::Identifier(reject_empty(value)?));
+                match paging {
+                    FilesPaging::Default => {}
+                    FilesPaging::Cursor { flag, cursor } => {
+                        args.push(flag_arg(flag, SUPPORTED_CURSOR_FLAGS)?);
+                        args.push(CliArg::Identifier(reject_empty(cursor)?));
                     }
-                    (None, None) => {}
-                    // A cursor without its observed flag, or a flag with no
-                    // cursor, is a programming error that must not produce a
-                    // half-formed command line.
-                    _ => return Err(ArgError::IllegalIdentifier),
+                    FilesPaging::Page {
+                        page_flag,
+                        page,
+                        page_size_flag,
+                        page_size,
+                    } => {
+                        args.push(flag_arg(page_flag, SUPPORTED_PAGE_FLAGS)?);
+                        args.push(CliArg::Identifier(page_number(*page, MAX_PAGE_NUMBER)?));
+                        args.push(flag_arg(page_size_flag, SUPPORTED_PAGE_SIZE_FLAGS)?);
+                        args.push(CliArg::Identifier(page_number(*page_size, MAX_PAGE_SIZE)?));
+                    }
                 }
                 args
             }
@@ -145,19 +200,29 @@ fn reject_empty(value: &str) -> Result<String, ArgError> {
     Ok(value.to_owned())
 }
 
-/// Map a cursor flag recorded in the compatibility table onto our static
-/// vocabulary.
+/// Map a flag recorded in the compatibility table onto our static vocabulary.
 ///
 /// `CliArg::Identifier` refuses a leading `-`, which is exactly what a flag
 /// needs, so a flag may only ever be a `Literal`. Requiring it to match a
 /// committed constant means a compatibility row cannot introduce a new flag —
 /// adding one is a code change with a test, as spec 7.2 intends.
-fn cursor_flag_arg(flag: &str) -> Result<CliArg, ArgError> {
-    SUPPORTED_CURSOR_FLAGS
+fn flag_arg(flag: &str, vocabulary: &'static [&'static str]) -> Result<CliArg, ArgError> {
+    vocabulary
         .iter()
         .find(|known| **known == flag)
         .map(|known| CliArg::Literal(known))
         .ok_or(ArgError::FlagInjection)
+}
+
+/// Render a 1-based counter as a decimal argument, inside a sane bound.
+///
+/// The bound is ours, not the vendor's: it keeps a corrupt cursor from turning
+/// into an unbounded walk through the account.
+fn page_number(value: u32, limit: u32) -> Result<String, ArgError> {
+    if value == 0 || value > limit {
+        return Err(ArgError::IllegalIdentifier);
+    }
+    Ok(value.to_string())
 }
 
 /// Cursor flags this build knows how to pass.
@@ -166,6 +231,24 @@ fn cursor_flag_arg(flag: &str) -> Result<CliArg, ArgError> {
 /// spec 7.2 says pagination is honoured only where observed, and "observed"
 /// here means observed *and* represented in this static vocabulary.
 pub const SUPPORTED_CURSOR_FLAGS: &[&str] = &["--cursor", "--page-token", "--after", "--next"];
+
+/// Page-number flags this build knows how to pass.
+///
+/// `@plaud-ai/cli` 0.3.15 prints `-p, --page <number>` in `plaud files --help`.
+pub const SUPPORTED_PAGE_FLAGS: &[&str] = &["-p", "--page"];
+
+/// Page-size flags this build knows how to pass.
+///
+/// `@plaud-ai/cli` 0.3.15 prints `-s, --page-size <number>` in
+/// `plaud files --help` and rejects a size outside 10..=100 with
+/// `[INVALID_ARGS]`.
+pub const SUPPORTED_PAGE_SIZE_FLAGS: &[&str] = &["-s", "--page-size"];
+
+/// Largest page number this build will ask any release for.
+pub const MAX_PAGE_NUMBER: u32 = 10_000;
+
+/// Largest page size this build will ask any release for.
+pub const MAX_PAGE_SIZE: u32 = 1_000;
 
 #[cfg(test)]
 mod tests {
@@ -183,10 +266,9 @@ mod tests {
 
     #[test]
     fn version_login_and_files_render_to_fixed_vectors() {
-        assert_eq!(
-            rendered(&CliCommand::Version),
-            [OsString::from("--version")]
-        );
+        // 0.3.15 rejects `--version` as an unknown option; the version probe
+        // is the `version` subcommand.
+        assert_eq!(rendered(&CliCommand::Version), [OsString::from("version")]);
         assert_eq!(rendered(&CliCommand::Login), [OsString::from("login")]);
         assert_eq!(rendered(&CliCommand::Logout), [OsString::from("logout")]);
         assert_eq!(rendered(&CliCommand::files()), [OsString::from("files")]);
@@ -261,7 +343,7 @@ mod tests {
 
     #[test]
     fn a_cursor_is_only_passed_with_its_observed_flag() {
-        let paged = CliCommand::files_page("--cursor", "abc123");
+        let paged = CliCommand::files_cursor("--cursor", "abc123");
         assert_eq!(
             rendered(&paged),
             [
@@ -275,27 +357,75 @@ mod tests {
     #[test]
     fn an_unobserved_cursor_flag_cannot_be_invented() {
         for flag in ["--exec", "-c", "--cursor; rm", "cursor", "--", "--üñî"] {
-            let command = CliCommand::files_page(flag, "abc123");
+            let command = CliCommand::files_cursor(flag, "abc123");
             assert!(command.args().is_err(), "{flag:?} must be refused");
         }
         for flag in SUPPORTED_CURSOR_FLAGS {
-            assert!(CliCommand::files_page(*flag, "abc123").args().is_ok());
+            assert!(CliCommand::files_cursor(*flag, "abc123").args().is_ok());
         }
     }
 
     #[test]
-    fn a_cursor_without_a_flag_is_a_refused_half_command() {
-        let command = CliCommand::Files {
-            cursor: Some("abc".to_owned()),
-            cursor_flag: None,
-        };
-        assert!(command.args().is_err());
+    fn a_numbered_page_renders_the_observed_flags_of_0_3_15() {
+        assert_eq!(
+            rendered(&CliCommand::files_numbered("-p", 2, "-s", 20)),
+            [
+                OsString::from("files"),
+                OsString::from("-p"),
+                OsString::from("2"),
+                OsString::from("-s"),
+                OsString::from("20"),
+            ]
+        );
+    }
+
+    #[test]
+    fn an_unobserved_page_flag_cannot_be_invented() {
+        for flag in ["--offset", "-P", "--page; rm", "page", "--cursor"] {
+            assert!(
+                CliCommand::files_numbered(flag, 1, "-s", 20)
+                    .args()
+                    .is_err(),
+                "{flag:?} must be refused as a page flag"
+            );
+            assert!(
+                CliCommand::files_numbered("-p", 1, flag, 20)
+                    .args()
+                    .is_err(),
+                "{flag:?} must be refused as a page-size flag"
+            );
+        }
+        for page_flag in SUPPORTED_PAGE_FLAGS {
+            for size_flag in SUPPORTED_PAGE_SIZE_FLAGS {
+                assert!(CliCommand::files_numbered(*page_flag, 1, *size_flag, 20)
+                    .args()
+                    .is_ok());
+            }
+        }
+    }
+
+    #[test]
+    fn a_page_counter_outside_its_bound_is_refused() {
+        for (page, size) in [
+            (0, 20),
+            (MAX_PAGE_NUMBER + 1, 20),
+            (1, 0),
+            (1, MAX_PAGE_SIZE + 1),
+        ] {
+            assert_eq!(
+                CliCommand::files_numbered("-p", page, "-s", size)
+                    .args()
+                    .unwrap_err(),
+                ArgError::IllegalIdentifier,
+                "page {page} size {size} must be refused"
+            );
+        }
     }
 
     #[test]
     fn a_hostile_cursor_value_is_refused() {
         for value in ["a;b", "--flag", "a b", "a\nb"] {
-            assert!(CliCommand::files_page("--cursor", value).args().is_err());
+            assert!(CliCommand::files_cursor("--cursor", value).args().is_err());
         }
     }
 

@@ -2,7 +2,17 @@
   "version": 1,
   "_schema": {
     "description": "Normative threat/control/verification matrix for plaudon. Checked by scripts/check-threat-model.py and crates/security/tests/threat_model_traceability.rs. Edit this file, then run `python3 scripts/check-threat-model.py --update` to regenerate the Markdown table in docs/threat-model/README.md.",
-    "row_keys": ["id", "spec", "threat", "control", "owner", "epic", "verification", "status", "notes"],
+    "row_keys": [
+      "id",
+      "spec",
+      "threat",
+      "control",
+      "owner",
+      "epic",
+      "verification",
+      "status",
+      "notes"
+    ],
     "status_values": {
       "implemented": "Control exists in this repository and every listed verification test exists and runs in CI.",
       "open": "Control is partially present. The listed verification tests exist and cover the implemented part; the named gap is restated in open-findings.md.",
@@ -67,7 +77,9 @@
       "control": "Compatibility warning, explicit local-only does not imply over-the-air encryption, no raw GATT payload logs",
       "owner": "crates/security/src/outbound.rs",
       "epic": "D",
-      "verification": ["describe_is_honest_about_what_is_not_guaranteed"],
+      "verification": [
+        "describe_is_honest_about_what_is_not_guaranteed"
+      ],
       "status": "open",
       "notes": "The disclosure is machine-enforced: NOT_GUARANTEED carries the radio-layer statement and every policy snapshot returned to the UI includes it. Suppression of raw GATT payload logging belongs to crates/plaud-ble and is not implemented (App. B.5, B.7)."
     },
@@ -680,6 +692,107 @@
       ],
       "status": "open",
       "notes": "Raised by D2.4 fuzzing against plaudon_domain::error::Redactor, which AppError::from_unmapped_vendor and DiagnosticLog::record both run untrusted vendor text through before it is persisted. Two defects: redact_token only matches a scheme at the start of a token, so `see (https://…)`, a quoted URL, an angle-bracketed URL or `url=https://…` survive verbatim including a signed query string; and looks_like_opaque_secret requires every character to be [A-Za-z0-9_-], so a dotted JWT and standard base64 credentials survive. The cited regression test asserts the contract as it should hold and is #[ignore]d with a reason pointing at this finding, so it turns green and the ignore can be deleted the moment the fix lands; reproducers are committed under tests/fixtures/fuzz-corpus/domain_redactor/. Team-AB has confirmed both defects and has a fix on epic-a-spikes (URL matched anywhere in the token, segment-splitting on . & ? , ; with a [A-Za-z0-9-_+/=] alphabet); it is not in this tree yet."
+    },
+    {
+      "id": "TM-044",
+      "spec": "16.2A",
+      "threat": "Voice profile embedding leaves the device through any egress path (cloud dispatch, model download, telemetry, diagnostics or a notification payload)",
+      "control": "Speaker embeddings get their own egress payload class, VoiceBiometric, which OutboundPolicy::authorize refuses in every network mode for every subsystem with no consent scope that could permit it; the local-only egress watch is extended to the enrol-and-match flow, and diagnostics redaction treats profile names like transcript text and embedding bytes as unloggable",
+      "owner": "crates/security/src/outbound.rs",
+      "epic": "D",
+      "verification": [
+        "a_voice_biometric_payload_is_refused_in_every_mode_for_every_subsystem",
+        "the_most_permissive_grant_still_refuses_a_voice_embedding",
+        "no_consent_content_type_exists_for_the_biometric_class",
+        "every_policy_snapshot_states_that_voice_data_is_always_refused",
+        "a_voice_biometric_denial_carries_labels_and_no_biometric_content",
+        "a_voice_biometric_attempt_is_refused_in_both_modes",
+        "the_voice_biometric_refusal_names_its_own_reason_and_allows_nothing",
+        "enrol_and_match_separates_the_speakers_and_writes_only_locally",
+        "local_only_mode_initiates_no_app_traffic",
+        "a_real_enrol_and_match_authorizes_no_outbound_request_with_local_only_mode_on",
+        "a_real_enrol_and_match_authorizes_no_outbound_request_with_local_only_mode_off",
+        "voice_enrolment_and_speaker_matching_authorize_no_outbound_request_with_local_only_mode_on",
+        "voice_enrolment_and_speaker_matching_authorize_no_outbound_request_with_local_only_mode_off",
+        "an_embedding_cannot_be_logged_in_any_shape_it_takes",
+        "a_registered_display_name_is_scrubbed_from_every_text_path",
+        "a_registered_name_never_reaches_the_log_file",
+        "redaction_payloads_match_the_allowlist_and_leak_nothing",
+        "embedding_blob_corpus_holds_its_invariants"
+      ],
+      "status": "implemented",
+      "notes": "P2.2. PayloadClass::VoiceBiometric is refused by OutboundPolicy::decide before the network mode, the grant, the subsystem, the purpose or the destination are considered, so the dedicated DenyReason::VoiceBiometricNeverEgresses is the answer in Local-only Mode and with the network permitted alike, and TryFrom<PayloadClass> for ContentType has no arm for it, so no consent grant can name it. Every effective-policy snapshot carries the always_refused statement in both modes. The egress-evidence suite gained the voice-profile-match scenario, which offers a biometric payload at the OpenRouter HTTPS, telemetry and cloud-CLI seams under both a local-only and a deliberately permissive policy and records six refusals. The watch over the one HTTP seam (LocalBackend::with_cloud_transport) sees zero attempts across a real enrolment and a real speaker-match job — scripted embedder, sealed exemplar on disk, suggestion row read back — with Local-only Mode on and off, and the same watch does catch the catalogue refresh once a key is stored (the_watch_catches_the_catalogue_refresh_once_a_key_is_stored), so the zero is falsifiable; the plaudon-egui watch repeats the claim over the shipped command surface. Diagnostics gained the embedding shapes (named field, long numeric vector, long opaque blob) and a process-wide display-name registry fed from the roster, so a name, a vector and a sealed blob are all scrubbed from the log sink, the crash hook and the notification reducer. Honest limits: the gate governs app-initiated traffic from this process only, the watch speaks for the transport seam rather than for a hypothetical component that opened its own socket, redaction cannot recognise a name it was never told about, and the shape-based blob and vector patterns are redaction-only, not scanner findings."
+    },
+    {
+      "id": "TM-045",
+      "spec": "13.7",
+      "threat": "Embedding inversion or re-identification from a stolen voice-profile store",
+      "control": "Embedding vectors exist at rest only as XChaCha20-Poly1305 ciphertext under a feature-scoped key in the OS secret store (new SecretScope::VoiceProfileKey); an unavailable store is a locked feature per ADR-0014, never a plaintext fallback; embeddings are excluded from exports by default; the documents state honestly that encryption protects data at rest, not data in use",
+      "owner": "crates/app-core/src/voice_profiles/store.rs",
+      "epic": "D",
+      "verification": [
+        "an_embedding_round_trips_through_the_sealed_form",
+        "the_ciphertext_never_contains_the_plaintext_vector",
+        "a_tampered_ciphertext_is_refused_rather_than_decoded",
+        "a_ciphertext_cannot_be_moved_to_another_person_or_model",
+        "destroying_the_key_makes_every_remaining_ciphertext_undecryptable",
+        "a_locked_store_locks_the_biometric_tier_and_nothing_else",
+        "a_locked_store_refuses_the_voice_profile_key_without_a_plaintext_fallback"
+      ],
+      "status": "open",
+      "notes": "Storage leg implemented (P1.2): migration 0900 keeps embeddings only as XChaCha20-Poly1305 ciphertext bound to person+model+dimension as AEAD additional data, the key lives in the OS vault under SecretScope::VoiceProfileKey, an unavailable vault locks the biometric tier while the name-only roster keeps working (ADR-0014, spec §12.2A), and destroying the key is the VP-095 cryptographic erasure. The matching job keeps the same rule in flight: its per-cluster scratch (migration 0901) is ciphertext bound to job, run and cluster and is destroyed when the job settles. Gap: the export/backup exclusion of embeddings is not built yet (tracked by TM-046), and encryption protects data at rest, not data in use — vectors are plaintext in process memory while a job runs."
+    },
+    {
+      "id": "TM-046",
+      "spec": "13.5",
+      "threat": "Profile export leaks voiceprints outside the user's control (plaintext backup, metadata export or an archive restored on another machine)",
+      "control": "Voice data is excluded from every export format and from portable backups by default; a backup containing the voiceprofiles namespace is representable only with ADR-0071 password encryption, enforced in ExportService::create_portable_backup; the archive secret scanner refuses embedding-shaped blobs outside that namespace; restoring a voice-bearing archive re-runs the consent gate before profiles activate",
+      "owner": "crates/export/src/archive/voiceprofiles.rs",
+      "epic": "J",
+      "verification": [
+        "a_plaintext_backup_carrying_voice_profiles_cannot_be_produced",
+        "a_staged_voice_entry_cannot_be_emitted_as_a_plaintext_archive",
+        "an_ordinary_backup_carries_the_roster_and_no_biometric_entry",
+        "an_encrypted_backup_may_carry_voice_profiles_and_a_restore_re_runs_the_consent_gate",
+        "the_scanner_refuses_an_embedding_outside_the_voice_namespace",
+        "a_recording_export_carries_names_and_never_voice_data",
+        "every_committed_corpus_entry_satisfies_the_parser_invariants"
+      ],
+      "status": "implemented",
+      "notes": "Implemented (P2.3). `export_recording` carries resolved display-name text only; portable backups exclude the biometric tier by default and carry the name-only roster like any other library data (VP-077). The `voiceprofiles/` namespace is stageable only with a `VoiceProfilePermit`, which exists only for `Protection::Encrypted`, and `ArchiveBuilder::finish` refuses a plaintext emission that holds one — a plaintext backup containing voiceprints is unrepresentable rather than merely refused at the UI. `ArchiveSecretScanner` treats an embedding-shaped value outside that namespace as a fatal finding. Restoring voice data re-arms the consent gate before the rows land, so the feature is off until the user passes it in the target library. Residual, documented: an archive's ciphertext is only as unreadable as the key is unavailable — the key never travels, so a restore onto another machine yields rows that cannot decrypt."
+    },
+    {
+      "id": "TM-047",
+      "spec": "17.4",
+      "threat": "Voice-profile poisoning: the wrong person enrolled into a profile, mislabelling them in every later recording",
+      "control": "Enrolment enforces minimum clean single-speaker speech and excludes overlap; matches are persisted suggestions that never change a transcript without explicit confirmation; every exemplar keeps provenance (recording, cluster, span) and a profile can be split by provenance; rejections are remembered and feed per-profile calibration; the UI never presents a match as identity",
+      "owner": "crates/app-core/src/voice_profiles/enroll.rs",
+      "epic": "M",
+      "verification": [
+        "the_roster_round_trips_with_matching_off_and_never_reaches_the_embedder",
+        "no_embedding_is_reachable_while_ungated_or_while_matching_is_off",
+        "turning_the_feature_on_requires_accepting_the_current_disclosure",
+        "enrolling_then_confirming_a_suggestion_names_the_cluster_and_its_segments",
+        "rejecting_never_renames_and_reject_then_pick_records_the_correction",
+        "splitting_an_enrolment_re_seals_the_exemplars_it_moves"
+      ],
+      "status": "open",
+      "notes": "Planned by docs/specs/VOICE_PROFILES_SPEC.md (VP-060 to VP-066, VP-094) and ADR-0082. There is deliberately no auto-assignment tier at any score: measured demographic error disparity in VoxCeleb-trained models makes an auto-assignment threshold a policy about whose records get silently corrupted. The matching half of the control exists as of the P1.4 change in crates/app-core/src/voice_profiles/matching: suggestion-only bands, speech minima, model-version-mismatch refusal and bounded per-profile calibration, with golden and property tests in crates/app-core/tests/voice_matching.rs. The row stays planned because enrolment, exemplar provenance and remembered rejections still have no implementation and the owner file does not exist yet. The enrolment leg landed with P1.5: crates/app-core/src/voice_profiles/enroll.rs enforces the VP-065 minima from the stored reconciliation before the embedder is called, records provenance (recording, run, cluster, span) per exemplar and splits an enrolment by that provenance with the ciphertexts re-sealed under the new owner; the consent gate is a ConsentProof value with no public constructor, so the roster path cannot reach embedding code at all, and a scripted embedder that panics on call proves it at runtime in both closed states. A rejection is kept as a score record and feeds the per-profile offset the matcher reads. Remaining: the egui surfaces that present suggestions and the dedupe/merge disclosures (P2.1), and the real ONNX embedder."
+    },
+    {
+      "id": "TM-048",
+      "spec": "16.6",
+      "threat": "Cross-library correlation of voiceprints: two libraries' profile stores combined to track one voice across contexts",
+      "control": "No sync and no stable cross-library identifier exist; each library has its own AEAD key; voice data is excluded from exports by default and representable only inside password-encrypted backups, so there is no plaintext artifact to correlate; the residual risk that a user restores one encrypted backup into two libraries is documented rather than denied",
+      "owner": "crates/app-core/src/voice_profiles/mod.rs",
+      "epic": "D",
+      "verification": [
+        "a_plaintext_backup_carrying_voice_profiles_cannot_be_produced",
+        "a_staged_voice_entry_cannot_be_emitted_as_a_plaintext_archive",
+        "an_encrypted_backup_may_carry_voice_profiles_and_a_restore_re_runs_the_consent_gate"
+      ],
+      "status": "open",
+      "notes": "Export leg implemented (P2.3): plaintext voice export is unrepresentable, the per-library AEAD key never travels in an archive, and a restore re-runs the consent gate, so there is no plaintext artifact to correlate across libraries. Remaining: the no-stable-identifier posture is asserted by construction rather than by a test, and the documented residual risk stands — a user who restores one encrypted backup into two libraries has, by their own action, two copies of the same profiles (ADR-0080)."
     }
   ]
 }

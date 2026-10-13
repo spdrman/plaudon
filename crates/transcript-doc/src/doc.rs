@@ -546,6 +546,41 @@ impl TranscriptDocument {
         self.version += 1;
     }
 
+    /// Adopt one segment's current speaker as the stored one, after
+    /// `set_segment_speaker` persisted it.
+    ///
+    /// Unlike text, a speaker assignment is written on its own, without a new
+    /// revision, so it rebases on its own too.
+    ///
+    /// # Errors
+    ///
+    /// [`DocError::UnknownSegment`] when the segment is not in this document.
+    pub fn note_speaker_persisted(&mut self, id: SegmentId) -> Result<(), DocError> {
+        let segment = self.segment_mut(id)?;
+        segment.base_speaker_id = segment.speaker_id;
+        Ok(())
+    }
+
+    /// Put one segment's speaker back to the stored one, after a write was
+    /// refused.
+    ///
+    /// No history entry: nothing the user did is being undone — a change that
+    /// never reached the database is being taken off the screen, and an undo
+    /// step for it would offer to restore an assignment that does not exist.
+    ///
+    /// # Errors
+    ///
+    /// [`DocError::UnknownSegment`] when the segment is not in this document.
+    pub fn restore_persisted_speaker(&mut self, id: SegmentId) -> Result<(), DocError> {
+        let segment = self.segment_mut(id)?;
+        if segment.speaker_id != segment.base_speaker_id {
+            segment.speaker_id = segment.base_speaker_id;
+            segment.version += 1;
+            self.version += 1;
+        }
+        Ok(())
+    }
+
     pub(crate) fn insert_text(
         &mut self,
         id: SegmentId,

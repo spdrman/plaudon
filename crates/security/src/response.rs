@@ -27,12 +27,26 @@
 //! | [`SecretShape::SignedUrl`] | an absolute URL whose query carries a signature/credential/expiry parameter |
 //! | [`SecretShape::DeviceToken`] | a maximal hexadecimal run of exactly 32 characters, the PLAUD device-token shape |
 //! | [`SecretShape::RawPointer`] | a `0x`-prefixed 8–16 digit hexadecimal address, i.e. a platform-bridge pointer |
+//! | [`SecretShape::VoiceEmbedding`] | any value under an embedding-bearing field name, e.g. `embedding`, `voiceprint`, `embedding_cipher` |
 //!
 //! [`assert_no_secret_in_response`] walks a `serde_json::Value`, applies
 //! [`secret_shape_of`] to every string, and additionally rejects a non-empty
 //! string or numeric value stored under a secret-bearing key name
-//! ([`SecretShape::SensitiveField`]) and a pointer-shaped integer
-//! ([`SecretShape::RawPointer`]).
+//! ([`SecretShape::SensitiveField`]), a pointer-shaped integer
+//! ([`SecretShape::RawPointer`]) and any value — including an array of floats —
+//! under an embedding-bearing key name ([`SecretShape::VoiceEmbedding`]).
+//!
+//! # Voice embeddings
+//!
+//! Speaker embeddings are biometric data and are never a permissible payload
+//! for anything that leaves the process (VOICE_PROFILES_SPEC VP-002, VP-110,
+//! ADR-0080). The control is that the vector type of
+//! `plaudon_app_core::voice_profiles::matching` implements no `Serialize` at
+//! all, so a vector cannot reach a DTO; this rule is the mechanical backstop
+//! for anything that reintroduces one under a recognisable name. It is a
+//! name-based rule on purpose: a bare array of floats is also a waveform, a
+//! duration histogram or a set of scores, and refusing those would make the
+//! scanner useless.
 //!
 //! # Honest scope
 //!
@@ -100,6 +114,23 @@ const SENSITIVE_KEY_NAMES: &[&str] = &[
 /// Key names whose value is a platform-bridge pointer.
 const POINTER_KEY_NAMES: &[&str] = &["ptr", "pointer", "raw_handle", "raw_pointer", "bridge_ptr"];
 
+/// Key names whose value is (or carries) a speaker embedding.
+///
+/// Matched exactly or as a `_`-suffixed form, like the other key rules, so
+/// `embedding`, `voice_embedding`, `speaker_embedding`, `embedding_cipher` and
+/// `exemplar_vector` are all covered.
+const EMBEDDING_KEY_NAMES: &[&str] = &[
+    "embedding",
+    "embeddings",
+    "embedding_cipher",
+    "embedding_nonce",
+    "voiceprint",
+    "voiceprints",
+    "speaker_vector",
+    "exemplar_vector",
+    "centroid_vector",
+];
+
 /// The kind of secret a payload appears to contain.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -116,6 +147,8 @@ pub enum SecretShape {
     RawPointer,
     /// A non-empty value stored under a secret-bearing field name.
     SensitiveField,
+    /// A value stored under a field name that carries a speaker embedding.
+    VoiceEmbedding,
 }
 
 impl SecretShape {
@@ -128,6 +161,7 @@ impl SecretShape {
             SecretShape::DeviceToken => "device_token",
             SecretShape::RawPointer => "raw_pointer",
             SecretShape::SensitiveField => "sensitive_field",
+            SecretShape::VoiceEmbedding => "voice_embedding",
         }
     }
 }
@@ -277,6 +311,14 @@ fn walk(value: &Value, pointer: &mut String, key: Option<&str>) -> Result<(), Re
                         shape,
                     });
                 }
+                if !item.is_null() && is_embedding_key(name) {
+                    pointer.push('/');
+                    pointer.push_str(name);
+                    return Err(ResponseLeakError {
+                        pointer: pointer.clone(),
+                        shape: SecretShape::VoiceEmbedding,
+                    });
+                }
                 pointer.push('/');
                 pointer.push_str(name);
                 walk(item, pointer, Some(name))?;
@@ -291,6 +333,19 @@ fn walk(value: &Value, pointer: &mut String, key: Option<&str>) -> Result<(), Re
 fn is_sensitive_key(key: &str) -> bool {
     let lowered = key.to_ascii_lowercase();
     SENSITIVE_KEY_NAMES
+        .iter()
+        .any(|name| lowered == *name || lowered.ends_with(&format!("_{name}")))
+}
+
+/// Whether `key` names a field that carries a speaker embedding.
+///
+/// A `null` under such a key is accepted: the absence of an embedding is not
+/// an embedding. Anything else — array, number, string, object — is refused,
+/// because none of them is a shape an embedding may legitimately take on the
+/// way out of this process.
+fn is_embedding_key(key: &str) -> bool {
+    let lowered = key.to_ascii_lowercase();
+    EMBEDDING_KEY_NAMES
         .iter()
         .any(|name| lowered == *name || lowered.ends_with(&format!("_{name}")))
 }
@@ -444,6 +499,69 @@ mod tests {
                 "has_token": false
             },
             "jobs": [{ "id": "job-1", "state": "completed" }]
+        });
+        assert!(assert_no_secret_in_response(&payload).is_ok());
+    }
+
+    #[test]
+    fn a_response_carrying_a_speaker_embedding_is_rejected() {
+        let vector = json!({
+            "suggestion": {
+                "person_id": "9f1c0f2e-5f3a-4a0d-9b9b-1f0a2b3c4d5e",
+                "embedding": [0.012_3, -0.044_1, 0.301_7]
+            }
+        });
+        let error = assert_no_secret_in_response(&vector).expect_err("leak");
+        assert_eq!(error.shape, SecretShape::VoiceEmbedding);
+        assert_eq!(error.pointer, "/suggestion/embedding");
+
+        for key in [
+            "voice_embedding",
+            "speaker_embedding",
+            "embedding_cipher",
+            "embedding_nonce",
+            "voiceprint",
+            "exemplar_vector",
+            "centroid_vector",
+        ] {
+            let payload = json!({ "profile": { key: "AAECAwQFBgcICQ==" } });
+            assert_eq!(
+                assert_no_secret_in_response(&payload)
+                    .expect_err("leak")
+                    .shape,
+                SecretShape::VoiceEmbedding,
+                "key {key} must be refused"
+            );
+        }
+
+        let nested = json!({ "profile": { "embeddings": [{ "dim": 256 }] } });
+        assert_eq!(
+            assert_no_secret_in_response(&nested)
+                .expect_err("leak")
+                .shape,
+            SecretShape::VoiceEmbedding
+        );
+    }
+
+    #[test]
+    fn a_voice_suggestion_payload_without_a_vector_passes() {
+        // The shape `plaudon_app_core::voice_profiles::matching::MatchReport`
+        // actually produces: scores, bands and person ids, no vector.
+        let payload = json!({
+            "cluster_key": "speaker_1",
+            "evaluated": 3,
+            "below_floor": 2,
+            "recorded": [{
+                "person_id": "9f1c0f2e-5f3a-4a0d-9b9b-1f0a2b3c4d5e",
+                "score": 2.731_4,
+                "band": "suggest",
+                "aggregation": "centroid"
+            }],
+            "model": {
+                "model_id": "wespeaker-resnet34-lm",
+                "model_version": "1.0",
+                "embedding": null
+            }
         });
         assert!(assert_no_secret_in_response(&payload).is_ok());
     }

@@ -1,0 +1,36 @@
+# Workspace cargo configuration.
+#
+# The Swift runtime rpath, for every binary this workspace links on macOS.
+#
+# `crates/ai-apple` links a Swift static library whose runtime dependencies
+# (`libswift_Concurrency.dylib` and friends) carry `@rpath` install names, so
+# anything that ends up linking it needs `/usr/lib/swift` on its runtime search
+# path or dyld refuses to start the binary. The build script emits that rpath
+# — together with the weak `Speech` and `FoundationModels` references, which
+# are what lets the result load on a Mac older than macOS 26 — as
+# `cargo:rustc-link-arg`, and Cargo applies link args only to targets of the
+# package that emitted them; `apps/plaudon-egui`, `crates/app` and
+# `tests/hardware` therefore re-emit the whole set from their own build
+# scripts, which works because each is a *direct* dependent of
+# `plaudon-ai-apple` and so is given its `DEP_PLAUDON_AI_APPLE_LINK_ARGS`.
+# Those three stay: this file does not replace them, because weak-linking a
+# framework a binary does not use is not something to do workspace-wide.
+#
+# That mechanism stops there. With `--all-features` — which is what the test,
+# clippy and coverage gates use — the Swift library is also linked into the
+# test binaries of packages that only depend on it transitively
+# (`plaudon-ui`, `plaudon-platform`, `plaudon-e2e`, the integration and chaos
+# suites, …), and Cargo publishes `DEP_*` to none of them. Measured as
+# `dyld: Library not loaded: @rpath/libswift_Concurrency.dylib` aborting 30+
+# test binaries in the coverage run (#269).
+#
+# `/usr/lib/swift` is part of macOS itself, so this is an rpath to the
+# operating system's own runtime, not to anything we ship, and it is scoped to
+# Apple targets: a Linux or Windows build still links nothing Apple.
+#
+# NOTE: setting RUSTFLAGS in the environment *replaces* these flags rather than
+# adding to them. The gates that do so (`RUSTFLAGS=-D warnings` for the Apple
+# bridge jobs) build `plaudon-ai-apple` itself, which emits the rpath from its
+# own build script, so nothing depends on both at once.
+[target.'cfg(target_os = "macos")']
+rustflags = ["-C", "link-arg=-Wl,-rpath,/usr/lib/swift"]

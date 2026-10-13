@@ -168,7 +168,10 @@ mod tests {
         selection.move_down(false, &rows);
         assert_eq!(selection.active(), 2);
         assert_eq!(selection.anchor(), 2);
-        assert!(selection.is_empty());
+        assert!(
+            selection.is_empty(),
+            "expected selection to be empty, got {selection:?}"
+        );
     }
 
     #[test]
@@ -214,7 +217,10 @@ mod tests {
         selection.toggle(rows[0].recording_id);
         assert!(selection.contains(rows[0].recording_id));
         selection.toggle(rows[0].recording_id);
-        assert!(selection.is_empty());
+        assert!(
+            selection.is_empty(),
+            "expected selection to be empty, got {selection:?}"
+        );
     }
 
     #[test]
@@ -257,6 +263,9 @@ mod tests {
         assert_eq!(range_ids(&rows, 1, 3).len(), 3);
         assert_eq!(range_ids(&rows, 3, 1), range_ids(&rows, 1, 3));
         assert_eq!(range_ids(&rows, 2, 2).len(), 1);
-        assert!(range_ids(&[], 0, 3).is_empty());
+        assert!(
+            range_ids(&[], 0, 3).is_empty(),
+            "an empty list has no range"
+        );
     }
 }

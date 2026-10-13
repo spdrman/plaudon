@@ -33,18 +33,26 @@ use egui::Ui;
 use plaudon_app::command::{AppCommand, AppResponse};
 use plaudon_app::dto::{
     GetTranscriptRequest, ListSpeakersRequest, ListSpeakersResponse, RecordingDetail, RevisionKind,
-    SaveTranscriptRevisionRequest, SegmentEdit, SpeakerDto, TranscriptPage, TranscriptRevisionRef,
-    TranscriptSegmentDto,
+    SaveTranscriptRevisionRequest, SegmentEdit, SetSegmentSpeakerRequest, SpeakerDto,
+    TranscriptPage, TranscriptRevisionRef, TranscriptSegmentDto,
 };
 use plaudon_domain::error::{AppErrorCode, ErrorEnvelope};
 use plaudon_domain::ids::{RecordingId, SpeakerId, TranscriptRevisionId};
 use plaudon_transcript_doc::autosave::SaveRequest;
-use plaudon_transcript_doc::doc::{DocumentSource, SegmentSeed, TranscriptDocument};
+use plaudon_transcript_doc::doc::{DocumentSource, SegmentId, SegmentSeed, TranscriptDocument};
 use plaudon_transcript_doc::playback::PlaybackPosition;
 use plaudon_transcript_doc::session::EditSession;
 
 use crate::ai::AiOutput;
 use crate::transcript::{ConflictChoice, SpeakerChoice, TranscriptEditor, TranscriptEditorState};
+
+/// A segment reassignment waiting for its `set_segment_speaker` answer.
+#[derive(Debug, Clone, Copy)]
+struct PendingSpeaker {
+    segment: SegmentId,
+    seq_index: u32,
+    revision_id: TranscriptRevisionId,
+}
 
 /// Segments asked for per page, matching the React pane's cursor pages.
 pub const PAGE_SIZE: u32 = 200;
@@ -73,6 +81,11 @@ pub struct TranscriptBinding {
     error: Option<ErrorEnvelope>,
     /// A position the user asked for by activating a timestamp.
     seek_to_ms: Option<u64>,
+    /// Reassignments dispatched and not yet answered.
+    pending_speakers: Vec<PendingSpeaker>,
+    /// The last refusal of a reassignment, shown above the transcript until
+    /// the next attempt.
+    speaker_error: Option<ErrorEnvelope>,
 }
 
 impl Default for TranscriptBinding {
@@ -97,6 +110,8 @@ impl TranscriptBinding {
             saving: false,
             error: None,
             seek_to_ms: None,
+            pending_speakers: Vec::new(),
+            speaker_error: None,
         }
     }
 
@@ -169,6 +184,10 @@ impl TranscriptBinding {
             "rename_speaker" | "confirm_speaker" | "reset_speaker" => {
                 self.on_speaker_operation(result)
             }
+            "set_segment_speaker" => self.on_segment_speaker(result),
+            "assign_cluster_person"
+            | "confirm_speaker_suggestion"
+            | "reject_speaker_suggestion" => self.on_cluster_assignment(result),
             _ => false,
         }
     }
@@ -296,6 +315,105 @@ impl TranscriptBinding {
         true
     }
 
+    /// The answer to a cluster assignment (`VOICE_PROFILES_SPEC` VP-211,
+    /// VP-212).
+    ///
+    /// Two things land here, and both are the stored truth rather than a
+    /// guess: the speaker row — a cluster assigned to a person carries that
+    /// person's name — and the exact segments the application attributed, so
+    /// the open document moves them in **one** undo step. A refused
+    /// assignment (`applied: false`, because segments were set individually)
+    /// changes nothing here; the panel that asked is showing the question.
+    fn on_cluster_assignment(&mut self, result: &Result<AppResponse, ErrorEnvelope>) -> bool {
+        let (speaker, assigned) = match result {
+            Ok(AppResponse::AssignClusterPerson(answer)) => {
+                if !answer.applied {
+                    return false;
+                }
+                (Some(&answer.speaker), answer.assigned_segments.as_slice())
+            }
+            Ok(
+                AppResponse::ConfirmSpeakerSuggestion(decision)
+                | AppResponse::RejectSpeakerSuggestion(decision),
+            ) => {
+                if !decision.applied {
+                    return false;
+                }
+                (
+                    decision.speaker.as_ref(),
+                    decision.assigned_segments.as_slice(),
+                )
+            }
+            _ => return false,
+        };
+        let Some(speaker) = speaker else {
+            return false;
+        };
+        if Some(speaker.recording_id) != self.recording_id {
+            return false;
+        }
+        if let Some(slot) = self
+            .speakers
+            .iter()
+            .position(|choice| choice.id == speaker.speaker_id)
+        {
+            self.speakers[slot] = choice(speaker);
+            self.speaker_ids = speaker_ids(&self.speakers);
+        }
+        if let Some(session) = self.session.as_mut() {
+            // A read-only revision refuses the move, which is correct: its
+            // attribution is not editable, and the next read shows the stored
+            // one.
+            let _ = session.assign_cluster(assigned, Some(speaker.speaker_id));
+        }
+        true
+    }
+
+    /// The answer to one reassignment.
+    ///
+    /// A refusal is not swallowed: the segment goes back to the attribution
+    /// the database holds and the message is shown, because a chip that kept
+    /// showing an assignment no store accepted would be a lie.
+    fn on_segment_speaker(&mut self, result: &Result<AppResponse, ErrorEnvelope>) -> bool {
+        match result {
+            Ok(AppResponse::SetSegmentSpeaker(answer)) => {
+                if Some(answer.recording_id) != self.recording_id {
+                    return false;
+                }
+                let Some(slot) = self.pending_speakers.iter().position(|pending| {
+                    pending.revision_id == answer.transcript_revision_id
+                        && pending.seq_index == answer.seq_index
+                }) else {
+                    return false;
+                };
+                let pending = self.pending_speakers.remove(slot);
+                if let Some(session) = self.session.as_mut() {
+                    // Ignored deliberately: the only failure is a segment the
+                    // document no longer holds, which is the case where there
+                    // is nothing left to rebase.
+                    let _ = session.note_speaker_persisted(pending.segment);
+                }
+                true
+            }
+            Err(envelope) => {
+                // A refusal envelope carries no segment, so the oldest
+                // unanswered reassignment is the one it belongs to: the panel
+                // dispatches them in order and the dispatcher answers in
+                // order.
+                if self.pending_speakers.is_empty() {
+                    return false;
+                }
+                let pending = self.pending_speakers.remove(0);
+                if let Some(session) = self.session.as_mut() {
+                    let _ = session.restore_persisted_speaker(pending.segment);
+                }
+                self.speaker_error = Some(envelope.clone());
+                true
+            }
+            Ok(_) => false,
+        }
+    }
+
     fn apply_speakers(&mut self, response: &ListSpeakersResponse) {
         self.speakers = response.speakers.iter().map(choice).collect();
         self.speaker_ids = speaker_ids(&self.speakers);
@@ -342,6 +460,14 @@ impl TranscriptBinding {
             return;
         }
 
+        if let Some(envelope) = self.speaker_error.clone() {
+            ui.label(format!("Speaker not changed: {}", envelope.message));
+            ui.label(format!("Diagnostic id {}", envelope.diagnostic_id));
+            if ui.button("Dismiss").clicked() {
+                self.speaker_error = None;
+            }
+        }
+
         let Some(session) = self.session.as_mut() else {
             ui.label("Reading the transcript…");
             return;
@@ -362,6 +488,22 @@ impl TranscriptBinding {
             if !self.saving {
                 self.saving = true;
                 out.command(save_command(&request));
+            }
+        }
+        if let Some(change) = output.speaker_change {
+            if let (Some(recording_id), Some(revision_id)) = (self.recording_id, self.loaded) {
+                self.speaker_error = None;
+                self.pending_speakers.push(PendingSpeaker {
+                    segment: change.segment,
+                    seq_index: change.seq_index,
+                    revision_id,
+                });
+                out.command(AppCommand::SetSegmentSpeaker(SetSegmentSpeakerRequest {
+                    recording_id: recording_id.to_string(),
+                    transcript_revision_id: revision_id.to_string(),
+                    seq_index: change.seq_index,
+                    speaker_id: change.speaker_id.map(|id| id.to_string()),
+                }));
             }
         }
         match output.conflict_choice {
@@ -494,12 +636,21 @@ fn document_from(
             start_ms: segment.start_ms,
             end_ms: segment.end_ms,
             text: segment.text.clone(),
-            speaker_id: segment.speaker_label.as_ref().and_then(|label| {
-                speakers
-                    .iter()
-                    .find(|(known, _)| known == label)
-                    .map(|(_, id)| *id)
-            }),
+            // The row identity is on the wire since VP-030; the label match
+            // stays as the fallback for a page read before the column was
+            // published, where the label is all there is.
+            speaker_id: segment
+                .speaker_id
+                .as_ref()
+                .and_then(|id| id.parse::<SpeakerId>().ok())
+                .or_else(|| {
+                    segment.speaker_label.as_ref().and_then(|label| {
+                        speakers
+                            .iter()
+                            .find(|(known, _)| known == label)
+                            .map(|(_, id)| *id)
+                    })
+                }),
             // `get_transcript` sends a confidence value and the engine that
             // produced it, but not the scale it is on. §8.5 forbids reading
             // a value without its scale and a scale cannot be invented, so

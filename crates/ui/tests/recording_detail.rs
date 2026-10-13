@@ -87,8 +87,8 @@ impl DetailApp {
         intents.extend(produced);
     }
 
-    fn respond(&mut self, id: u64, result: Result<AppResponse, ErrorEnvelope>) {
-        self.screen.on_response(CommandId::from_raw(id), &result);
+    fn respond(&mut self, id: u64, result: &Result<AppResponse, ErrorEnvelope>) {
+        self.screen.on_response(CommandId::from_raw(id), result);
     }
 
     fn command_names(&self) -> Vec<&'static str> {
@@ -127,10 +127,10 @@ fn harness_loaded(artifacts: Vec<SourceArtifactSummary>) -> Harness<'static, Det
     let mut harness = harness();
     harness
         .state_mut()
-        .respond(2, Ok(AppResponse::GetRecording(fixture())));
+        .respond(2, &Ok(AppResponse::GetRecording(fixture())));
     harness.state_mut().respond(
         1,
-        Ok(AppResponse::ListSourceArtifacts(
+        &Ok(AppResponse::ListSourceArtifacts(
             ListSourceArtifactsResponse { artifacts },
         )),
     );
@@ -241,7 +241,7 @@ fn open_disclosure(harness: &mut Harness<'_, DetailApp>) {
     let id = harness.state().sent.len() as u64;
     harness
         .state_mut()
-        .respond(id, Ok(AppResponse::GetDeletionDisclosure(disclosure())));
+        .respond(id, &Ok(AppResponse::GetDeletionDisclosure(disclosure())));
     harness.run();
 }
 
@@ -341,10 +341,10 @@ fn the_exports_and_the_delete_control_survive_the_stacked_layout() {
     let mut harness = harness_sized(800.0);
     harness
         .state_mut()
-        .respond(2, Ok(AppResponse::GetRecording(fixture())));
+        .respond(2, &Ok(AppResponse::GetRecording(fixture())));
     harness.state_mut().respond(
         1,
-        Ok(AppResponse::ListSourceArtifacts(
+        &Ok(AppResponse::ListSourceArtifacts(
             ListSourceArtifactsResponse {
                 artifacts: vec![artifact("transcript", None)],
             },
@@ -362,10 +362,10 @@ fn a_failed_export_list_offers_the_standard_error_affordance() {
     let mut harness = harness();
     harness
         .state_mut()
-        .respond(2, Ok(AppResponse::GetRecording(fixture())));
+        .respond(2, &Ok(AppResponse::GetRecording(fixture())));
     harness
         .state_mut()
-        .respond(1, Err(envelope(AppErrorCode::StorageUnavailable)));
+        .respond(1, &Err(envelope(AppErrorCode::StorageUnavailable)));
     harness.run();
 
     let lines = announced(&harness);
@@ -420,7 +420,12 @@ fn the_disclosure_states_every_limit_sentence_verbatim() {
     open_disclosure(&mut harness);
 
     let lines = announced(&harness);
-    assert_eq!(DELETION_LIMITS.len(), 5, "the contract has five sentences");
+    assert_eq!(
+        DELETION_LIMITS.len(),
+        6,
+        "the contract has six sentences: the five of spec 4.6 and the \
+         voice-profile one of VOICE_PROFILES_SPEC VP-080"
+    );
     for limit in DELETION_LIMITS {
         assert!(
             lines.iter().any(|line| line == limit),
@@ -551,7 +556,7 @@ fn a_refused_confirmation_keeps_the_user_here_and_explains_why() {
     let id = harness.state().sent.len() as u64;
     harness
         .state_mut()
-        .respond(id, Err(envelope(AppErrorCode::ConfirmationRequired)));
+        .respond(id, &Err(envelope(AppErrorCode::ConfirmationRequired)));
     harness.run();
 
     assert!(
@@ -594,7 +599,7 @@ fn a_successful_deletion_reports_what_happened_and_leaves_the_detail() {
     let id = harness.state().sent.len() as u64;
     harness
         .state_mut()
-        .respond(id, Ok(AppResponse::DeleteRecording(deleted())));
+        .respond(id, &Ok(AppResponse::DeleteRecording(deleted())));
     harness.run();
 
     let summary = harness

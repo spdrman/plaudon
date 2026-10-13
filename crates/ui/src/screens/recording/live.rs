@@ -5,6 +5,10 @@
 //! the three bindings and, crucially, the **one** thing none of them can own
 //! alone: the synchronisation between them.
 //!
+//! * A speaker answer belongs to two panels at once, and that now includes
+//!   the roster assignments: a cluster assigned to a person renames the
+//!   speaker row, which the transcript chips and the speaker panel both
+//!   render.
 //! * A timestamp the user activates in the transcript seeks the player.
 //! * An anchor the user activates in the review panel seeks the player, and
 //!   the position is the backend's own — the panel offers no control at all
@@ -150,13 +154,13 @@ impl DetailPanels for LivePanels {
         // while the transcript had the names all along.
         if is_speaker_answer(command) {
             self.transcript.on_response(command, result, out);
-            self.ai.on_response(command, result);
+            self.ai.on_response(command, result, out);
             return;
         }
         if self.transcript.on_response(command, result, out) {
             return;
         }
-        self.ai.on_response(command, result);
+        self.ai.on_response(command, result, out);
     }
 
     fn on_ui_event(&mut self, event: &UiEvent, out: &mut AiOutput) {
@@ -172,6 +176,12 @@ impl DetailPanels for LivePanels {
 fn is_speaker_answer(command: &'static str) -> bool {
     matches!(
         command,
-        "list_speakers" | "rename_speaker" | "confirm_speaker" | "reset_speaker"
+        "list_speakers"
+            | "rename_speaker"
+            | "confirm_speaker"
+            | "reset_speaker"
+            | "assign_cluster_person"
+            | "confirm_speaker_suggestion"
+            | "reject_speaker_suggestion"
     )
 }

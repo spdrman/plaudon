@@ -14,7 +14,7 @@
 //! to every segment of that cluster at once, and is reversible because
 //! `original_label` is never overwritten (spec 8.7, \u00a74.5).
 
-use plaudon_domain::ids::{RecordingId, SpeakerId, TranscriptRevisionId};
+use plaudon_domain::ids::{PersonId, RecordingId, SpeakerId, TranscriptRevisionId};
 use plaudon_domain::time::Timestamp;
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
@@ -39,6 +39,33 @@ pub struct DiarizationRunInsert {
     /// Where processing happened.
     pub privacy_class: String,
     /// Terminal status: `succeeded`, `failed` or `canceled`.
+    pub status: String,
+    /// SHA-256 of the exact media bytes.
+    pub input_sha256: String,
+    /// Clusters the provider reported.
+    pub detected_cluster_count: Option<u32>,
+    /// When the run started.
+    pub created_at: Timestamp,
+    /// When the run finished.
+    pub finished_at: Option<Timestamp>,
+}
+
+/// A diarization run as read back.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StoredDiarizationRun {
+    /// Run identity.
+    pub id: Uuid,
+    /// Recording that was diarized.
+    pub recording_id: RecordingId,
+    /// Media asset that was diarized.
+    pub media_asset_id: String,
+    /// Provider identifier.
+    pub provider_id: String,
+    /// Provider version, when known.
+    pub provider_version: Option<String>,
+    /// Where processing happened.
+    pub privacy_class: String,
+    /// Terminal status.
     pub status: String,
     /// SHA-256 of the exact media bytes.
     pub input_sha256: String,
@@ -91,6 +118,8 @@ pub struct StoredSpeaker {
     pub recording_id: RecordingId,
     /// Diarization cluster, when the row came from a run.
     pub cluster_key: Option<String>,
+    /// Roster person this row is linked to, when one has been linked (VP-010).
+    pub person_id: Option<PersonId>,
     /// The machine-assigned label the row started with.
     pub original_label: String,
     /// Current label.
@@ -118,6 +147,26 @@ impl SpeakerRepository {
     #[must_use]
     pub const fn new(db: Database) -> Self {
         Self { db }
+    }
+
+    /// Delete a diarization run and everything derived from it.
+    ///
+    /// The resumable match job calls this before re-running a diarize stage
+    /// that crashed before its checkpoint committed: the run id is derived
+    /// from the job, so a retried attempt overwrites its own abandoned rows
+    /// instead of leaving an orphan run beside the real one. Deleting a run
+    /// that is not there is not an error.
+    ///
+    /// # Errors
+    ///
+    /// Propagates persistence failures.
+    pub async fn discard_run(&self, run_id: Uuid) -> PersistenceResult<bool> {
+        let affected = sqlx::query("DELETE FROM diarization_runs WHERE id = ?1")
+            .bind(run_id.to_string())
+            .execute(self.db.pool())
+            .await?
+            .rows_affected();
+        Ok(affected > 0)
     }
 
     /// Record a diarization run with its raw turns, in one transaction.
@@ -273,8 +322,8 @@ impl SpeakerRepository {
         recording_id: RecordingId,
     ) -> PersistenceResult<Vec<StoredSpeaker>> {
         let rows = sqlx::query(
-            "SELECT id, cluster_key, original_label, label, name, provenance, user_confirmed,
-                    renamed_at, confirmed_at
+            "SELECT id, cluster_key, person_id, original_label, label, name, provenance,
+                    user_confirmed, renamed_at, confirmed_at
              FROM speakers WHERE recording_id = ?1
              ORDER BY COALESCE(original_label, label), id",
         )
@@ -287,10 +336,18 @@ impl SpeakerRepository {
                 let id: String = row.try_get("id")?;
                 let original: Option<String> = row.try_get("original_label")?;
                 let label: String = row.try_get("label")?;
+                let person: Option<String> = row.try_get("person_id")?;
                 Ok(StoredSpeaker {
                     id: id.parse().map_err(|_| PersistenceError::IntegrityFailed)?,
                     recording_id,
                     cluster_key: row.try_get("cluster_key")?,
+                    person_id: person
+                        .map(|value| {
+                            value
+                                .parse::<PersonId>()
+                                .map_err(|_| PersistenceError::IntegrityFailed)
+                        })
+                        .transpose()?,
                     original_label: original.unwrap_or_else(|| label.clone()),
                     label,
                     name: row.try_get("name")?,
@@ -305,6 +362,206 @@ impl SpeakerRepository {
                 })
             })
             .collect()
+    }
+
+    /// A diarization run by id, or `None` when it is gone.
+    ///
+    /// The resumable match job reads it back after a crash: the run row and
+    /// its turns are the committed output of the pipeline's first stage, so a
+    /// resumed job reuses them instead of re-running the provider (VP-102).
+    ///
+    /// # Errors
+    ///
+    /// Propagates persistence failures.
+    pub async fn run(&self, run_id: Uuid) -> PersistenceResult<Option<StoredDiarizationRun>> {
+        let row = sqlx::query(
+            "SELECT id, recording_id, media_asset_id, provider_id, provider_version,
+                    privacy_class, status, input_sha256, detected_cluster_count, created_at,
+                    finished_at
+             FROM diarization_runs WHERE id = ?1",
+        )
+        .bind(run_id.to_string())
+        .fetch_optional(self.db.pool())
+        .await?;
+        row.as_ref().map(decode_run).transpose()
+    }
+
+    /// The raw provider turns of a run, in the order the provider emitted
+    /// them.
+    ///
+    /// # Errors
+    ///
+    /// Propagates persistence failures.
+    pub async fn turns(&self, run_id: Uuid) -> PersistenceResult<Vec<SpeakerTurnInsert>> {
+        let rows = sqlx::query(
+            "SELECT seq_index, cluster_key, start_ms, end_ms, confidence, confidence_scale
+             FROM speaker_turns WHERE diarization_run_id = ?1 ORDER BY seq_index",
+        )
+        .bind(run_id.to_string())
+        .fetch_all(self.db.pool())
+        .await?;
+        rows.iter()
+            .map(|row| {
+                Ok(SpeakerTurnInsert {
+                    seq_index: u32::try_from(row.try_get::<i64, _>("seq_index")?)
+                        .map_err(|_| PersistenceError::IntegrityFailed)?,
+                    cluster_key: row.try_get("cluster_key")?,
+                    start_ms: u64::try_from(row.try_get::<i64, _>("start_ms")?)
+                        .map_err(|_| PersistenceError::IntegrityFailed)?,
+                    end_ms: u64::try_from(row.try_get::<i64, _>("end_ms")?)
+                        .map_err(|_| PersistenceError::IntegrityFailed)?,
+                    confidence: row.try_get("confidence")?,
+                    confidence_scale: row.try_get("confidence_scale")?,
+                })
+            })
+            .collect()
+    }
+
+    /// The reconciled per-segment assignments of one run against one revision,
+    /// in transcript order.
+    ///
+    /// # Errors
+    ///
+    /// Propagates persistence failures.
+    pub async fn assignments(
+        &self,
+        revision_id: TranscriptRevisionId,
+        run_id: Uuid,
+    ) -> PersistenceResult<Vec<AssignmentInsert>> {
+        let rows = sqlx::query(
+            "SELECT seq_index, assignment, cluster_key, overlapping_keys_json, covered_ms
+             FROM segment_speaker_assignments
+             WHERE transcript_revision_id = ?1 AND diarization_run_id = ?2
+             ORDER BY seq_index",
+        )
+        .bind(revision_id.to_string())
+        .bind(run_id.to_string())
+        .fetch_all(self.db.pool())
+        .await?;
+        rows.iter()
+            .map(|row| {
+                Ok(AssignmentInsert {
+                    seq_index: u32::try_from(row.try_get::<i64, _>("seq_index")?)
+                        .map_err(|_| PersistenceError::IntegrityFailed)?,
+                    assignment: row.try_get("assignment")?,
+                    cluster_key: row.try_get("cluster_key")?,
+                    overlapping_keys_json: row.try_get("overlapping_keys_json")?,
+                    covered_ms: u64::try_from(row.try_get::<i64, _>("covered_ms")?)
+                        .map_err(|_| PersistenceError::IntegrityFailed)?,
+                })
+            })
+            .collect()
+    }
+
+    /// How many of a cluster's segments were attributed to somebody other
+    /// than `speaker_id` by hand (VP-211's "3 segments were set
+    /// individually").
+    ///
+    /// A per-segment exception is a segment the reconciliation attributes to
+    /// this cluster alone, whose `transcript_segments.speaker_id` points at a
+    /// *different* speaker row. A segment with no attribution yet is not an
+    /// exception: nobody decided anything about it.
+    ///
+    /// # Errors
+    ///
+    /// Propagates persistence failures.
+    pub async fn cluster_segment_exceptions(
+        &self,
+        revision_id: TranscriptRevisionId,
+        run_id: Uuid,
+        cluster_key: &str,
+        speaker_id: SpeakerId,
+    ) -> PersistenceResult<u32> {
+        let count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*)
+             FROM segment_speaker_assignments AS a
+             JOIN transcript_segments AS s
+               ON s.transcript_revision_id = a.transcript_revision_id
+              AND s.seq_index = a.seq_index
+             WHERE a.transcript_revision_id = ?1 AND a.diarization_run_id = ?2
+               AND a.assignment = 'single' AND a.cluster_key = ?3
+               AND s.speaker_id IS NOT NULL AND s.speaker_id <> ?4",
+        )
+        .bind(revision_id.to_string())
+        .bind(run_id.to_string())
+        .bind(cluster_key)
+        .bind(speaker_id.to_string())
+        .fetch_one(self.db.pool())
+        .await?;
+        Ok(u32::try_from(count).unwrap_or(u32::MAX))
+    }
+
+    /// Attribute every segment of one cluster to one speaker row, in one
+    /// statement (VP-032, VP-211).
+    ///
+    /// This is the bulk half of an assignment: "this whole cluster is Priya"
+    /// writes the cluster's segments here and the roster link on the speaker
+    /// row, rather than issuing N single-segment commands — which is both the
+    /// spec's rule and what makes the action one undo step (VP-212).
+    ///
+    /// Returns the zero-based `seq_index` of every segment written, ascending,
+    /// so the caller can turn the action into exactly one undo step over
+    /// known segments rather than a bare count (VP-212).
+    ///
+    /// # Errors
+    ///
+    /// Propagates persistence failures.
+    pub async fn assign_cluster_segments(
+        &self,
+        revision_id: TranscriptRevisionId,
+        run_id: Uuid,
+        cluster_key: &str,
+        speaker_id: SpeakerId,
+    ) -> PersistenceResult<Vec<u32>> {
+        let rows: Vec<i64> = sqlx::query_scalar(
+            "UPDATE transcript_segments SET speaker_id = ?4
+             WHERE transcript_revision_id = ?1
+               AND seq_index IN (
+                   SELECT seq_index FROM segment_speaker_assignments
+                   WHERE transcript_revision_id = ?1 AND diarization_run_id = ?2
+                     AND assignment = 'single' AND cluster_key = ?3
+               )
+             RETURNING seq_index",
+        )
+        .bind(revision_id.to_string())
+        .bind(run_id.to_string())
+        .bind(cluster_key)
+        .bind(speaker_id.to_string())
+        .fetch_all(self.db.pool())
+        .await?;
+        let mut assigned: Vec<u32> = rows
+            .into_iter()
+            .map(|value| u32::try_from(value).unwrap_or(u32::MAX))
+            .collect();
+        assigned.sort_unstable();
+        Ok(assigned)
+    }
+
+    /// The most recent diarization run of a recording, when it has one.
+    ///
+    /// Enrolment and cluster assignment both work from the run the user is
+    /// looking at, which is the newest succeeded one.
+    ///
+    /// # Errors
+    ///
+    /// Propagates persistence failures.
+    pub async fn latest_run(
+        &self,
+        recording_id: RecordingId,
+    ) -> PersistenceResult<Option<StoredDiarizationRun>> {
+        let row = sqlx::query(
+            "SELECT id, recording_id, media_asset_id, provider_id, provider_version,
+                    privacy_class, status, input_sha256, detected_cluster_count, created_at,
+                    finished_at
+             FROM diarization_runs
+             WHERE recording_id = ?1 AND status = 'succeeded'
+             ORDER BY created_at DESC, id DESC
+             LIMIT 1",
+        )
+        .bind(recording_id.to_string())
+        .fetch_optional(self.db.pool())
+        .await?;
+        row.as_ref().map(decode_run).transpose()
     }
 
     /// Rename a speaker. The name is recorded; identity is not claimed until
@@ -403,4 +660,30 @@ impl SpeakerRepository {
         }
         Ok(())
     }
+}
+
+fn decode_run(row: &sqlx::sqlite::SqliteRow) -> PersistenceResult<StoredDiarizationRun> {
+    let id: String = row.try_get("id")?;
+    let recording_id: String = row.try_get("recording_id")?;
+    let clusters: Option<i64> = row.try_get("detected_cluster_count")?;
+    Ok(StoredDiarizationRun {
+        id: id.parse().map_err(|_| PersistenceError::IntegrityFailed)?,
+        recording_id: recording_id
+            .parse()
+            .map_err(|_| PersistenceError::IntegrityFailed)?,
+        media_asset_id: row.try_get("media_asset_id")?,
+        provider_id: row.try_get("provider_id")?,
+        provider_version: row.try_get("provider_version")?,
+        privacy_class: row.try_get("privacy_class")?,
+        status: row.try_get("status")?,
+        input_sha256: row.try_get("input_sha256")?,
+        detected_cluster_count: clusters
+            .map(u32::try_from)
+            .transpose()
+            .map_err(|_| PersistenceError::IntegrityFailed)?,
+        created_at: Timestamp::from_millis(row.try_get::<i64, _>("created_at")?),
+        finished_at: row
+            .try_get::<Option<i64>, _>("finished_at")?
+            .map(Timestamp::from_millis),
+    })
 }

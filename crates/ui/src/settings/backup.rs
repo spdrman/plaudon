@@ -823,6 +823,11 @@ impl Section for BackupSection {
                     destination_directory: path.to_owned(),
                     password: Self::password_argument(&password),
                     sensitive_profile: self.sensitive_profile,
+                    // The "include voice profiles" control is the People/
+                    // Settings work (VP-090); this screen never opts in, and
+                    // the backend refuses the combination anyway unless the
+                    // archive is encrypted (VP-078).
+                    include_voice_profiles: false,
                 }));
             }
             PickedPath::File(FilePurpose::RestoreArchive) => {

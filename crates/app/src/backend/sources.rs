@@ -131,17 +131,17 @@ impl ConnectorFactory for ProductionConnectorFactory {
             GatedProcessLauncher::new(Arc::new(policy)),
             Arc::new(plaudon_diagnostics::redact::Redactor::new()),
         );
-        // No vendor download host has been observed yet, so the default
-        // policy's host list is empty and every download is refused until a
-        // host is recorded in the URL contract (spec §7.3).
-        let download = Arc::new(DownloadPolicy::default());
+        // The allowlist is the host that was actually observed serving
+        // `plaud audio` links on the one release in the committed
+        // compatibility table (spec 7.3): an exact host, never a wildcard,
+        // because a bucket name is part of the host on S3.
+        let download = Arc::new(DownloadPolicy::with_hosts(
+            plaudon_source_plaud_cli::OBSERVED_AUDIO_HOSTS,
+        ));
         let fetcher = ReqwestFetcher::new(Arc::clone(&download))
             .map_err(|err| internal(format!("cannot build the download client: {err}")))?;
-        let pipeline = AcquisitionPipeline::new(
-            download,
-            Arc::new(fetcher),
-            UrlContract::undocumented("plaud.ai"),
-        );
+        let pipeline =
+            AcquisitionPipeline::new(download, Arc::new(fetcher), UrlContract::plaud_cli_0_3_15());
         let account_scope = SourceAccountScope::new(PLAUD_ACCOUNT_SCOPE);
         let connector = PlaudCloudCliConnector::new(
             CliDiscovery::new(),
@@ -488,7 +488,7 @@ impl SourcesPort for LocalBackend {
             ConnectorState::Unconfigured | ConnectorState::IncompatibleVersion
         ) && !self.source_runtime.session().disconnected;
         if needs_discovery {
-            // A read-only `--version` launch; failures are recorded on the
+            // A read-only `version` launch; failures are recorded on the
             // connector and surface as diagnostics, not as a command error.
             let intent = UserInitiated::new(PROBE_INTENT, Timestamp::now().as_millis());
             match handle.connector.connect(None, &intent).await {

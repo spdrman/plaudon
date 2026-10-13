@@ -107,7 +107,7 @@ pub fn row(title: &str) -> RecordingSummary {
         acc.wrapping_mul(31).wrapping_add(byte as usize) % 1_000_000
     });
     let mut row = row_at(index);
-    row.title = title.to_owned();
+    title.clone_into(&mut row.title);
     row
 }
 

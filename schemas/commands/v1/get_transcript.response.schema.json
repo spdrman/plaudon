@@ -143,6 +143,7 @@
         "alignment_origin",
         "confidence",
         "speaker_label",
+        "speaker_id",
         "annotations"
       ],
       "properties": {
@@ -203,6 +204,13 @@
             "string",
             "null"
           ]
+        },
+        "speaker_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid"
         },
         "annotations": {
           "type": "array",

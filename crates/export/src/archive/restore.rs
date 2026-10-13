@@ -17,23 +17,28 @@
 //! referencing them. They are inert, they are what the next attempt reuses,
 //! and the library the user sees is unchanged.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
+
+use base64::engine::general_purpose::STANDARD as BASE64;
+use base64::Engine as _;
 
 use plaudon_domain::ids::ImportIntentId;
 use plaudon_domain::media::{MediaIdentity, Sha256Digest};
 use plaudon_persistence::archive::{relative_path, MediaArchive};
+use plaudon_persistence::voice_profiles::VoiceProfileGateRepository;
 use plaudon_persistence::{Database, PersistenceError};
 use plaudon_security::fsguard::PrivateTempDir;
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
 
 use super::documents::{
-    AnnotationDocument, OutputDocument, RecordDocument, SourceDocument, ToolDocument,
-    TranscriptDocument,
+    AnnotationDocument, OutputDocument, PersonDocument, RecordDocument, SourceDocument,
+    ToolDocument, TranscriptDocument,
 };
 use super::manifest::{Manifest, ManifestEntry};
 use super::reader::{self, EntrySink, InspectionReport};
+use super::voiceprofiles::{self, VoiceProfileDocument};
 use crate::error::{ArchiveRejection, ExportError, ExportResult};
 
 /// Staging-directory prefix for restores.
@@ -106,6 +111,13 @@ pub struct RestoreReport {
     pub sources_restored: u64,
     /// Tool definitions inserted.
     pub tools_restored: u64,
+    /// Roster entries inserted (VP-077: ordinary library data).
+    pub people_restored: u64,
+    /// Voice enrolments inserted from the `voiceprofiles/` namespace.
+    pub voice_profiles_restored: u64,
+    /// Whether the consent gate must be re-run before any restored profile is
+    /// used (VP-078). Set whenever the archive carried voice data at all.
+    pub voice_consent_required: bool,
     /// Media blobs committed into the archive.
     pub media_committed: u64,
     /// Media blobs already present and reused.
@@ -266,6 +278,8 @@ impl Restorer {
         let mut outputs: Vec<OutputDocument> = Vec::new();
         let mut sources: Vec<SourceDocument> = Vec::new();
         let mut tools: Vec<ToolDocument> = Vec::new();
+        let mut people: Vec<PersonDocument> = Vec::new();
+        let mut voice_profiles: Vec<VoiceProfileDocument> = Vec::new();
         let mut media: Vec<(&ManifestEntry, &PathBuf)> = Vec::new();
 
         for entry in &manifest.entries {
@@ -300,6 +314,11 @@ impl Restorer {
                 sources.push(serde_json::from_slice(&bytes).map_err(|_| malformed("source"))?);
             } else if entry.path.starts_with("tools/") {
                 tools.push(serde_json::from_slice(&bytes).map_err(|_| malformed("tool"))?);
+            } else if entry.path.starts_with("people/") {
+                people.push(serde_json::from_slice(&bytes).map_err(|_| malformed("person"))?);
+            } else if voiceprofiles::in_namespace(&entry.path) {
+                voice_profiles
+                    .push(serde_json::from_slice(&bytes).map_err(|_| malformed("voice profile"))?);
             }
         }
 
@@ -354,6 +373,18 @@ impl Restorer {
             committed_paths.insert(entry.sha256.clone(), relative);
         }
 
+        // The consent gate is re-armed *before* a single biometric row lands
+        // (VP-078). A crash between these two steps therefore leaves the
+        // feature off with nothing restored, never profiles the user never
+        // consented to in this library with matching armed.
+        if !voice_profiles.is_empty() {
+            VoiceProfileGateRepository::new(self.db.clone())
+                .require_consent_after_restore()
+                .await
+                .map_err(ExportError::Persistence)?;
+            report.voice_consent_required = true;
+        }
+
         let mut tx = self.db.begin_write().await?;
 
         for source in &sources {
@@ -375,6 +406,37 @@ impl Restorer {
             .map_err(PersistenceError::from)?
             .rows_affected();
             report.sources_restored += affected;
+        }
+
+        // The roster before the recordings: `speakers.person_id` points at it.
+        let mut known_people: BTreeSet<String> = BTreeSet::new();
+        for person in &people {
+            let aliases = serde_json::to_string(&person.aliases).map_err(|_| {
+                ExportError::ArchiveRejected(ArchiveRejection::Malformed(format!(
+                    "person {} has unserializable aliases",
+                    person.id
+                )))
+            })?;
+            let affected = sqlx::query(
+                "INSERT OR IGNORE INTO people
+                     (id, display_name, aliases_json, email, organisation, created_at, updated_at,
+                      status)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            )
+            .bind(&person.id)
+            .bind(&person.display_name)
+            .bind(&aliases)
+            .bind(person.email.as_deref())
+            .bind(person.organisation.as_deref())
+            .bind(person.created_at)
+            .bind(person.updated_at)
+            .bind(&person.status)
+            .execute(&mut *tx)
+            .await
+            .map_err(PersistenceError::from)?
+            .rows_affected();
+            report.people_restored += affected;
+            known_people.insert(person.id.clone());
         }
 
         for record in &records {
@@ -539,10 +601,18 @@ impl Restorer {
                 .map_err(PersistenceError::from)?;
             }
             for speaker in &annotation.speakers {
+                // The link travels only when the person it names travels with
+                // it. An unresolvable id becomes a plain name snapshot rather
+                // than a dangling reference — the recording keeps its labels
+                // either way (VP-080).
+                let person_id = speaker
+                    .person_id
+                    .as_deref()
+                    .filter(|id| known_people.contains(*id));
                 sqlx::query(
                     "INSERT OR IGNORE INTO speakers
-                         (id, recording_id, label, name, provenance, user_confirmed)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                         (id, recording_id, label, name, provenance, user_confirmed, person_id)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
                 )
                 .bind(&speaker.id)
                 .bind(&annotation.recording_id)
@@ -550,6 +620,7 @@ impl Restorer {
                 .bind(speaker.name.as_deref())
                 .bind(&speaker.provenance)
                 .bind(i64::from(speaker.user_confirmed))
+                .bind(person_id)
                 .execute(&mut *tx)
                 .await
                 .map_err(PersistenceError::from)?;
@@ -788,6 +859,104 @@ impl Restorer {
             }
         }
 
+        // Voice profiles last: they need the roster, and the gate above has
+        // already been re-armed, so nothing here is usable until the user
+        // passes it in this library (VP-078).
+        for profile in &voice_profiles {
+            // A hostile or corrupt document is refused before the first insert,
+            // not left for a CHECK constraint to catch halfway through.
+            profile.validate().map_err(|reason| {
+                ExportError::ArchiveRejected(ArchiveRejection::Malformed(format!(
+                    "voice-profile document is not valid: {reason}"
+                )))
+            })?;
+            if !known_people.contains(&profile.person_id)
+                && !person_exists(&mut tx, &profile.person_id).await?
+            {
+                report.conflicts.push(RestoreConflict {
+                    entry_path: VoiceProfileDocument::entry_path(&profile.person_id),
+                    reason: "the archive carries no roster entry for this enrolment".to_owned(),
+                });
+                continue;
+            }
+            let enrollment = &profile.enrollment;
+            let affected = sqlx::query(
+                "INSERT OR IGNORE INTO person_voice_enrollments
+                     (person_id, consent_version, consent_note, retention_months, last_matched_at,
+                      status, expired_at, created_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            )
+            .bind(&profile.person_id)
+            .bind(&enrollment.consent_version)
+            .bind(enrollment.consent_note.as_deref())
+            .bind(i64::from(enrollment.retention_months))
+            .bind(enrollment.last_matched_at)
+            .bind(&enrollment.status)
+            .bind(enrollment.expired_at)
+            .bind(enrollment.created_at)
+            .execute(&mut *tx)
+            .await
+            .map_err(PersistenceError::from)?
+            .rows_affected();
+            report.voice_profiles_restored += affected;
+            if affected == 0 {
+                // This library already has an enrolment for that person. Its
+                // exemplars are its own; adding somebody else's would silently
+                // change what the profile recognises.
+                report.conflicts.push(RestoreConflict {
+                    entry_path: VoiceProfileDocument::entry_path(&profile.person_id),
+                    reason: "this person is already enrolled in the target library".to_owned(),
+                });
+                continue;
+            }
+
+            for exemplar in &profile.exemplars {
+                let cipher = decode_sealed(&exemplar.embedding_cipher_b64, &exemplar.id)?;
+                let nonce = decode_sealed(&exemplar.embedding_nonce_b64, &exemplar.id)?;
+                // Provenance the target library cannot resolve is dropped, not
+                // fabricated: the exemplar belongs to the enrolment, and where
+                // it came from is a fact about a recording this library may not
+                // have. Diarization runs never travel in an archive at all.
+                let recording_id = match exemplar.recording_id.as_deref() {
+                    Some(id) if recording_exists(&mut tx, id).await? => Some(id),
+                    _ => None,
+                };
+                sqlx::query(
+                    "INSERT OR IGNORE INTO voice_exemplars
+                         (id, person_id, recording_id, diarization_run_id, cluster_key,
+                          source_start_ms, source_end_ms, speech_ms, model_id, model_version,
+                          model_sha256, embedding_dim, embedding_cipher, embedding_nonce,
+                          created_at)
+                     VALUES (?1, ?2, ?3, NULL, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+                )
+                .bind(&exemplar.id)
+                .bind(&profile.person_id)
+                .bind(recording_id)
+                .bind(recording_id.and(exemplar.cluster_key.as_deref()))
+                .bind(
+                    exemplar
+                        .source_start_ms
+                        .map(|value| i64::try_from(value).unwrap_or(i64::MAX)),
+                )
+                .bind(
+                    exemplar
+                        .source_end_ms
+                        .map(|value| i64::try_from(value).unwrap_or(i64::MAX)),
+                )
+                .bind(i64::try_from(exemplar.speech_ms).unwrap_or(i64::MAX))
+                .bind(&exemplar.model_id)
+                .bind(&exemplar.model_version)
+                .bind(&exemplar.model_sha256)
+                .bind(i64::from(exemplar.embedding_dim))
+                .bind(cipher)
+                .bind(nonce)
+                .bind(exemplar.created_at)
+                .execute(&mut *tx)
+                .await
+                .map_err(PersistenceError::from)?;
+            }
+        }
+
         tx.commit().await.map_err(PersistenceError::from)?;
         Ok(report)
     }
@@ -835,4 +1004,42 @@ async fn table_exists(
         .await
         .map_err(PersistenceError::from)?;
     Ok(row.is_some())
+}
+
+/// Whether a roster entry with this id already exists in the target library.
+async fn person_exists(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    person_id: &str,
+) -> ExportResult<bool> {
+    let row = sqlx::query("SELECT 1 FROM people WHERE id = ?1")
+        .bind(person_id)
+        .fetch_optional(&mut **tx)
+        .await
+        .map_err(PersistenceError::from)?;
+    Ok(row.is_some())
+}
+
+/// Whether a recording with this id exists, so provenance can point at it.
+async fn recording_exists(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    recording_id: &str,
+) -> ExportResult<bool> {
+    let row = sqlx::query("SELECT 1 FROM recordings WHERE id = ?1")
+        .bind(recording_id)
+        .fetch_optional(&mut **tx)
+        .await
+        .map_err(PersistenceError::from)?;
+    Ok(row.is_some())
+}
+
+/// Decode a base64 field of a voice-profile document.
+///
+/// A malformed blob fails the restore rather than landing as truncated
+/// ciphertext that would later decrypt to nothing and look like tampering.
+fn decode_sealed(encoded: &str, exemplar_id: &str) -> ExportResult<Vec<u8>> {
+    BASE64.decode(encoded).map_err(|_| {
+        ExportError::ArchiveRejected(ArchiveRejection::Malformed(format!(
+            "exemplar {exemplar_id} carries a malformed sealed value"
+        )))
+    })
 }

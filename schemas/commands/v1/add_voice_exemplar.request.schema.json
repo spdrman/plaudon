@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/add_voice_exemplar.request.schema.json",
+  "title": "add_voice_exemplar.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "person_id",
+    "recording_id",
+    "cluster_key"
+  ],
+  "properties": {
+    "person_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "recording_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "cluster_key": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    }
+  }
+}

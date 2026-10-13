@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/enroll_person_voice.request.schema.json",
+  "title": "enroll_person_voice.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "person_id",
+    "recording_id",
+    "cluster_key",
+    "consent"
+  ],
+  "properties": {
+    "person_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "recording_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "cluster_key": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "consent": {
+      "$ref": "#/$defs/enrolment_consent"
+    }
+  },
+  "$defs": {
+    "enrolment_consent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "disclosure_version",
+        "person_attested",
+        "retention_months",
+        "consent_note"
+      ],
+      "properties": {
+        "disclosure_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "person_attested": {
+          "type": "boolean"
+        },
+        "retention_months": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 12
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "consent_note": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    }
+  }
+}

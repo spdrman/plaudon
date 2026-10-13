@@ -303,16 +303,22 @@ impl ModelPicker {
                 }
                 if ui
                     .add_enabled(
-                        !context.blocked_by_local_only(&target.engine),
+                        // A local-only stage has no cloud model to verify, so
+                        // the control that would send a clip is not offered
+                        // (VP-110).
+                        !context.blocked_by_local_only(&target.engine)
+                            && stage.verification_task().is_some(),
                         egui::Button::new("Send the test clip and accept the cost"),
                     )
                     .clicked()
                 {
-                    output.command(AppCommand::VerifyModel(VerifyModelRequest {
-                        model_id: target.model_id.clone(),
-                        task: stage.verification_task().to_owned(),
-                        cost_acknowledged: true,
-                    }));
+                    if let Some(task) = stage.verification_task() {
+                        output.command(AppCommand::VerifyModel(VerifyModelRequest {
+                            model_id: target.model_id.clone(),
+                            task: task.to_owned(),
+                            cost_acknowledged: true,
+                        }));
+                    }
                     close = true;
                 }
             });

@@ -238,6 +238,13 @@ mod tests {
     const ADVERSARIAL_TRANSCRIPT: &str =
         "the acquisition closes friday, wire the deposit to account 4815162342";
 
+    /// A roster name and the vocabulary of the voice-profiles feature. A
+    /// notification says how many jobs need attention, never who was
+    /// recognised: VOICE_PROFILES_SPEC VP-112 and ADR-0021 both forbid it, and
+    /// a suggestion is not even a claim about a person, it is a guess awaiting
+    /// confirmation.
+    const ADVERSARIAL_PERSON: &str = "Dana Scully";
+
     /// Everything the payload is allowed to contain: letters, digits, spaces and
     /// a closed set of punctuation. No `/`, `\\`, `.ext`-style tokens beyond the
     /// sentence period, no quotes, no colons.
@@ -299,6 +306,13 @@ mod tests {
             "acquisition",
             "4815162342",
             "deposit",
+            ADVERSARIAL_PERSON,
+            "scully",
+            "embedding",
+            "voiceprint",
+            "speaker",
+            "voice profile",
+            "matched",
         ];
 
         for context in samples() {

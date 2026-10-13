@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/reject_speaker_suggestion.request.schema.json",
+  "title": "reject_speaker_suggestion.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "suggestion_id",
+    "corrected_person_id",
+    "overwrite_segment_exceptions"
+  ],
+  "properties": {
+    "suggestion_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "corrected_person_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "uuid"
+    },
+    "overwrite_segment_exceptions": {
+      "type": "boolean"
+    }
+  }
+}

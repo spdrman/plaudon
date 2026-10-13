@@ -341,6 +341,30 @@ impl EditSession {
         ))
     }
 
+    /// A `set_segment_speaker` write succeeded: the assignment on screen is
+    /// now the stored one.
+    ///
+    /// # Errors
+    ///
+    /// [`DocError::UnknownSegment`] when the segment is not in this document.
+    pub fn note_speaker_persisted(&mut self, id: SegmentId) -> Result<(), DocError> {
+        self.document.note_speaker_persisted(id)?;
+        self.search.refresh(&self.document);
+        Ok(())
+    }
+
+    /// A `set_segment_speaker` write was refused: show the stored assignment
+    /// again, without an undo step for a change that never landed.
+    ///
+    /// # Errors
+    ///
+    /// [`DocError::UnknownSegment`] when the segment is not in this document.
+    pub fn restore_persisted_speaker(&mut self, id: SegmentId) -> Result<(), DocError> {
+        self.document.restore_persisted_speaker(id)?;
+        self.search.refresh(&self.document);
+        Ok(())
+    }
+
     /// Reassign every segment currently attributed to `from`.
     ///
     /// One undo step, because "that was Dana, not Speaker 2" is one decision.
@@ -375,6 +399,69 @@ impl EditSession {
             selection,
             self.now_ms,
         ))?;
+        Ok(count)
+    }
+
+    /// Attribute the segments at `seq_indexes` to `speaker`, as one undo step.
+    ///
+    /// This is what a *cluster* assignment looks like in the open document
+    /// (`VOICE_PROFILES_SPEC` VP-211, VP-212): the application wrote the
+    /// cluster's segments in one statement and answered with exactly which
+    /// ones it wrote, so the screen applies that one decision as one history
+    /// entry — `Cmd/Ctrl+Z` restores every segment's previous attribution,
+    /// including the ones that had been set individually and were overwritten.
+    ///
+    /// The assignment is already stored, so the moved segments are marked
+    /// persisted: the document is catching up with the database, not
+    /// proposing a write.
+    ///
+    /// Returns how many segments moved.
+    ///
+    /// # Errors
+    ///
+    /// [`DocError::ReadOnly`] when the open revision is not editable, and
+    /// [`DocError::UnknownSegment`] if a moved segment vanished mid-commit.
+    pub fn assign_cluster(
+        &mut self,
+        seq_indexes: &[u32],
+        speaker: Option<SpeakerId>,
+    ) -> Result<usize, DocError> {
+        let touched: Vec<SegmentId> = self
+            .document
+            .segments()
+            .iter()
+            .filter(|segment| seq_indexes.contains(&segment.seq_index))
+            .map(|segment| segment.id)
+            .collect();
+        let ops: Vec<Op> = self
+            .document
+            .segments()
+            .iter()
+            .filter(|segment| {
+                segment.speaker_id != speaker && seq_indexes.contains(&segment.seq_index)
+            })
+            .map(|segment| Op::SetSpeaker {
+                segment: segment.id,
+                before: segment.speaker_id,
+                after: speaker,
+            })
+            .collect();
+        let count = ops.len();
+        if count > 0 {
+            let selection = self.selection;
+            self.commit(OpGroup::new(
+                ops,
+                EditKind::SpeakerChange,
+                selection,
+                selection,
+                self.now_ms,
+            ))?;
+        }
+        // Every segment of the cluster is stored now, whether or not it moved
+        // on screen: the write already happened.
+        for segment in touched {
+            self.document.note_speaker_persisted(segment)?;
+        }
         Ok(count)
     }
 
@@ -769,6 +856,73 @@ mod tests {
     }
 
     #[test]
+    fn a_persisted_reassignment_stops_being_a_pending_one() {
+        let mut session = session(&["one", "two"]);
+        let segment_ids = ids(&session);
+        let speaker = SpeakerId::new();
+        session
+            .set_speaker(segment_ids[0], Some(speaker))
+            .expect("assign");
+        assert!(session.document().is_dirty());
+
+        session
+            .note_speaker_persisted(segment_ids[0])
+            .expect("the write landed");
+        assert_eq!(session.document().speaker_reassignments(), Vec::new());
+        assert!(!session.document().is_dirty());
+        assert_eq!(
+            session
+                .document()
+                .segment(segment_ids[0])
+                .expect("segment")
+                .speaker_id,
+            Some(speaker),
+            "the assignment itself is untouched: only its base moved"
+        );
+    }
+
+    #[test]
+    fn a_refused_reassignment_is_taken_off_the_document_without_an_undo_step() {
+        let mut session = session(&["one", "two"]);
+        let segment_ids = ids(&session);
+        let stored = SpeakerId::new();
+        session
+            .set_speaker(segment_ids[0], Some(stored))
+            .expect("assign");
+        session
+            .note_speaker_persisted(segment_ids[0])
+            .expect("the write landed");
+
+        let attempted = SpeakerId::new();
+        session
+            .set_speaker(segment_ids[0], Some(attempted))
+            .expect("assign");
+        session
+            .restore_persisted_speaker(segment_ids[0])
+            .expect("the write was refused");
+
+        assert_eq!(
+            session
+                .document()
+                .segment(segment_ids[0])
+                .expect("segment")
+                .speaker_id,
+            Some(stored)
+        );
+        // Undo goes back past the refused change to the stored one, never
+        // offering to restore an assignment no store accepted.
+        session.undo().expect("undo");
+        assert_eq!(
+            session
+                .document()
+                .segment(segment_ids[0])
+                .expect("segment")
+                .speaker_id,
+            Some(stored)
+        );
+    }
+
+    #[test]
     fn reassigning_a_whole_speaker_is_one_step() {
         let mut session = session(&["one", "two", "three"]);
         let speaker = SpeakerId::new();
@@ -793,6 +947,83 @@ mod tests {
                 .speaker_id,
             Some(speaker)
         );
+    }
+
+    #[test]
+    fn assigning_a_cluster_is_one_undo_step_that_restores_the_segments_set_by_hand() {
+        // The shape of VP-211/VP-212: three segments of one cluster, one of
+        // which the user had attributed to somebody else by hand. Assigning
+        // the cluster overwrites that exception, and one undo puts it back.
+        let mut session = session(&["one", "two", "three"]);
+        let cluster = SpeakerId::new();
+        let exception = SpeakerId::new();
+        let segment_ids = ids(&session);
+        session
+            .set_speaker(segment_ids[0], Some(cluster))
+            .expect("assign");
+        session
+            .set_speaker(segment_ids[1], Some(exception))
+            .expect("assign");
+        let before = session.history().undo_depth();
+
+        let moved = session
+            .assign_cluster(&[0, 1, 2], Some(cluster))
+            .expect("assign the cluster");
+
+        assert_eq!(moved, 2, "the segment already on the cluster did not move");
+        assert_eq!(
+            session.history().undo_depth(),
+            before + 1,
+            "a cluster assignment is one step, not one per segment"
+        );
+        for id in &segment_ids {
+            assert_eq!(
+                session.document().segment(*id).expect("segment").speaker_id,
+                Some(cluster)
+            );
+        }
+        // Already stored: the document is catching up with the database, so
+        // nothing is left looking like an unsaved change.
+        assert!(session
+            .document()
+            .segments()
+            .iter()
+            .all(|segment| segment.speaker_id == segment.base_speaker_id));
+
+        session.undo().expect("undo");
+        assert_eq!(
+            session
+                .document()
+                .segment(segment_ids[1])
+                .expect("segment")
+                .speaker_id,
+            Some(exception),
+            "undo did not restore the segment that had been set individually"
+        );
+        assert_eq!(
+            session
+                .document()
+                .segment(segment_ids[2])
+                .expect("segment")
+                .speaker_id,
+            None
+        );
+    }
+
+    #[test]
+    fn assigning_a_cluster_that_changes_nothing_adds_no_undo_step() {
+        let mut session = session(&["one", "two"]);
+        let cluster = SpeakerId::new();
+        let segment_ids = ids(&session);
+        session
+            .set_speaker(segment_ids[0], Some(cluster))
+            .expect("assign");
+        let before = session.history().undo_depth();
+        assert_eq!(
+            session.assign_cluster(&[0], Some(cluster)).expect("assign"),
+            0
+        );
+        assert_eq!(session.history().undo_depth(), before);
     }
 
     #[test]

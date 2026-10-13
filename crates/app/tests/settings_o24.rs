@@ -338,7 +338,11 @@ fn a_fresh_library_has_no_models_and_says_where_they_would_come_from() {
     let AppResponse::ListLocalModels(response) = harness.call(AppCommand::ListLocalModels) else {
         panic!("wrong response");
     };
-    assert!(response.models.is_empty());
+    assert!(
+        response.models.is_empty(),
+        "expected response.models to be empty, got {:?}",
+        response.models
+    );
     assert_eq!(response.disk.installed_bytes, 0);
     assert!(response.model_root.ends_with("models"));
     assert!(
@@ -510,8 +514,14 @@ fn a_build_the_updater_did_not_install_reports_that_rather_than_a_version() {
         status.installed_version_copy(),
         "Not managed by the updater"
     );
-    assert!(!status.manifest_endpoint.is_empty());
-    assert!(!status.signing_key_id.is_empty());
+    assert!(
+        !status.manifest_endpoint.is_empty(),
+        "expected status.manifest_endpoint to be non-empty"
+    );
+    assert!(
+        !status.signing_key_id.is_empty(),
+        "expected status.signing_key_id to be non-empty"
+    );
 }
 
 #[test]

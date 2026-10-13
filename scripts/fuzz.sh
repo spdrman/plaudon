@@ -29,6 +29,7 @@ TARGETS=(
   fuzz_redactor
   fuzz_error_envelope
   fuzz_domain_redactor
+  fuzz_embedding_blob
 )
 
 # Targets that cannot be written yet because the parser they would exercise does

@@ -332,7 +332,11 @@ mod tests {
         let mut state = OnboardingState::new();
         state.apply(OnboardingAction::Skip);
         assert_eq!(state.step(), OnboardingStep::Privacy);
-        assert!(state.skipped().is_empty());
+        assert!(
+            state.skipped().is_empty(),
+            "expected state.skipped() to be empty, got {:?}",
+            state.skipped()
+        );
     }
 
     #[test]
@@ -419,8 +423,14 @@ mod tests {
     #[test]
     fn every_step_has_a_title_and_a_stable_identifier() {
         for &step in OnboardingStep::ALL {
-            assert!(!step.title().is_empty());
-            assert!(!step.as_str().is_empty());
+            assert!(
+                !step.title().is_empty(),
+                "expected step.title() to be non-empty"
+            );
+            assert!(
+                !step.as_str().is_empty(),
+                "expected step.as_str() to be non-empty"
+            );
         }
         assert_eq!(OnboardingStep::ALL.len(), 6);
     }

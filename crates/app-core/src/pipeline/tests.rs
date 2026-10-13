@@ -111,13 +111,13 @@ impl Harness {
             audio_sha256: Sha256Digest::of(b"fixture-media"),
         }
     }
+}
 
-    fn pipeline(&self, replies: Vec<Reply>) -> (SummarizationPipeline, Arc<ScriptedModel>) {
-        let model = Arc::new(ScriptedModel::new(capabilities(100_000), replies));
-        let pipeline =
-            SummarizationPipeline::new(model.clone(), Arc::new(SteppingClock::new(1_000, 10)));
-        (pipeline, model)
-    }
+fn scripted_pipeline(replies: Vec<Reply>) -> (SummarizationPipeline, Arc<ScriptedModel>) {
+    let model = Arc::new(ScriptedModel::new(capabilities(100_000), replies));
+    let pipeline =
+        SummarizationPipeline::new(model.clone(), Arc::new(SteppingClock::new(1_000, 10)));
+    (pipeline, model)
 }
 
 fn ctx() -> JobContext {
@@ -128,7 +128,7 @@ fn ctx() -> JobContext {
 async fn a_multi_segment_recording_is_summarized_with_resolving_anchors() {
     let harness = Harness::new();
     let request = harness.request(100_000);
-    let (pipeline, model) = harness.pipeline(vec![
+    let (pipeline, model) = scripted_pipeline(vec![
         Reply::Body(summary_body(&harness.revision, 0, 3)),
         Reply::Body(extraction_body(&harness.revision)),
     ]);
@@ -137,11 +137,18 @@ async fn a_multi_segment_recording_is_summarized_with_resolving_anchors() {
 
     assert_eq!(model.call_count(), 2, "one section, one extraction");
     assert_eq!(outcome.claims.len(), 3);
-    assert!(outcome.claims.iter().all(|claim| claim.is_grounded()));
+    assert!(outcome
+        .claims
+        .iter()
+        .all(plaudon_domain::claim::Claim::is_grounded));
     assert_eq!(outcome.grounding.verified_anchors, 3);
     assert_eq!(outcome.grounding.total_anchors, 3);
     assert_eq!(outcome.coverage, CoverageState::Full);
-    assert!(outcome.rejected.is_empty());
+    assert!(
+        outcome.rejected.is_empty(),
+        "nothing should be rejected: {:?}",
+        outcome.rejected
+    );
     assert!(outcome.provenance_is_complete());
 
     // Every anchor resolves to real text at the exact span it names.
@@ -156,7 +163,12 @@ async fn a_multi_segment_recording_is_summarized_with_resolving_anchors() {
                 .take((verified.char_end - verified.char_start) as usize)
                 .collect();
             assert_eq!(verified.matched_text, expected);
-            assert_eq!(verified.seek_ms, segment.start.map(|s| s.get()));
+            assert_eq!(
+                verified.seek_ms,
+                segment
+                    .start
+                    .map(plaudon_domain::timerange::SourceTimeMs::get)
+            );
         }
     }
 }
@@ -165,7 +177,7 @@ async fn a_multi_segment_recording_is_summarized_with_resolving_anchors() {
 async fn every_stage_records_its_input_revision_and_versions() {
     let harness = Harness::new();
     let request = harness.request(100_000);
-    let (pipeline, _) = harness.pipeline(vec![
+    let (pipeline, _) = scripted_pipeline(vec![
         Reply::Body(summary_body(&harness.revision, 0, 3)),
         Reply::Body(extraction_body(&harness.revision)),
     ]);
@@ -188,8 +200,14 @@ async fn every_stage_records_its_input_revision_and_versions() {
         assert_eq!(stage.pipeline_version, PIPELINE_VERSION);
         assert_eq!(stage.template_id, "general_meeting");
         assert_eq!(stage.template_version, "1.0.0");
-        assert!(!stage.prompt_version.is_empty());
-        assert!(!stage.schema_version.is_empty());
+        assert!(
+            !stage.prompt_version.is_empty(),
+            "{stage:?} has no prompt version"
+        );
+        assert!(
+            !stage.schema_version.is_empty(),
+            "{stage:?} has no schema version"
+        );
         assert!(stage.is_complete(), "{stage:?} has incomplete provenance");
         assert!(stage.ended_at >= stage.started_at);
     }
@@ -299,7 +317,7 @@ async fn a_long_transcript_is_section_summarized_then_synthesized() {
 async fn a_model_reporting_less_than_its_chunk_downgrades_the_coverage_claim() {
     let harness = Harness::new();
     let request = harness.request(100_000);
-    let (pipeline, _) = harness.pipeline(vec![
+    let (pipeline, _) = scripted_pipeline(vec![
         Reply::Body(summary_body(&harness.revision, 0, 1)),
         Reply::Body(extraction_body(&harness.revision)),
     ]);
@@ -316,7 +334,7 @@ async fn an_unverified_context_length_is_never_dispatched() {
     let harness = Harness::new();
     let mut request = harness.request(100_000);
     request.capabilities.max_context_tokens = plaudon_domain::capability::Known::Unknown;
-    let (pipeline, model) = harness.pipeline(vec![]);
+    let (pipeline, model) = scripted_pipeline(vec![]);
     let error = pipeline.run(request, &ctx()).await.unwrap_err();
     assert_eq!(
         error,
@@ -330,7 +348,7 @@ async fn an_unknown_structured_output_capability_is_never_dispatched() {
     let harness = Harness::new();
     let mut request = harness.request(100_000);
     request.capabilities.supports_structured_output = Tri::Unknown;
-    let (pipeline, model) = harness.pipeline(vec![]);
+    let (pipeline, model) = scripted_pipeline(vec![]);
     assert_eq!(
         pipeline.run(request, &ctx()).await.unwrap_err(),
         PipelineError::RequestFamilyUnknown
@@ -346,7 +364,7 @@ async fn an_unavailable_model_is_never_dispatched() {
         plaudon_ai_contracts::capabilities::AvailabilityReason::ModelAssetMissing {
             asset: "weights".into(),
         };
-    let (pipeline, model) = harness.pipeline(vec![]);
+    let (pipeline, model) = scripted_pipeline(vec![]);
     assert_eq!(
         pipeline.run(request, &ctx()).await.unwrap_err(),
         PipelineError::CapabilityUnverified
@@ -359,7 +377,7 @@ async fn a_prompt_constrained_model_is_marked_as_compatibility_mode() {
     let harness = Harness::new();
     let mut request = harness.request(100_000);
     request.capabilities.supports_structured_output = Tri::No;
-    let (pipeline, _) = harness.pipeline(vec![
+    let (pipeline, _) = scripted_pipeline(vec![
         Reply::Body(summary_body(&harness.revision, 0, 3)),
         Reply::Body(extraction_body(&harness.revision)),
     ]);
@@ -374,7 +392,7 @@ async fn a_prompt_constrained_model_is_marked_as_compatibility_mode() {
 async fn a_cancelled_run_yields_no_partial_output() {
     let harness = Harness::new();
     let request = harness.request(100_000);
-    let (pipeline, model) = harness.pipeline(vec![
+    let (pipeline, model) = scripted_pipeline(vec![
         Reply::Body(summary_body(&harness.revision, 0, 3)),
         Reply::Body(extraction_body(&harness.revision)),
     ]);
@@ -391,7 +409,7 @@ async fn a_cancelled_run_yields_no_partial_output() {
 async fn a_failed_stage_produces_no_output_at_all() {
     let harness = Harness::new();
     let request = harness.request(100_000);
-    let (pipeline, _) = harness.pipeline(vec![
+    let (pipeline, _) = scripted_pipeline(vec![
         Reply::Body(summary_body(&harness.revision, 0, 3)),
         Reply::Fail(TextModelError::ProviderRejected),
     ]);
@@ -409,7 +427,7 @@ async fn a_fabricated_anchor_is_rejected_before_it_becomes_a_claim() {
     body["decisions"][0]["anchors"][0]["seq_index"] = serde_json::json!(99);
     body["decisions"][0]["anchors"][0]["excerpt"] = serde_json::json!("never said this");
 
-    let (pipeline, _) = harness.pipeline(vec![
+    let (pipeline, _) = scripted_pipeline(vec![
         Reply::Body(summary_body(&harness.revision, 0, 3)),
         Reply::Body(body.clone()),
         Reply::Body(body.clone()),
@@ -444,7 +462,7 @@ async fn a_falsified_owner_is_flagged_by_the_entailment_spot_check() {
     let mut body = extraction_body(&harness.revision);
     body["action_items"][0]["owner"] = serde_json::json!("Mallory Quade");
 
-    let (pipeline, _) = harness.pipeline(vec![
+    let (pipeline, _) = scripted_pipeline(vec![
         Reply::Body(summary_body(&harness.revision, 0, 3)),
         Reply::Body(body),
     ]);
@@ -470,7 +488,7 @@ async fn a_high_consequence_claim_defaults_to_review_required() {
         serde_json::json!("The scaffold inspection is overdue and that is a safety risk");
     body["decisions"][0]["anchors"] = serde_json::json!([anchor_json(&harness.revision, 2, 62)]);
 
-    let (pipeline, _) = harness.pipeline(vec![
+    let (pipeline, _) = scripted_pipeline(vec![
         Reply::Body(summary_body(&harness.revision, 0, 3)),
         Reply::Body(body),
     ]);
@@ -484,7 +502,10 @@ async fn a_high_consequence_claim_defaults_to_review_required() {
     assert_eq!(decision.state(), ClaimState::SourceLinked);
     assert!(decision.review_required());
     assert!(!decision.permits_automatic_dispatch());
-    assert!(outcome.verified_claims().is_empty());
+    assert!(
+        outcome.verified_claims().is_empty(),
+        "a review-required claim must not count as verified"
+    );
 }
 
 #[tokio::test]
@@ -498,7 +519,7 @@ async fn bounded_repair_stops_at_the_configured_attempt_count() {
     let mut broken = extraction_body(&harness.revision);
     broken["action_items"][0]["anchors"] = serde_json::json!([]);
 
-    let (pipeline, model) = harness.pipeline(vec![
+    let (pipeline, model) = scripted_pipeline(vec![
         Reply::Body(summary_body(&harness.revision, 0, 3)),
         Reply::Body(broken.clone()),
         Reply::Body(broken.clone()),
@@ -533,7 +554,7 @@ async fn bounded_repair_stops_at_the_configured_attempt_count() {
 async fn repair_is_skipped_when_the_first_response_is_clean() {
     let harness = Harness::new();
     let request = harness.request(100_000);
-    let (pipeline, model) = harness.pipeline(vec![
+    let (pipeline, model) = scripted_pipeline(vec![
         Reply::Body(summary_body(&harness.revision, 0, 3)),
         Reply::Body(extraction_body(&harness.revision)),
     ]);
@@ -546,7 +567,7 @@ async fn an_extraction_with_nothing_usable_fails_visibly() {
     let harness = Harness::new();
     let mut request = harness.request(100_000);
     request.repair_policy = RepairPolicy::NONE;
-    let (pipeline, _) = harness.pipeline(vec![
+    let (pipeline, _) = scripted_pipeline(vec![
         Reply::Body(summary_body(&harness.revision, 0, 3)),
         Reply::Body(serde_json::json!("not an object")),
     ]);
@@ -560,7 +581,7 @@ async fn a_model_asking_for_a_tool_is_refused() {
     let request = harness.request(100_000);
     let mut body = extraction_body(&harness.revision);
     body["tool_calls"] = serde_json::json!([{"name": "http_get"}]);
-    let (pipeline, _) = harness.pipeline(vec![
+    let (pipeline, _) = scripted_pipeline(vec![
         Reply::Body(summary_body(&harness.revision, 0, 3)),
         Reply::Body(body),
     ]);
@@ -661,7 +682,7 @@ async fn a_text_only_revision_produces_anchors_without_seek_positions() {
     let pipeline = SummarizationPipeline::new(model, Arc::new(SteppingClock::new(0, 1)));
     let outcome = pipeline.run(request, &ctx()).await.unwrap();
 
-    assert!(!outcome.claims.is_empty());
+    assert!(!outcome.claims.is_empty(), "the run produced no claims");
     for claim in &outcome.claims {
         for anchor in &claim.anchors {
             let verified = anchor.verified().expect("anchor resolves");
@@ -677,7 +698,7 @@ async fn an_unchanged_section_is_reused_instead_of_regenerated() {
     let mut request = harness.request(100_000);
 
     let first = {
-        let (pipeline, _) = harness.pipeline(vec![
+        let (pipeline, _) = scripted_pipeline(vec![
             Reply::Body(summary_body(&harness.revision, 0, 3)),
             Reply::Body(extraction_body(&harness.revision)),
         ]);
@@ -688,7 +709,8 @@ async fn an_unchanged_section_is_reused_instead_of_regenerated() {
     };
 
     request.reusable_sections = first.section_summaries.clone();
-    let (pipeline, model) = harness.pipeline(vec![Reply::Body(extraction_body(&harness.revision))]);
+    let (pipeline, model) =
+        scripted_pipeline(vec![Reply::Body(extraction_body(&harness.revision))]);
     let second = pipeline.run(request, &ctx()).await.unwrap();
 
     assert_eq!(

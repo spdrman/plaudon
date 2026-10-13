@@ -887,7 +887,8 @@ impl Shell {
         let compact = ui.ctx().content_rect().width() < COMPACT_LAYOUT_WIDTH;
         let collapsed = compact || self.panels.sidebar_collapsed;
         let rect = ui.available_rect_before_wrap();
-        let available: [bool; 6] = Destination::ALL.map(|d| self.screens.has(d));
+        let available: [bool; Destination::ALL.len()] =
+            Destination::ALL.map(|d| self.screens.has(d));
 
         let (nav_rect, content_rect) = if collapsed {
             let split = rect.width() > nav::COLLAPSED_WIDTH * 2.0;

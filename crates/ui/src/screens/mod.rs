@@ -8,6 +8,7 @@
 pub mod devices;
 pub mod inbox;
 pub mod library;
+pub mod people;
 pub mod recording;
 pub mod search;
 pub mod sources;

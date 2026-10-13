@@ -1,0 +1,140 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/confirm_speaker_suggestion.response.schema.json",
+  "title": "confirm_speaker_suggestion.response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "suggestion_id",
+    "state",
+    "applied",
+    "speaker",
+    "person",
+    "assigned_segments",
+    "segment_exceptions"
+  ],
+  "properties": {
+    "suggestion_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "state": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "confirmed",
+        "rejected",
+        "corrected",
+        "expired"
+      ]
+    },
+    "applied": {
+      "type": "boolean"
+    },
+    "speaker": {
+      "$ref": "#/$defs/speaker"
+    },
+    "person": {
+      "$ref": "#/$defs/person_ref"
+    },
+    "assigned_segments": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "segment_exceptions": {
+      "type": "integer",
+      "minimum": 0
+    }
+  },
+  "$defs": {
+    "speaker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "speaker_id",
+        "recording_id",
+        "cluster_key",
+        "person_id",
+        "label",
+        "name",
+        "confirmed",
+        "original_label",
+        "renamed_at",
+        "confirmed_at"
+      ],
+      "properties": {
+        "speaker_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "recording_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "cluster_key": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "person_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "confirmed": {
+          "type": "boolean"
+        },
+        "original_label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "renamed_at": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "confirmed_at": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      }
+    },
+    "person_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "person_id",
+        "display_name"
+      ],
+      "properties": {
+        "person_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "display_name": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

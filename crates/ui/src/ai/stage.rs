@@ -130,11 +130,17 @@ impl StageDispatch {
                 .ui(ui);
         }
 
+        // A stage with no consent purpose can never leave the device (the
+        // speaker stages of VP-110), so there is no grant to ask for and the
+        // dialog is not offered.
+        let (Some(purpose), Some(content)) = (stage.consent_purpose(), stage.content_type()) else {
+            return;
+        };
         if let Some(decision) = self.consent.ui(
             ui,
             model,
-            stage.consent_purpose(),
-            stage.content_type(),
+            purpose,
+            content,
             Some(context.recording_id),
             &estimate,
             output,

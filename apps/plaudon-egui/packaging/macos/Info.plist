@@ -57,7 +57,7 @@
 	<key>NSSupportsAutomaticGraphicsSwitching</key>
 	<true/>
 	<key>NSHumanReadableCopyright</key>
-	<string>Licensed under the Apache License, Version 2.0</string>
+	<string>Licensed under the MIT License</string>
 	<!-- Direct BLE acquisition from a PLAUD device (spec 7.7). -->
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>Plaudon uses Bluetooth to find and import recordings from your PLAUD device. It never connects to anything else.</string>
