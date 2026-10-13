@@ -144,7 +144,13 @@ impl SourcesShellScreen {
     }
 
     /// Ask the application what the connector's state is.
+    ///
+    /// This is the screen's whole first-frame load, so it latches `loaded`:
+    /// the subscription resynchronisation the shell fans out before the first
+    /// frame asks for exactly this read, and probing again from [`Screen::ui`]
+    /// would run the vendor tool twice over for one startup.
     fn probe(&mut self, cx: &mut ScreenCtx<'_>) {
+        self.loaded = true;
         self.send_intent(SourcesState::initial_intent(), cx);
     }
 }
@@ -158,7 +164,6 @@ impl Screen for SourcesShellScreen {
 
     fn ui(&mut self, ui: &mut egui::Ui, cx: &mut ScreenCtx<'_>) {
         if !self.loaded {
-            self.loaded = true;
             self.probe(cx);
         }
         for intent in sources_screen(ui, &mut self.state) {

@@ -13,7 +13,7 @@
 
 mod fixtures;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -59,6 +59,16 @@ struct ScreenApp {
     /// The published name of every command the engine answered, which is what
     /// a frame actually dispatched.
     answered: Vec<&'static str>,
+    /// Commands whose answer the test has taken over with [`ScreenApp::answer`].
+    ///
+    /// The engine behind these screens is a real one, so a command a frame
+    /// dispatched is answered on whichever later frame the worker gets to it.
+    /// Once the test has handed the adapter the answer it means to assert on,
+    /// the engine's own answer to the same command is counted but not
+    /// delivered: it describes a library the test is no longer talking about,
+    /// and letting it land would make the assertion depend on which frame a
+    /// worker thread happened to finish in.
+    seeded: BTreeSet<&'static str>,
     picked_files: Arc<Mutex<u32>>,
     picked_folders: Arc<Mutex<u32>>,
 }
@@ -98,6 +108,7 @@ impl ScreenApp {
             route,
             bus: ShellBus::default(),
             answered: Vec::new(),
+            seeded: BTreeSet::new(),
             picked_files,
             picked_folders,
         }
@@ -115,9 +126,11 @@ impl ScreenApp {
         f(self.screen.as_mut(), &mut cx)
     }
 
-    /// Hand the adapter one answer, as the shell's fan-out would.
+    /// Hand the adapter one answer, as the shell's fan-out would, and take
+    /// that command over: see [`ScreenApp::seeded`].
     fn answer(&mut self, response: AppResponse) {
         let command = response.command();
+        self.seeded.insert(command);
         let result = Ok(response);
         self.with_ctx(|screen, cx| {
             screen.on_response(CommandId::from_raw(0), command, &result, cx);
@@ -140,6 +153,9 @@ impl ScreenApp {
                     result,
                 } => {
                     self.answered.push(command);
+                    if self.seeded.contains(command) {
+                        continue;
+                    }
                     self.with_ctx(|screen, cx| screen.on_response(id, command, &result, cx));
                 }
                 AppEvent::Ui(event) => {
@@ -311,8 +327,9 @@ fn a_jobs_deep_link_is_announced_on_the_row_it_names() {
             job_id: JOB_ID.to_owned(),
         },
     );
-    // Let the real empty page land first, so the seeded one is not overwritten
-    // by an answer still in flight.
+    // The screen reads its page on its own first; the seeded page below then
+    // replaces that answer rather than racing it, because `answer` takes the
+    // command over.
     pump(&mut harness, &[("list_jobs", 1)]);
 
     harness.state_mut().answer(AppResponse::ListJobs(JobPage {
