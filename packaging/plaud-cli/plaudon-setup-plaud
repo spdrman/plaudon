@@ -1,0 +1,165 @@
+#!/usr/bin/env bash
+# Guided setup for the official PLAUD Cloud CLI on macOS (spec 7.1, 7.2).
+#
+# Plaudon never signs you in to PLAUD itself and never handles your PLAUD
+# credentials. Signing in is done by the vendor's own CLI, in your own shell,
+# against the vendor's own OAuth flow. This script does four things and
+# nothing else:
+#
+#   1. checks that Node.js and npm are present
+#   2. installs `@plaud-ai/cli` at the one version this build is verified
+#      against, if that exact version is not already installed
+#   3. runs `plaud login`, which opens your browser
+#   4. runs `plaud me` to confirm the session exists
+#
+# It prints no token, no session file and no raw credential: everything the
+# vendor CLI writes to this terminal is passed through a redactor first.
+#
+# Shipped inside Plaudon.app/Contents/Resources and linked onto the PATH by
+# the Homebrew cask.
+
+set -uo pipefail
+
+# The single version of the vendor CLI this build will drive. It is the
+# version recorded in crates/source-plaud-cli/cli-compatibility.yaml, which is
+# compiled into the application; anything else is refused by the application
+# at runtime (INCOMPATIBLE_VERSION), so installing anything else would only
+# move the failure later.
+PLAUD_CLI_PACKAGE="@plaud-ai/cli"
+PLAUD_CLI_VERSION="0.3.15"
+
+bold=""
+plain=""
+if [ -t 1 ]; then
+  bold=$'\033[1m'
+  plain=$'\033[0m'
+fi
+
+say() { printf '%s\n' "$*"; }
+step() { printf '\n%s==> %s%s\n' "$bold" "$*" "$plain"; }
+problem() { printf '\n%s!!  %s%s\n' "$bold" "$*" "$plain" >&2; }
+
+# Everything the vendor CLI prints goes through here. A bearer token, a JWT or
+# an `x: <long opaque string>` field never reaches the terminal or a scrollback
+# buffer, whatever a future version of that CLI decides to print.
+redact() {
+  sed -E \
+    -e 's/eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_.-]{8,}/[redacted token]/g' \
+    -e 's/(([Tt]oken|TOKEN|[Ss]ecret|SECRET|[Bb]earer|BEARER|[Aa]pi[_-]?[Kk]ey|API[_-]?KEY|[Pp]assword|PASSWORD|[Rr]efresh)[^A-Za-z0-9]{0,4})[A-Za-z0-9._~+\/-]{12,}=*/\1[redacted]/g'
+}
+
+missing_node() {
+  problem "Node.js is required and was not found."
+  cat >&2 <<'GUIDE'
+The official PLAUD Cloud CLI is an npm package, so it needs Node.js.
+
+  Homebrew:   brew install node
+  Or:         https://nodejs.org/en/download
+
+Then run plaudon-setup-plaud again.
+GUIDE
+  exit 1
+}
+
+step "Checking for Node.js"
+command -v node >/dev/null 2>&1 || missing_node
+command -v npm >/dev/null 2>&1 || missing_node
+say "node $(node --version 2>/dev/null || echo '(version unknown)'), npm $(npm --version 2>/dev/null || echo '(version unknown)')"
+
+# `plaud version` prints `plaud <version>` on its first line; `--version` is
+# rejected as an unknown option by 0.3.15, which is why it is not used here.
+installed_version() {
+  command -v plaud >/dev/null 2>&1 || return 1
+  plaud version 2>/dev/null | head -1 | sed -n 's/^plaud \([0-9][0-9A-Za-z.+-]*\).*/\1/p'
+}
+
+step "Checking for $PLAUD_CLI_PACKAGE $PLAUD_CLI_VERSION"
+current="$(installed_version || true)"
+if [ "$current" = "$PLAUD_CLI_VERSION" ]; then
+  say "already installed: plaud $current"
+else
+  if [ -n "$current" ]; then
+    say "found plaud $current; Plaudon drives $PLAUD_CLI_VERSION only and refuses any other version,"
+    say "so this installs $PLAUD_CLI_VERSION over it."
+  else
+    say "not installed; installing it now."
+  fi
+  say "running: npm install -g $PLAUD_CLI_PACKAGE@$PLAUD_CLI_VERSION"
+  if ! npm install -g "$PLAUD_CLI_PACKAGE@$PLAUD_CLI_VERSION" 2>&1 | redact; then
+    problem "npm could not install $PLAUD_CLI_PACKAGE@$PLAUD_CLI_VERSION."
+    cat >&2 <<'GUIDE'
+This is usually one of three things:
+
+  * no network, or a proxy npm does not know about
+  * a global prefix you cannot write to — `npm config get prefix` and either
+    fix its permissions or set one in your home directory:
+        npm config set prefix ~/.npm-global
+        export PATH="$HOME/.npm-global/bin:$PATH"
+  * the version was unpublished upstream, in which case Plaudon cannot drive
+    the vendor CLI at all until its compatibility table is updated and the
+    application rebuilt.
+
+Nothing has been signed in to. Fix the above and run plaudon-setup-plaud again.
+GUIDE
+    exit 1
+  fi
+  current="$(installed_version || true)"
+  if [ "$current" != "$PLAUD_CLI_VERSION" ]; then
+    problem "after installing, \`plaud version\` reports '${current:-nothing}', not $PLAUD_CLI_VERSION."
+    cat >&2 <<'GUIDE'
+Another `plaud` is probably earlier on your PATH — `command -v plaud` and
+`npm root -g` will show which. Plaudon fails closed on an unrecognised version,
+so resolve this before signing in.
+GUIDE
+    exit 1
+  fi
+  say "installed: plaud $current"
+fi
+
+step "Signing in to PLAUD"
+cat <<'GUIDE'
+`plaud login` opens your browser and signs you in to your own PLAUD account.
+This is the vendor's flow: Plaudon never sees your password, and the session it
+creates belongs to the CLI, not to Plaudon. Plaudon reads what that session can
+already read, and the application cannot sign you out again — the vendor CLI's
+`logout` is not something this build exercises.
+GUIDE
+say ""
+if ! plaud login 2>&1 | redact; then
+  problem "\`plaud login\` did not complete."
+  cat >&2 <<'GUIDE'
+Nothing was changed. Common causes: the browser window was closed before the
+flow finished, no default browser is set for this user, or the account requires
+a step the CLI cannot do here. Run `plaud login` yourself to see the vendor's
+own message, then run plaudon-setup-plaud again.
+GUIDE
+  exit 1
+fi
+
+step "Confirming the session"
+if ! plaud me 2>&1 | redact; then
+  problem "\`plaud me\` did not report a signed-in user."
+  cat >&2 <<'GUIDE'
+The login flow reported success but the session cannot be read back. Try
+`plaud login` again; if it keeps happening, the vendor CLI's session store is
+the place to look, not Plaudon.
+GUIDE
+  exit 1
+fi
+
+step "Done"
+cat <<'GUIDE'
+The PLAUD source in Plaudon can now enumerate and download your own recordings.
+
+Next steps:
+
+  1. Open Plaudon.
+  2. Local-only Mode is on from the first launch and blocks every outbound
+     call, including this one. Turn it off before using the PLAUD source if you
+     want the application to reach the vendor at all.
+  3. Settings -> Sources -> PLAUD Cloud CLI: the version check runs there, and
+     it will say `0.3.15` if this finished cleanly.
+
+This terminal printed no token. If you want the session gone, use the vendor
+CLI's own `logout`; Plaudon cannot revoke it for you.
+GUIDE

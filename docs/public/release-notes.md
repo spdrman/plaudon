@@ -57,6 +57,14 @@ and the compatibility records backing every published claim. The evidence
 manifest is signed and every entry carries a SHA-256, so a published claim can
 be checked.
 
+Each release also carries the Homebrew cask and the WinGet manifests it is
+described by, rendered from the built files rather than written: `plaudon.rb`
+and `winget-manifests-<version>.zip`, with the same SHA-256 the checksum file
+records. Neither is live yet — the tap is written only once a release is
+published, and the WinGet manifests reach users only through a pull request to
+`microsoft/winget-pkgs` that a person opens and a maintainer there accepts. See
+[installing Plaudon](./install.md).
+
 Updates and rollbacks are both cryptographically verified against a pinned key;
 a rollback never relaxes that check.
 
@@ -80,6 +88,7 @@ a rollback never relaxes that check.
 
 ### Reading
 
+- [Installing Plaudon](./install.md)
 - [Privacy disclosure](./privacy-disclosure.md)
 - [Vendor dependency matrix](./vendor-matrix.md)
 - [Troubleshooting](./troubleshooting.md)

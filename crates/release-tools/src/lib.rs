@@ -14,6 +14,9 @@
 //!   makes unmeasured claims.
 //! * [`evidence`] assembles and verifies the signed release evidence bundle
 //!   required by spec 24.
+//! * [`packaging`] renders the Homebrew cask and the WinGet manifests from
+//!   the artifacts a release actually built, so a published checksum is a
+//!   measurement rather than a transcription.
 
 pub mod buildmeta;
 pub mod compat;
@@ -21,6 +24,7 @@ pub mod coverage;
 pub mod doclint;
 pub mod evidence;
 pub mod hash;
+pub mod packaging;
 pub mod scenarios;
 pub mod sign;
 

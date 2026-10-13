@@ -118,6 +118,16 @@ iconutil -c iconset "$ICNS_SOURCE" -o "$ICONSET" >/dev/null || {
 rm -rf "$ICONSET"
 cp "$ICNS_SOURCE" "$APP_PATH/Contents/Resources/plaudon.icns"
 
+# The guided PLAUD sign-in helper. It ships inside the bundle so that the
+# Homebrew cask can link it onto the PATH from there (`binary` in the cask),
+# and so that a hand-unzipped bundle carries it too. It is not the
+# application: it installs the pinned vendor CLI and runs the vendor's own
+# login, and the application never calls it.
+SETUP_HELPER="$REPO_ROOT/packaging/plaud-cli/plaudon-setup-plaud"
+[ -f "$SETUP_HELPER" ] || { echo "reason=missing_binary: $SETUP_HELPER is absent" >&2; exit 1; }
+cp "$SETUP_HELPER" "$APP_PATH/Contents/Resources/plaudon-setup-plaud"
+chmod 755 "$APP_PATH/Contents/Resources/plaudon-setup-plaud"
+
 # Info.plist: template + generated associations, merged into one dictionary.
 VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' "$REPO_ROOT/Cargo.toml" | head -1)"
 [ -n "$VERSION" ] || { echo "reason=missing_binary: the workspace version could not be read" >&2; exit 1; }

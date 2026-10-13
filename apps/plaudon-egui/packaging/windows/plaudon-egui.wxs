@@ -142,6 +142,18 @@
         <RegistryValue Root="HKCU" Key="Software\Plaudon" Name="Version" Type="string" Value="$(var.Version)" KeyPath="yes" />
       </Component>
 
+      <!-- The guided PLAUD sign-in helper. WinGet declares a package
+           dependency on Node.js but cannot install the vendor's npm-published
+           CLI, so the thing that can ships with the installer and is run by
+           the user, from the install directory, when they want the PLAUD
+           source. It is a per-user file like every other component here, and
+           its key path is a registry value under HKCU for the same reason
+           (ICE38). -->
+      <Component Id="PlaudSetupScript" Directory="INSTALLFOLDER" Guid="531FECEC-F68F-44CE-B1E9-3025D83E4458">
+        <File Id="PlaudonSetupPlaud" Source="Plaudon-Setup-Plaud.ps1" KeyPath="no" />
+        <RegistryValue Root="HKCU" Key="Software\Plaudon" Name="PlaudSetupScript" Type="string" Value="[INSTALLFOLDER]Plaudon-Setup-Plaud.ps1" KeyPath="yes" />
+      </Component>
+
       <Component Id="StartMenuShortcut" Directory="INSTALLFOLDER" Guid="764C3E17-FADE-4841-95C5-A9D5A8985F9C">
         <File Id="PlaudonIconFile" Source="plaudon.ico" KeyPath="no" />
         <Shortcut
