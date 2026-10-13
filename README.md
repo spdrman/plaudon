@@ -23,6 +23,51 @@
 
 ---
 
+<!-- BEGIN: macOS unsigned-build install (docs/public/install-macos.md) -->
+
+## Install and open Plaudon on macOS (unsigned build)
+
+The macOS artifact is **ad-hoc signed and not notarized**: there is no Apple
+Developer ID certificate and no notarization ticket behind this project, so macOS
+blocks the first launch. On current macOS the old right-click → **Open** trick is
+gone; the steps below are the only two routes. Full version with screenshots:
+[`docs/public/install-macos.md`](docs/public/install-macos.md).
+
+1. **Download** `Plaudon-<version>-macos-arm64.zip` and `checksums.txt` from the
+   [latest release](https://github.com/spdrman/plaudon/releases/latest).
+2. **Verify the download** (run it in the folder holding both files):
+   ```sh
+   shasum -a 256 -c checksums.txt --ignore-missing
+   # ./Plaudon-<version>-macos-arm64.zip: OK
+   ```
+   Anything but `OK` means you do not have the published bytes — stop there.
+3. **Install:** `unzip Plaudon-<version>-macos-arm64.zip && mv Plaudon.app /Applications/`
+4. **Open it once and let it be blocked.** macOS shows *"Plaudon.app" Not Opened —
+   Apple could not verify "Plaudon.app" is free of malware…*. Click **Done**, not
+   *Move to Trash*. That blocked attempt is what creates the entry in the next step.
+5. **Allow it:** **System Settings → Privacy & Security → Security**, where
+   *"Plaudon.app" was blocked to protect your Mac* now has an **Open Anyway**
+   button. Click it, authenticate with your password or Touch ID, and confirm.
+   Leave *Allow applications from* on **App Store & Known Developers**.
+
+   Terminal alternative, same effect — removes the quarantine flag the browser
+   attached to the download:
+   ```sh
+   xattr -dr com.apple.quarantine /Applications/Plaudon.app
+   ```
+
+You are overriding a security control to run a build nobody but its authors has
+checked. Do it only if you trust this build, and only after the checksum matched;
+building from source ([Build and run](#build-and-run)) avoids the question. The
+no-warranty terms in [No warranty / use at your own risk](#no-warranty--use-at-your-own-risk)
+apply in full. Intel Macs are not covered — the release is Apple Silicon only, and
+the Windows `.msi` is unsigned too (SmartScreen warns) and has never been run on
+Windows.
+
+<!-- END: macOS unsigned-build install -->
+
+---
+
 ## What Plaudon is
 
 Plaudon is an independent, local-first desktop application for importing, transcribing and reviewing

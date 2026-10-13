@@ -6,6 +6,11 @@ reports success for work that did not happen.
 
 ## First run
 
+**macOS refuses to open the application: "Plaudon.app" Not Opened.** The
+published build is ad-hoc signed and not notarized, so Gatekeeper blocks the
+first launch. Click **Done** (never *Move to Trash*) and follow
+[Install and open Plaudon on macOS](./install-macos.md#5-allow-it-once-in-system-settings).
+
 **The application opens with an empty library.** That is the expected first
 state. Drag an audio file onto the window, or use Import, to add a recording.
 Local-only Mode is on by default, so nothing is sent anywhere.

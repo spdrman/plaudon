@@ -4,6 +4,8 @@ Plaudon is an independent, local-first desktop application for importing,
 transcribing and reviewing your own recordings. It is not produced by,
 affiliated with or approved by PLAUD, OpenRouter or Apple.
 
+- [Install and open Plaudon on macOS](./install-macos.md) — verifying the
+  download, and getting an unsigned, not-notarized build past Gatekeeper.
 - [Privacy disclosure](./privacy-disclosure.md) — what leaves your machine, when,
   where to, and under what permission.
 - [Vendor dependency matrix](./vendor-matrix.md) — every external service and
