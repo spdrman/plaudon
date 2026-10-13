@@ -189,10 +189,12 @@ ordinary data and exist in both modes.
   with an explicit "not enough clean speech" outcome, never a low-quality embedding.
 - **VP-024.** Stage 4 never runs when the feature is disabled, when no profiles exist, or when the
   consent gate has not been passed; in those states the job plan simply has no stage-4/5 entries.
-- **VP-025.** Model inference (stages 1 and 3) is an ADR-0015 out-of-process candidate: the ONNX
-  helper runs under `plaudon_security::sandbox::SandboxedHelper` once that wiring lands (today the
-  sandbox has no caller — open finding F-012 — and this EPIC must not widen that gap by adding a
-  new in-process parser of untrusted model output).
+- **VP-025.** Model inference (stage 3) runs out of process (ADR-0015): `plaudon-speaker-helper`
+  is spawned through `plaudon_security::sandbox::SandboxedHelper` with read access to the
+  checkpoint and the canonical PCM derivative, no writable path, no network and no further `exec`;
+  a window goes in and a vector comes out (#283). Stage 1 (segmentation) has no provider yet and
+  must use the same helper shape when it gains one — this EPIC does not add an in-process parser
+  of untrusted model output.
 - **VP-026.** Every embedding records the model id, model version/sha256 and feature-extraction
   parameters that produced it (§7). Embeddings from different models are never compared
   (thresholds are properties of a checkpoint, not an architecture — §6.3). A model upgrade
@@ -1166,10 +1168,10 @@ parallel; nothing user-visible ships before P2.1 + P2.2 land together.
 3. **Windows x64 CPU budget:** no published figures exist for any candidate stack; if reference
    hardware misses VP-150, is the fallback fewer threads + background-only, or feature
    unavailability on low-end hardware (the §3.1 "measured runtime capability" rule)?
-4. **ADR-0015 wiring:** the sandbox has no callers today (open finding F-012). Does this EPIC land
-   the first `SandboxedHelper` integration for ONNX inference, or does it inherit the F-012
-   remediation? (This spec assumes the former; it must not ship a new in-process untrusted-input
-   surface.)
+4. **ADR-0015 wiring:** ~~the sandbox has no callers today~~ **Resolved (#283):** this EPIC landed
+   the first `SandboxedHelper` integration, for speaker-embedding inference. What remains of F-012
+   is per-platform: Windows applies a job object and no filesystem restriction in V1, and the
+   helper has not been run there (`docs/release/voice-profiles-evidence.md`).
 5. **Enrolment from imported vendor transcripts** (recordings with vendor speaker labels): allowed
    as provenance, or restricted to app-diarized recordings in V1? (Spec assumption: restricted.)
 6. **Suggestion expiry:** do pending suggestions expire with the enrolment retention clock or

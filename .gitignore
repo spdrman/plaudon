@@ -6,6 +6,16 @@ native/apple-bridge/build/
 # Local STT model fixtures are seeded by scripts/fetch-stt-fixtures.sh
 tests/fixtures/stt/models/
 
+# Speaker model weights are seeded by scripts/fetch-speaker-models.sh. They are
+# 32 MB of biometric model weights with their own licence flow; the digests are
+# in docs/licensing/third-party-register.md, the bytes are not in git.
+tests/fixtures/speaker/models/
+
+# The pinned ONNX Runtime build seeded by scripts/fetch-onnxruntime.sh. Its
+# digest is in docs/licensing/third-party-register.md and in
+# crates/ai-speaker/src/runtime.rs; its 83-343 MB of bytes are not in git.
+vendor/onnxruntime/
+
 # Opt-in hardware-suite records (tests/hardware writes them here; the release
 # evidence bundle collects them).
 target/hardware-evidence/

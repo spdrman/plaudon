@@ -109,16 +109,20 @@ objc2-foundation = { version = "0.3", default-features = false, features = ["std
 # ONNX Runtime bindings for the speaker-embedding engine (ADR-0081 §3), used
 # only by `plaudon-ai-speaker`'s off-by-default `onnx` feature. Pinned exactly:
 # the 2.0 line is still a release candidate and its API moves between them.
-# `default-features = false` drops `ndarray` and `tracing`; `download-binaries`
-# fetches a prebuilt, statically-linked ONNX Runtime at build time, which is a
-# build-time network dependency a release build must replace with
-# `ORT_LIB_LOCATION` pointing at a pinned, checksummed artifact — recorded as a
-# release-evidence item in docs/release-evidence/voice-profiles.md.
+# `default-features = false` drops `ndarray` and `tracing`.
+#
+# `download-binaries` is deliberately **absent**. It fetches a prebuilt ONNX
+# Runtime over TLS from a third-party CDN while the build script runs, which is
+# a build-time network dependency a release build must not have — and it pulls
+# `ureq`, `socks`, `lzma-rust2` and `hmac-sha256` into the build graph. Without
+# it, `ort-sys` links whatever `ORT_LIB_LOCATION` points at and nothing else:
+# run `scripts/fetch-onnxruntime.sh` once to vendor the pinned, digest-verified
+# archive recorded in `crates/ai-speaker/src/runtime.rs` and
+# `docs/licensing/third-party-register.md`, then
+# `cargo build --offline -p plaudon-ai-speaker --features onnx` succeeds with
+# no network at all.
 ort = { version = "=2.0.0-rc.14", default-features = false, features = [
     "std",
-    "download-binaries",
-    "tls-rustls",
-    "copy-dylibs",
     "api-31",
 ] }
 # Pure-Rust Opus decoder (BSD-3-Clause, no dependencies, no build script, no C

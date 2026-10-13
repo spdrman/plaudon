@@ -187,26 +187,44 @@ exclude_feature_tainted() {
   local p
   for p in "${APPLE_TAINTED[@]}"; do printf -- '--exclude %s ' "$p"; done
   # `--all-features` would also turn on plaudon-ai-speaker's `onnx` feature,
-  # whose build script downloads a prebuilt ONNX Runtime over the network
-  # (ADR-0081 §3). A gate that silently needs a CDN is not a gate, so the
-  # crate is excluded here and checked on its own by `run_onnx_embedder`,
-  # which is opt-in. Nothing depends on this crate with the feature on, so
-  # one `--exclude` really does switch it off.
+  # which links a vendored ONNX Runtime through ORT_LIB_LOCATION (ADR-0081
+  # §3). That archive is 83 MB and is not in the repository, so a runner that
+  # has not fetched it cannot link the crate; it is excluded here and checked
+  # on its own by `run_onnx_embedder`, which is opt-in. Nothing depends on
+  # this crate with the feature on, so one `--exclude` really does switch it
+  # off.
   printf -- '--exclude plaudon-ai-speaker '
 }
 
 # The off-by-default inference runtime (ADR-0081 §4). Opt-in, like the
-# hardware suites: it needs the network on a cold cache and it is not part of
-# any shipped configuration. Without the variable this check says what it
+# hardware suites: it needs a vendored ONNX Runtime on disk and it is not part
+# of any shipped configuration. Without the variable this check says what it
 # skipped and why, rather than passing quietly.
+#
+# The build is **offline on purpose**. Since #283 nothing in this graph may
+# reach the network while it compiles, and `--offline` is how that is checked
+# rather than asserted: a reintroduced `download-binaries` would fail here.
 run_onnx_embedder() {
   if [ "${PLAUDON_ONNX_EMBEDDER:-0}" != "1" ]; then
     echo "skipped: set PLAUDON_ONNX_EMBEDDER=1 to build and test the ADR-0081 ONNX engine"
-    echo "  (off by default; its build downloads a prebuilt ONNX Runtime)"
+    echo "  (off by default; it links the vendored ONNX Runtime, see scripts/fetch-onnxruntime.sh)"
     return 0
   fi
-  cargo clippy -p plaudon-ai-speaker --all-targets --features onnx -- -D warnings || return $?
-  cargo test -p plaudon-ai-speaker --all-targets --features onnx
+  if [ -z "${ORT_LIB_LOCATION:-}" ] && [ -z "${ORT_LIB_PATH:-}" ]; then
+    local vendored="vendor/onnxruntime/$(rustc -vV | awk '/^host: /{print $2}')"
+    if [ -d "$vendored" ]; then
+      ORT_LIB_LOCATION="$PWD/$vendored"
+      export ORT_LIB_LOCATION
+      echo "using the vendored runtime at $ORT_LIB_LOCATION"
+    else
+      echo "ORT_LIB_LOCATION is not set and $vendored does not exist:" >&2
+      echo "  run scripts/fetch-onnxruntime.sh first" >&2
+      return 1
+    fi
+  fi
+  cargo clippy --offline -p plaudon-ai-speaker --all-targets --features onnx -- -D warnings ||
+    return $?
+  cargo test --offline -p plaudon-ai-speaker --all-targets --features onnx
 }
 
 run_clippy() {
