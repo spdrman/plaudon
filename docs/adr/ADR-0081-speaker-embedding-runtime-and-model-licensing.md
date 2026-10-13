@@ -1,6 +1,6 @@
 # ADR-0081: Speaker embedding runtime and model licensing
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-10-12; §3 amended the same day on measured evidence, below)
 - **Date:** 2026-10-12
 - **Spec:** VOICE_PROFILES_SPEC §5 (VP-040–045), §14; base spec §8.7, §12, §3.1; extends ADR-0400
 
@@ -91,3 +91,39 @@ speaker-embedding implementation exists.
 - If the gate is not passed on reference hardware, the feature does not ship; the allowlist keeps
   only the fake provider and the UI never offers enrolment. That outcome is acceptable and
   planned for (VP-042).
+
+## Amendment, 2026-10-12 (P2.5, #248): the runtime decision, measured
+
+Decision §3 named `ort` + `kaldi-native-fbank`, with the first-party `sherpa-onnx` crate as the
+fallback. Building both on the reference Apple Silicon machine changed half of that, and the
+numbers are the reason rather than the illustration (full record:
+[docs/hardware/macos-apple-silicon.md](../hardware/macos-apple-silicon.md) §"Speaker embedding on
+this platform"):
+
+- **`ort` 2.0.0-rc.14 is the runtime.** Clean release build in **15 s** at `CARGO_BUILD_JOBS=2`,
+  15 crates in a normal build, ONNX Runtime linked **statically** into one binary — nothing extra
+  to install, sign or notarize. Two costs are accepted explicitly: the 2.0 line is still a release
+  candidate, so the dependency is pinned with `=`; and `download-binaries` fetches the prebuilt
+  runtime over TLS during the build, which a release build must replace with `ORT_LIB_LOCATION`
+  pointing at a vendored, checksummed artifact. That replacement is a release-evidence item, not a
+  nice-to-have: a build that reaches a CDN is not a build we can reproduce offline.
+- **`sherpa-rs` 0.6.8 stays the fallback, and is more expensive than assumed.** 80 s clean build,
+  a bindgen/libclang and CMake requirement on every build host, and **three dylibs** (26 MB) to
+  redistribute, with ONNX Runtime pinned at 1.17.1. It remains the answer if `ort` cannot be made
+  to work on Windows x64 — which is not yet measured.
+- **`kaldi-native-fbank` is dropped; the feature front end is first-party.** The only maintained
+  Rust binding (`knf-rs` → `knf-rs-sys`) vendors the C++ sources and builds them with CMake *and*
+  bindgen, so a 300-line DSP dependency would impose a C++ toolchain on every build host and put a
+  second native parser of untrusted audio in the process (ADR-0015). `crates/ai-speaker/src/fbank.rs`
+  computes the same features in dependency-free Rust and was cross-checked against
+  `kaldi-native-fbank` on a 3-second broadband signal with the same window: identical frame and bin
+  counts, **max absolute difference 5.6 × 10⁻⁴, RMS 1.2 × 10⁻⁵**. This is the `opus-pure` decision
+  again (O1.6), for the same reasons.
+
+The §4 gate is **not** passed, and the feature flag therefore stays off. What now exists:
+`docs/benchmarks/speaker-match-wespeaker-resnet34-lm-eer.json` — WeSpeaker ResNet34-LM over
+LibriSpeech `test-clean`-derived fixtures on macOS arm64, pooled **EER 0.61%** (240 target / 2 640
+non-target trials), startup **481 ms**, RTF **0.0124**, peak RSS **214 MiB**. What does not:
+Windows x64 figures of any kind, a real diarization provider's DER, out-of-process inference, and
+the privacy-counsel review. Each is an item with an owner and a next step in
+[docs/release/voice-profiles-evidence.md](../release/voice-profiles-evidence.md).

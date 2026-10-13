@@ -18,6 +18,10 @@ plaudon-audio = { workspace = true }
 async-trait = { workspace = true }
 plaudon-ai-contracts = { workspace = true }
 plaudon-ai-openrouter = { workspace = true }
+# The compiled speaker-model records the licence register is checked against.
+# Default features only: the licence facts are a plain data module, so this
+# dependency pulls no inference runtime.
+plaudon-ai-speaker = { workspace = true }
 serde = { workspace = true }
 sha2 = { workspace = true }
 symphonia = { version = "0.5", default-features = false, features = [

@@ -47,6 +47,7 @@ plaudon-ai-contracts = { path = "crates/ai-contracts" }
 plaudon-ai-openrouter = { path = "crates/ai-openrouter" }
 plaudon-ai-whisper = { path = "crates/ai-whisper" }
 plaudon-ai-diarization = { path = "crates/ai-diarization" }
+plaudon-ai-speaker = { path = "crates/ai-speaker", default-features = false }
 plaudon-ai-tools = { path = "crates/ai-tools" }
 plaudon-ai-local-llm = { path = "crates/ai-local-llm" }
 plaudon-ai-apple = { path = "crates/ai-apple" }
@@ -105,6 +106,21 @@ notify = { version = "7", default-features = false, features = ["macos_fsevent"]
 objc2 = { version = "0.6", default-features = false, features = ["std"] }
 objc2-app-kit = { version = "0.3", default-features = false, features = ["std"] }
 objc2-foundation = { version = "0.3", default-features = false, features = ["std"] }
+# ONNX Runtime bindings for the speaker-embedding engine (ADR-0081 §3), used
+# only by `plaudon-ai-speaker`'s off-by-default `onnx` feature. Pinned exactly:
+# the 2.0 line is still a release candidate and its API moves between them.
+# `default-features = false` drops `ndarray` and `tracing`; `download-binaries`
+# fetches a prebuilt, statically-linked ONNX Runtime at build time, which is a
+# build-time network dependency a release build must replace with
+# `ORT_LIB_LOCATION` pointing at a pinned, checksummed artifact — recorded as a
+# release-evidence item in docs/release-evidence/voice-profiles.md.
+ort = { version = "=2.0.0-rc.14", default-features = false, features = [
+    "std",
+    "download-binaries",
+    "tls-rustls",
+    "copy-dylibs",
+    "api-31",
+] }
 # Pure-Rust Opus decoder (BSD-3-Clause, no dependencies, no build script, no C
 # toolchain and no system library). Chosen in O1.6 (#214) on measured evidence
 # against libopus; see docs/licensing/third-party-register.md and

@@ -1,0 +1,50 @@
+[package]
+name = "plaudon-ai-speaker"
+description = "Speaker-embedding checkpoint facts, Kaldi-compatible features and the optional ONNX engine (ADR-0081)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[features]
+default = []
+# ADR-0081 §3: ONNX Runtime through `ort`, statically linked, plus the audio
+# decoder the window needs. Off by default and never enabled in a shipped
+# build until the §4 gates pass on both reference platforms; the workspace
+# `--all-features` runs exclude this crate for the same reason the Apple
+# bridge is excluded (scripts/pre-commit.sh, docs/PRECOMMIT.md).
+onnx = ["dep:ort", "dep:plaudon-audio", "dep:plaudon-eval"]
+
+[dependencies]
+async-trait = { workspace = true }
+plaudon-ai-contracts = { workspace = true }
+plaudon-app-core = { workspace = true }
+plaudon-domain = { workspace = true }
+hex = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
+ort = { workspace = true, optional = true }
+plaudon-audio = { workspace = true, optional = true }
+# The measurement bridge writes the harness's own document type, so the schema
+# cannot drift between the tool that produces it and the tool that reads it.
+plaudon-eval = { workspace = true, optional = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true }
+
+# The measurement bridge: builds fixture audio, extracts embeddings for the
+# §17.2 harness and reports the ADR-0081 §4 runtime figures. It is a developer
+# tool, not a product binary, so it exists only when the runtime does.
+[[bin]]
+name = "plaudon-speaker-embed"
+path = "src/bin/plaudon-speaker-embed.rs"
+required-features = ["onnx"]

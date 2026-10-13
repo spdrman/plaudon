@@ -207,3 +207,123 @@ fn no_model_weight_is_bundled_without_a_checksum_requirement() {
     assert!(weights.contains("checksum") || weights.contains("Checksum"));
     assert!(weights.contains("not bundlable"));
 }
+
+/// The speaker-model facts exist in four places; they must say one thing.
+///
+/// The compiled records in `plaudon-ai-speaker` are the source of truth: the
+/// installer verifies against them, so a register row or a `NOTICE` line that
+/// drifts from them is a licence document describing a file we would refuse.
+/// Checking all four here is cheaper than discovering the disagreement when a
+/// download fails or, worse, when it does not.
+#[test]
+fn the_speaker_model_artifacts_match_the_register() {
+    let register = read("docs/licensing/third-party-register.md");
+    let notice = read("NOTICE");
+    let fetch = read("scripts/fetch-speaker-models.sh");
+    let public = read("docs/public/model-licensing.md");
+
+    for artifact in plaudon_ai_speaker::checkpoint::BUNDLE_TIER {
+        assert!(
+            register.contains(artifact.sha256_hex),
+            "{} digest is not in the model-weights checksum table",
+            artifact.model_id
+        );
+        assert!(
+            register.contains(artifact.source_file_name),
+            "{} is not named by its exact published file name in the register",
+            artifact.model_id
+        );
+        assert!(
+            register.contains(&artifact.byte_length.to_string()),
+            "{} size is not recorded in the register",
+            artifact.model_id
+        );
+        assert!(
+            notice.contains(artifact.sha256_hex),
+            "{} digest is not in NOTICE",
+            artifact.model_id
+        );
+        assert!(
+            fetch.contains(artifact.sha256_hex) && fetch.contains(artifact.source_url),
+            "scripts/fetch-speaker-models.sh does not pin {} by URL and digest",
+            artifact.model_id
+        );
+        assert!(
+            public.contains(artifact.display_name),
+            "{} is not disclosed in docs/public/model-licensing.md",
+            artifact.model_id
+        );
+    }
+
+    // The attribution the two licences oblige, in the file that carries it.
+    for required in ["CNRS", "WeSpeaker", "VoxCeleb", "CC-BY-4.0"] {
+        assert!(
+            notice.contains(required),
+            "NOTICE does not attribute {required}"
+        );
+    }
+}
+
+/// A model row may be bundlable only if its licence is one we reviewed.
+///
+/// The register's own vocabulary test covers "unknown licence, not bundled";
+/// this is the other half, from the code side: an artifact record that
+/// acquired an unreviewed licence would otherwise sail through because no
+/// document mentions it.
+#[test]
+fn no_speaker_artifact_carries_an_unreviewed_licence() {
+    const REVIEWED: &[&str] = &["MIT", "CC-BY-4.0"];
+    for artifact in plaudon_ai_speaker::checkpoint::BUNDLE_TIER {
+        assert!(
+            REVIEWED.contains(&artifact.licence_spdx),
+            "{} is marked bundlable under the unreviewed licence {}",
+            artifact.model_id,
+            artifact.licence_spdx
+        );
+        assert!(
+            !artifact.source_url.contains("huggingface.co/pyannote/"),
+            "{} is fetched from the gated upstream, which ADR-0400 condition 3 forbids",
+            artifact.model_id
+        );
+    }
+}
+
+/// The release-evidence register must list what this release cannot prove.
+#[test]
+fn the_release_evidence_register_lists_the_benchmarks_and_the_counsel_review() {
+    let evidence = read("docs/release/voice-profiles-evidence.md");
+    for artifact in [
+        "speaker-match-wespeaker-resnet34-lm-eer.json",
+        "speaker-match-scripted-synthetic-eer.json",
+        "speaker-match-wespeaker-fixtures.json",
+    ] {
+        assert!(
+            evidence.contains(artifact),
+            "the release-evidence register does not list {artifact}"
+        );
+    }
+    let lowercase = evidence.to_ascii_lowercase();
+    assert!(
+        lowercase.contains("privacy-counsel") || lowercase.contains("privacy counsel"),
+        "the counsel review is not a listed release-evidence item"
+    );
+    assert!(
+        lowercase.contains("windows"),
+        "the missing Windows x64 measurement is not listed"
+    );
+    for required in ["Owner", "Status"] {
+        assert!(
+            evidence.contains(required),
+            "a release-evidence item without an {required} column is not actionable"
+        );
+    }
+    let collect = read("scripts/collect-evidence.sh");
+    assert!(
+        collect.contains("docs/release/voice-profiles-evidence.md"),
+        "the evidence collector does not put the register into the bundle"
+    );
+    assert!(
+        collect.contains("docs/benchmarks/."),
+        "the evidence collector does not put the benchmark artifacts into the bundle"
+    );
+}

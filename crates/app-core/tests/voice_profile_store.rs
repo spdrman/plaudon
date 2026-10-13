@@ -364,3 +364,117 @@ async fn a_locked_store_locks_the_biometric_tier_and_nothing_else() {
     assert_eq!(people.list_active().await.unwrap().len(), 1);
     db.close().await;
 }
+
+/// Two libraries, one voice: nothing links the rows (TM-048).
+///
+/// The cross-library correlation threat is not "could someone decrypt the
+/// store" — that is TM-045 — but "could two stores be joined". Until now the
+/// answer was argued from the schema's shape; this is the argument as a test.
+/// Enrol the *same* vector for the *same* person name in two independent
+/// libraries and nothing comes out the same: not the person id, not the
+/// enrolment id, not the nonce, not the ciphertext. There is no content-derived
+/// identifier to join on, and the key that would make the ciphertexts
+/// comparable never leaves its own library.
+#[tokio::test]
+async fn the_same_voice_in_two_libraries_shares_no_identifier_or_ciphertext() {
+    async fn library(dir: &std::path::Path, name: &str) -> (Database, PersonId, SealedEmbedding) {
+        let db = Database::open(dir.join(format!("{name}.sqlite")))
+            .await
+            .unwrap();
+        MigrationRunner::new().run(&db).await.unwrap();
+        let people = PeopleRepository::new(db.clone());
+        let voices = VoiceEnrollmentRepository::new(db.clone());
+
+        // Same display name in both libraries: the obvious join key a user
+        // would hand an adversary, and it is a note, not an identifier.
+        let person = people
+            .create(&PersonDraft::named("Priya"), Timestamp::from_millis(1))
+            .await
+            .unwrap();
+        voices
+            .enroll(
+                person.id,
+                &EnrollmentDraft {
+                    consent_version: "voice-profiles-disclosure/1".to_owned(),
+                    consent_note: None,
+                    retention_months: 12,
+                },
+                Timestamp::from_millis(2),
+            )
+            .await
+            .unwrap();
+
+        // A fresh secret store per library: this is what a second machine is.
+        let (_store, cipher) = in_memory();
+        let sealed = cipher
+            .seal(&embedding(192), &binding(person.id, 192))
+            .unwrap();
+        voices
+            .add_exemplar(
+                &ExemplarInsert {
+                    person_id: person.id,
+                    recording_id: None,
+                    diarization_run_id: None,
+                    cluster_key: None,
+                    source_start_ms: None,
+                    source_end_ms: None,
+                    speech_ms: 8_000,
+                    model_id: "wespeaker-resnet34-lm".to_owned(),
+                    model_version: "1.0".to_owned(),
+                    model_sha256: "c".repeat(64),
+                    embedding_dim: sealed.embedding_dim,
+                    embedding_cipher: sealed.cipher.clone(),
+                    embedding_nonce: sealed.nonce.clone(),
+                },
+                Timestamp::from_millis(3),
+            )
+            .await
+            .unwrap();
+        (db, person.id, sealed)
+    }
+
+    let dir = tempfile::tempdir().unwrap();
+    let (first_db, first_person, first_sealed) = library(dir.path(), "first").await;
+    let (second_db, second_person, second_sealed) = library(dir.path(), "second").await;
+
+    assert_ne!(
+        first_person, second_person,
+        "the person id is random per library, not derived from the name or the voice"
+    );
+    assert_ne!(
+        first_sealed.nonce, second_sealed.nonce,
+        "a repeated nonce would make two ciphertexts comparable"
+    );
+    assert_ne!(
+        first_sealed.cipher, second_sealed.cipher,
+        "the same vector under two library keys must not produce the same bytes"
+    );
+    assert_eq!(
+        first_sealed.embedding_dim, second_sealed.embedding_dim,
+        "dimensionality is a property of the model, and it is the only thing the two rows share"
+    );
+
+    // Nothing persisted is a function of the vector: the only columns that
+    // could join two libraries are the model identity, which is the same for
+    // every user of the checkpoint and identifies nobody.
+    let joinable: Vec<(String, String)> =
+        sqlx::query_as("SELECT person_id, model_sha256 FROM voice_exemplars")
+            .fetch_all(first_db.pool())
+            .await
+            .unwrap();
+    let other: Vec<(String, String)> =
+        sqlx::query_as("SELECT person_id, model_sha256 FROM voice_exemplars")
+            .fetch_all(second_db.pool())
+            .await
+            .unwrap();
+    assert_eq!(joinable.len(), 1);
+    assert_eq!(other.len(), 1);
+    assert_ne!(joinable[0].0, other[0].0);
+    assert_eq!(
+        joinable[0].1, other[0].1,
+        "the model digest is shared on purpose: it identifies the checkpoint, not a person"
+    );
+
+    first_db.close().await;
+    second_db.close().await;
+}
