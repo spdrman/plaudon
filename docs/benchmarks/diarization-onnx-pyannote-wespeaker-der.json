@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "generator": "plaudon-speaker-embed 0.1.0",
-  "measured_on": "2026-10-13T01:45:13Z",
-  "commit": "d5af1c636404d49a43877f52f9da40d753dedca6",
+  "measured_on": "2026-10-13T01:50:01Z",
+  "commit": "83388f0be0aec5ee30a391ac150fb8305442602d",
   "provider": {
     "provider_id": "onnx-pyannote-wespeaker",
     "provider_version": "3.0+voxceleb-2022-10",
@@ -32,12 +32,27 @@
       {
         "name": "min_track_ms",
         "value": "1000",
-        "provenance": "declared floor: a shorter track is not embedded at all"
+        "provenance": "declared floor: a shorter track is embedded and assigned, but may not shape where a cluster boundary falls"
+      },
+      {
+        "name": "min_embed_ms",
+        "value": "250",
+        "provenance": "declared floor: below it a vector describes the room, not a voice, and the track is dropped"
+      },
+      {
+        "name": "cluster.min_cluster_tracks",
+        "value": "12",
+        "provenance": "`pyannote/speaker-diarization-3.1`'s published `clustering.min_cluster_size`"
+      },
+      {
+        "name": "embedding_exclude_overlap",
+        "value": "true",
+        "provenance": "a speaker is embedded from the frames where they are the only voice, as `pyannote/speaker-diarization-3.1` does; where a track has none, the mixture is embedded and the track may not shape the clustering"
       },
       {
         "name": "cluster.threshold",
         "value": "0.7045",
-        "provenance": "sherpa-onnx's documented default for this checkpoint pair; not tuned on these sessions"
+        "provenance": "`pyannote/speaker-diarization-3.1`'s published `clustering.threshold` for this exact checkpoint pair, with its `centroid` linkage; not tuned on these sessions"
       },
       {
         "name": "assemble.activity_threshold",
@@ -56,9 +71,9 @@
     "host_cpu": "Apple M5",
     "os_build": "macos 27.0.1 (26A434)",
     "intra_op_threads": 1,
-    "peak_rss_bytes": 389267456,
-    "startup_ms": 459,
-    "real_time_factor": 0.07603253429479985
+    "peak_rss_bytes": 486096896,
+    "startup_ms": 398,
+    "real_time_factor": 0.07538817842779648
   },
   "corpus": {
     "library_id": "librispeech-session-v1",
@@ -79,7 +94,7 @@
       "overlapping_reference_ms": 3000,
       "hypothesis_clusters": 4,
       "hypothesis_turns": 30,
-      "elapsed_ms": 7948,
+      "elapsed_ms": 7658,
       "der": {
         "overall": {
           "der": 0.11760416666666666,
@@ -135,7 +150,7 @@
       "overlapping_reference_ms": 3000,
       "hypothesis_clusters": 4,
       "hypothesis_turns": 30,
-      "elapsed_ms": 7861,
+      "elapsed_ms": 8128,
       "der": {
         "overall": {
           "der": 0.1275,
@@ -191,7 +206,7 @@
       "overlapping_reference_ms": 3000,
       "hypothesis_clusters": 4,
       "hypothesis_turns": 29,
-      "elapsed_ms": 7881,
+      "elapsed_ms": 8411,
       "der": {
         "overall": {
           "der": 0.16364583333333332,
@@ -247,7 +262,7 @@
       "overlapping_reference_ms": 3000,
       "hypothesis_clusters": 3,
       "hypothesis_turns": 33,
-      "elapsed_ms": 7923,
+      "elapsed_ms": 7896,
       "der": {
         "overall": {
           "der": 0.34989583333333335,
@@ -303,7 +318,7 @@
       "overlapping_reference_ms": 10800,
       "hypothesis_clusters": 3,
       "hypothesis_turns": 29,
-      "elapsed_ms": 5750,
+      "elapsed_ms": 5116,
       "der": {
         "overall": {
           "der": 0.31666666666666665,
@@ -359,7 +374,7 @@
       "overlapping_reference_ms": 10800,
       "hypothesis_clusters": 4,
       "hypothesis_turns": 16,
-      "elapsed_ms": 5692,
+      "elapsed_ms": 5117,
       "der": {
         "overall": {
           "der": 0.3752450980392157,
@@ -415,7 +430,7 @@
       "overlapping_reference_ms": 10800,
       "hypothesis_clusters": 4,
       "hypothesis_turns": 24,
-      "elapsed_ms": 5485,
+      "elapsed_ms": 5239,
       "der": {
         "overall": {
           "der": 0.4598039215686274,
@@ -471,7 +486,7 @@
       "overlapping_reference_ms": 10800,
       "hypothesis_clusters": 3,
       "hypothesis_turns": 20,
-      "elapsed_ms": 5665,
+      "elapsed_ms": 5414,
       "der": {
         "overall": {
           "der": 0.3786764705882353,
@@ -527,7 +542,7 @@
       "overlapping_reference_ms": 0,
       "hypothesis_clusters": 3,
       "hypothesis_turns": 27,
-      "elapsed_ms": 6882,
+      "elapsed_ms": 7111,
       "der": {
         "overall": {
           "der": 0.3523809523809524,
@@ -583,7 +598,7 @@
       "overlapping_reference_ms": 0,
       "hypothesis_clusters": 3,
       "hypothesis_turns": 14,
-      "elapsed_ms": 6793,
+      "elapsed_ms": 6878,
       "der": {
         "overall": {
           "der": 0.41523809523809524,
@@ -639,7 +654,7 @@
       "overlapping_reference_ms": 0,
       "hypothesis_clusters": 3,
       "hypothesis_turns": 16,
-      "elapsed_ms": 6745,
+      "elapsed_ms": 6863,
       "der": {
         "overall": {
           "der": 0.3669047619047619,
@@ -695,7 +710,7 @@
       "overlapping_reference_ms": 0,
       "hypothesis_clusters": 2,
       "hypothesis_turns": 9,
-      "elapsed_ms": 6663,
+      "elapsed_ms": 6768,
       "der": {
         "overall": {
           "der": 0.5788095238095238,
