@@ -194,3 +194,19 @@ Not present in any shipped build today.
 No shipped configuration enables it (ADR-0081 §4), so no release binary
 contains ONNX Runtime code; this entry exists so that the obligation is already
 written down on the day one does.
+
+The binary is vendored, never downloaded by the build (issue #283). It is
+ONNX Runtime 1.31.0, fetched by `scripts/fetch-onnxruntime.sh` by exact URL and
+digest:
+
+  aarch64-apple-darwin+coreml.tar.lzma2
+    sha256 4033efca0e6c1606bd2ec3870d4cb19d0dba0ad0160dbfb616e66cae969ed68c
+    9687276 bytes, containing libonnxruntime.a
+
+  x86_64-pc-windows-msvc+directml.tar.lzma2
+    sha256 f99aaef23f12986abb05924c944d8433521263ad756b462df762a5a982c98405
+    32457673 bytes, containing onnxruntime.lib and DirectML.dll
+
+The Windows build additionally carries DirectML (Copyright (c) Microsoft
+Corporation), which ships with Windows and is linked rather than
+redistributed.

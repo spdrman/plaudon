@@ -18,7 +18,7 @@ default = []
 # build until the §4 gates pass on both reference platforms; the workspace
 # `--all-features` runs exclude this crate for the same reason the Apple
 # bridge is excluded (scripts/pre-commit.sh, docs/PRECOMMIT.md).
-onnx = ["dep:ort", "dep:plaudon-audio", "dep:plaudon-eval"]
+onnx = ["dep:ort", "dep:plaudon-audio", "dep:plaudon-eval", "dep:plaudon-security"]
 
 [dependencies]
 async-trait = { workspace = true }
@@ -32,6 +32,9 @@ sha2 = { workspace = true }
 thiserror = { workspace = true }
 ort = { workspace = true, optional = true }
 plaudon-audio = { workspace = true, optional = true }
+# Inference runs out of process (ADR-0015): the sandbox owns the helper's
+# restrictions, its resource caps and the typed frame protocol.
+plaudon-security = { workspace = true, optional = true }
 # The measurement bridge writes the harness's own document type, so the schema
 # cannot drift between the tool that produces it and the tool that reads it.
 plaudon-eval = { workspace = true, optional = true }
@@ -47,4 +50,12 @@ tokio = { workspace = true }
 [[bin]]
 name = "plaudon-speaker-embed"
 path = "src/bin/plaudon-speaker-embed.rs"
+required-features = ["onnx"]
+
+# The sandboxed inference helper: the process the checkpoint is parsed and run
+# in (ADR-0015, ADR-0081 §3). It is a product binary wherever the feature is
+# on, and it exists only when the runtime does.
+[[bin]]
+name = "plaudon-speaker-helper"
+path = "src/bin/plaudon-speaker-helper.rs"
 required-features = ["onnx"]

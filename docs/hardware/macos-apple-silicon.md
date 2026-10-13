@@ -280,6 +280,42 @@ windows: about 11 s of embedding work on this machine, bounded in memory by the
 window rather than the recording, because the canonical PCM derivative lives on
 disk and windows are read by seeking.
 
+#### What #283 changed about these numbers
+
+The table above was measured **in the application process, under ONNX
+Runtime's own provider selection** — which on this machine is CoreML, as the
+481 ms start-up shows: that is an Apple model compilation, not a graph load.
+Since #283 the pipeline runs inference in a sandboxed helper
+(`plaudon-speaker-helper`) and pins the session to the CPU execution provider,
+because CoreML's compiler needs a working directory inside the user's
+temporary directory and the helper's `(deny default)` profile does not grant
+one. Both halves of that change were measured here on 2026-10-12, release
+build, same checkpoint, one 3 s window, best of five:
+
+| Figure | Pre-#283: in process, CoreML | Now: in process, CPU | Now: through the sandboxed helper |
+|---|---|---|---|
+| Session start-up | 442 ms cold, 147 ms with a warm model cache | 75–89 ms | 80 ms (reported by the helper) |
+| One 3 s window | 13.0–16.3 ms | 48.4–54.8 ms | 76.8 ms (86.2 ms for the first) |
+| Real-time factor | 0.0054 | 0.018 | 0.026 |
+| Resident set | 92 MB | 92 MB | 92 MB in the helper, which is where the model now lives |
+
+Two consequences, stated rather than averaged away:
+
+* **The accuracy figures below still describe this engine.** The two
+  providers' vectors for the same input agree to a cosine similarity of
+  **0.999974** (largest component difference 1.2e-3), which is three orders of
+  magnitude below the margin between the derived operating point and the
+  nearest trial score, so the EER and the thresholds were not re-derived.
+* **The runtime figures above are no longer the shipped configuration's.** The
+  honest replacement is a re-run of the whole 312-window harness through the
+  helper, which needs the LibriSpeech corpus this machine no longer holds; it
+  is listed as an open item in
+  [`docs/release/voice-profiles-evidence.md`](../release/voice-profiles-evidence.md).
+  The per-window and start-up measurements in this sub-section are
+  microbenchmarks on one synthetic window, taken by
+  `crates/ai-speaker/tests/sandboxed_inference.rs`, and are not a substitute
+  for that run.
+
 ### Accuracy on licence-clean audio
 
 From `docs/benchmarks/speaker-match-wespeaker-resnet34-lm-eer.json`: 12 enrolled
