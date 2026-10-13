@@ -215,7 +215,10 @@ pub struct SpeakerMatchReport {
 
 /// Write `measured_on` as RFC 3339, falling back to epoch milliseconds for an
 /// instant outside the range that can be formatted.
-#[allow(clippy::ref_option, reason = "serde's serialize_with signature takes a reference")]
+#[allow(
+    clippy::ref_option,
+    reason = "serde's serialize_with signature takes a reference"
+)]
 fn serialize_measured_on<S: serde::Serializer>(
     value: &Option<Timestamp>,
     serializer: S,
