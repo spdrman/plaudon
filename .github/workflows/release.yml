@@ -410,6 +410,9 @@ jobs:
     needs: [version, macos, windows]
     if: github.event_name == 'push' && github.ref == 'refs/heads/release'
     runs-on: ubuntu-latest
+    outputs:
+      publishable: ${{ steps.assemble.outputs.publishable }}
+      msi: ${{ steps.assemble.outputs.msi }}
     permissions:
       contents: write
     steps:
@@ -552,6 +555,194 @@ jobs:
             "release/checksums.txt#SHA-256 checksums" \
             "release/macos-signing-report.json#macOS signing report" \
             "release/windows-signing-report.json#Windows signing report"
+
+  packaging:
+    name: Homebrew cask and WinGet manifests
+    needs: [version, publish]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/release'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Install the pinned toolchain
+        run: rustup show
+
+      - name: Render the cask and the manifests from the built artifacts
+        # Not from the version string alone: the digests are taken from the
+        # two files the release jobs produced, and the cask's macOS floor from
+        # the bundle's own signing report. `packaging render` refuses a
+        # placeholder, a malformed digest and an asset that belongs to another
+        # version, so a manifest that lies cannot be written here.
+        shell: bash
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          MSI: ${{ needs.publish.outputs.msi }}
+        run: |
+          set -euo pipefail
+          cargo run --quiet --package plaudon-release-tools --bin plaudon-release -- \
+            packaging render \
+            --version "$VERSION" \
+            --macos-zip artifacts/macos-arm64/Plaudon.app.zip \
+            --msi "artifacts/windows-x64/$MSI" \
+            --signing-report artifacts/macos-arm64/macos-signing-report.json \
+            --out packaging-out
+          find packaging-out -type f | sort
+
+      - name: The rendered manifests parse as YAML and the cask as Ruby
+        # `winget validate` is Windows-only and runs in the job below; this is
+        # the hermetic half: the files have to be loadable at all, and the
+        # digests they publish have to be the digests of the files that were
+        # uploaded.
+        shell: bash
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          MSI: ${{ needs.publish.outputs.msi }}
+        run: |
+          set -euo pipefail
+          ruby -c packaging-out/homebrew/plaudon.rb
+          python3 - "$VERSION" <<'PY'
+          import pathlib, sys, yaml
+          version = sys.argv[1]
+          root = pathlib.Path("packaging-out/winget") / version
+          for path in sorted(root.glob("*.yaml")):
+              document = yaml.safe_load(path.read_text())
+              assert document["PackageIdentifier"] == "spdrman.Plaudon", path
+              assert str(document["PackageVersion"]) == version, path
+              print(f"{path}: {document['ManifestType']} manifest, schema {document['ManifestVersion']}")
+          PY
+          zip_sha=$(sha256sum artifacts/macos-arm64/Plaudon.app.zip | cut -d' ' -f1)
+          msi_sha=$(sha256sum "artifacts/windows-x64/$MSI" | cut -d' ' -f1)
+          grep -q "$zip_sha" packaging-out/homebrew/plaudon.rb
+          grep -qi "$msi_sha" "packaging-out/winget/$VERSION/spdrman.Plaudon.installer.yaml"
+          echo "the published digests are the digests of the uploaded files"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packaging-manifests
+          path: packaging-out
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Attach the cask and the manifests to the release
+        # Always, whatever happens with the tap: whoever wants to install by
+        # hand, or to open the winget-pkgs pull request themselves, gets the
+        # exact files this release was described by.
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.version.outputs.tag }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          cp packaging/plaud-cli/Plaudon-Setup-Plaud.ps1 packaging-out/Plaudon-Setup-Plaud.ps1
+          (cd "packaging-out/winget/$VERSION" && zip -q "../../winget-manifests-$VERSION.zip" ./*.yaml)
+          gh release upload "$TAG" --clobber \
+            "packaging-out/homebrew/plaudon.rb#Homebrew cask (spdrman/homebrew-plaudon)" \
+            "packaging-out/winget-manifests-$VERSION.zip#WinGet manifests for manifests/s/spdrman/Plaudon/$VERSION/" \
+            "packaging-out/Plaudon-Setup-Plaud.ps1#Guided PLAUD CLI setup for Windows"
+
+      - name: Push the cask to the tap, or say what to run by hand
+        # Two reasons this does not push, and neither is a release failure:
+        #
+        #   * no TAP_PUSH_TOKEN. GITHUB_TOKEN cannot write to another
+        #     repository, so pushing to spdrman/homebrew-plaudon needs a token
+        #     somebody created deliberately.
+        #   * the release is a draft. The cask's URL only resolves once the
+        #     release is published, so publishing the cask first would hand
+        #     every `brew install --cask plaudon` a 404.
+        shell: bash
+        env:
+          TAP_PUSH_TOKEN: ${{ secrets.TAP_PUSH_TOKEN }}
+          PUBLISHABLE: ${{ needs.publish.outputs.publishable }}
+          VERSION: ${{ needs.version.outputs.version }}
+          TAG: ${{ needs.version.outputs.tag }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          manual() {
+            cat <<EOF
+          The cask for $TAG was not pushed to spdrman/homebrew-plaudon. To do it by hand,
+          once the release is published:
+
+            gh release download $TAG --repo $GITHUB_REPOSITORY --pattern plaudon.rb
+            git clone https://github.com/spdrman/homebrew-plaudon
+            mkdir -p homebrew-plaudon/Casks && mv plaudon.rb homebrew-plaudon/Casks/
+            cd homebrew-plaudon && git commit -am "plaudon $VERSION" && git push
+
+          The cask is attached to the release as \`plaudon.rb\` and to this run as the
+          \`packaging-manifests\` artifact: $RUN_URL
+          EOF
+          }
+          if [ -z "${TAP_PUSH_TOKEN:-}" ]; then
+            echo "::notice::No TAP_PUSH_TOKEN secret, so the Homebrew tap was not updated."
+            echo "GITHUB_TOKEN cannot push to spdrman/homebrew-plaudon: that needs a fine-grained"
+            echo "personal access token with Contents: read and write on that repository, stored"
+            echo "as the TAP_PUSH_TOKEN secret of this repository."
+            manual
+            exit 0
+          fi
+          if [ "$PUBLISHABLE" != "true" ]; then
+            echo "::notice::This release is an unsigned draft, so the tap was deliberately not updated."
+            echo "A cask pointing at a draft release's asset downloads nothing: the URL 404s until"
+            echo "a human publishes the release."
+            manual
+            exit 0
+          fi
+          git clone --depth 1 "https://x-access-token:$TAP_PUSH_TOKEN@github.com/spdrman/homebrew-plaudon.git" tap 2>/dev/null
+          mkdir -p tap/Casks
+          cp packaging-out/homebrew/plaudon.rb tap/Casks/plaudon.rb
+          cd tap
+          if git diff --quiet -- Casks/plaudon.rb; then
+            echo "the tap already carries this exact cask; nothing to push"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Casks/plaudon.rb
+          git commit -m "plaudon $VERSION" -m "Rendered from the release artifacts by $RUN_URL"
+          git push origin HEAD 2>/dev/null
+          echo "pushed Casks/plaudon.rb for $VERSION to spdrman/homebrew-plaudon"
+
+  winget-validate:
+    name: Validate the WinGet manifests (Windows)
+    needs: [version, packaging]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/release'
+    runs-on: windows-2025
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: packaging-manifests
+          path: packaging-out
+
+      - name: winget validate
+        # `winget validate` is the only tool that checks a manifest against the
+        # schema the service will enforce, and it exists on Windows only. The
+        # hosted image does not always carry the App Installer package, so its
+        # absence is reported rather than treated as a pass or as a failure:
+        # the manifests were already checked structurally in the job above.
+        shell: pwsh
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          $manifests = Join-Path "packaging-out/winget" $env:VERSION
+          Get-ChildItem $manifests | ForEach-Object { Write-Host $_.Name }
+          if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+            Write-Host "::notice::winget is not installed on this runner image, so the manifests were not validated against the upstream schema. They were checked structurally in the packaging job."
+            exit 0
+          }
+          winget validate --manifest $manifests
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "winget validate rejected the rendered manifests"
+            exit 1
+          }
+          Write-Host "winget validate accepted the manifests"
 
   merge-back:
     name: Merge release back into main

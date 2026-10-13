@@ -23,6 +23,54 @@
 
 ---
 
+## Install
+
+> **None of these commands work yet.** 0.1.0 is a *draft prerelease*: built, tagged, checksummed
+> and attached, but not published by a human, so there is nothing for Homebrew to download. The
+> WinGet package does not exist either — manifests reach users only through a pull request to
+> [`microsoft/winget-pkgs`](https://github.com/microsoft/winget-pkgs) that a person opens and a
+> maintainer there accepts, and none has been opened. The manual download below is the honest
+> route, and it needs the draft published first too.
+
+**macOS, Apple Silicon.** The bundle is **unsigned and not notarized**, so Gatekeeper will refuse
+to open it until you say otherwise:
+
+```sh
+brew tap spdrman/plaudon
+brew install --cask plaudon
+xattr -dr com.apple.quarantine /Applications/Plaudon.app   # or: brew install --cask --no-quarantine plaudon
+plaudon-setup-plaud                                        # installs the pinned PLAUD CLI, runs the vendor's login
+```
+
+**Windows 11, x64.** The installer is **unsigned** (SmartScreen will warn about an unknown
+publisher) and **untested**: it is built and audited on a Windows runner, but nothing installs or
+runs it on Windows. It installs per user, needs no elevation and writes only `HKCU`:
+
+```powershell
+winget install spdrman.Plaudon
+& "$env:LOCALAPPDATA\Programs\Plaudon\Plaudon-Setup-Plaud.ps1"
+```
+
+**The PLAUD CLI.** Importing from a PLAUD account needs PLAUD's own tool, the npm package
+`@plaud-ai/cli`, which neither Homebrew nor WinGet can be made to own: the cask depends on `node`
+and installs it, WinGet declares a dependency on Node.js and ships the setup script instead.
+Exactly one release has been exercised — 0.3.15, on macOS — and that version is compiled into the
+application as a lock, so every other release is refused by name rather than guessed at. Both
+setup helpers install that version, run the vendor's own `plaud login` in your browser, confirm it
+with `plaud me`, and print no token.
+
+**By hand.** Once a release is published, the [release page](https://github.com/spdrman/plaudon/releases)
+carries `Plaudon-<version>-macos-arm64.zip`, `Plaudon-<version>-x64.msi`, `checksums.txt`, both
+signing reports, and the cask and WinGet manifests that release was described by. Unzip, move
+`Plaudon.app` to `/Applications`, clear the quarantine attribute as above; or run the `.msi`.
+Check the checksums.
+
+Details, including what the cask does to your global npm packages and how the manifests are
+generated, are in [docs/public/install.md](docs/public/install.md). Plaudon is provided as is,
+with no warranty of any kind — see [No warranty / use at your own risk](#no-warranty--use-at-your-own-risk).
+
+---
+
 ## What Plaudon is
 
 Plaudon is an independent, local-first desktop application for importing, transcribing and reviewing
@@ -402,6 +450,7 @@ model and how to add a screen.
 
 **For users** — [`docs/public/`](docs/public/README.md)
 
+* [Installing Plaudon](docs/public/install.md) — Homebrew, WinGet, manual download, and what is published today
 * [Privacy disclosure](docs/public/privacy-disclosure.md) — what leaves your machine, when, where to, under what permission
 * [Vendor dependency matrix](docs/public/vendor-matrix.md) — every external service and component, its status and its licence
 * [Compatibility matrix](docs/public/compatibility.md) — generated from the claim register; no cell claims support without archived evidence

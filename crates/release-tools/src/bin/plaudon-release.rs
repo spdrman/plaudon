@@ -13,12 +13,15 @@
 //! plaudon-release evidence assemble --staging <dir> [--out <dir>]
 //! plaudon-release evidence verify --bundle <dir> --trusted-key <id>
 //! plaudon-release evidence gate --bundle <dir> --trusted-key <id>
+//! plaudon-release packaging render --macos-zip <file> --msi <file> --out <dir>
 //! ```
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use plaudon_release_tools::{buildmeta, compat, coverage, doclint, evidence, scenarios, sign};
+use plaudon_release_tools::{
+    buildmeta, compat, coverage, doclint, evidence, packaging, scenarios, sign,
+};
 
 const USAGE: &str = "\
 plaudon-release <command>
@@ -51,6 +54,14 @@ plaudon-release <command>
 
   evidence gate --bundle <dir> --trusted-key <key-id>
       Verify, then fail when a Supported compatibility cell lacks evidence.
+
+  packaging render --macos-zip <file> --msi <file> --out <dir>
+                   [--version <x.y.z>] [--repository <owner/repo>]
+                   [--signing-report <file> | --minimum-macos <version>]
+                   [--release-date <YYYY-MM-DD>]
+      Render the Homebrew cask and the WinGet manifests from the built
+      artifacts. Digests are computed from those files; a placeholder, a
+      malformed digest and a version mismatch are all refused.
 ";
 
 fn repo_root() -> PathBuf {
@@ -106,6 +117,13 @@ fn main() -> ExitCode {
                 ExitCode::FAILURE
             }
         },
+        "packaging" if args.get(1).map(String::as_str) == Some("render") => {
+            packaging_render(&root, &args)
+        }
+        "packaging" => {
+            eprint!("{USAGE}");
+            ExitCode::FAILURE
+        }
         "--help" | "-h" | "help" => {
             print!("{USAGE}");
             ExitCode::SUCCESS
@@ -473,4 +491,127 @@ fn evidence_verify(args: &[String], quiet: bool) -> ExitCode {
         }
         Err(error) => fail(&error.to_string()),
     }
+}
+
+/// Renders the Homebrew cask and the WinGet manifests from the two files the
+/// release actually built.
+///
+/// Every published claim is a measurement: the digests are of these bytes,
+/// the URLs are of this version's assets, and the macOS floor is the one the
+/// signing report recorded for this bundle. The renderer refuses a
+/// placeholder, a malformed digest and a version that disagrees with either
+/// the workspace or the asset names, so a broken manifest never reaches a
+/// release.
+fn packaging_render(root: &Path, args: &[String]) -> ExitCode {
+    let Some(macos_zip) = flag(args, "--macos-zip") else {
+        return fail("--macos-zip <file> is required: the digest is taken from the built file");
+    };
+    let Some(msi) = flag(args, "--msi") else {
+        return fail("--msi <file> is required: the digest is taken from the built file");
+    };
+    let Some(out) = flag(args, "--out") else {
+        return fail("--out <dir> is required");
+    };
+
+    let declared = workspace_version(root);
+    let version = match flag(args, "--version") {
+        Some(requested) => {
+            if let Some(declared) = declared.as_deref() {
+                if requested != declared {
+                    return fail(&format!(
+                        "version mismatch: --version {requested}, but the workspace declares {declared}"
+                    ));
+                }
+            }
+            requested
+        }
+        None => match declared {
+            Some(declared) => declared,
+            None => return fail("the workspace version could not be read; pass --version"),
+        },
+    };
+
+    let minimum_macos = match (
+        flag(args, "--signing-report"),
+        flag(args, "--minimum-macos"),
+    ) {
+        (Some(report), _) => match packaging::minimum_macos_from_report(Path::new(&report)) {
+            Ok(minimum) => minimum,
+            Err(error) => return fail(&error.to_string()),
+        },
+        (None, Some(minimum)) => minimum,
+        (None, None) => {
+            return fail(
+                "--signing-report <file> or --minimum-macos <version> is required: the cask's macOS floor is the bundle's own LSMinimumSystemVersion",
+            );
+        }
+    };
+
+    let release_date = flag(args, "--release-date").unwrap_or_else(|| {
+        let today = time::OffsetDateTime::now_utc().date();
+        format!(
+            "{:04}-{:02}-{:02}",
+            today.year(),
+            u8::from(today.month()),
+            today.day()
+        )
+    });
+    let repository =
+        flag(args, "--repository").unwrap_or_else(|| packaging::DEFAULT_REPOSITORY.to_owned());
+
+    let release = match packaging::Release::from_files(
+        &version,
+        &repository,
+        Path::new(&macos_zip),
+        Path::new(&msi),
+        &minimum_macos,
+        &release_date,
+    ) {
+        Ok(release) => release,
+        Err(error) => return fail(&error.to_string()),
+    };
+    let templates = match packaging::Templates::from_repo(root) {
+        Ok(templates) => templates,
+        Err(error) => return fail(&error.to_string()),
+    };
+    let rendered = match packaging::render(&templates, &release) {
+        Ok(rendered) => rendered,
+        Err(error) => return fail(&error.to_string()),
+    };
+    let problems = packaging::validate_winget(&rendered, &release.version);
+    if !problems.is_empty() {
+        for problem in &problems {
+            eprintln!("error: {problem}");
+        }
+        return fail("the rendered WinGet manifests are not internally consistent");
+    }
+    let written = match rendered.write_to(Path::new(&out), &release.version) {
+        Ok(written) => written,
+        Err(error) => return fail(&error.to_string()),
+    };
+
+    println!("rendered packaging manifests for {}:", release.version);
+    println!("  macOS bundle    {}", release.macos_url());
+    println!("                  sha256 {}", release.macos_zip.sha256);
+    println!("  Windows .msi    {}", release.msi_url());
+    println!("                  sha256 {}", release.msi.sha256);
+    println!(
+        "  macOS floor     {} (depends_on macos: >= :{})",
+        release.minimum_macos,
+        packaging::macos_symbol(&release.minimum_macos).unwrap_or("?")
+    );
+    for path in written {
+        println!("  wrote {}", path.display());
+    }
+    ExitCode::SUCCESS
+}
+
+/// The workspace version, read from the root manifest.
+fn workspace_version(root: &Path) -> Option<String> {
+    let manifest = std::fs::read_to_string(root.join("Cargo.toml")).ok()?;
+    manifest
+        .lines()
+        .find_map(|line| line.trim().strip_prefix("version = \""))
+        .and_then(|rest| rest.split('"').next())
+        .map(str::to_owned)
 }

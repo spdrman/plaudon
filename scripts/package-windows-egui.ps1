@@ -134,6 +134,15 @@ New-Item -ItemType Directory -Force -Path $Stage | Out-Null
 Copy-Item $Exe $Stage -Force
 Copy-Item $Cli $Stage -Force
 Copy-Item $Icon $Stage -Force
+# The guided PLAUD sign-in helper. WinGet can declare a Node.js dependency but
+# cannot install an npm package, so the installer carries the script that
+# does: it installs the pinned vendor CLI and runs the vendor's own login.
+$PlaudSetup = Join-Path $RepoRoot "packaging/plaud-cli/Plaudon-Setup-Plaud.ps1"
+if (-not (Test-Path $PlaudSetup)) {
+    Write-Error "reason=missing_binary: $PlaudSetup is absent"
+    exit 1
+}
+Copy-Item $PlaudSetup $Stage -Force
 
 $Version = (Select-String -Path (Join-Path $RepoRoot "Cargo.toml") -Pattern '^version = "(.+)"' |
     Select-Object -First 1).Matches[0].Groups[1].Value
