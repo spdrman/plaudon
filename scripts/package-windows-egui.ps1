@@ -242,7 +242,9 @@ function Get-Column([string]$sql) {
             "StringData", "GetProperty", $null, $record, @(1))
     }
     $view.GetType().InvokeMember("Close", "InvokeMethod", $null, $view, $null) | Out-Null
-    return , $values
+    # No comma: `return , $values` hands back an array *containing* the array,
+    # which the JSON below then nests and the caller counts as one row.
+    return $values
 }
 $summary = $database.GetType().InvokeMember("SummaryInformation", "GetProperty", $null, $database, @(0))
 [pscustomobject]@{
