@@ -10,7 +10,9 @@ means permission.
 `deny.toml`: a dependency carrying a licence outside the reviewed allowlist, an
 unknown registry or an open advisory fails the build.
 
-Reviewed on 2026-10-12 (O1.6: the Opus decoder row is now a shipped dependency).
+Reviewed on 2026-10-12. Two passes that day: O1.6 made the Opus decoder row a
+shipped dependency, and P2.5 (#248) added the speaker-embedding runtime, the
+two bundle-tier model artifacts and their checksum table.
 
 ## Redistribution vocabulary
 
@@ -68,6 +70,10 @@ Reviewed on 2026-10-12 (O1.6: the Opus decoder row is now a shipped dependency).
 | FFmpeg | LGPL-2.1+ or GPL depending on build | **excluded for now** | would require source offer and dynamic linking care | large C codebase parsing untrusted input | Not introduced, and no longer needed for Opus: Symphonia covers WAV, MP3, M4A/AAC, FLAC and Ogg Vorbis, and `opus-pure` covers Ogg Opus (O1.6, #214). A format outside that set is still refused with a typed error rather than reached for with an LGPL C library. |
 | filmcraft (`spdrman/filmcraft`) | MIT or Apache-2.0 | bundle (adapted source) | **`NOTICE`, per file** | `std`-only ring buffer and mixing thread; no `unsafe` | Adapt, not depend: `crates/audio-playback/src/ring.rs` is derived from its `play_ahead.rs`, and `cpal_out.rs` and the waveform mesh follow its structure. Every adapted file names the origin in its header and in `NOTICE`. A git dependency is impossible here — `deny.toml` sets `unknown-git = "deny"` — and the crate is unpublished. |
 | `objc2` 0.6, `objc2-app-kit` 0.3, `objc2-foundation` 0.3 (macOS only) | MIT or Apache-2.0 | bundle, on macOS only | notice file | typed bindings to the Objective-C runtime; `apps/plaudon-egui/src/mac_open.rs` uses them for one thing — adding `application:openURLs:` to the live `NSApplicationDelegate` so a `.plaudon` document or a `plaudon://` link reaches the window. The handler copies URL strings into a queue and nothing else; the strings are then parsed by `plaudon_platform::activation::open_request`, which refuses anything outside the approved roots, and no path is logged | Bundle on macOS (parity row C10). **No package is added to the graph**: `tray-icon` 0.25 and `muda` 0.20 already pull all three at exactly these versions on macOS (`Cargo.lock`), and naming them directly only removes the pretence that the tray crate is where AppKit types come from. Needed because winit 0.30.13 installs its own application delegate (`platform_impl/macos/event_loop.rs`) which implements only `applicationDidFinishLaunching:` and `applicationWillTerminate:`, and neither winit nor eframe 0.36 surfaces an open event. |
+| `ort` 2.0.0-rc.14 and `ort-sys` (ONNX Runtime bindings, behind `plaudon-ai-speaker`'s off-by-default `onnx` feature) | MIT or Apache-2.0 for the bindings; the ONNX Runtime binary they link is MIT (© Microsoft) | **not in any shipped build today**; bundle-with-the-feature when ADR-0081 §4 passes | `NOTICE` carries both | links a prebuilt ONNX Runtime **statically**, so a release has no extra dylib to sign or notarize; the model file is parsed by that native code, which is why the digest is verified before the session is created (`crates/ai-speaker/src/onnx.rs`) and why ADR-0015's out-of-process requirement still stands as an open gate item | **Chosen for the runtime (ADR-0081 §3 as amended 2026-10-12).** Measured here against the alternatives on macOS arm64 at `-j2`: `ort` + a first-party feature front end builds clean in **15 s**, adds 15 crates to a normal build and produces a single self-contained binary. `sherpa-rs` 0.6.8 — the first-party sherpa-onnx fallback — takes **80 s**, needs bindgen (libclang) and CMake on every build host, and ships **three dylibs** (`libsherpa-onnx-c-api`, `libsherpa-onnx-cxx-api`, `libonnxruntime.1.17.1`, 26 MB) pinned to an ONNX Runtime two years older than the one `ort` links. Two caveats are recorded rather than smoothed over: the 2.0 line is still a release candidate (pinned with `=`), and `download-binaries` fetches the runtime over TLS at build time, which a release build must replace with `ORT_LIB_LOCATION` pointing at a pinned, checksummed artifact (release-evidence item, `docs/release/voice-profiles-evidence.md`). |
+| `ureq` 3, `ureq-proto`, `socks`, `lzma-rust2`, `hmac-sha256` (build dependencies of `ort-sys` only) | MIT or Apache-2.0; `hmac-sha256` is ISC | never shipped: they exist only in `ort-sys`'s build script | n/a | this is the build-time download path for the prebuilt ONNX Runtime — an HTTP client, an LZMA decompressor and a digest check running on the build machine, not in the product | Accepted only as long as the build-time download is accepted; pinning `ORT_LIB_LOCATION` removes all five from the build. |
+| `sherpa-rs` 0.6.8 / sherpa-onnx (the ADR-0081 §3 fallback) | Apache-2.0 (sherpa-onnx), MIT (`sherpa-rs`) | **excluded** | n/a | drags a second C++ codebase, a bindgen/libclang build-host requirement and three runtime dylibs into the artifact path | Rejected on the measured build burden above. Still the fallback if `ort` cannot be made to work on Windows x64, which is not yet measured; the decision is recorded in ADR-0081 so a reversal has to argue with numbers. |
+| `knf-rs` 0.3.2 / `knf-rs-sys` (Rust bindings to `kaldi-native-fbank`) | MIT | **excluded** | n/a | vendors the kaldi-native-fbank C++ sources and builds them with CMake **and** bindgen, so every build host needs libclang and a C++ toolchain, and a second native parser of untrusted audio enters the process | Rejected: `crates/ai-speaker/src/fbank.rs` computes the same features in ~300 lines of dependency-free Rust, the same precedent as choosing `opus-pure` over libopus bindings (O1.6). The two implementations were compared on this machine over a 3 s broadband signal with the same window (`povey`): identical frame and bin counts, **max absolute difference 5.6e-4, RMS 1.2e-5** — f32 rounding, not a behavioural difference. `knf-rs` is a verification tool, never a dependency. |
 
 ## Packaging and installer tooling
 
@@ -93,7 +99,35 @@ outside the application bundle.
 |---|---|---|---|---|
 | Whisper `ggml` conversions (`tiny`, `base`, `small`, `medium`, `large-v3`) | MIT for the original OpenAI weights; each redistributed conversion must be checked individually | user-installed by default | required before install; `scripts/verify-model-pack.sh` refuses an unverified file | A conversion whose redistribution terms are not clearly MIT is marked **not bundlable** and is user-downloaded only. |
 | Apple on-device speech and language assets | Apple platform assets | never redistributed | n/a | Downloaded by the operating system on the user's instruction. |
-| Any diarization model (for example pyannote) | gated, varies | excluded pending a separate review | n/a | Not introduced; §8.7 requires a feasibility and licensing spike first. |
+| pyannote `segmentation-3.0`, ONNX export | MIT, © 2022 CNRS; the export is published un-gated with the licence text beside it | **bundlable** in the offline model pack, user-installed by default | required: exact file name and sha256 in the table below, enforced by `crates/ai-speaker/src/checkpoint.rs` and `scripts/fetch-speaker-models.sh` | Reviewed and accepted (ADR-0081 §1). Not installed by any release today: the voice-profiles feature is off and its §4 gates are not all passed. The gated Hugging Face original is **excluded** as a default path (ADR-0400 condition 3); it remains permitted as an explicit user download with the user's own token. |
+| WeSpeaker `ResNet34-LM` (VoxCeleb), ONNX | CC-BY-4.0 — WeSpeaker publishes pretrained weights under the licence of their training corpus, and VoxCeleb is CC-BY-4.0 | **bundlable** with attribution, user-installed by default | required: exact file name and sha256 in the table below | Reviewed and accepted (ADR-0081 §1, §2). Where upstreams disagree about whether VoxCeleb-trained weights inherit CC-BY-4.0 we follow the stricter claim; the attribution lands in `NOTICE` and on the model screen. |
+| NVIDIA TitaNet-L and any model trained on LDC corpora (Fisher, Switchboard, NIST SRE) | labelled CC-BY-4.0 on Hugging Face, Apache-2.0 on NGC; training corpora are per-seat LDC licences | **excluded** | n/a | Excluded from bundling regardless of the label (ADR-0081 §2): the two licence theories give opposite answers and we do not need the model. |
+| Rev Reverb diarization models (carried in the same sherpa-onnx release tags) | non-commercial | **excluded** | n/a | Excluded. This is why every acquisition above is by exact file name: a glob over a release tag would fetch one of these. |
+
+### Model-weights checksums (§12 "checksum recorded")
+
+These four values — file name, size, digest, licence — are the install
+contract. They are compiled into `crates/ai-speaker/src/checkpoint.rs`, pinned
+in `scripts/fetch-speaker-models.sh`, reproduced in `NOTICE`, and checked
+against this table by
+`plaudon-integration-tests --test licensing_register`, so a drift in any one
+of the four fails the build rather than a review.
+
+| File (exact name) | Bytes | sha256 | Licence | Fetched from |
+|---|---|---|---|---|
+| `wespeaker_en_voxceleb_resnet34_LM.onnx` | 26530550 | `e9848563da86f263117134dfd7ad63c92355b37de492b55e325400c9d9c39012` | CC-BY-4.0 | `https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/wespeaker_en_voxceleb_resnet34_LM.onnx` (upstream tag spelling preserved) |
+| `model.onnx` → installed as `pyannote-segmentation-3.0.onnx` | 5992913 | `220ad67ca923bef2fa91f2390c786097bf305bceb5e261d4af67b38e938e1079` | MIT | `https://huggingface.co/csukuangfj/sherpa-onnx-pyannote-segmentation-3-0/resolve/main/model.onnx` |
+
+Provenance note, verified by byte comparison on 2026-10-12: the WeSpeaker file
+above is the upstream export
+(`https://wespeaker-1256283475.cos.ap-shanghai.myqcloud.com/models/voxceleb/voxceleb_resnet34_LM.onnx`,
+26530309 bytes, sha256
+`7bb2f06e9df17cdf1ef14ee8a15ab08ed28e8d0ef5054ee135741560df2ec068`) with 241
+bytes of ONNX `metadata_props` appended — `framework`, `language`, the upstream
+`url`, `sample_rate=16000`, `output_dim=256`, `normalize_samples=0`. The first
+26530309 bytes are identical, so the graph and the weights are upstream's and
+only the metadata is the mirror's. The mirror is the acquisition target
+because that metadata states the feature contract the engine implements.
 
 ## Evaluation corpora (speaker matching, VOICE_PROFILES_SPEC §17.2)
 
@@ -115,6 +149,19 @@ including in free text.
 | VoxCeleb 1/2, VoxConverse | form-gated, "research purposes", underlying YouTube copyright never licensed to the publisher | **never in the repository or CI** | n/a | Excluded. Developer-local evaluation only, never a committed fixture or a derived one. |
 | AISHELL-4 (openslr.org/111) | CC-BY-**SA**-4.0 | **never vendored, never mixed into derived fixtures** | n/a | Excluded: ShareAlike contamination risk for anything derived from it. |
 | sherpa-onnx release-tag test wavs | no stated licence | never vendored | n/a | Excluded. No licence means no permission. |
+
+The measured tier is built locally by `plaudon-speaker-embed build-fixtures`
+(`crates/ai-speaker`): it decodes LibriSpeech `test-clean` with the product's
+own decoder, cuts fixed-length single-speaker utterances, and derives the
+channel conditions. Three of the four are pure Rust in that tool (clean,
+telephone band-pass, room impulse response); the low-bitrate Opus condition
+shells out to a developer-local **FFmpeg** (`-c:a libopus -b:a 12k`), which is
+never redistributed and never linked — the same standing as `rsvg-convert`
+above. The MUSAN condition is **not built**: the corpus is an 11 GB download
+this run did not take, so `noise_musan` is absent from the measured plan rather
+than approximated. Every built file's digest is in
+[docs/benchmarks/speaker-match-wespeaker-fixtures.json](../benchmarks/speaker-match-wespeaker-fixtures.json);
+no audio and no embedding is committed.
 
 ## Audit hook
 

@@ -93,6 +93,10 @@ echo "==> risk exceptions"
 mkdir -p "$STAGING/risk-exceptions"
 cp docs/release/risk-exceptions.md "$STAGING/risk-exceptions/" 2>/dev/null || \
   echo "no accepted risk exception is open for this release" > "$STAGING/risk-exceptions/none.txt"
+# The EPIC P register: the measured artifacts, and the items no development
+# environment can produce — the Windows x64 figures and the privacy-counsel
+# review — with their owners and their next step (ADR-0081 §4, VP-131).
+cp docs/release/voice-profiles-evidence.md "$STAGING/risk-exceptions/" 2>/dev/null || true
 
 echo "==> migration and restore results"
 mkdir -p "$STAGING/migration-restore"

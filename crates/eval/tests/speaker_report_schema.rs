@@ -89,6 +89,56 @@ fn the_committed_artifact_satisfies_the_schema() {
     assert!(errors.is_empty(), "{errors:?}");
 }
 
+/// Every committed artifact, not just the scripted one.
+///
+/// `docs/benchmarks/` gained its first real measurement in P2.5
+/// (`speaker-match-wespeaker-resnet34-lm-eer.json`), and a measured artifact is
+/// exactly the document that will be quoted: it has to satisfy the published
+/// shape, carry the standing caveats and name the platform its runtime figures
+/// came from.
+#[test]
+fn every_committed_speaker_match_artifact_satisfies_the_schema() {
+    let directory = repo_root().join("docs/benchmarks");
+    let mut checked = 0;
+    for entry in std::fs::read_dir(&directory)
+        .expect("docs/benchmarks")
+        .flatten()
+    {
+        let path = entry.path();
+        let name = path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .into_owned();
+        if !name.starts_with("speaker-match-") || !name.ends_with("-eer.json") {
+            continue;
+        }
+        let committed: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).expect("read artifact"))
+                .unwrap_or_else(|error| panic!("{name} is not valid JSON: {error}"));
+        let errors = errors(&committed);
+        assert!(errors.is_empty(), "{name}: {errors:?}");
+
+        // A measurement of a real checkpoint must say which machine produced
+        // its runtime figures; ADR-0081 §4 is a per-platform gate.
+        if committed["model"]["embedding_source"] == serde_json::json!("model_pack") {
+            let runtime = &committed["runtime"];
+            assert!(
+                runtime["platform"].is_string()
+                    && runtime["peak_rss_bytes"].is_number()
+                    && runtime["startup_ms"].is_number()
+                    && runtime["real_time_factor"].is_number(),
+                "{name} measures a checkpoint but records no complete runtime footprint"
+            );
+        }
+        checked += 1;
+    }
+    assert!(
+        checked >= 2,
+        "expected the scripted artifact and at least one measured one, saw {checked}"
+    );
+}
+
 #[test]
 fn the_schema_refuses_a_document_that_hides_what_it_measured() {
     let mut instance = serde_json::to_value(report()).expect("serialize");
