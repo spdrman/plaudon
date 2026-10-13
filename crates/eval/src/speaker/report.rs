@@ -177,6 +177,17 @@ pub struct SpeakerMatchReport {
     pub generator: String,
     /// When the run happened, when a caller recorded it. `null` for a
     /// deterministic scripted run, which has no measurement moment.
+    ///
+    /// Written as RFC 3339, not as epoch milliseconds: this document is read
+    /// by people in review comments and release notes, and the published
+    /// shape (`schemas/speaker-match-report.v1.schema.json`) has always said
+    /// `date-time`. Until P2.5 produced the first measured artifact every
+    /// committed document had `null` here, so the two never disagreed out
+    /// loud.
+    #[serde(
+        serialize_with = "serialize_measured_on",
+        deserialize_with = "deserialize_measured_on"
+    )]
     pub measured_on: Option<Timestamp>,
     /// Commit the run was made at, when the caller recorded one.
     pub commit: Option<String>,
@@ -202,6 +213,47 @@ pub struct SpeakerMatchReport {
     pub caveats: Vec<String>,
 }
 
+/// Write `measured_on` as RFC 3339, falling back to epoch milliseconds for an
+/// instant outside the range that can be formatted.
+#[allow(clippy::ref_option, reason = "serde's serialize_with signature takes a reference")]
+fn serialize_measured_on<S: serde::Serializer>(
+    value: &Option<Timestamp>,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    match value.and_then(Timestamp::to_rfc3339) {
+        Some(text) => serializer.serialize_some(&text),
+        None => serializer.serialize_none(),
+    }
+}
+
+/// Read `measured_on` back from RFC 3339, or from the millisecond form an
+/// older document may carry.
+fn deserialize_measured_on<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<Timestamp>, D::Error> {
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Recorded {
+        Rfc3339(String),
+        Millis(i64),
+    }
+
+    let Some(recorded) = Option::<Recorded>::deserialize(deserializer)? else {
+        return Ok(None);
+    };
+    match recorded {
+        Recorded::Millis(millis) => Ok(Some(Timestamp::from_millis(millis))),
+        Recorded::Rfc3339(text) => {
+            let parsed =
+                time::OffsetDateTime::parse(&text, &time::format_description::well_known::Rfc3339)
+                    .map_err(serde::de::Error::custom)?;
+            let millis = i64::try_from(parsed.unix_timestamp_nanos() / 1_000_000)
+                .map_err(serde::de::Error::custom)?;
+            Ok(Some(Timestamp::from_millis(millis)))
+        }
+    }
+}
+
 /// Caveats every speaker-matching artifact carries.
 ///
 /// Published with the numbers rather than next to them, because a benchmark
@@ -215,6 +267,9 @@ pub const STANDING_CAVEATS: &[&str] = &[
      person confirms (VP-060, ADR-0082).",
     "Published model-card EERs (VoxCeleb1-O, full-length utterances) measure a different protocol \
      and must not be compared with these figures (VP-173).",
+    "ADR-0081 §4 is a two-platform gate and one document covers one platform: a release needs this \
+     artifact for macOS arm64 *and* for Windows x64, so `release_evidence.qualifies` means \
+     \"usable as evidence for the platform named in `runtime`\", never \"the gate is passed\".",
 ];
 
 impl SpeakerMatchReport {

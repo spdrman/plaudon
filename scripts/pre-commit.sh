@@ -92,6 +92,7 @@ apple-no-symbols|slow|remote-linux|Apple bridge › no-apple-symbols
 apple-macos|slow|native-macos|Apple bridge › macos (Swift bridge, link probe, sanitizers, opt-in gate)
 extraction-eval|slow|remote|Extraction Evaluation › evaluate › Run extraction evaluation
 package-macos|slow|native-macos|CI › egui-desktop (macos-15) › Package the macOS bundle
+onnx-embedder|slow|native-macos|no CI job: the ADR-0081 ONNX engine, opt-in (PLAUDON_ONNX_EMBEDDER=1)
 ci-selftest|slow|native|CI › pipeline-selftest › Deliberately failing fixtures must fail their gates
 coverage|slow|native-macos|CI › coverage › Branch coverage + Enforce the critical-module policy
 REGISTRY
@@ -182,14 +183,35 @@ run_build_metadata() {
 # Apple-tainted crates are built on this Mac, crate-scoped at
 # CARGO_BUILD_JOBS=2, which is what the workstation resource policy allows.
 APPLE_TAINTED=(plaudon-ai-apple plaudon-app plaudon-egui plaudon-hardware-tests)
-exclude_apple_tainted() {
+exclude_feature_tainted() {
   local p
   for p in "${APPLE_TAINTED[@]}"; do printf -- '--exclude %s ' "$p"; done
+  # `--all-features` would also turn on plaudon-ai-speaker's `onnx` feature,
+  # whose build script downloads a prebuilt ONNX Runtime over the network
+  # (ADR-0081 §3). A gate that silently needs a CDN is not a gate, so the
+  # crate is excluded here and checked on its own by `run_onnx_embedder`,
+  # which is opt-in. Nothing depends on this crate with the feature on, so
+  # one `--exclude` really does switch it off.
+  printf -- '--exclude plaudon-ai-speaker '
+}
+
+# The off-by-default inference runtime (ADR-0081 §4). Opt-in, like the
+# hardware suites: it needs the network on a cold cache and it is not part of
+# any shipped configuration. Without the variable this check says what it
+# skipped and why, rather than passing quietly.
+run_onnx_embedder() {
+  if [ "${PLAUDON_ONNX_EMBEDDER:-0}" != "1" ]; then
+    echo "skipped: set PLAUDON_ONNX_EMBEDDER=1 to build and test the ADR-0081 ONNX engine"
+    echo "  (off by default; its build downloads a prebuilt ONNX Runtime)"
+    return 0
+  fi
+  cargo clippy -p plaudon-ai-speaker --all-targets --features onnx -- -D warnings || return $?
+  cargo test -p plaudon-ai-speaker --all-targets --features onnx
 }
 
 run_clippy() {
   remote_shell "$GIT_SNAPSHOT
-cargo clippy --workspace --all-targets --all-features $(exclude_apple_tainted) -- -D warnings" ||
+cargo clippy --workspace --all-targets --all-features $(exclude_feature_tainted) -- -D warnings" ||
     return $?
   echo "--- the four crates whose --all-features needs macOS, on this host at -j${CARGO_BUILD_JOBS}"
   cargo clippy -p plaudon-ai-apple -p plaudon-app -p plaudon-egui -p plaudon-hardware-tests \
@@ -220,7 +242,7 @@ run_tests() {
   # apple-macos check covers it instead.
   PLAUDON_E2E_HOST="$(unprivileged_host)" \
     remote_shell "$GIT_SNAPSHOT
-cargo test --workspace --all-features $(exclude_apple_tainted)" || return $?
+cargo test --workspace --all-features $(exclude_feature_tainted)" || return $?
   echo "--- plaudon-app and plaudon-hardware-tests with --all-features, on this host"
   cargo test -p plaudon-app -p plaudon-hardware-tests --all-features || return $?
   # plaudon-egui's suites drive a real renderer, which docs/EGUI_TESTING.md
@@ -388,6 +410,7 @@ run_check() { # name
     apple-macos) run_apple_macos ;;
     extraction-eval) run_extraction_eval ;;
     package-macos) run_package_macos ;;
+    onnx-embedder) run_onnx_embedder ;;
     ci-selftest) run_ci_selftest ;;
     coverage) run_coverage ;;
     *) echo "unknown check: $1" >&2; return 2 ;;

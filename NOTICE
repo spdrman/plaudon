@@ -127,3 +127,69 @@ zlib/libpng licence, with its compression components (LZMA SDK, bzip2) under
 their own permissive terms; the full texts ship with NSIS and are reproduced
 in the release evidence bundle. Nothing of NSIS is linked into plaudon-egui
 itself, and the macOS bundle contains no installer code at all.
+
+--------------------------------------------------------------------------------
+Speaker and segmentation model weights (model-pack tier, EPIC P)
+Distributed as an offline model pack, never inside the application binary.
+--------------------------------------------------------------------------------
+
+Neither file below is bundled in Plaudon today: the voice-profiles feature is
+off by default and its ADR-0081 §4 gates are not all passed, so no release
+installs them. The attribution each one obliges is recorded here because the
+obligation attaches to the model pack we build and to any screen that displays
+the model, not to a future decision to ship — and because the digests below are
+the only ones the installer will accept (crates/ai-speaker/src/checkpoint.rs,
+docs/licensing/third-party-register.md).
+
+  pyannote segmentation-3.0, ONNX export
+  wespeaker/pyannote-segmentation-3.0.onnx
+  sha256 220ad67ca923bef2fa91f2390c786097bf305bceb5e261d4af67b38e938e1079
+
+    pyannote.audio segmentation-3.0
+    Copyright (c) 2022 CNRS
+    Licensed under the MIT License.
+
+  The weights are the ones published by CNRS for pyannote.audio; the ONNX
+  export used here is the sherpa-onnx project's, published un-gated with the
+  MIT licence text beside it
+  (https://huggingface.co/csukuangfj/sherpa-onnx-pyannote-segmentation-3-0).
+
+  WeSpeaker ResNet34-LM speaker embedding
+  wespeaker_en_voxceleb_resnet34_LM.onnx
+  sha256 e9848563da86f263117134dfd7ad63c92355b37de492b55e325400c9d9c39012
+
+    WeSpeaker pretrained models
+    Copyright (c) the WeSpeaker authors (WeNet Open Source Community)
+    Licensed under the Creative Commons Attribution 4.0 International License.
+
+  WeSpeaker publishes its pretrained weights under the licence of the corpus
+  they were trained on (docs/pretrained.md), which for this checkpoint is:
+
+    VoxCeleb
+    Nagrani, Chung and Zisserman, Visual Geometry Group, University of Oxford.
+    Licensed under the Creative Commons Attribution 4.0 International License.
+
+  CC-BY-4.0 requires that the author, the licence and a notice of any changes
+  travel with the material. Plaudon makes no change to either file: the model
+  pack installs the published bytes, verified against the digests above, and
+  the application displays the licence before the download starts. Where
+  upstreams disagree about whether VoxCeleb-trained weights inherit CC-BY-4.0,
+  we follow the stricter claim (ADR-0081 §2).
+
+--------------------------------------------------------------------------------
+ONNX Runtime (crate `ort`, optional `onnx` feature)
+Not present in any shipped build today.
+--------------------------------------------------------------------------------
+
+    ONNX Runtime
+    Copyright (c) Microsoft Corporation
+    Licensed under the MIT License.
+
+    ort
+    Copyright (c) 2022 pyke.io and the ort contributors
+    Licensed under the MIT License or the Apache License, Version 2.0.
+
+`crates/ai-speaker`'s `onnx` feature links a prebuilt ONNX Runtime statically.
+No shipped configuration enables it (ADR-0081 §4), so no release binary
+contains ONNX Runtime code; this entry exists so that the obligation is already
+written down on the day one does.
