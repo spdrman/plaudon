@@ -23,7 +23,9 @@
 //! linked resources. They are compiled from `packaging/windows/
 //! plaudon-egui.rc` with whichever resource compiler the host has —
 //! `llvm-rc` (the LLVM distribution and cargo-xwin) or MSVC's `rc.exe` — and
-//! linked into the binary. `scripts/package-windows-egui.ps1` refuses to
+//! linked into the binary. The icon the script links is the brand kit's,
+//! `brand/kit/icons/desktop/plaudon.ico`, which is the only copy of that
+//! artwork in the repository. `scripts/package-windows-egui.ps1` refuses to
 //! package an executable whose version information is missing, so a build
 //! that silently lost its resources cannot become an installer.
 
@@ -65,7 +67,9 @@ fn embed_windows_resources() {
     );
     println!(
         "cargo:rerun-if-changed={}",
-        packaging.join("plaudon.ico").display()
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../brand/kit/icons/desktop/plaudon.ico")
+            .display()
     );
     println!("cargo:rerun-if-env-changed=RC");
 

@@ -13,7 +13,11 @@
 // CREATEPROCESS_MANIFEST_RESOURCE_ID and 24 is RT_MANIFEST.
 #define IDI_PLAUDON 1
 
-IDI_PLAUDON ICON "plaudon.ico"
+// The icon is the brand kit's, read from the one place it lives
+// (`brand/kit/icons/desktop/plaudon.ico`); the path is relative because
+// `build.rs` compiles this script with its own directory as the working
+// directory. No copy of the artwork is kept under packaging/.
+IDI_PLAUDON ICON "../../../../brand/kit/icons/desktop/plaudon.ico"
 1 24 "plaudon-egui.exe.manifest"
 
 #ifndef PLAUDON_VERSION

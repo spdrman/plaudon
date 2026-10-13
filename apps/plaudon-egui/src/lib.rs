@@ -25,6 +25,7 @@
 //!   vendored `plaudon_craft_ui::layout::ResizeHandle`, which carries
 //!   `Role::Splitter`, a numeric value and keyboard resizing.
 
+pub mod icon;
 pub mod screens;
 pub mod shell_app;
 

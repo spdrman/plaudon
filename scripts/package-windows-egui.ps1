@@ -52,7 +52,11 @@ $OutFull = (Resolve-Path $Out).Path
 $Packaging = Join-Path $RepoRoot "apps/plaudon-egui/packaging/windows"
 $Wxs = Join-Path $Packaging "plaudon-egui.wxs"
 $Manifest = Join-Path $Packaging "plaudon-egui.exe.manifest"
-$Icon = Join-Path $Packaging "plaudon.ico"
+# The installer icon (ARP entry, Start menu shortcut) is the brand kit's, the
+# same file the executable resource links; it is staged into the WiX bind path
+# under the name plaudon-egui.wxs references.
+$Icon = Join-Path $RepoRoot "brand/kit/icons/desktop/plaudon.ico"
+if (-not (Test-Path $Icon)) { Write-Error "reason=missing_binary: $Icon is absent; the brand kit must be checked out"; exit 1 }
 
 # ------------------------------------------------------------------ build --
 $Jobs = if ($env:CARGO_BUILD_JOBS) { $env:CARGO_BUILD_JOBS } else { "2" }

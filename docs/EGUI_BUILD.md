@@ -18,7 +18,7 @@ Companion documents: `docs/EGUI_MIGRATION_PLAN.md` (what is being built and why)
 | --- | --- | --- |
 | all | the pinned toolchain | `rustup show` reads `rust-toolchain.toml` |
 | macOS | C++ headers for `whisper-rs` | `export SDKROOT=$(xcrun --show-sdk-path)` then, **separately**, `export CXXFLAGS="-isystem $SDKROOT/usr/include/c++/v1"` |
-| macOS | bundling, signing, the icon | Xcode Command Line Tools: `codesign`, `iconutil`, `sips`, `plutil`, `PlistBuddy` |
+| macOS | bundling, signing, the icon | Xcode Command Line Tools: `codesign`, `iconutil`, `plutil`, `PlistBuddy` |
 | macOS | notarization (optional) | `xcrun notarytool store-credentials` once, then `PLAUDON_NOTARY_PROFILE` |
 | Windows | the executable's icon, version block and manifest | the Windows SDK resource compiler (`rc.exe`) or LLVM's `llvm-rc` on `PATH`, or `RC=<path>` |
 | Windows | the installer | the WiX toolset, pinned: `dotnet tool install --global wix --version 5.0.2` — or `PLAUDON_WIX=<path to wix.exe>` |
@@ -135,17 +135,26 @@ closed without a credential.
 
 ## 4. The application icon
 
-`apps/plaudon-egui/packaging/icon.svg` is the only hand-edited icon asset: original artwork, drawn
-from primitives, in the design system's light-theme accent. Two derived artifacts are committed
-beside it because the platforms that consume them have no SVG rasteriser:
+Every OS-facing icon comes from the brand kit, `brand/kit/icons/desktop/` (its README is
+`brand/kit/README.txt`): the kit's SVG masters are the artwork and the exports beside them are
+what the platforms consume. There is no second copy in `apps/`, and nothing is rasterised at
+build time.
 
-```sh
-scripts/make-app-icon.sh     # rewrites packaging/icon-1024.png and packaging/windows/plaudon.ico
-```
+| Surface | File | Wired by |
+|---|---|---|
+| macOS bundle icon | `plaudon.icns` | `scripts/package-macos-egui.sh` copies it to `Contents/Resources/plaudon.icns` after `iconutil` validates it |
+| Windows executable resource | `plaudon.ico` | `apps/plaudon-egui/packaging/windows/plaudon-egui.rc`, compiled by `build.rs` |
+| Windows installer: ARP entry, Start menu shortcut | `plaudon.ico` | `scripts/package-windows-egui.ps1` stages it into the WiX bind path for `plaudon-egui.wxs` |
+| Window, Dock and task switcher | `plaudon-icon-256.png` | `apps/plaudon-egui/src/icon.rs`, `include_bytes!` + `ViewportBuilder::with_icon` |
+| Windows notification area | `plaudon-icon-32.png` | `apps/plaudon-egui/src/tray.rs` |
 
-Needs `rsvg-convert` (or `magick`, `convert`, `inkscape`) and, for the `.ico`, `magick`/`convert`.
-The macOS `.icns` is not committed: `scripts/package-macos-egui.sh` builds it from the master raster
-with `sips` and `iconutil` on every run, so the bundle cannot carry a stale icon.
+The macOS status item is the exception and stays a generated monochrome glyph: a macOS template
+image is one colour plus alpha, which would flatten the full-bleed brand tile to a black square.
+
+The artwork is the repository owner's own, MIT-licensed with the repository
+(`docs/licensing/third-party-register.md`). `apps/plaudon-egui/tests/packaging.rs` asserts the
+`.ico` sizes, the `.icns` header, the PNG dimensions, and that no copy of the artwork has
+reappeared under `packaging/`.
 
 ---
 
@@ -317,7 +326,7 @@ docker run --rm -v "$PWD:/work" -w /work mcr.microsoft.com/dotnet/sdk:8.0 bash -
   dotnet tool install --global wix --version 5.0.2 >/dev/null
   stage=$(mktemp -d)
   : > "$stage/plaudon-egui.exe"; : > "$stage/plaudon.exe"
-  cp apps/plaudon-egui/packaging/windows/plaudon.ico "$stage/"
+  cp brand/kit/icons/desktop/plaudon.ico "$stage/"
   wix build -arch x64 -d Version=0.1.0 -b "$stage" -o /tmp/plaudon.wixipl \
     apps/plaudon-egui/packaging/windows/plaudon-egui.wxs'
 ```

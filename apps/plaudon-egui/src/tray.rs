@@ -84,13 +84,27 @@ pub fn default_model(local_only: bool) -> plaudon_platform::tray::TrayModel {
     )
 }
 
-/// A 32×32 RGBA status glyph, generated rather than shipped as an asset.
+/// The 32×32 RGBA status-item image.
 ///
-/// A ring with a solid centre: legible at status-item size, and on macOS it is
-/// installed as a template image so the system tints it for the menu bar's
-/// appearance instead of the application guessing light or dark.
+/// Windows draws the notification area in colour, so it gets the brand icon
+/// itself (`crate::icon::tray_rgba`, the kit's 32px export). macOS asks for a
+/// *template* image — one colour plus alpha, tinted by the system for the
+/// menu bar's appearance — and the brand icon is a full-bleed colour tile
+/// that a template would flatten to a black square, so the status item there
+/// keeps the generated ring glyph: a ring with a solid centre, legible at
+/// status-item size.
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 fn status_icon_rgba() -> Vec<u8> {
+    #[cfg(target_os = "windows")]
+    if let Some(rgba) = crate::icon::tray_rgba() {
+        return rgba;
+    }
+    generated_glyph_rgba()
+}
+
+/// The generated template glyph: black with alpha, nothing else.
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+fn generated_glyph_rgba() -> Vec<u8> {
     let size = ICON_SIZE as i32;
     let mut pixels = Vec::with_capacity((ICON_SIZE * ICON_SIZE * 4) as usize);
     let centre = f64::from(size - 1) / 2.0;
@@ -153,10 +167,12 @@ mod backend {
             let rgba = super::status_icon_rgba();
             let icon = Icon::from_rgba(rgba, super::ICON_SIZE, super::ICON_SIZE)
                 .map_err(|error| error.to_string())?;
+            // Only the macOS glyph is a template image; the Windows icon is
+            // the brand artwork and must keep its colours.
             let builder = TrayIconBuilder::new()
                 .with_tooltip("Plaudon")
                 .with_icon(icon)
-                .with_icon_as_template(true);
+                .with_icon_as_template(cfg!(target_os = "macos"));
             let tray = builder.build().map_err(|error| error.to_string())?;
             Ok(Self {
                 icon: Mutex::new(tray),

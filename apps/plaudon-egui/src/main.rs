@@ -58,8 +58,15 @@ fn main() -> ExitCode {
         }
     };
 
+    // The window, Dock and task-switcher icon: the brand kit's artwork, the
+    // same image the `.icns` and the `.ico` are cut from. A decode failure
+    // leaves the platform default rather than refusing to open a window.
+    let mut viewport = window_state::viewport(state.window);
+    if let Some(icon) = plaudon_egui::icon::window_icon() {
+        viewport = viewport.with_icon(icon);
+    }
     let options = eframe::NativeOptions {
-        viewport: window_state::viewport(state.window),
+        viewport,
         renderer: eframe::Renderer::Wgpu,
         ..eframe::NativeOptions::default()
     };
