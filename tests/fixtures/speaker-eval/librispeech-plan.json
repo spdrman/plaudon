@@ -2,7 +2,7 @@
   "library": {
     "schema_version": 1,
     "library_id": "librispeech-test-clean-v1",
-    "notes": "Single-speaker fixtures cut from LibriSpeech test-clean (CC-BY-4.0, openslr.org/12) by `plaudon-speaker-embed build-fixtures`. The audio is never committed: a contributor downloads the corpus and rebuilds it, and docs/benchmarks/speaker-match-wespeaker-fixtures.json pins every file's digest and the reader each plan label was assigned. The MUSAN noise condition is absent because this run did not build it.",
+    "notes": "Single-speaker fixtures cut from LibriSpeech test-clean (CC-BY-4.0, openslr.org/12) by `plaudon-speaker-embed build-fixtures`, with the noise condition mixed from MUSAN (CC-BY-4.0, openslr.org/17). The audio is never committed: a contributor downloads both corpora and rebuilds it, and docs/benchmarks/speaker-match-wespeaker-fixtures.json pins every file's digest, the reader each plan label was assigned, and the MUSAN files and SNR the noise condition used.",
     "fixtures": [
       {
         "fixture_id": "librispeech-clean",
@@ -50,6 +50,53 @@
         "media_sha256": "4987bb1462a9a2f1113d5d83355c13f5c0fa7236f88b1f89431795de13d54122",
         "media_committed": false,
         "recipe": "LibriSpeech test-clean FLAC decoded to 16 kHz mono by plaudon-audio; consecutive utterances of one reader concatenated and trimmed to 3000 ms, enrolment and trial material disjoint; media_sha256 folds the sorted `<token> <sha256>` lines of every file of this condition in docs/benchmarks/speaker-match-wespeaker-fixtures.json"
+      },
+      {
+        "fixture_id": "librispeech-noise_musan",
+        "corpus": "musan",
+        "condition": "noise_musan",
+        "speakers": [
+          "roster-01",
+          "roster-02",
+          "roster-03",
+          "roster-04",
+          "roster-05",
+          "roster-06",
+          "roster-07",
+          "roster-08",
+          "roster-09",
+          "roster-10",
+          "roster-11",
+          "roster-12",
+          "cohort-01",
+          "cohort-02",
+          "cohort-03",
+          "cohort-04",
+          "cohort-05",
+          "cohort-06",
+          "cohort-07",
+          "cohort-08",
+          "cohort-09",
+          "cohort-10",
+          "cohort-11",
+          "cohort-12",
+          "cohort-13",
+          "cohort-14",
+          "cohort-15",
+          "cohort-16",
+          "cohort-17",
+          "cohort-18",
+          "cohort-19",
+          "cohort-20",
+          "cohort-21",
+          "cohort-22",
+          "cohort-23",
+          "cohort-24"
+        ],
+        "duration_ms": 3000,
+        "media_sha256": "4539e83a931916458b0f23a1a3dfadac9ca8b546a0c3b820c781426fed840c80",
+        "media_committed": false,
+        "recipe": "the clean fixture summed with one file of the MUSAN noise subset at 10.0 dB SNR, the noise scaled by the ratio of the two RMS levels and the sum divided by its peak only if it would clip; the file and the start offset are derived from the sha256 of the fixture token and are listed per file in docs/benchmarks/speaker-match-wespeaker-fixtures.json; media_sha256 folds the sorted `<token> <sha256>` lines of every file of this condition in that manifest"
       },
       {
         "fixture_id": "librispeech-telephone_bandpass",
@@ -211,6 +258,7 @@
   },
   "conditions": [
     "clean",
+    "noise_musan",
     "telephone_bandpass",
     "opus_low_bitrate",
     "room_impulse_response"

@@ -7,12 +7,14 @@ against `schemas/speaker-match-report.v1.schema.json`.
 
 ## Status
 
-**One checkpoint has been measured, on one platform.** P2.5 (#248) produced
+**One checkpoint has been measured, on one platform.** P2.5 (#248, extended by
+#284) produced
 [`speaker-match-wespeaker-resnet34-lm-eer.json`](speaker-match-wespeaker-resnet34-lm-eer.json):
-WeSpeaker ResNet34-LM over LibriSpeech `test-clean`-derived fixtures, embedded
-by the real ONNX engine (`crates/ai-speaker`) on macOS arm64. Pooled EER
-**0.61%** over 240 target and 2 640 non-target trials, with the runtime
-footprint beside it (startup 481 ms, RTF 0.0124, peak RSS 214 MiB). The run's
+WeSpeaker ResNet34-LM over LibriSpeech `test-clean`-derived fixtures — including
+the MUSAN noise condition at 10 dB SNR — embedded by the real ONNX engine
+(`crates/ai-speaker`) on macOS arm64. Pooled EER
+**0.67%** over 300 target and 3 300 non-target trials, with the runtime
+footprint beside it (startup 103 ms, RTF 0.0143, peak RSS 87 MiB). The run's
 machine facts and exact commands are in
 [docs/hardware/macos-apple-silicon.md](../hardware/macos-apple-silicon.md); the
 fixture provenance — which LibriSpeech reader stood in for which plan label,
@@ -32,9 +34,9 @@ These remain unmeasured and unclaimed:
   two-platform gate, so the feature stays off;
   [docs/release/voice-profiles-evidence.md](../release/voice-profiles-evidence.md)
   carries the item, its owner and the exact run that would close it;
-- **the `noise_musan` condition**, which the measured plan omits because MUSAN
-  was not downloaded — a missing condition is reported as missing rather than
-  approximated with other noise;
+- **noise beyond MUSAN's `noise` subset**: the measured `noise_musan` condition
+  is one additive mixture at a single declared SNR (10 dB). MUSAN's `music` and
+  `babble` material, other SNRs and real far-field capture are not measured;
 - **DER of a real diarization provider**. The committed DER figure scores a
   deliberately imperfect *scripted* hypothesis against exact synthetic ground
   truth, so it measures `crates/ai-diarization::der`, not a provider. The
@@ -64,7 +66,7 @@ cargo run -p plaudon-eval --bin plaudon-eval -- speaker-match \
   --out docs/benchmarks/speaker-match-wespeaker-resnet34-lm-eer.json \
   --commit "$(git rev-parse HEAD)" --measured-on "$(date -u +%FT%TZ)" \
   --platform macos-arm64 --host-cpu "Apple M5" \
-  --peak-rss-bytes 224509952 --startup-ms 481 --real-time-factor 0.0124
+  --peak-rss-bytes 91242496 --startup-ms 103 --real-time-factor 0.0143
 ```
 
 `crates/eval/tests/speaker_harness.rs` regenerates the committed artifact and
@@ -120,9 +122,16 @@ run is exactly its output:
 ```sh
 plaudon-speaker-embed build-fixtures \
   --librispeech <dir with LibriSpeech/test-clean> \
+  --musan <dir with musan/noise> \
   --plan tests/fixtures/speaker-eval/librispeech-plan.json \
   --out <fixture dir>
 ```
+
+`--musan` is required whenever the plan lists `noise_musan`, and the tool
+refuses the condition without it: an approximation labelled as MUSAN would be a
+false provenance claim. `--musan-snr-db` overrides the 10 dB default and the
+figure used is written into the manifest, because a noise condition without a
+stated SNR reports an error rate that means nothing.
 
 1. Plan labels are assigned to LibriSpeech readers deterministically — both
    sorted, then zipped — and the assignment is written into the output
@@ -152,7 +161,7 @@ Each condition is one chain applied to the fixture audio before extraction:
 | Condition | Chain |
 |---|---|
 | `clean` | none |
-| `noise_musan` | MUSAN mix at a declared SNR — **not built for the 2026-10-12 run** |
+| `noise_musan` | one file of the MUSAN `noise` subset summed at **10 dB SNR**, the noise scaled by the ratio of the two RMS levels and the sum divided by its peak only if it would clip; file and start offset are derived from the sha256 of the fixture token, and both are recorded per fixture in the manifest |
 | `opus_low_bitrate` | encode at 12 kbit/s with libopus and decode back (developer-local FFmpeg; the product's own decoder is `crates/audio/src/opus.rs`) |
 | `telephone_bandpass` | two-pole RBJ high-pass at 300 Hz and low-pass at 3400 Hz, Q = 0.7071 |
 | `room_impulse_response` | convolution with a deterministic image-source response of a 5.0 × 4.0 × 2.7 m room, wall reflection 0.6, 12 image orders, peak-normalised |
