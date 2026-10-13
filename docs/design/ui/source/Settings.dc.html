@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Settings</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Source+Code+Pro:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#0a4fe0}a:hover{color:#0841b8}
+</style>
+</helmet>
+<div style="width: 1280px; height: {{rootH}}px; background: {{t.canvas}}; font-family: Inter, system-ui, sans-serif; color: {{t.text}}; display: flex; flex-direction: column; overflow: hidden">
+  <div style="width: 1280px; height: 820px; display: flex; flex-direction: column; flex-shrink: 0">
+    <div style="height: 28px; display: flex; align-items: center; gap: 18px; padding: 0 16px; font-size: 13px; border-bottom: 1px solid {{t.border}}"><span>File</span><span>View</span><span>Go</span><span>Help</span></div>
+    <div style="height: 44px; display: flex; align-items: center; gap: 8px; padding: 0 16px; border-bottom: 1px solid {{t.border}}">
+      <button style="height: 28px; padding: 0 12px; border-radius: 6px; border: 1px solid {{t.accent}}; background: {{t.accent}}; color: {{t.accentText}}; font: inherit; font-size: 13px; font-weight: 600">Import audio…</button>
+      <button style="height: 28px; padding: 0 12px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; color: {{t.text}}; font: inherit; font-size: 13px">Search recordings</button>
+      <button style="height: 28px; padding: 0 12px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; color: {{t.text}}; font: inherit; font-size: 13px; display: flex; align-items: center; gap: 8px">Command palette <span style="font-size: 11px; color: {{t.text2}}">Ctrl+K</span></button>
+      <button style="height: 28px; padding: 0 12px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; color: {{t.text}}; font: inherit; font-size: 13px">Refresh</button>
+      <div style="flex: 1"></div>
+      <button aria-label="Activity: no unread notifications" style="height: 28px; padding: 0 10px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; color: {{t.text}}; font: inherit; font-size: 13px">Activity</button>
+      <span style="font-size: 15px; font-weight: 600; margin-left: 8px">Settings</span>
+    </div>
+    <div style="height: 722px; display: flex">
+      <nav aria-label="Primary" style="width: 216px; flex-shrink: 0; border-right: 1px solid {{t.border}}; padding: 12px 10px; box-sizing: border-box; display: flex; flex-direction: column; gap: 2px">
+        <div style="display: flex; align-items: center; gap: 10px; padding: 4px 8px 10px"><img src="{{t.mark}}" alt="" style="height: 26px"><span style="font-size: 15px; font-weight: 700">Plaudon</span></div>
+        <a href="#main" style="font-size: 12px; color: {{t.text2}}; padding: 2px 8px 8px; text-decoration: none">Skip to main content</a>
+        <sc-for list="{{nav}}" as="n" hint-placeholder-count="7">
+          <button style="height: 32px; display: flex; align-items: center; gap: 10px; padding: 0 8px; border: none; border-radius: 6px; background: {{n.bg}}; color: {{t.text}}; font: inherit; font-size: 13px; font-weight: {{n.weight}}; text-align: left">
+            <span style="width: 20px; height: 20px; border-radius: 3px; background: {{n.tileBg}}; color: {{n.tileFg}}; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center">{{n.g}}</span>
+            <span style="flex: 1">{{n.l}}</span><span style="font-size: 11px; color: {{t.text2}}; font-weight: 400">{{n.k}}</span>
+          </button>
+        </sc-for>
+      </nav>
+      <main id="main" style="flex: 1; min-width: 0; display: flex">
+        <div style="width: 200px; flex-shrink: 0; padding: 20px 8px 16px 20px; box-sizing: border-box; display: flex; flex-direction: column; gap: 2px">
+          <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px"><span style="font-size: 12px; color: {{t.text2}}">On this page</span><span style="font-size: 9px; font-weight: 700; padding: 0 4px; border-radius: 3px; border: 1px solid {{t.warning}}; color: {{t.warning}}">PROPOSED</span></div>
+          <sc-for list="{{sections}}" as="s" hint-placeholder-count="14"><a href="#main" style="font-size: 12px; padding: 4px 8px; border-radius: 3px; text-decoration: none; color: {{s.color}}; background: {{s.bg}}; font-weight: {{s.weight}}">{{s.label}}</a></sc-for>
+        </div>
+        <div style="flex: 1; min-width: 0; padding: 20px 24px 16px 12px; box-sizing: border-box; display: flex; flex-direction: column; gap: 12px; overflow: hidden">
+          <h1 style="margin: 0; font-size: 24px; font-weight: 700">Settings</h1>
+
+          <section style="background: {{t.surface}}; border: 1px solid {{t.border}}; border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px">
+            <h2 style="margin: 0; font-size: 15px; font-weight: 600">Privacy &amp; network</h2>
+            <p style="margin: 0; font-size: 13px; line-height: 1.5; color: {{t.text2}}">Recordings, transcripts and summaries stay on this computer. Cloud AI is opt-in: Plaudon sends nothing to a provider until you choose one and consent for that purpose.</p>
+            <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
+              <label style="display: flex; align-items: center; gap: 8px; font-size: 13px"><span style="width: 16px; height: 16px; border-radius: 3px; background: {{t.accent}}; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 2px {{t.surface}}, 0 0 0 4px {{t.focus}}"><svg width="10" height="8" viewBox="0 0 10 8" aria-hidden="true"><path d="M1 4l3 3 5-6" fill="none" stroke="{{t.accentText}}" stroke-width="1.8"></path></svg></span>Local-only mode (refuse all outbound network access)</label>
+              <span style="padding: 0 8px; border-radius: 3px; background: {{t.tSuccess}}; color: {{t.success}}; font-size: 12px; font-weight: 600; line-height: 20px">✓ Local only</span>
+            </div>
+            <div style="padding: 8px 10px; border-radius: 6px; background: {{t.canvas}}; border: 1px solid {{t.border}}; font-size: 12px; line-height: 1.6">
+              <div>Enforced policy: [the gate's own description]</div>
+              <div style="color: {{t.text2}}">No hosts are reachable.</div>
+            </div>
+            <div style="height: 1px; background: {{t.border}}; margin: 4px 0"></div>
+            <h3 style="margin: 0; font-size: 13px; font-weight: 600">Voice profiles</h3>
+            <p style="margin: 0; font-size: 12px; line-height: 1.5; color: {{t.text2}}">Voice matching compares a voiceprint computed on this device against the people you have enrolled. A voiceprint is biometric data, it never leaves this machine, and matching stays off until you turn it on. A match is only ever a suggestion you confirm.</p>
+            <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
+              <label style="display: flex; align-items: center; gap: 8px; font-size: 13px"><span style="width: 16px; height: 16px; border-radius: 3px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; box-sizing: border-box"></span>Match speakers against enrolled voice profiles</label>
+              <span style="padding: 0 8px; border-radius: 3px; background: {{t.tNeutral}}; color: {{t.neutral}}; font-size: 12px; font-weight: 600; line-height: 20px">– No speaker-embedding model in this build</span>
+            </div>
+            <div style="display: flex; gap: 8px">
+              <button style="height: 26px; padding: 0 10px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; color: {{t.text}}; font: inherit; font-size: 12px">Open the People list</button>
+              <button style="height: 26px; padding: 0 10px; border-radius: 6px; border: 1px solid {{t.danger}}; background: {{t.surface}}; color: {{t.danger}}; font: inherit; font-size: 12px">Forget all voice profiles…</button>
+            </div>
+          </section>
+
+          <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+            <section style="background: {{t.surface}}; border: 1px solid {{t.border}}; border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px">
+              <h2 style="margin: 0; font-size: 15px; font-weight: 600">Appearance</h2>
+              <div role="radiogroup" aria-label="Appearance" style="display: flex; gap: 6px">
+                <sc-for list="{{appear}}" as="a" hint-placeholder-count="3"><span style="height: 28px; padding: 0 10px; border-radius: 6px; border: 1px solid {{a.border}}; background: {{a.bg}}; display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: {{a.weight}}"><span style="width: 12px; height: 12px; border-radius: 6px; border: {{a.dot}}; box-sizing: border-box"></span>{{a.label}}</span></sc-for>
+              </div>
+              <div style="font-size: 12px; color: {{t.text2}}">Contrast</div>
+              <div role="radiogroup" aria-label="Contrast" style="display: flex; gap: 6px">
+                <sc-for list="{{contrast}}" as="a" hint-placeholder-count="2"><span style="height: 28px; padding: 0 10px; border-radius: 6px; border: 1px solid {{a.border}}; background: {{a.bg}}; display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: {{a.weight}}"><span style="width: 12px; height: 12px; border-radius: 6px; border: {{a.dot}}; box-sizing: border-box"></span>{{a.label}}</span></sc-for>
+              </div>
+              <div style="font-size: 12px; color: {{t.text2}}; line-height: 1.5">Follow the system flips light and dark with the OS, live. High contrast swaps in the high-contrast pair and a 3 pt focus ring.</div>
+            </section>
+            <section style="background: {{t.surface}}; border: 1px solid {{t.border}}; border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px">
+              <h2 style="margin: 0; font-size: 15px; font-weight: 600">AI key</h2>
+              <span style="align-self: flex-start; padding: 0 8px; border-radius: 3px; background: {{t.tNeutral}}; color: {{t.neutral}}; font-size: 12px; font-weight: 600; line-height: 20px">– No key saved</span>
+              <p style="margin: 0; font-size: 12px; line-height: 1.5; color: {{t.text2}}">Plaudon never displays a saved key and never returns it from the backend. Having a key does not grant cloud processing on its own.</p>
+              <label style="font-size: 12px; color: {{t.text2}}; display: flex; flex-direction: column; gap: 4px">Set OpenRouter API key<span style="height: 26px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; display: flex; align-items: center; padding: 0 8px; font-size: 13px; color: {{t.text}}; letter-spacing: 2px">••••••••••••</span></label>
+              <button style="align-self: flex-start; height: 26px; padding: 0 10px; border-radius: 6px; border: 1px solid {{t.accent}}; background: {{t.accent}}; color: {{t.accentText}}; font: inherit; font-size: 12px; font-weight: 600">Set key</button>
+            </section>
+          </div>
+        </div>
+      </main>
+    </div>
+    <div role="status" style="height: 26px; display: flex; align-items: center; gap: 12px; padding: 0 16px; font-size: 12px; color: {{t.text2}}; border-top: 1px solid {{t.border}}">
+      <span>Ready</span><div style="flex: 1"></div>
+      <span style="padding: 1px 8px; border-radius: 3px; background: {{t.tSuccess}}; color: {{t.success}}; font-weight: 600">✓ Local only</span>
+    </div>
+  </div>
+  <sc-if value="{{notesOn}}" hint-placeholder-val="{{ true }}">
+    <div style="height: 280px; box-sizing: border-box; border-top: 1px solid {{t.border}}; background: {{t.surface}}; padding: 18px 24px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 22px; font-size: 12px; line-height: 1.5; color: {{t.text2}}">
+      <div style="display: flex; flex-direction: column; gap: 6px"><strong style="color: {{t.text}}; font-size: 13px">egui mapping: settings</strong>
+        <div>One ScrollArea of sections, each settings::section() drawn as a Frame (bg_surface, radius.large). Appearance and AI key sit side by side via ui.columns(2) when the main width is over 820 pt, stacked otherwise.</div>
+        <div><strong style="color: {{t.warning}}">Proposed:</strong> the "On this page" index, built from section_titles(), each entry calling scroll_to_rect on its section.</div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px"><strong style="color: {{t.text}}; font-size: 13px">Local-only mode, as built</strong>
+        <div>egui::Checkbox labelled "Local-only mode (refuse all outbound network access)". Ticking it sends set_local_only_mode with confirmed: true; the toggle is the confirmation. It is disabled while the request is in flight.</div>
+        <div>The badge and the "Enforced policy" lines render only after the gate answers. Before that, the safe reading is on, and no policy sentence is composed.</div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px"><strong style="color: {{t.text}}; font-size: 13px">Appearance, as built</strong>
+        <div>Two radio groups (radio_value) for Follow the system, Light, Dark and Standard, High contrast. ThemeState::apply installs both styles with set_style_of; the choice persists in shell-state.json until set_appearance exists.</div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px"><strong style="color: {{t.text}}; font-size: 13px">AI key, as built</strong>
+        <div>TextEdit::singleline(..).password(true), handed over once and cleared. Only presence is shown: "Key saved in the system keychain" or "No key saved". Remove asks first: "Remove the OpenRouter key?" with its disclosure.</div>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light"},"notes":{"editor":"enum","options":["on","off"],"default":"on"},"$preview":{"width":1280,"height":1100}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const THEMES = {
+      light: { canvas: '#f4f6fa', surface: '#ffffff', selected: '#e2ebff', hover: '#edf1f7', text: '#172544', text2: '#4d5873', border: '#d9dfea', borderStrong: '#6b7690', accent: '#0a4fe0', accentText: '#ffffff', neutral: '#4d5873', success: '#0f6b3f', warning: '#8a4b00', danger: '#a1121f', focus: '#0b57ff', tNeutral: '#edeef1', tSuccess: '#e7f0ec', mark: './assets/plaudon-mark-light.svg' },
+      dark: { canvas: '#0b1220', surface: '#111a2c', selected: '#1c3366', hover: '#1a2540', text: '#f2f6ff', text2: '#a9b4d0', border: '#27334d', borderStrong: '#6d7a99', accent: '#6ea8ff', accentText: '#0b1220', neutral: '#a9b4d0', success: '#67c391', warning: '#e8a35c', danger: '#f08a92', focus: '#8fc2ff', tNeutral: '#293346', tSuccess: '#1f353c', mark: './assets/plaudon-mark-dark.svg' }
+    };
+    const dark = this.props.theme === 'dark';
+    const t = THEMES[dark ? 'dark' : 'light'];
+    const notesOn = this.props.notes !== 'off';
+    const NAV = [['L', 'Library', 'Ctrl+1'], ['I', 'Inbox', 'Ctrl+2'], ['J', 'Jobs', 'Ctrl+3'], ['T', 'Templates', 'Ctrl+4'], ['S', 'Settings', 'Ctrl+5'], ['D', 'Devices', 'Ctrl+6'], ['P', 'People', 'Ctrl+7']];
+    const nav = NAV.map(([g, l, k], i) => ({ g, l, k, bg: i === 4 ? t.selected : 'transparent', weight: i === 4 ? 600 : 400, tileBg: i === 4 ? t.accent : t.hover, tileFg: i === 4 ? t.accentText : t.text2 }));
+    const TITLES = ['Privacy & network', 'Appearance', 'AI key', 'Engines', 'Local models', 'Cloud consent', 'Notifications', 'Storage and permissions', 'Backup and restore', 'Export', 'Default templates', 'Keyboard shortcuts', 'Updates', 'Sources and activity'];
+    const sections = TITLES.map((label, i) => ({ label, bg: i === 0 ? t.selected : 'transparent', color: i === 0 ? t.text : t.text2, weight: i === 0 ? 600 : 400 }));
+    const opt = (label, on) => ({ label, bg: on ? t.selected : t.surface, border: on ? t.borderStrong : t.border, weight: on ? 600 : 400, dot: on ? '4px solid ' + t.accent : '1px solid ' + t.borderStrong });
+    const appear = [opt('Follow the system', false), opt('Light', !dark), opt('Dark', dark)];
+    const contrast = [opt('Standard', true), opt('High contrast', false)];
+    return { t, notesOn, rootH: notesOn ? 1100 : 820, nav, sections, appear, contrast };
+  }
+}
+</script>
+</body>
+</html>

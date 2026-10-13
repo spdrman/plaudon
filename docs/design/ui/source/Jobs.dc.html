@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Jobs</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Source+Code+Pro:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#0a4fe0}a:hover{color:#0841b8}
+</style>
+</helmet>
+<div style="width: 1280px; height: {{rootH}}px; background: {{t.canvas}}; font-family: Inter, system-ui, sans-serif; color: {{t.text}}; display: flex; flex-direction: column; overflow: hidden">
+  <div style="width: 1280px; height: 820px; display: flex; flex-direction: column; flex-shrink: 0">
+    <div style="height: 28px; display: flex; align-items: center; gap: 18px; padding: 0 16px; font-size: 13px; border-bottom: 1px solid {{t.border}}"><span>File</span><span>View</span><span>Go</span><span>Help</span></div>
+    <div style="height: 44px; display: flex; align-items: center; gap: 8px; padding: 0 16px; border-bottom: 1px solid {{t.border}}">
+      <button style="height: 28px; padding: 0 12px; border-radius: 6px; border: 1px solid {{t.accent}}; background: {{t.accent}}; color: {{t.accentText}}; font: inherit; font-size: 13px; font-weight: 600">Import audio…</button>
+      <button style="height: 28px; padding: 0 12px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; color: {{t.text}}; font: inherit; font-size: 13px">Search recordings</button>
+      <button style="height: 28px; padding: 0 12px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; color: {{t.text}}; font: inherit; font-size: 13px; display: flex; align-items: center; gap: 8px">Command palette <span style="font-size: 11px; color: {{t.text2}}">Ctrl+K</span></button>
+      <button style="height: 28px; padding: 0 12px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; color: {{t.text}}; font: inherit; font-size: 13px">Refresh</button>
+      <div style="flex: 1"></div>
+      <button aria-label="Activity: 2 unread notifications" style="height: 28px; padding: 0 10px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; color: {{t.text}}; font: inherit; font-size: 13px; display: flex; align-items: center; gap: 6px">Activity <span style="min-width: 18px; height: 18px; border-radius: 9px; background: {{t.accent}}; color: {{t.accentText}}; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center">2</span></button>
+      <span style="font-size: 15px; font-weight: 600; margin-left: 8px">Jobs</span>
+    </div>
+    <div style="height: 722px; display: flex">
+      <nav aria-label="Primary" style="width: 216px; flex-shrink: 0; border-right: 1px solid {{t.border}}; padding: 12px 10px; box-sizing: border-box; display: flex; flex-direction: column; gap: 2px">
+        <div style="display: flex; align-items: center; gap: 10px; padding: 4px 8px 10px"><img src="{{t.mark}}" alt="" style="height: 26px"><span style="font-size: 15px; font-weight: 700">Plaudon</span></div>
+        <a href="#main" style="font-size: 12px; color: {{t.text2}}; padding: 2px 8px 8px; text-decoration: none">Skip to main content</a>
+        <sc-for list="{{nav}}" as="n" hint-placeholder-count="7">
+          <button style="height: 32px; display: flex; align-items: center; gap: 10px; padding: 0 8px; border: none; border-radius: 6px; background: {{n.bg}}; color: {{t.text}}; font: inherit; font-size: 13px; font-weight: {{n.weight}}; text-align: left">
+            <span style="width: 20px; height: 20px; border-radius: 3px; background: {{n.tileBg}}; color: {{n.tileFg}}; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center">{{n.g}}</span>
+            <span style="flex: 1">{{n.l}}</span><span style="font-size: 11px; color: {{t.text2}}; font-weight: 400">{{n.k}}</span>
+          </button>
+        </sc-for>
+      </nav>
+      <main id="main" style="flex: 1; min-width: 0; padding: 20px 24px; box-sizing: border-box; display: flex; flex-direction: column; gap: 12px; overflow: hidden">
+        <h1 style="margin: 0; font-size: 24px; font-weight: 700">Jobs</h1>
+        <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap">
+          <span style="font-size: 12px; color: {{t.text2}}; width: 96px">Filter by state</span>
+          <sc-for list="{{stateChips}}" as="c" hint-placeholder-count="6"><button style="height: 26px; padding: 0 10px; border-radius: 13px; border: 1px solid {{c.border}}; background: {{c.bg}}; color: {{t.text}}; font: inherit; font-size: 12px; font-weight: {{c.weight}}">{{c.label}}</button></sc-for>
+        </div>
+        <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap">
+          <span style="font-size: 12px; color: {{t.text2}}; width: 96px">Filter by kind</span>
+          <sc-for list="{{kindChips}}" as="c" hint-placeholder-count="7"><button style="height: 26px; padding: 0 10px; border-radius: 13px; border: 1px solid {{c.border}}; background: {{c.bg}}; color: {{t.text}}; font: inherit; font-size: 12px; font-weight: {{c.weight}}">{{c.label}}</button></sc-for>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+          <sc-for list="{{jobs}}" as="j" hint-placeholder-count="6">
+            <article style="background: {{t.surface}}; border: {{j.frame}}; border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px">
+              <div style="display: flex; align-items: center; gap: 8px">
+                <span style="font-size: 12px; color: {{t.text2}}">{{j.kind}}</span>
+                <span style="font-size: 13px; font-weight: 600; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{j.title}}</span>
+                <span style="padding: 0 7px; border-radius: 3px; background: {{j.tint}}; color: {{j.tone}}; font-size: 12px; font-weight: 600; line-height: 20px; white-space: nowrap"><span style="font-family: 'Source Code Pro', ui-monospace, monospace">{{j.glyph}}</span> {{j.state}}</span>
+              </div>
+              <div style="font-size: 12px; color: {{t.text2}}; line-height: 1.5">{{j.desc}}</div>
+              <sc-if value="{{j.hasBar}}" hint-placeholder-val="{{ true }}">
+                <div style="position: relative; height: 18px; border-radius: 3px; background: {{t.hover}}; overflow: hidden">
+                  <div style="position: absolute; left: {{j.barX}}; top: 0; width: {{j.barW}}; height: 18px; background: {{t.accent}}"></div>
+                  <span style="position: absolute; left: 8px; top: 0; line-height: 18px; font-size: 11px; font-weight: 600; color: {{j.barText}}">{{j.barLabel}}</span>
+                </div>
+              </sc-if>
+              <div style="display: flex; gap: 14px; font-size: 12px; color: {{t.text2}}"><span>Stage <span style="color: {{t.text}}">{{j.stage}}</span></span><span>Elapsed <span style="color: {{t.text}}">{{j.elapsed}}</span></span></div>
+              <sc-if value="{{j.hasExtra}}" hint-placeholder-val="{{ false }}">
+                <div style="border-radius: 6px; background: {{j.extraBg}}; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; font-size: 12px">
+                  <span style="font-weight: 600; color: {{j.tone}}">{{j.extraTitle}}</span>
+                  <span style="color: {{t.text}}">{{j.extraLine}}</span>
+                  <sc-if value="{{j.ack}}" hint-placeholder-val="{{ false }}"><label style="display: flex; gap: 8px; align-items: center; color: {{t.text}}"><span style="width: 14px; height: 14px; border-radius: 3px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; box-sizing: border-box"></span>I understand this starts a new run that may be billed</label></sc-if>
+                </div>
+              </sc-if>
+              <div style="display: flex; gap: 8px">
+                <sc-for list="{{j.actions}}" as="a" hint-placeholder-count="2"><button style="height: 26px; padding: 0 10px; border-radius: 6px; border: 1px solid {{a.border}}; background: {{a.bg}}; color: {{a.fg}}; opacity: {{a.op}}; font: inherit; font-size: 12px; font-weight: {{a.weight}}">{{a.label}}</button></sc-for>
+              </div>
+            </article>
+          </sc-for>
+        </div>
+        <button style="align-self: center; height: 28px; padding: 0 12px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; color: {{t.text}}; font: inherit; font-size: 13px">Show more jobs</button>
+      </main>
+    </div>
+    <div role="status" style="height: 26px; display: flex; align-items: center; gap: 12px; padding: 0 16px; font-size: 12px; color: {{t.text2}}; border-top: 1px solid {{t.border}}">
+      <span>Ready</span><div style="flex: 1"></div><span>2 tasks running</span>
+      <span style="padding: 1px 8px; border-radius: 3px; background: {{t.tWarning}}; color: {{t.warning}}; font-weight: 600">! Network allowed for providers you enable</span>
+    </div>
+  </div>
+  <sc-if value="{{notesOn}}" hint-placeholder-val="{{ true }}">
+    <div style="height: 280px; box-sizing: border-box; border-top: 1px solid {{t.border}}; background: {{t.surface}}; padding: 18px 24px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 22px; font-size: 12px; line-height: 1.5; color: {{t.text2}}">
+      <div style="display: flex; flex-direction: column; gap: 6px"><strong style="color: {{t.text}}; font-size: 13px">egui mapping: jobs</strong>
+        <div>Filters are selectable_label chips, CornerRadius 13 (full pill), selected = bg_selected + border_strong. Counts come from the page's per-state counts; when none are reported the row says so instead of showing zeros.</div>
+        <div>Cards in a two-column egui::Grid inside a ScrollArea, 50 jobs per page, Show more jobs at the end.</div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px"><strong style="color: {{t.text}}; font-size: 13px">State badge and progress</strong>
+        <div>Every JobState has its own glyph and label from job_presentation, painted in its tone on the matching tint. The description sits under the title in text_secondary.</div>
+        <div>ProgressBar::new(fraction).text("Running locally: 62% complete") when a fraction exists; otherwise an indeterminate bar with "progress not reported". Completion is never invented.</div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px"><strong style="color: {{t.text}}; font-size: 13px">Guards, as built</strong>
+        <div>Cloud outcome unknown is never retried automatically; Retry job stays disabled until the cost acknowledgement is ticked. Cancel opens the irreversibility disclosure (see the component sheet).</div>
+        <div>Not enough space shows the library volume's capacity and a storage-settings control.</div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px"><strong style="color: {{t.text}}; font-size: 13px">Focus and links</strong>
+        <div>A job opened from a link (notification, activity) scrolls into view and takes focus: its Frame stroke becomes focus_ring at 2 pt, as on the card at top left.</div>
+        <div>A dropped job.updated event refetches the page.</div>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light"},"notes":{"editor":"enum","options":["on","off"],"default":"on"},"$preview":{"width":1280,"height":1100}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const THEMES = {
+      light: { canvas: '#f4f6fa', surface: '#ffffff', selected: '#e2ebff', hover: '#edf1f7', text: '#172544', text2: '#4d5873', border: '#d9dfea', borderStrong: '#6b7690', accent: '#0a4fe0', accentText: '#ffffff', neutral: '#4d5873', running: '#0a4fe0', waiting: '#7a4a00', success: '#0f6b3f', warning: '#8a4b00', danger: '#a1121f', focus: '#0b57ff', tNeutral: '#edeef1', tRunning: '#e6edfc', tWaiting: '#f2ede6', tSuccess: '#e7f0ec', tWarning: '#f3ede6', tDanger: '#f6e7e9', mark: './assets/plaudon-mark-light.svg' },
+      dark: { canvas: '#0b1220', surface: '#111a2c', selected: '#1c3366', hover: '#1a2540', text: '#f2f6ff', text2: '#a9b4d0', border: '#27334d', borderStrong: '#6d7a99', accent: '#6ea8ff', accentText: '#0b1220', neutral: '#a9b4d0', running: '#6ea8ff', waiting: '#e3b667', success: '#67c391', warning: '#e8a35c', danger: '#f08a92', focus: '#8fc2ff', tNeutral: '#293346', tRunning: '#20314e', tWaiting: '#333335', tSuccess: '#1f353c', tWarning: '#333034', tDanger: '#352c3c', mark: './assets/plaudon-mark-dark.svg' }
+    };
+    const t = THEMES[this.props.theme === 'dark' ? 'dark' : 'light'];
+    const notesOn = this.props.notes !== 'off';
+    const NAV = [['L', 'Library', 'Ctrl+1'], ['I', 'Inbox', 'Ctrl+2'], ['J', 'Jobs', 'Ctrl+3'], ['T', 'Templates', 'Ctrl+4'], ['S', 'Settings', 'Ctrl+5'], ['D', 'Devices', 'Ctrl+6'], ['P', 'People', 'Ctrl+7']];
+    const nav = NAV.map(([g, l, k], i) => ({ g, l, k, bg: i === 2 ? t.selected : 'transparent', weight: i === 2 ? 600 : 400, tileBg: i === 2 ? t.accent : t.hover, tileFg: i === 2 ? t.accentText : t.text2 }));
+    const chip = (label, on) => ({ label, bg: on ? t.selected : t.surface, border: on ? t.borderStrong : t.border, weight: on ? 600 : 400 });
+    const stateChips = [chip('All: 14', true), chip('Running locally: 1', false), chip('Preflight: 1', false), chip('Queued: 1', false), chip('Cloud outcome unknown: 1', false), chip('Failed — can retry: 1', false), chip('Completed: 9', false)];
+    const kindChips = [chip('All', true), chip('Import', false), chip('Transcription', false), chip('Summary', false), chip('Export', false), chip('Model install', false), chip('Source sync', false), chip('Speaker matching', false)];
+    const T = { neutral: [t.neutral, t.tNeutral], running: [t.running, t.tRunning], warning: [t.warning, t.tWarning], danger: [t.danger, t.tDanger], success: [t.success, t.tSuccess] };
+    const btn = (label, kind, disabled) => ({ label, bg: kind === 'primary' ? t.accent : t.surface, fg: kind === 'primary' ? t.accentText : kind === 'danger' ? t.danger : t.text, border: kind === 'primary' ? t.accent : kind === 'danger' ? t.danger : t.borderStrong, weight: kind === 'primary' ? 600 : 400, op: disabled ? 0.5 : 1 });
+    const job = (o) => {
+      const [tone, tint] = T[o.tone];
+      return Object.assign({ hasBar: false, hasExtra: false, ack: false, barX: '0%', barW: '0%', barLabel: '', barText: t.text, extraBg: tint, extraTitle: '', extraLine: '', frame: '1px solid ' + t.border, tone, tint }, o);
+    };
+    const jobs = [
+      job({ kind: 'Transcription', title: 'Sync notes, design review', glyph: '>', state: 'Running locally', tone: 'running', desc: 'Processing on this computer; nothing leaves the device.', hasBar: true, barW: '62%', barLabel: 'Running locally: 62% complete', barText: t.accentText, stage: 'Transcribing', elapsed: '4 min 12 s', actions: [btn('Cancel job', 'danger')], frame: '2px solid ' + t.focus }),
+      job({ kind: 'Import', title: 'Podcast draft, episode 12', glyph: '?', state: 'Preflight', tone: 'running', desc: 'Checking inputs, space and engine availability before starting.', hasBar: true, barX: '30%', barW: '24%', barLabel: 'Preflight: progress not reported', barText: t.text, stage: 'Preflight', elapsed: '3 s', actions: [btn('Cancel job', 'danger')] }),
+      job({ kind: 'Summary', title: 'Weekly sync, platform team', glyph: '??', state: 'Cloud outcome unknown', tone: 'warning', desc: 'The provider response was lost. The request may already have been accepted and billed, so it is never retried automatically.', stage: 'Sending to provider', elapsed: '1 min 40 s', hasExtra: true, extraTitle: 'Cloud request outcome unknown', extraLine: 'Provider request id: [request id from the provider]', ack: true, actions: [btn('Retry job', 'primary', true)] }),
+      job({ kind: 'Import', title: 'Kitchen renovation call', glyph: '!r', state: 'Failed — can retry', tone: 'danger', desc: 'The job stopped on an error that may succeed on another attempt.', stage: 'Copying into the library', elapsed: '12 s', hasExtra: true, extraTitle: 'Not enough space', extraLine: 'Library volume. Free space: 1,288,490,188 bytes of 256,060,514,304 bytes', actions: [btn('Retry job', 'primary'), btn('Open storage settings for the library volume', 'secondary')] }),
+      job({ kind: 'Transcription', title: 'Lecture 7, signal processing', glyph: '…', state: 'Queued', tone: 'neutral', desc: 'Waiting for a free slot.', stage: 'not started', elapsed: 'Elapsed time unknown', actions: [btn('Cancel job', 'danger')] }),
+      job({ kind: 'Model install', title: 'ggml-base.en', glyph: 'OK', state: 'Completed', tone: 'success', desc: 'The output and its metadata are durably committed.', stage: 'Committing', elapsed: '2 min 03 s', actions: [] })
+    ];
+    return { t, notesOn, rootH: notesOn ? 1100 : 820, nav, stateChips, kindChips, jobs };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Plaudon logo and icon usage</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Source+Code+Pro:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#0a4fe0}a:hover{color:#0841b8}
+</style>
+</helmet>
+<div style="width: 1280px; height: 960px; box-sizing: border-box; background: #f4f6fa; font-family: Inter, system-ui, sans-serif; color: #172544; padding: 40px 48px; display: flex; flex-direction: column; gap: 22px">
+  <div style="display: flex; align-items: baseline; justify-content: space-between">
+    <h1 style="margin: 0; font-size: 24px; font-weight: 700">Logo and app icon</h1>
+    <div style="font-size: 13px; color: #4d5873">Ribbon Pulse, from brand/kit/logo. Geometry untouched; the palette is chosen per theme.</div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px">
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <div style="height: 180px; border-radius: 10px; background: #ffffff; border: 1px solid #d9dfea; display: flex; align-items: center; justify-content: center"><img src="./assets/plaudon-mark-light.svg" alt="Plaudon mark, light palette" style="height: 120px"></div>
+      <div style="font-size: 12px; color: #4d5873">Mark, light palette. Body #0585fc to #0029b0, highlight #46c9fc, fold #04185a.</div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <div style="height: 180px; border-radius: 10px; background: #0b1220; border: 1px solid #27334d; display: flex; align-items: center; justify-content: center"><img src="./assets/plaudon-mark-dark.svg" alt="Plaudon mark, dark palette" style="height: 120px"></div>
+      <div style="font-size: 12px; color: #4d5873">Mark, dark palette. The SVG's own dark stops (#5cb4ff to #5470ee, fold #3a58cc) so the fold doesn't sink into the canvas.</div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <div style="height: 180px; border-radius: 10px; background: #ffffff; border: 1px solid #d9dfea; display: flex; align-items: center; justify-content: center; gap: 28px"><img src="./assets/plaudon-mono-blue-light.svg" alt="Monochrome blue mark" style="height: 96px"><div style="width: 96px; height: 112px; border-radius: 10px; background: #0b57ff; display: flex; align-items: center; justify-content: center"><img src="./assets/plaudon-mono-white.svg" alt="Monochrome white mark on royal" style="height: 72px"></div></div>
+      <div style="font-size: 12px; color: #4d5873">Monochrome blue (#0b57ff, 5.50:1 on white) and white on royal (5.50:1). Use these below 24 pt and in the tray.</div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <div style="height: 180px; border-radius: 10px; background: #0b1220; border: 1px solid #27334d; display: flex; align-items: center; justify-content: center"><img src="./assets/plaudon-mono-blue-dark.svg" alt="Monochrome blue mark, dark palette" style="height: 96px"></div>
+      <div style="font-size: 12px; color: #4d5873">Monochrome, dark palette #6ea8ff (7.76:1 on the dark canvas).</div>
+    </div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px">
+    <div style="height: 150px; border-radius: 10px; background: #ffffff; border: 1px solid #d9dfea; display: flex; align-items: center; justify-content: center"><img src="./assets/plaudon-lockup-light.svg" alt="Plaudon lockup: private audio, searchable knowledge" style="height: 120px"></div>
+    <div style="height: 150px; border-radius: 10px; background: #0b1220; border: 1px solid #27334d; display: flex; align-items: center; justify-content: center"><img src="./assets/plaudon-lockup-dark.svg" alt="Plaudon lockup, dark palette" style="height: 120px"></div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: 1.1fr 1fr 1fr; gap: 16px">
+    <div style="background: #ffffff; border: 1px solid #d9dfea; border-radius: 10px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px">
+      <h2 style="margin: 0; font-size: 15px; font-weight: 600">Where the logo appears in the app</h2>
+      <div style="display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 6px; background: #f4f6fa">
+        <img src="./assets/plaudon-mark-light.svg" alt="" style="height: 26px">
+        <span style="font-size: 15px; font-weight: 600">Plaudon</span>
+        <span style="margin-left: auto; font-size: 11px; color: #4d5873">nav rail header, 24 pt mark</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 6px; background: #f4f6fa">
+        <img src="./assets/plaudon-lockup-light.svg" alt="" style="height: 40px">
+        <span style="margin-left: auto; font-size: 11px; color: #4d5873">first-run setup, About</span>
+      </div>
+      <div style="font-size: 12px; line-height: 1.5; color: #4d5873">Collapsed rail (below 1040 pt) shows the mark alone at 20 pt. Clear space is a quarter of the mark's height. Minimum 16 px for the mark, 96 px wide for the lockup, as the kit says.</div>
+    </div>
+    <div style="background: #ffffff; border: 1px solid #d9dfea; border-radius: 10px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px">
+      <h2 style="margin: 0; font-size: 15px; font-weight: 600">App icon</h2>
+      <div style="display: flex; align-items: flex-end; gap: 16px">
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 4px"><img src="./assets/app-icon-256.png" alt="Brand kit desktop icon, 256 px" style="width: 96px; height: 96px"><span style="font-size: 11px; color: #4d5873">kit 256</span></div>
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 4px"><img src="./assets/app-icon-32.png" alt="Brand kit desktop icon, 32 px" style="width: 32px; height: 32px"><span style="font-size: 11px; color: #4d5873">32</span></div>
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 4px"><img src="./assets/app-icon-16.png" alt="Brand kit desktop icon, 16 px" style="width: 16px; height: 16px"><span style="font-size: 11px; color: #4d5873">16</span></div>
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 4px; margin-left: auto"><img src="./assets/packaging-icon-today.png" alt="Current packaging icon, the earlier waveform tile" style="width: 64px; height: 64px; opacity: 0.9"><span style="font-size: 11px; color: #4d5873">ships today</span></div>
+      </div>
+      <div style="display: flex; gap: 8px; align-items: flex-start"><span style="font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 3px; border: 1px solid #8a4b00; color: #8a4b00; flex-shrink: 0">PROPOSED</span><span style="font-size: 12px; line-height: 1.5; color: #4d5873">apps/plaudon-egui/packaging/icon.svg is still the earlier five-bar tile in #1a4fa0. I'd swap the bundle, .icns, .ico and the eframe window icon to the kit's desktop exports so the dock matches the rail.</span></div>
+    </div>
+    <div style="background: #ffffff; border: 1px solid #d9dfea; border-radius: 10px; padding: 16px 18px; display: flex; flex-direction: column; gap: 8px">
+      <h2 style="margin: 0; font-size: 15px; font-weight: 600">Brand colours in the UI</h2>
+      <div style="display: grid; grid-template-columns: 18px 1fr auto; gap: 6px 8px; align-items: center; font-size: 12px">
+        <span style="width: 14px; height: 14px; border-radius: 3px; background: #46c9fc"></span><span>Highlight #46c9fc</span><span style="color: #a1121f; font-weight: 600">✕ 1.91:1 on white</span>
+        <span style="width: 14px; height: 14px; border-radius: 3px; background: #56c9ff"></span><span>Sky #56c9ff</span><span style="color: #a1121f; font-weight: 600">✕ 1.88:1</span>
+        <span style="width: 14px; height: 14px; border-radius: 3px; background: #17c7c7"></span><span>Teal #17c7c7</span><span style="color: #a1121f; font-weight: 600">✕ 2.09:1</span>
+        <span style="width: 14px; height: 14px; border-radius: 3px; background: #2f86ff"></span><span>Azure #2f86ff</span><span style="color: #8a4b00; font-weight: 600">! 3.51:1, UI only</span>
+        <span style="width: 14px; height: 14px; border-radius: 3px; background: #0b57ff"></span><span>Royal #0b57ff</span><span style="color: #0f6b3f; font-weight: 600">✓ 5.50:1</span>
+        <span style="width: 14px; height: 14px; border-radius: 3px; background: #172544"></span><span>Ink #172544</span><span style="color: #0f6b3f; font-weight: 600">✓ 15.17:1</span>
+      </div>
+      <div style="font-size: 12px; line-height: 1.5; color: #4d5873">The cyan family lives inside the mark only. It never carries text, a status, a focus ring or a waveform. Royal becomes the focus ring; the accent is a slightly deeper #0a4fe0 so white text on it clears 6.5:1.</div>
+    </div>
+  </div>
+
+  <div style="background: #ffffff; border: 1px solid #d9dfea; border-radius: 10px; padding: 14px 18px; display: flex; gap: 24px; font-size: 12px; line-height: 1.5; color: #4d5873">
+    <div style="flex: 1"><strong style="color: #172544">egui mapping.</strong> egui can't read prefers-color-scheme inside an SVG, so ship both pinned variants and choose by Tokens::get(ctx).theme.is_dark(). Paint with egui::Image::new(include_image!("…light.svg")).fit_to_exact_size(vec2(24.0, 28.0)).</div>
+    <div style="flex: 1"><span style="font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 3px; border: 1px solid #8a4b00; color: #8a4b00">NEW TO THE REPO</span> include_image! needs an image loader: egui_extras with the svg feature (resvg) and egui_extras::install_image_loaders. crates/ui uses egui_extras for tables only today. Pre-rasterised PNGs at 1x and 2x with the png feature are the lighter alternative.</div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":960}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

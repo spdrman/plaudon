@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Other destinations</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Source+Code+Pro:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#0a4fe0}a:hover{color:#0841b8}
+</style>
+</helmet>
+<div style="width: 1280px; height: {{rootH}}px; background: {{t.canvas}}; font-family: Inter, system-ui, sans-serif; color: {{t.text}}; display: flex; flex-direction: column; overflow: hidden">
+  <div style="width: 1280px; height: 820px; flex-shrink: 0; box-sizing: border-box; padding: 24px 28px; display: flex; flex-direction: column; gap: 14px">
+    <div style="display: flex; align-items: baseline; gap: 12px"><h1 style="margin: 0; font-size: 24px; font-weight: 700">Inbox, search, people, templates, activity, palette</h1><span style="font-size: 13px; color: {{t.text2}}">Main-region content only; the shell around each is the same as the Library.</span></div>
+    <div style="flex: 1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 16px">
+
+      <section style="background: {{t.surface}}; border: 1px solid {{t.border}}; border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 8px; overflow: hidden">
+        <div style="display: flex; align-items: baseline; justify-content: space-between"><h2 style="margin: 0; font-size: 19px; font-weight: 700">Inbox</h2><span style="font-size: 11px; color: {{t.text2}}">Ctrl+2</span></div>
+        <div style="font-size: 12px; color: {{t.text2}}">Inbox recordings, newest import first</div>
+        <sc-for list="{{inbox}}" as="r" hint-placeholder-count="4">
+          <div style="display: flex; flex-direction: column; gap: 2px; padding: 8px; border-radius: 6px; background: {{r.bg}}; border: 1px solid {{t.hover}}">
+            <span style="font-size: 13px; font-weight: 600">{{r.title}}</span>
+            <span style="font-size: 12px; color: {{r.c}}">{{r.status}}</span>
+          </div>
+        </sc-for>
+        <div style="font-size: 12px; color: {{t.text2}}; margin-top: auto">Empty: "Nothing waiting" with Import an audio file and Go to Library.</div>
+      </section>
+
+      <section style="background: {{t.surface}}; border: 1px solid {{t.border}}; border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 8px; overflow: hidden">
+        <h2 style="margin: 0; font-size: 19px; font-weight: 700">Search transcripts</h2>
+        <span style="height: 28px; border-radius: 6px; border: 2px solid {{t.focus}}; display: flex; align-items: center; padding: 0 8px; font-size: 13px">retry limit</span>
+        <div style="font-size: 12px; color: {{t.text2}}">2 results in 2 recordings</div>
+        <div style="display: flex; flex-direction: column; gap: 4px; padding: 8px; border-radius: 6px; border: 1px solid {{t.hover}}">
+          <span style="font-size: 13px; font-weight: 600">Weekly sync, platform team</span>
+          <span style="font-size: 12px; line-height: 1.5">…check whether the <span style="background: {{t.tWarning}}">retry limit</span> is the culprit.</span>
+          <button style="align-self: flex-start; height: 24px; padding: 0 8px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; color: {{t.text}}; font: inherit; font-size: 12px">Play from 23:18</button>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 4px; padding: 8px; border-radius: 6px; border: 1px solid {{t.hover}}">
+          <span style="font-size: 13px; font-weight: 600">Voice memo</span>
+          <span style="font-size: 12px; line-height: 1.5">…raise the <span style="background: {{t.tWarning}}">retry limit</span> before Friday.</span>
+          <button style="align-self: flex-start; height: 24px; padding: 0 8px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; color: {{t.text}}; font: inherit; font-size: 12px">Open segment 12</button>
+        </div>
+        <div style="font-size: 12px; color: {{t.text2}}">No timing, no play button: the second result opens the segment instead.</div>
+      </section>
+
+      <section style="background: {{t.surface}}; border: 1px solid {{t.border}}; border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 8px; overflow: hidden">
+        <div style="display: flex; align-items: baseline; justify-content: space-between"><h2 style="margin: 0; font-size: 19px; font-weight: 700">People</h2><span style="font-size: 11px; color: {{t.text2}}">Ctrl+7</span></div>
+        <div style="font-size: 12px; color: {{t.text2}}; line-height: 1.5">One list of people for the whole library. Every recording assigns speakers from it.</div>
+        <div style="display: flex; gap: 8px"><span style="flex: 1; height: 26px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; display: flex; align-items: center; padding: 0 8px; font-size: 12px; color: {{t.text2}}">Search people</span><button style="height: 26px; padding: 0 10px; border-radius: 6px; border: 1px solid {{t.accent}}; background: {{t.accent}}; color: {{t.accentText}}; font: inherit; font-size: 12px; font-weight: 600">Add a person</button></div>
+        <sc-for list="{{people}}" as="p" hint-placeholder-count="3">
+          <div style="display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 6px; border: 1px solid {{t.hover}}">
+            <span style="width: 28px; height: 28px; border-radius: 14px; background: {{t.tRunning}}; color: {{t.running}}; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center">{{p.initial}}</span>
+            <span style="display: flex; flex-direction: column; gap: 1px; flex: 1"><span style="font-size: 13px; font-weight: 600">{{p.name}}</span><span style="font-size: 12px; color: {{t.text2}}">{{p.meta}}</span></span>
+          </div>
+        </sc-for>
+        <div style="font-size: 12px; color: {{t.text2}}; margin-top: auto">Works with voice matching off. Review queue keys: j, k, Enter, Del, n.</div>
+      </section>
+
+      <section style="background: {{t.surface}}; border: 1px solid {{t.border}}; border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 8px; overflow: hidden">
+        <div style="display: flex; align-items: baseline; justify-content: space-between"><h2 style="margin: 0; font-size: 19px; font-weight: 700">Templates</h2><span style="font-size: 11px; color: {{t.text2}}">Ctrl+4</span></div>
+        <sc-for list="{{templates}}" as="tp" hint-placeholder-count="3">
+          <div style="display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: 6px; background: {{tp.bg}}; border: 1px solid {{t.hover}}">
+            <span style="display: flex; flex-direction: column; gap: 1px; flex: 1"><span style="font-size: 13px; font-weight: 600">{{tp.name}}</span><span style="font-size: 12px; color: {{t.text2}}">{{tp.meta}}</span></span>
+            <span style="padding: 0 6px; border-radius: 3px; background: {{tp.tint}}; color: {{tp.tone}}; font-size: 11px; font-weight: 600; line-height: 18px">{{tp.badge}}</span>
+          </div>
+        </sc-for>
+        <div style="display: flex; gap: 8px"><button style="height: 26px; padding: 0 10px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; color: {{t.text}}; font: inherit; font-size: 12px">Copy this template</button><button style="height: 26px; padding: 0 10px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; color: {{t.text}}; font: inherit; font-size: 12px">Validate</button></div>
+        <div style="font-size: 12px; color: {{t.success}}; font-weight: 600">✓ This document would be accepted by Save.</div>
+      </section>
+
+      <section style="background: {{t.surface}}; border: 1px solid {{t.border}}; border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 8px; overflow: hidden">
+        <div style="display: flex; align-items: baseline; justify-content: space-between"><h2 style="margin: 0; font-size: 19px; font-weight: 700">Activity history</h2><button style="height: 24px; padding: 0 8px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; color: {{t.text}}; font: inherit; font-size: 12px">Refresh activity</button></div>
+        <sc-for list="{{activity}}" as="a" hint-placeholder-count="4">
+          <div style="display: flex; gap: 8px; padding: 8px; border-radius: 6px; border: 1px solid {{t.hover}}; background: {{a.bg}}">
+            <span style="width: 8px; flex-shrink: 0; font-size: 12px; font-weight: 700; color: {{t.accent}}">{{a.dot}}</span>
+            <span style="display: flex; flex-direction: column; gap: 2px; flex: 1"><span style="font-size: 13px; font-weight: {{a.weight}}">{{a.title}}</span><span style="font-size: 12px; color: {{t.text2}}">{{a.meta}}</span></span>
+          </div>
+        </sc-for>
+        <div style="font-size: 12px; color: {{t.text2}}">Unread carries a "•" and the word Unread for screen readers, not colour alone.</div>
+      </section>
+
+      <section style="background: {{t.canvas}}; border: 1px solid {{t.border}}; border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 8px; overflow: hidden; position: relative">
+        <div style="font-size: 11px; font-weight: 600; color: {{t.text2}}">COMMAND PALETTE · Ctrl+K</div>
+        <div role="dialog" aria-label="Command palette" style="background: {{t.raised}}; border: 1px solid {{t.border}}; border-radius: 10px; box-shadow: {{t.shadow}}; padding: 8px; display: flex; flex-direction: column; gap: 4px">
+          <span aria-label="Search commands" style="height: 30px; border-radius: 6px; border: 2px solid {{t.focus}}; display: flex; align-items: center; padding: 0 8px; font-size: 13px">imp</span>
+          <sc-for list="{{palette}}" as="c" hint-placeholder-count="4">
+            <div style="display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 8px; border-radius: 6px; background: {{c.bg}}">
+              <span style="font-size: 13px; flex: 1">{{c.label}}</span><span style="font-size: 11px; color: {{t.text2}}">{{c.group}}</span><span style="font-size: 11px; color: {{t.text2}}; min-width: 48px; text-align: right">{{c.chord}}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="font-size: 12px; color: {{t.text2}}">Arrow keys move, Enter runs, Escape closes. Same registry as menu, toolbar and keymap.</div>
+      </section>
+    </div>
+  </div>
+  <sc-if value="{{notesOn}}" hint-placeholder-val="{{ true }}">
+    <div style="height: 280px; box-sizing: border-box; border-top: 1px solid {{t.border}}; background: {{t.surface}}; padding: 18px 24px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 22px; font-size: 12px; line-height: 1.5; color: {{t.text2}}">
+      <div style="display: flex; flex-direction: column; gap: 6px"><strong style="color: {{t.text}}; font-size: 13px">egui mapping: lists</strong>
+        <div>Inbox, People, Templates and Activity are ScrollArea::show_rows lists of row Frames (border bg_hover, radius.medium). Selected row fills bg_selected; focus adds the 2 pt ring.</div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px"><strong style="color: {{t.text}}; font-size: 13px">Search</strong>
+        <div>Results grouped by recording; the hit is a LayoutJob section in tint_warning. "Play from" appears only when the result has a seek time, and "Play from about" when timing is derived.</div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px"><strong style="color: {{t.text}}; font-size: 13px">Palette</strong>
+        <div>An egui::Modal-free Area anchored top-centre with window_shadow; TextEdit named "Search commands" (it was the one unnamed control the a11y sweep found). Ranked subsequence matches, chords via shortcuts::display.</div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px"><strong style="color: {{t.text}}; font-size: 13px">People and templates, as built</strong>
+        <div>People: rename, merge, delete with their disclosures, possible duplicates never merged by themselves. Templates: built-ins ship read-only; "Copy this template" makes your own, Save refuses a document with problems and lists each one.</div>
+        <div><strong style="color: {{t.warning}}">Proposed:</strong> the initial avatars in People.</div>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light"},"notes":{"editor":"enum","options":["on","off"],"default":"on"},"$preview":{"width":1280,"height":1100}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const THEMES = {
+      light: { canvas: '#f4f6fa', surface: '#ffffff', raised: '#ffffff', selected: '#e2ebff', hover: '#edf1f7', text: '#172544', text2: '#4d5873', border: '#d9dfea', borderStrong: '#6b7690', accent: '#0a4fe0', accentText: '#ffffff', neutral: '#4d5873', running: '#0a4fe0', waiting: '#7a4a00', success: '#0f6b3f', warning: '#8a4b00', focus: '#0b57ff', tNeutral: '#edeef1', tRunning: '#e6edfc', tSuccess: '#e7f0ec', tWarning: '#f3ede6', shadow: '0 8px 24px rgba(23,37,68,0.16)' },
+      dark: { canvas: '#0b1220', surface: '#111a2c', raised: '#18233a', selected: '#1c3366', hover: '#1a2540', text: '#f2f6ff', text2: '#a9b4d0', border: '#27334d', borderStrong: '#6d7a99', accent: '#6ea8ff', accentText: '#0b1220', neutral: '#a9b4d0', running: '#6ea8ff', waiting: '#e3b667', success: '#67c391', warning: '#e8a35c', focus: '#8fc2ff', tNeutral: '#293346', tRunning: '#20314e', tSuccess: '#1f353c', tWarning: '#333034', shadow: '0 8px 24px rgba(0,0,0,0.5)' }
+    };
+    const t = THEMES[this.props.theme === 'dark' ? 'dark' : 'light'];
+    const notesOn = this.props.notes !== 'off';
+    const inbox = [
+      { title: 'Sync notes, design review', status: '⟳ Transcribing', c: t.running, bg: t.selected },
+      { title: 'Podcast draft, episode 12', status: '⟳ Importing', c: t.running, bg: 'transparent' },
+      { title: 'Field recording, river', status: '◷ Pending', c: t.neutral, bg: 'transparent' },
+      { title: 'Voice memo', status: '– Not transcribed', c: t.neutral, bg: 'transparent' }
+    ];
+    const people = [
+      { initial: 'M', name: 'Maya', meta: 'In 14 recordings · voice: none' },
+      { initial: 'J', name: 'Jonas', meta: 'In 6 recordings · voice: none' },
+      { initial: 'R', name: 'Ruth', meta: 'Not assigned in any recording yet' }
+    ];
+    const templates = [
+      { name: 'Meeting summary', meta: 'Version 3 · ships with the application', badge: 'Built-in', tone: t.neutral, tint: t.tNeutral, bg: 'transparent' },
+      { name: 'Lecture notes', meta: 'Version 2 · ships with the application', badge: 'Built-in', tone: t.neutral, tint: t.tNeutral, bg: 'transparent' },
+      { name: 'Team retro (your copy)', meta: 'Version 4 · stored 2 Oct 2026', badge: 'Your copy', tone: t.running, tint: t.tRunning, bg: t.selected }
+    ];
+    const activity = [
+      { dot: '•', title: 'Transcription finished', meta: 'Weekly sync, platform team · 6 Oct, 12:01 · Desktop notification delivered.', weight: 600, bg: t.selected },
+      { dot: '•', title: 'Requires attention', meta: 'Kitchen renovation call · Open the job for Kitchen renovation call', weight: 600, bg: t.selected },
+      { dot: '', title: 'Import finished', meta: '3 recordings · 5 Oct, 15:02', weight: 400, bg: 'transparent' },
+      { dot: '', title: 'Import finished', meta: '1 recording · 3 Oct, 10:51', weight: 400, bg: 'transparent' }
+    ];
+    const palette = [
+      { label: 'Import audio…', group: 'Library', chord: 'Ctrl+O', bg: t.selected },
+      { label: 'Go to Library', group: 'Navigation', chord: 'Ctrl+1', bg: 'transparent' },
+      { label: 'Command palette', group: 'General', chord: 'Ctrl+K', bg: 'transparent' },
+      { label: 'Keyboard shortcuts', group: 'General', chord: '?', bg: 'transparent' }
+    ];
+    return { t, notesOn, rootH: notesOn ? 1100 : 820, inbox, people, templates, activity, palette };
+  }
+}
+</script>
+</body>
+</html>

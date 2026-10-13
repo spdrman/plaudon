@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Bluetooth devices</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Source+Code+Pro:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#0a4fe0}a:hover{color:#0841b8}
+</style>
+</helmet>
+<div style="width: 1280px; height: {{rootH}}px; background: {{t.canvas}}; font-family: Inter, system-ui, sans-serif; color: {{t.text}}; display: flex; flex-direction: column; overflow: hidden">
+  <div style="width: 1280px; height: 820px; display: flex; flex-direction: column; flex-shrink: 0">
+    <div style="height: 28px; display: flex; align-items: center; gap: 18px; padding: 0 16px; font-size: 13px; border-bottom: 1px solid {{t.border}}"><span>File</span><span>View</span><span>Go</span><span>Help</span></div>
+    <div style="height: 44px; display: flex; align-items: center; gap: 8px; padding: 0 16px; border-bottom: 1px solid {{t.border}}">
+      <button style="height: 28px; padding: 0 12px; border-radius: 6px; border: 1px solid {{t.accent}}; background: {{t.accent}}; color: {{t.accentText}}; font: inherit; font-size: 13px; font-weight: 600">Import audio…</button>
+      <button style="height: 28px; padding: 0 12px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; color: {{t.text}}; font: inherit; font-size: 13px">Search recordings</button>
+      <button style="height: 28px; padding: 0 12px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; color: {{t.text}}; font: inherit; font-size: 13px; display: flex; align-items: center; gap: 8px">Command palette <span style="font-size: 11px; color: {{t.text2}}">Ctrl+K</span></button>
+      <button style="height: 28px; padding: 0 12px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; color: {{t.text}}; font: inherit; font-size: 13px">Refresh</button>
+      <div style="flex: 1"></div>
+      <button aria-label="Activity: no unread notifications" style="height: 28px; padding: 0 10px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; color: {{t.text}}; font: inherit; font-size: 13px">Activity</button>
+      <span style="font-size: 15px; font-weight: 600; margin-left: 8px">Devices</span>
+    </div>
+    <div style="height: 722px; display: flex">
+      <nav aria-label="Primary" style="width: 216px; flex-shrink: 0; border-right: 1px solid {{t.border}}; padding: 12px 10px; box-sizing: border-box; display: flex; flex-direction: column; gap: 2px">
+        <div style="display: flex; align-items: center; gap: 10px; padding: 4px 8px 10px"><img src="{{t.mark}}" alt="" style="height: 26px"><span style="font-size: 15px; font-weight: 700">Plaudon</span></div>
+        <a href="#main" style="font-size: 12px; color: {{t.text2}}; padding: 2px 8px 8px; text-decoration: none">Skip to main content</a>
+        <sc-for list="{{nav}}" as="n" hint-placeholder-count="7">
+          <button style="height: 32px; display: flex; align-items: center; gap: 10px; padding: 0 8px; border: none; border-radius: 6px; background: {{n.bg}}; color: {{t.text}}; font: inherit; font-size: 13px; font-weight: {{n.weight}}; text-align: left">
+            <span style="width: 20px; height: 20px; border-radius: 3px; background: {{n.tileBg}}; color: {{n.tileFg}}; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center">{{n.g}}</span>
+            <span style="flex: 1">{{n.l}}</span><span style="font-size: 11px; color: {{t.text2}}; font-weight: 400">{{n.k}}</span>
+          </button>
+        </sc-for>
+      </nav>
+      <main id="main" style="flex: 1; min-width: 0; display: flex">
+        <div style="flex: 1; min-width: 0; padding: 20px 20px 16px 24px; box-sizing: border-box; display: flex; flex-direction: column; gap: 12px; overflow: hidden">
+          <div style="display: flex; align-items: flex-start; gap: 16px">
+            <div style="flex: 1; display: flex; flex-direction: column; gap: 4px">
+              <h1 style="margin: 0; font-size: 24px; font-weight: 700">PLAUD devices</h1>
+              <p style="margin: 0; font-size: 13px; line-height: 1.5; color: {{t.text2}}">Each device is shown with the compatibility status recorded for its exact model and firmware. Scanning asks for Bluetooth permission only when you start a scan.</p>
+            </div>
+            <button style="height: 28px; padding: 0 12px; border-radius: 6px; border: 1px solid {{t.accent}}; background: {{t.accent}}; color: {{t.accentText}}; font: inherit; font-size: 13px; font-weight: 600; white-space: nowrap">Scan again</button>
+            <button style="height: 28px; padding: 0 12px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; color: {{t.text}}; font: inherit; font-size: 13px; white-space: nowrap">Add PLAUD device</button>
+          </div>
+          <sc-for list="{{sections}}" as="s" hint-placeholder-count="5">
+            <section aria-label="{{s.label}}" style="background: {{t.surface}}; border: 1px solid {{t.border}}; border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px">
+              <div style="display: flex; align-items: baseline; gap: 8px"><h2 style="margin: 0; font-size: 13px; font-weight: 600">{{s.label}}</h2><span style="font-size: 12px; color: {{t.text2}}">{{s.count}}</span></div>
+              <sc-if value="{{s.empty}}" hint-placeholder-val="{{ true }}"><div style="font-size: 12px; color: {{t.text2}}">{{s.emptyText}}</div></sc-if>
+              <sc-for list="{{s.rows}}" as="r" hint-placeholder-count="1">
+                <button style="display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 6px; border: {{r.border}}; background: {{r.bg}}; color: {{t.text}}; font: inherit; text-align: left">
+                  <span style="display: flex; flex-direction: column; gap: 2px; flex: 1"><span style="font-size: 13px; font-weight: 600">{{r.name}}</span><span style="font-size: 12px; color: {{t.text2}}">{{r.facts}}</span></span>
+                  <span style="padding: 0 7px; border-radius: 3px; background: {{r.tint}}; color: {{r.tone}}; font-size: 12px; font-weight: 600; line-height: 20px">{{r.badge}}</span>
+                </button>
+              </sc-for>
+            </section>
+          </sc-for>
+          <section aria-label="USB (legacy PLAUD Note volume)" style="border: 1px dashed {{t.borderStrong}}; border-radius: 10px; padding: 10px 12px; display: flex; align-items: center; gap: 12px">
+            <span style="flex: 1; font-size: 12px; line-height: 1.5; color: {{t.text2}}"><strong style="color: {{t.text}}">USB (legacy PLAUD Note volume).</strong> This build has no USB device command, so the recordings are brought in with the ordinary file import: Plaudon only reads the files you choose and writes nothing to the volume.</span>
+            <button style="height: 26px; padding: 0 10px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; color: {{t.text}}; font: inherit; font-size: 12px; white-space: nowrap">Choose files from the mounted volume</button>
+          </section>
+        </div>
+        <aside aria-label="Device facts" style="width: 380px; flex-shrink: 0; border-left: 1px solid {{t.border}}; padding: 18px; box-sizing: border-box; display: flex; flex-direction: column; gap: 10px; overflow: hidden">
+          <div style="display: flex; align-items: center; gap: 8px"><h2 style="margin: 0; font-size: 15px; font-weight: 600; flex: 1">PLAUD NOTE</h2><span style="padding: 0 7px; border-radius: 3px; background: {{t.tNeutral}}; color: {{t.neutral}}; font-size: 12px; font-weight: 600; line-height: 20px">? Not evaluated</span></div>
+          <div style="display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 4px 10px; font-size: 12px">
+            <span style="color: {{t.text2}}">Model</span><span>PLAUD Note</span>
+            <span style="color: {{t.text2}}">Firmware</span><span>Unknown</span>
+            <span style="color: {{t.text2}}">Transport</span><span>Bluetooth LE</span>
+            <span style="color: {{t.text2}}">Advertised name</span><span>PLAUD NOTE</span>
+            <span style="color: {{t.text2}}">Signal strength</span><span>-61 dBm</span>
+            <span style="color: {{t.text2}}">Battery</span><span>Unknown</span>
+            <span style="color: {{t.text2}}">Identity</span><span style="color: {{t.warning}}; font-weight: 600">! Unverified</span>
+          </div>
+          <div style="font-size: 12px; line-height: 1.5; color: {{t.text2}}">An advertisement can be copied, so a name or a signal does not identify this device. It stays unverified until the device accepts its authorization.</div>
+          <div style="font-size: 13px; font-weight: 600">Capabilities</div>
+          <div style="display: flex; flex-direction: column; gap: 4px; font-size: 12px">
+            <div><span style="color: {{t.danger}}; font-weight: 600">✕</span> Read-only listing of recordings: <span style="color: {{t.text2}}">Not offered. [reason from the claim register]</span></div>
+            <div><span style="color: {{t.danger}}; font-weight: 600">✕</span> Read-only transfer: <span style="color: {{t.text2}}">Not offered. [reason from the claim register]</span></div>
+          </div>
+          <div style="font-size: 13px; font-weight: 600">Known limitations</div>
+          <div style="font-size: 12px; line-height: 1.5; color: {{t.text2}}">[verbatim limitations from the compatibility register]</div>
+          <div style="font-size: 13px; font-weight: 600">Radio disclosures</div>
+          <div style="font-size: 12px; line-height: 1.5; color: {{t.text2}}">The legacy protocol may exchange a static per-device credential over a link that is not encrypted at the radio layer. Turning off every internet connection does not make that link private.</div>
+          <div style="font-size: 13px; font-weight: 600">Experimental probe</div>
+          <label style="display: flex; gap: 8px; align-items: flex-start; font-size: 12px; line-height: 1.5"><span style="width: 14px; height: 14px; border-radius: 3px; border: 1px solid {{t.borderStrong}}; box-sizing: border-box; flex-shrink: 0; margin-top: 2px"></span>Allow a read-only experimental probe of this device (listing only, no transfer)</label>
+          <button style="align-self: flex-start; height: 28px; padding: 0 12px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; color: {{t.text}}; font: inherit; font-size: 13px">Check the device again</button>
+        </aside>
+      </main>
+    </div>
+    <div role="status" style="height: 26px; display: flex; align-items: center; gap: 12px; padding: 0 16px; font-size: 12px; color: {{t.text2}}; border-top: 1px solid {{t.border}}">
+      <span>Scan finished: 2 devices heard</span><div style="flex: 1"></div>
+      <span style="padding: 1px 8px; border-radius: 3px; background: {{t.tSuccess}}; color: {{t.success}}; font-weight: 600">✓ Local only</span>
+    </div>
+  </div>
+  <sc-if value="{{notesOn}}" hint-placeholder-val="{{ true }}">
+    <div style="height: 280px; box-sizing: border-box; border-top: 1px solid {{t.border}}; background: {{t.surface}}; padding: 18px 24px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 22px; font-size: 12px; line-height: 1.5; color: {{t.text2}}">
+      <div style="display: flex; flex-direction: column; gap: 6px"><strong style="color: {{t.text}}; font-size: 13px">egui mapping: devices</strong>
+        <div>Five sections in SECTION_ORDER, each a Frame with a heading and a count, exposed as a labelled region. Rows are full-width Buttons with a two-line label and a badge on the right. Detail is the screen's aside (SidePanel::right, 380 pt).</div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px"><strong style="color: {{t.text}}; font-size: 13px">Honest labels, as built</strong>
+        <div>The badge word is the register's status_label: "Not evaluated" (?, neutral), "Unsupported" (×, danger), "Experimental" (!, warning). Nothing reads "should work". Firmware, battery and signal that can't be verified print "Unknown".</div>
+        <div>An empty section after a real scan uses its own sentence; with no usable radio every radio section reads "Not checked: the radio could not be used for this scan."</div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px"><strong style="color: {{t.text}}; font-size: 13px">Copy from the backend</strong>
+        <div>Capabilities, limitations, disclosures and transfer labels arrive in the DTO; the UI composes none of them. Bracketed text marks where the register's own words go.</div>
+        <div>The radio disclosure here paraphrases the README for the mock.</div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px"><strong style="color: {{t.text}}; font-size: 13px">Build note</strong>
+        <div>Without the hardware-scan feature the screen shows the UnavailableInBuild state (see Errors). Authorization, transfer rows with an estimate labelled as one, and disconnect keep their current layouts and copy.</div>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light"},"notes":{"editor":"enum","options":["on","off"],"default":"on"},"$preview":{"width":1280,"height":1100}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const THEMES = {
+      light: { canvas: '#f4f6fa', surface: '#ffffff', selected: '#e2ebff', hover: '#edf1f7', text: '#172544', text2: '#4d5873', border: '#d9dfea', borderStrong: '#6b7690', accent: '#0a4fe0', accentText: '#ffffff', neutral: '#4d5873', success: '#0f6b3f', warning: '#8a4b00', danger: '#a1121f', focus: '#0b57ff', tNeutral: '#edeef1', tSuccess: '#e7f0ec', tDanger: '#f6e7e9', mark: './assets/plaudon-mark-light.svg' },
+      dark: { canvas: '#0b1220', surface: '#111a2c', selected: '#1c3366', hover: '#1a2540', text: '#f2f6ff', text2: '#a9b4d0', border: '#27334d', borderStrong: '#6d7a99', accent: '#6ea8ff', accentText: '#0b1220', neutral: '#a9b4d0', success: '#67c391', warning: '#e8a35c', danger: '#f08a92', focus: '#8fc2ff', tNeutral: '#293346', tSuccess: '#1f353c', tDanger: '#352c3c', mark: './assets/plaudon-mark-dark.svg' }
+    };
+    const t = THEMES[this.props.theme === 'dark' ? 'dark' : 'light'];
+    const notesOn = this.props.notes !== 'off';
+    const NAV = [['L', 'Library', 'Ctrl+1'], ['I', 'Inbox', 'Ctrl+2'], ['J', 'Jobs', 'Ctrl+3'], ['T', 'Templates', 'Ctrl+4'], ['S', 'Settings', 'Ctrl+5'], ['D', 'Devices', 'Ctrl+6'], ['P', 'People', 'Ctrl+7']];
+    const nav = NAV.map(([g, l, k], i) => ({ g, l, k, bg: i === 5 ? t.selected : 'transparent', weight: i === 5 ? 600 : 400, tileBg: i === 5 ? t.accent : t.hover, tileFg: i === 5 ? t.accentText : t.text2 }));
+    const sec = (label, emptyText, rows) => ({ label, emptyText, rows, empty: rows.length === 0, count: rows.length === 1 ? '1 device' : rows.length + ' devices' });
+    const sections = [
+      sec('Nearby', 'No PLAUD devices were heard in this scan.', [{ name: 'PLAUD NOTE', facts: 'Model: PLAUD Note · Firmware: Unknown · Signal: -61 dBm', badge: '? Not evaluated', tone: t.neutral, tint: t.tNeutral, bg: t.selected, border: '2px solid ' + t.focus }]),
+      sec('Connected', 'No device is connected.', []),
+      sec('Needs authorization', 'No scanned device is waiting for authorization.', []),
+      sec('Unsupported firmware', 'No scanned device reported unsupported firmware.', [{ name: 'PLAUD NOTEPIN', facts: 'Model: PLAUD NotePin · Firmware: [reported version] · Signal: -74 dBm', badge: '× Unsupported', tone: t.danger, tint: t.tDanger, bg: t.surface, border: '1px solid ' + t.border }]),
+      sec('Previously linked', 'No device has been linked on this computer.', [])
+    ];
+    return { t, notesOn, rootH: notesOn ? 1100 : 820, nav, sections };
+  }
+}
+</script>
+</body>
+</html>

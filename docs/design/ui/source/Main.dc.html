@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Plaudon UI overview</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Source+Code+Pro:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#0a4fe0}a:hover{color:#0841b8}
+</style>
+</helmet>
+<div style="width: 1280px; height: 820px; box-sizing: border-box; background: #f4f6fa; font-family: Inter, system-ui, sans-serif; color: #172544; padding: 48px 56px; display: flex; flex-direction: column; gap: 28px">
+  <div style="display: flex; align-items: center; justify-content: space-between">
+    <div style="display: flex; align-items: center; gap: 18px">
+      <svg viewBox="199 159 650 763" width="52" height="61" aria-hidden="true">
+        <defs>
+          <linearGradient id="mBody" gradientUnits="userSpaceOnUse" x1="420" y1="159" x2="700" y2="710"><stop offset="0" style="stop-color: #0585fc"></stop><stop offset="0.35" style="stop-color: #0166f5"></stop><stop offset="0.7" style="stop-color: #0045dc"></stop><stop offset="1" style="stop-color: #0029b0"></stop></linearGradient>
+          <linearGradient id="mHi" gradientUnits="userSpaceOnUse" x1="230" y1="159" x2="560" y2="400"><stop offset="0" style="stop-color: #46c9fc"></stop><stop offset="1" style="stop-color: #42b8fb"></stop></linearGradient>
+          <linearGradient id="mFold" gradientUnits="userSpaceOnUse" x1="440" y1="620" x2="205" y2="850"><stop offset="0" style="stop-color: #04185a"></stop><stop offset="0.5" style="stop-color: #032c92"></stop><stop offset="1" style="stop-color: #032893"></stop></linearGradient>
+          <radialGradient id="mGlow" gradientUnits="userSpaceOnUse" cx="222" cy="730" r="215"><stop offset="0" style="stop-color: #0040c4; stop-opacity: 0.95"></stop><stop offset="1" style="stop-color: #0040c4; stop-opacity: 0"></stop></radialGradient>
+          <clipPath id="mClip"><path style="clip-rule: evenodd" d="M305,159H590C735,159 848,290 848,434.5C848,579 735,710 590,710H482Q461,710 461,731V819C461,875 419,921 359,921H302C246,921 200,875 200,819V264C200,206 247,159 305,159ZM409,384H412A30,30 0 0 1 442,414V461A30,30 0 0 1 412,491H409A30,30 0 0 1 379,461V414A30,30 0 0 1 409,384ZM495,335H497A30,30 0 0 1 527,365V511A30,30 0 0 1 497,541H495A30,30 0 0 1 465,511V365A30,30 0 0 1 495,335ZM579,277H582A30,30 0 0 1 612,307V575A30,30 0 0 1 582,605H579A30,30 0 0 1 549,575V307A30,30 0 0 1 579,277ZM665,334H667A30,30 0 0 1 697,364V516A30,30 0 0 1 667,546H665A30,30 0 0 1 635,516V364A30,30 0 0 1 665,334ZM751,386H753A30,30 0 0 1 783,416V461A30,30 0 0 1 753,491H751A30,30 0 0 1 721,461V416A30,30 0 0 1 751,386Z"></path></clipPath>
+        </defs>
+        <g style="clip-path: url(#mClip)">
+          <rect x="185" y="140" width="680" height="800" fill="url(#mBody)"></rect>
+          <path d="M185,140H600L588,159C540,182 490,213 448,240C380,285 300,333 262,368C232,396 206,430 199,480H185Z" fill="url(#mHi)"></path>
+          <path d="M185,470L199,482C203,520 240,552 298,579C360,612 400,632 426,662C448,688 461,712 461,745V940H185Z" fill="url(#mFold)"></path>
+          <path d="M185,470L199,482C203,520 240,552 298,579C360,612 400,632 426,662C448,688 461,712 461,745V940H185Z" fill="url(#mGlow)"></path>
+        </g>
+      </svg>
+      <div style="display: flex; flex-direction: column; gap: 2px">
+        <h1 style="margin: 0; font-size: 34px; font-weight: 700; letter-spacing: -0.02em">Plaudon desktop UI</h1>
+        <div style="font-size: 15px; color: #4d5873">One design for the egui shell: every screen the app has, light and dark, with the tokens and the egui calls to build it.</div>
+      </div>
+    </div>
+    <div style="display: flex; gap: 8px">
+      <span style="font-size: 12px; padding: 4px 10px; border-radius: 6px; background: #e7f0ec; color: #0f6b3f; font-weight: 600">✓ All pairs AA, measured</span>
+      <span style="font-size: 12px; padding: 4px 10px; border-radius: 6px; background: #e6edfc; color: #0a4fe0; font-weight: 600">egui 0.36 / eframe 0.36</span>
+    </div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px">
+    <div style="background: #ffffff; border: 1px solid #d9dfea; border-radius: 10px; padding: 20px 22px; display: flex; flex-direction: column; gap: 10px">
+      <h2 style="margin: 0; font-size: 15px; font-weight: 600">The product rules the UI has to show</h2>
+      <div style="font-size: 13px; line-height: 1.5; color: #172544; display: flex; flex-direction: column; gap: 8px">
+        <div><strong>Local-first.</strong> Local-only mode is on from first launch. The badge renders what the egress gate answered, never the stored preference.</div>
+        <div><strong>No account.</strong> Nothing in the shell asks you to sign in. The PLAUD account route lives behind Devices and says it's PLAUD Cloud.</div>
+        <div><strong>Bring your own key.</strong> The OpenRouter key's presence is shown, never its value. A key is never consent.</div>
+        <div><strong>Claims are source-anchored.</strong> Every claim says whether its anchor resolved, and seeks only when the transcript has real timing.</div>
+        <div><strong>Unverified means unverified.</strong> Hardware reads "Unsupported" or "Not evaluated". Unknown is "Unknown", never 0:00 or $0.</div>
+        <div><strong>Never colour alone.</strong> Every status has a glyph and a word.</div>
+      </div>
+    </div>
+    <div style="background: #ffffff; border: 1px solid #d9dfea; border-radius: 10px; padding: 20px 22px; display: flex; flex-direction: column; gap: 10px">
+      <h2 style="margin: 0; font-size: 15px; font-weight: 600">What egui is allowed to draw here</h2>
+      <div style="font-size: 13px; line-height: 1.5; display: flex; flex-direction: column; gap: 8px">
+        <div>Panels (TopBottomPanel, SidePanel, CentralPanel), Frame with CornerRadius and Stroke, Grid, ScrollArea, egui_extras::TableBuilder, Modal, Area, ComboBox, Checkbox, Slider, ProgressBar, TextEdit, selectable_label.</div>
+        <div>Painter shapes for the waveform, ruler, playhead, status glyphs and transport icons. One linear gradient (a vertex-coloured Mesh) in the app icon tile only.</div>
+        <div>Shadow only on Modal and popups, through visuals.window_shadow and popup_shadow. No blur, no backdrop filter, no CSS-only layout.</div>
+        <div>Motion stays inside egui's animate_bool at the 90 ms and 160 ms tokens. The only continuous animation is a spinner while work runs.</div>
+      </div>
+    </div>
+    <div style="background: #ffffff; border: 1px solid #d9dfea; border-radius: 10px; padding: 20px 22px; display: flex; flex-direction: column; gap: 10px">
+      <h2 style="margin: 0; font-size: 15px; font-weight: 600">How to read this canvas</h2>
+      <div style="font-size: 13px; line-height: 1.5; display: flex; flex-direction: column; gap: 8px">
+        <div>Each window is drawn at 1280 by 820 pt, the app's default size. The light board carries an egui mapping strip under the window; the dark board beside it is the same screen in the dark theme.</div>
+        <div>Copy in the mockups is the app's own copy, taken from crates/ui and crates/app, so it reads the way the build reads.</div>
+        <div style="display: flex; align-items: center; gap: 8px"><span style="font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 3px; border: 1px solid #8a4b00; color: #8a4b00">PROPOSED</span><span>marks anything the app doesn't do today.</span></div>
+        <div>Chords are shown as Ctrl, the way the in-window menu bar renders them on Windows and Linux. macOS shows Cmd.</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="background: #ffffff; border: 1px solid #d9dfea; border-radius: 10px; padding: 18px 22px; display: flex; flex-direction: column; gap: 12px">
+    <h2 style="margin: 0; font-size: 15px; font-weight: 600">On the canvas</h2>
+    <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px 20px; font-size: 13px; color: #4d5873">
+      <div><span style="color: #172544; font-weight: 600">Foundations</span>: overview, logo and icon, tokens with contrast</div>
+      <div><span style="color: #172544; font-weight: 600">Library</span>: populated table, empty first-run state</div>
+      <div><span style="color: #172544; font-weight: 600">Recording</span>: waveform, transport, transcript, summary outputs</div>
+      <div><span style="color: #172544; font-weight: 600">Review</span>: claims and anchors, consent sheet, egress refusal</div>
+      <div><span style="color: #172544; font-weight: 600">Jobs</span>: states, progress, cancel and retry</div>
+      <div><span style="color: #172544; font-weight: 600">Devices</span>: five scan sections, Not evaluated, Unsupported</div>
+      <div><span style="color: #172544; font-weight: 600">Settings</span>: Local-only mode, appearance, AI key; first-run setup</div>
+      <div><span style="color: #172544; font-weight: 600">Errors</span>: startup failure, load error, offline, no radio; other destinations; components</div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":820}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

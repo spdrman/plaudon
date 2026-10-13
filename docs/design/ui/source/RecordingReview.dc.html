@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Recording review</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Source+Code+Pro:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#0a4fe0}a:hover{color:#0841b8}
+</style>
+</helmet>
+<div style="width: 1280px; height: {{rootH}}px; background: {{t.canvas}}; font-family: Inter, system-ui, sans-serif; color: {{t.text}}; display: flex; flex-direction: column; overflow: hidden">
+  <div style="width: 1280px; height: 820px; display: flex; flex-direction: column; flex-shrink: 0">
+    <div style="height: 28px; display: flex; align-items: center; gap: 18px; padding: 0 16px; font-size: 13px; border-bottom: 1px solid {{t.border}}"><span>File</span><span>View</span><span>Go</span><span>Help</span></div>
+    <div style="height: 44px; display: flex; align-items: center; gap: 8px; padding: 0 16px; border-bottom: 1px solid {{t.border}}">
+      <button style="height: 28px; padding: 0 12px; border-radius: 6px; border: 1px solid {{t.accent}}; background: {{t.accent}}; color: {{t.accentText}}; font: inherit; font-size: 13px; font-weight: 600">Import audio…</button>
+      <button style="height: 28px; padding: 0 12px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; color: {{t.text}}; font: inherit; font-size: 13px">Search recordings</button>
+      <button style="height: 28px; padding: 0 12px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; color: {{t.text}}; font: inherit; font-size: 13px; display: flex; align-items: center; gap: 8px">Command palette <span style="font-size: 11px; color: {{t.text2}}">Ctrl+K</span></button>
+      <button style="height: 28px; padding: 0 12px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; color: {{t.text}}; font: inherit; font-size: 13px">Refresh</button>
+      <div style="flex: 1"></div>
+      <button aria-label="Activity: no unread notifications" style="height: 28px; padding: 0 10px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; color: {{t.text}}; font: inherit; font-size: 13px">Activity</button>
+      <span style="font-size: 15px; font-weight: 600; margin-left: 8px">Library</span>
+    </div>
+    <div style="height: 722px; display: flex">
+      <nav aria-label="Primary" style="width: 216px; flex-shrink: 0; border-right: 1px solid {{t.border}}; padding: 12px 10px; box-sizing: border-box; display: flex; flex-direction: column; gap: 2px">
+        <div style="display: flex; align-items: center; gap: 10px; padding: 4px 8px 10px"><img src="{{t.mark}}" alt="" style="height: 26px"><span style="font-size: 15px; font-weight: 700">Plaudon</span></div>
+        <a href="#main" style="font-size: 12px; color: {{t.text2}}; padding: 2px 8px 8px; text-decoration: none">Skip to main content</a>
+        <sc-for list="{{nav}}" as="n" hint-placeholder-count="7">
+          <button style="height: 32px; display: flex; align-items: center; gap: 10px; padding: 0 8px; border: none; border-radius: 6px; background: {{n.bg}}; color: {{t.text}}; font: inherit; font-size: 13px; font-weight: {{n.weight}}; text-align: left">
+            <span style="width: 20px; height: 20px; border-radius: 3px; background: {{n.tileBg}}; color: {{n.tileFg}}; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center">{{n.g}}</span>
+            <span style="flex: 1">{{n.l}}</span><span style="font-size: 11px; color: {{t.text2}}; font-weight: 400">{{n.k}}</span>
+          </button>
+        </sc-for>
+      </nav>
+      <main id="main" style="flex: 1; min-width: 0; display: flex">
+        <div style="flex: 1; min-width: 0; padding: 14px 16px 14px 22px; box-sizing: border-box; display: flex; flex-direction: column; gap: 10px">
+          <button style="align-self: flex-start; height: 24px; padding: 0 8px 0 4px; border: none; background: transparent; color: {{t.accent}}; font: inherit; font-size: 12px; display: flex; align-items: center; gap: 4px"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M7.5 2.5L4 6l3.5 3.5" fill="none" stroke="{{t.accent}}" stroke-width="1.6"></path></svg>Back to library</button>
+          <h1 style="margin: 0; font-size: 19px; font-weight: 700">Weekly sync, platform team</h1>
+          <section aria-label="Playback" style="background: {{t.surface}}; border: 1px solid {{t.border}}; border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px">
+            <div style="height: 40px; display: flex; align-items: center; gap: 2px; position: relative">
+              <sc-for list="{{bars}}" as="b" hint-placeholder-count="90"><span style="width: 3px; height: {{b.h}}px; border-radius: 1px; background: {{b.c}}; flex-shrink: 0"></span></sc-for>
+              <span style="position: absolute; left: 219px; top: -1px; width: 2px; height: 42px; background: {{t.text}}"></span>
+              <span style="position: absolute; left: 221px; top: 0; width: 18px; height: 40px; background: {{t.tRunning}}; opacity: 0.8; border-left: 0; border-bottom: 2px solid {{t.accent}}"></span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px">
+              <button aria-label="Play" style="width: 32px; height: 28px; border-radius: 6px; border: 1px solid {{t.accent}}; background: {{t.accent}}; display: flex; align-items: center; justify-content: center"><svg width="12" height="14" viewBox="0 0 12 14" aria-hidden="true"><path d="M2 1.5v11l9-5.5z" fill="{{t.accentText}}"></path></svg></button>
+              <span style="font-family: 'Source Code Pro', ui-monospace, monospace; font-size: 13px">22:05 <span style="color: {{t.text2}}">/ 48:12</span></span>
+            </div>
+          </section>
+          <section aria-label="Transcript" style="flex: 1; min-height: 0; background: {{t.surface}}; border: 1px solid {{t.border}}; border-radius: 10px; overflow: hidden; display: flex; flex-direction: column">
+            <div style="padding: 8px 12px; border-bottom: 1px solid {{t.border}}; font-size: 15px; font-weight: 600">Transcript</div>
+            <div style="display: grid; grid-template-columns: 54px minmax(0, 1fr); gap: 8px; padding: 8px 12px; border-bottom: 1px solid {{t.hover}}">
+              <span style="height: 22px; border-radius: 3px; background: {{t.tRunning}}; color: {{t.running}}; font-family: 'Source Code Pro', ui-monospace, monospace; font-size: 12px; display: flex; align-items: center; justify-content: center">21:40</span>
+              <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 12px; color: {{t.text2}}">Speaker 2 (inferred cluster)</span><span style="font-size: 13px; line-height: 1.5">Before we close, can we talk about the dashboards?</span></div>
+            </div>
+            <div style="display: grid; grid-template-columns: 54px minmax(0, 1fr); gap: 8px; padding: 8px 12px; border-bottom: 1px solid {{t.hover}}; background: {{t.selected}}">
+              <span style="height: 22px; border-radius: 3px; background: {{t.accent}}; color: {{t.accentText}}; font-family: 'Source Code Pro', ui-monospace, monospace; font-size: 12px; display: flex; align-items: center; justify-content: center">22:05</span>
+              <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 12px; color: {{t.text2}}">Maya (confirmed) · Segment 41</span><span style="font-size: 13px; line-height: 1.5">So for the dashboards, <span style="background: {{t.surface}}; border-bottom: 2px solid {{t.accent}}; padding: 0 1px">the numbers are a week old because the export job stalled.</span></span></div>
+            </div>
+            <div style="display: grid; grid-template-columns: 54px minmax(0, 1fr); gap: 8px; padding: 8px 12px; border-bottom: 1px solid {{t.hover}}">
+              <span style="height: 22px; border-radius: 3px; background: {{t.tRunning}}; color: {{t.running}}; font-family: 'Source Code Pro', ui-monospace, monospace; font-size: 12px; display: flex; align-items: center; justify-content: center">22:40</span>
+              <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 12px; color: {{t.text2}}">Speaker 2 (inferred cluster)</span><span style="font-size: 13px; line-height: 1.5">I can rerun it today, but someone needs to own the alert that should have caught it.</span></div>
+            </div>
+            <div style="display: grid; grid-template-columns: 54px minmax(0, 1fr); gap: 8px; padding: 8px 12px">
+              <span style="height: 22px; border-radius: 3px; background: {{t.tRunning}}; color: {{t.running}}; font-family: 'Source Code Pro', ui-monospace, monospace; font-size: 12px; display: flex; align-items: center; justify-content: center">23:18</span>
+              <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 12px; color: {{t.text2}}">Maya (confirmed)</span><span style="font-size: 13px; line-height: 1.5">Put my name on that. Let us also check whether the retry limit is the culprit.</span></div>
+            </div>
+          </section>
+        </div>
+        <aside aria-label="Outputs" style="width: 540px; flex-shrink: 0; border-left: 1px solid {{t.border}}; padding: 14px 18px; box-sizing: border-box; display: flex; flex-direction: column; gap: 10px; overflow: hidden">
+          <span style="font-size: 15px; font-weight: 600">Outputs</span>
+          <div role="tablist" style="display: flex; gap: 4px; border-bottom: 1px solid {{t.border}}">
+            <sc-for list="{{tabs}}" as="tb" hint-placeholder-count="6"><button role="tab" style="height: 28px; padding: 0 8px; border: none; border-bottom: 2px solid {{tb.rule}}; background: transparent; color: {{tb.color}}; font: inherit; font-size: 12px; font-weight: {{tb.weight}}">{{tb.label}}</button></sc-for>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px">
+            <span style="font-size: 13px">2 of 5 claims have to be checked against the transcript.</span>
+            <div style="flex: 1"></div>
+            <div role="radiogroup" aria-label="Filter claims" style="display: flex; border: 1px solid {{t.borderStrong}}; border-radius: 6px; overflow: hidden; font-size: 12px">
+              <span style="padding: 3px 8px">All claims</span><span style="padding: 3px 8px; background: {{t.selected}}; font-weight: 600; border-left: 1px solid {{t.borderStrong}}; border-right: 1px solid {{t.borderStrong}}">Review required</span><span style="padding: 3px 8px">Verified only</span>
+            </div>
+          </div>
+
+          <div style="background: {{t.surface}}; border: 2px solid {{t.focus}}; border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px">
+            <div style="display: flex; gap: 6px; align-items: center"><span style="padding: 0 6px; border-radius: 3px; background: {{t.tWarning}}; color: {{t.warning}}; font-size: 11px; font-weight: 600; line-height: 18px">! Review required</span><span style="font-size: 12px; color: {{t.text2}}">Summary</span></div>
+            <div style="font-size: 13px; line-height: 1.5; font-weight: 600">Dashboard figures are a week out of date because the export job stalled.</div>
+            <div style="border: 1px solid {{t.border}}; border-radius: 6px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; background: {{t.canvas}}">
+              <div style="font-size: 12px; font-weight: 600; color: {{t.success}}">✓ Anchor resolved in the transcript</div>
+              <div style="font-size: 13px; font-style: italic; line-height: 1.5">“the numbers are a week old because the export job stalled.”</div>
+              <div style="display: grid; grid-template-columns: repeat(4, auto); justify-content: start; gap: 2px 16px; font-size: 12px">
+                <span style="color: {{t.text2}}">Segment</span><span style="color: {{t.text2}}">Characters</span><span style="color: {{t.text2}}">Alignment origin</span><span style="color: {{t.text2}}">Entailment check</span>
+                <span>41</span><span>22–80</span><span>Engine reported</span><span style="color: {{t.success}}">✓ Supported by the cited passage</span>
+              </div>
+            </div>
+            <label style="font-size: 12px; color: {{t.text2}}; display: flex; flex-direction: column; gap: 4px">Review note (optional)<span style="height: 26px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}"></span></label>
+            <div style="display: flex; gap: 8px">
+              <button style="height: 28px; padding: 0 12px; border-radius: 6px; border: 1px solid {{t.accent}}; background: {{t.accent}}; color: {{t.accentText}}; font: inherit; font-size: 13px; font-weight: 600">Seek to this passage</button>
+              <button style="height: 28px; padding: 0 12px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; color: {{t.text}}; font: inherit; font-size: 13px">Confirm this claim</button>
+              <button style="height: 28px; padding: 0 12px; border-radius: 6px; border: 1px solid {{t.danger}}; background: {{t.surface}}; color: {{t.danger}}; font: inherit; font-size: 13px">Reject this claim</button>
+            </div>
+          </div>
+
+          <div style="background: {{t.surface}}; border: 1px solid {{t.border}}; border-radius: 10px; padding: 10px 14px; display: flex; flex-direction: column; gap: 6px">
+            <div style="display: flex; gap: 6px; align-items: center"><span style="padding: 0 6px; border-radius: 3px; background: {{t.tNeutral}}; color: {{t.neutral}}; font-size: 11px; font-weight: 600; line-height: 18px">– Unverified</span><span style="font-size: 12px; color: {{t.text2}}">Summary</span></div>
+            <div style="font-size: 13px; line-height: 1.5">Support will receive the release notes a day before the build ships.</div>
+            <div style="font-size: 12px; font-weight: 600; color: {{t.danger}}">✕ Anchor did not resolve</div>
+            <div style="font-size: 12px; color: {{t.text2}}">This claim is not backed by a resolved source anchor.</div>
+          </div>
+
+          <div style="background: {{t.surface}}; border: 1px solid {{t.border}}; border-radius: 10px; padding: 10px 14px; display: flex; flex-direction: column; gap: 6px">
+            <div style="display: flex; gap: 6px; align-items: center"><span style="padding: 0 6px; border-radius: 3px; background: {{t.tSuccess}}; color: {{t.success}}; font-size: 11px; font-weight: 600; line-height: 18px">✓ Confirmed by a person</span><span style="font-size: 12px; color: {{t.text2}}">Key decisions</span></div>
+            <div style="font-size: 13px; line-height: 1.5">The release branch cut-off moves to Thursday.</div>
+            <div style="font-size: 12px; color: {{t.text2}}">A reviewer accepted this claim against the transcript.</div>
+          </div>
+          <div style="font-size: 12px; color: {{t.text2}}; line-height: 1.5; padding: 0 2px">On a transcript without engine timing the seek control is replaced by: This transcript has no real timestamps; we do not invent seek times.</div>
+        </aside>
+      </main>
+    </div>
+    <div role="status" style="height: 26px; display: flex; align-items: center; gap: 12px; padding: 0 16px; font-size: 12px; color: {{t.text2}}; border-top: 1px solid {{t.border}}">
+      <span>Moved to 22:05, where the cited passage begins</span><div style="flex: 1"></div>
+      <span style="padding: 1px 8px; border-radius: 3px; background: {{t.tSuccess}}; color: {{t.success}}; font-weight: 600">✓ Local only</span>
+    </div>
+  </div>
+  <sc-if value="{{notesOn}}" hint-placeholder-val="{{ true }}">
+    <div style="height: 280px; box-sizing: border-box; border-top: 1px solid {{t.border}}; background: {{t.surface}}; padding: 18px 24px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 22px; font-size: 12px; line-height: 1.5; color: {{t.text2}}">
+      <div style="display: flex; flex-direction: column; gap: 6px"><strong style="color: {{t.text}}; font-size: 13px">egui mapping: review panel</strong>
+        <div>ScrollArea::vertical in the aside. Each claim is a Frame (bg_surface, border_subtle, radius.large). The claim with keyboard focus swaps its stroke to focus_ring at 2 pt.</div>
+        <div>The filter is three selectable_value buttons in one horizontal group: All claims, Review required, Verified only.</div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px"><strong style="color: {{t.text}}; font-size: 13px">Anchors</strong>
+        <div>Resolution is stated first, glyph and word: ✓ Anchor resolved in the transcript or ✕ Anchor did not resolve. Matched text in italics, then a Grid of Segment, Characters, Alignment origin, Entailment check.</div>
+        <div>In the transcript the anchored range is a LayoutJob section with a 2 pt accent underline, and its row gets bg_selected.</div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px"><strong style="color: {{t.text}}; font-size: 13px">Seek, as built</strong>
+        <div>Seek to this passage exists only when AlignmentOrigin permits seeking. It moves the engine clock to the segment start and scrolls the transcript; the status line says where it went. An anchor proves traceability, not truth, so Confirm and Reject stay separate actions.</div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px"><strong style="color: {{t.text}}; font-size: 13px">Proposed</strong>
+        <div><strong style="color: {{t.warning}}">Proposed:</strong> the soft span on the waveform marking the cited passage (painter rect_filled in tint_running with a 2 pt accent base line). Today the playhead moves but the passage isn't drawn on the waveform.</div>
+        <div><strong style="color: {{t.warning}}">Proposed:</strong> the status-line sentence after a seek.</div>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light"},"notes":{"editor":"enum","options":["on","off"],"default":"on"},"$preview":{"width":1280,"height":1100}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const THEMES = {
+      light: { canvas: '#f4f6fa', surface: '#ffffff', selected: '#e2ebff', hover: '#edf1f7', text: '#172544', text2: '#4d5873', border: '#d9dfea', borderStrong: '#6b7690', accent: '#0a4fe0', accentText: '#ffffff', neutral: '#4d5873', running: '#0a4fe0', success: '#0f6b3f', warning: '#8a4b00', danger: '#a1121f', focus: '#0b57ff', waveRem: '#7c869e', tNeutral: '#edeef1', tRunning: '#e6edfc', tSuccess: '#e7f0ec', tWarning: '#f3ede6', mark: './assets/plaudon-mark-light.svg' },
+      dark: { canvas: '#0b1220', surface: '#111a2c', selected: '#1c3366', hover: '#1a2540', text: '#f2f6ff', text2: '#a9b4d0', border: '#27334d', borderStrong: '#6d7a99', accent: '#6ea8ff', accentText: '#0b1220', neutral: '#a9b4d0', running: '#6ea8ff', success: '#67c391', warning: '#e8a35c', danger: '#f08a92', focus: '#8fc2ff', waveRem: '#66739a', tNeutral: '#293346', tRunning: '#20314e', tSuccess: '#1f353c', tWarning: '#333034', mark: './assets/plaudon-mark-dark.svg' }
+    };
+    const t = THEMES[this.props.theme === 'dark' ? 'dark' : 'light'];
+    const notesOn = this.props.notes !== 'off';
+    const NAV = [['L', 'Library', 'Ctrl+1'], ['I', 'Inbox', 'Ctrl+2'], ['J', 'Jobs', 'Ctrl+3'], ['T', 'Templates', 'Ctrl+4'], ['S', 'Settings', 'Ctrl+5'], ['D', 'Devices', 'Ctrl+6'], ['P', 'People', 'Ctrl+7']];
+    const nav = NAV.map(([g, l, k], i) => ({ g, l, k, bg: i === 0 ? t.selected : 'transparent', weight: i === 0 ? 600 : 400, tileBg: i === 0 ? t.accent : t.hover, tileFg: i === 0 ? t.accentText : t.text2 }));
+    let seed = 11;
+    const rnd = () => { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
+    const bars = [];
+    for (let i = 0; i < 96; i++) { const env = 0.35 + 0.65 * Math.abs(Math.sin(i / 7)); bars.push({ h: Math.max(3, Math.round(38 * env * (0.45 + 0.55 * rnd()))), c: i < 44 ? t.accent : t.waveRem }); }
+    const TABS = ['Transcription', 'Summarize', 'Outputs', 'Review', 'History', 'Export'];
+    const tabs = TABS.map((label, i) => ({ label, rule: i === 3 ? t.accent : 'transparent', color: i === 3 ? t.text : t.text2, weight: i === 3 ? 600 : 400 }));
+    return { t, notesOn, rootH: notesOn ? 1100 : 820, nav, bars, tabs };
+  }
+}
+</script>
+</body>
+</html>

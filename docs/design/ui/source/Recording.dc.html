@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Recording detail</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Source+Code+Pro:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#0a4fe0}a:hover{color:#0841b8}
+</style>
+</helmet>
+<div style="width: 1280px; height: {{rootH}}px; background: {{t.canvas}}; font-family: Inter, system-ui, sans-serif; color: {{t.text}}; display: flex; flex-direction: column; overflow: hidden">
+  <div style="width: 1280px; height: 820px; display: flex; flex-direction: column; flex-shrink: 0">
+    <div style="height: 28px; display: flex; align-items: center; gap: 18px; padding: 0 16px; font-size: 13px; border-bottom: 1px solid {{t.border}}"><span>File</span><span>View</span><span>Go</span><span>Help</span></div>
+    <div style="height: 44px; display: flex; align-items: center; gap: 8px; padding: 0 16px; border-bottom: 1px solid {{t.border}}">
+      <button style="height: 28px; padding: 0 12px; border-radius: 6px; border: 1px solid {{t.accent}}; background: {{t.accent}}; color: {{t.accentText}}; font: inherit; font-size: 13px; font-weight: 600">Import audio…</button>
+      <button style="height: 28px; padding: 0 12px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; color: {{t.text}}; font: inherit; font-size: 13px">Search recordings</button>
+      <button style="height: 28px; padding: 0 12px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; color: {{t.text}}; font: inherit; font-size: 13px; display: flex; align-items: center; gap: 8px">Command palette <span style="font-size: 11px; color: {{t.text2}}">Ctrl+K</span></button>
+      <button style="height: 28px; padding: 0 12px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; color: {{t.text}}; font: inherit; font-size: 13px">Refresh</button>
+      <div style="flex: 1"></div>
+      <button aria-label="Activity: no unread notifications" style="height: 28px; padding: 0 10px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; color: {{t.text}}; font: inherit; font-size: 13px">Activity</button>
+      <span style="font-size: 15px; font-weight: 600; margin-left: 8px">Library</span>
+    </div>
+    <div style="height: 722px; display: flex">
+      <nav aria-label="Primary" style="width: 216px; flex-shrink: 0; border-right: 1px solid {{t.border}}; padding: 12px 10px; box-sizing: border-box; display: flex; flex-direction: column; gap: 2px">
+        <div style="display: flex; align-items: center; gap: 10px; padding: 4px 8px 10px"><img src="{{t.mark}}" alt="" style="height: 26px"><span style="font-size: 15px; font-weight: 700">Plaudon</span></div>
+        <a href="#main" style="font-size: 12px; color: {{t.text2}}; padding: 2px 8px 8px; text-decoration: none">Skip to main content</a>
+        <sc-for list="{{nav}}" as="n" hint-placeholder-count="7">
+          <button style="height: 32px; display: flex; align-items: center; gap: 10px; padding: 0 8px; border: none; border-radius: 6px; background: {{n.bg}}; color: {{t.text}}; font: inherit; font-size: 13px; font-weight: {{n.weight}}; text-align: left">
+            <span style="width: 20px; height: 20px; border-radius: 3px; background: {{n.tileBg}}; color: {{n.tileFg}}; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center">{{n.g}}</span>
+            <span style="flex: 1">{{n.l}}</span><span style="font-size: 11px; color: {{t.text2}}; font-weight: 400">{{n.k}}</span>
+          </button>
+        </sc-for>
+      </nav>
+      <main id="main" style="flex: 1; min-width: 0; display: flex">
+        <div style="flex: 1; min-width: 0; padding: 14px 18px 14px 22px; box-sizing: border-box; display: flex; flex-direction: column; gap: 12px">
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <div style="display: flex; align-items: center; justify-content: space-between">
+              <button style="height: 24px; padding: 0 8px 0 4px; border: none; border-radius: 3px; background: transparent; color: {{t.accent}}; font: inherit; font-size: 12px; display: flex; align-items: center; gap: 4px"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M7.5 2.5L4 6l3.5 3.5" fill="none" stroke="{{t.accent}}" stroke-width="1.6"></path></svg>Back to library</button>
+              <button style="height: 26px; padding: 0 10px; border-radius: 6px; border: 1px solid {{t.danger}}; background: transparent; color: {{t.danger}}; font: inherit; font-size: 12px">Delete recording…</button>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px">
+              <h1 style="margin: 0; font-size: 19px; font-weight: 700">Weekly sync, platform team</h1>
+              <span style="padding: 1px 8px; border-radius: 3px; background: {{t.tSuccess}}; color: {{t.success}}; font-size: 12px; font-weight: 600">✓ Transcribed</span>
+              <span title="Local-only mode is on: this recording is never sent to a provider." style="padding: 1px 8px; border-radius: 3px; background: {{t.tSuccess}}; color: {{t.success}}; font-size: 12px; font-weight: 600">✓ Local only</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 96px 150px 130px 130px 130px; gap: 1px 12px; font-size: 12px">
+              <span style="color: {{t.text2}}">Source</span><span style="color: {{t.text2}}">Original file</span><span style="color: {{t.text2}}">Content hash (SHA-256)</span><span style="color: {{t.text2}}">Recorded</span><span style="color: {{t.text2}}">Imported</span>
+              <span>Watched folder</span><span>weekly-sync-1006.m4a</span><span style="font-family: 'Source Code Pro', ui-monospace, monospace">3f9a1c0e2b7d…</span><span>6 Oct 2026, 09:02 UTC</span><span>6 Oct 2026, 11:40 UTC</span>
+            </div>
+            <div style="font-size: 12px; color: {{t.text2}}">Duration <span style="color: {{t.text}}; font-family: 'Source Code Pro', ui-monospace, monospace">48:12</span> · Codec <span style="color: {{t.text}}">aac</span> · Engine <span style="color: {{t.text}}">whisper.cpp</span> · Renaming is not part of this build, so the title is shown exactly as it was imported.</div>
+          </div>
+
+          <section aria-label="Playback" style="background: {{t.surface}}; border: 1px solid {{t.border}}; border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px">
+            <div style="position: relative; height: 14px; font-family: 'Source Code Pro', ui-monospace, monospace; font-size: 10px; color: {{t.text2}}">
+              <sc-for list="{{ticks}}" as="k" hint-placeholder-count="10"><span style="position: absolute; left: {{k.x}}px; top: 0; border-left: 1px solid {{t.borderStrong}}; padding-left: 3px; height: 12px">{{k.label}}</span></sc-for>
+            </div>
+            <div role="slider" aria-label="Position" aria-valuetext="12:03 of 48:12" style="position: relative; height: 64px; display: flex; align-items: center; gap: 2px">
+              <sc-for list="{{bars}}" as="b" hint-placeholder-count="140"><span style="width: 3px; height: {{b.h}}px; border-radius: 1px; background: {{b.c}}; flex-shrink: 0"></span></sc-for>
+              <span style="position: absolute; left: {{playX}}px; top: -2px; width: 2px; height: 68px; background: {{t.text}}"></span>
+              <span style="position: absolute; left: {{playKnob}}px; top: -6px; width: 10px; height: 10px; border-radius: 5px; background: {{t.text}}; box-shadow: 0 0 0 2px {{t.surface}}, 0 0 0 4px {{t.focus}}"></span>
+            </div>
+            <div style="position: relative; height: 16px">
+              <sc-for list="{{regions}}" as="g" hint-placeholder-count="6"><span style="position: absolute; left: {{g.x}}px; width: {{g.w}}px; top: 0; height: 16px; border-radius: 3px; background: {{g.bg}}; color: {{g.fg}}; font-size: 10px; font-weight: 600; padding-left: 4px; box-sizing: border-box; overflow: hidden; white-space: nowrap">{{g.label}}</span></sc-for>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px; margin-top: 2px">
+              <button aria-label="Back 10 s" style="width: 32px; height: 28px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; color: {{t.text}}; display: flex; align-items: center; justify-content: center; font: inherit; font-size: 10px; font-weight: 700">−10</button>
+              <button aria-label="Pause" style="width: 36px; height: 32px; border-radius: 6px; border: 1px solid {{t.accent}}; background: {{t.accent}}; display: flex; align-items: center; justify-content: center"><svg width="12" height="14" viewBox="0 0 12 14" aria-hidden="true"><rect x="1" y="1" width="3.5" height="12" rx="1" fill="{{t.accentText}}"></rect><rect x="7.5" y="1" width="3.5" height="12" rx="1" fill="{{t.accentText}}"></rect></svg></button>
+              <button aria-label="Forward 10 s" style="width: 32px; height: 28px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; color: {{t.text}}; display: flex; align-items: center; justify-content: center; font: inherit; font-size: 10px; font-weight: 700">+10</button>
+              <span style="font-family: 'Source Code Pro', ui-monospace, monospace; font-size: 13px; margin-left: 6px">12:03 <span style="color: {{t.text2}}">/ 48:12</span></span>
+              <div style="flex: 1"></div>
+              <label style="font-size: 12px; color: {{t.text2}}; display: flex; align-items: center; gap: 6px">Speed<span style="height: 26px; width: 70px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; display: flex; align-items: center; justify-content: space-between; padding: 0 8px; box-sizing: border-box; font-size: 13px; color: {{t.text}}">1×<svg width="10" height="6" viewBox="0 0 10 6" aria-hidden="true"><path d="M1 1l4 4 4-4" fill="none" stroke="{{t.text2}}" stroke-width="1.5"></path></svg></span></label>
+              <label style="font-size: 12px; color: {{t.text2}}; display: flex; align-items: center; gap: 6px">Volume<span style="position: relative; width: 96px; height: 4px; border-radius: 2px; background: {{t.waveRem}}"><span style="position: absolute; left: 0; top: 0; width: 70px; height: 4px; border-radius: 2px; background: {{t.accent}}"></span><span style="position: absolute; left: 64px; top: -5px; width: 14px; height: 14px; border-radius: 7px; background: {{t.surface}}; border: 1px solid {{t.borderStrong}}; box-sizing: border-box"></span></span></label>
+            </div>
+          </section>
+
+          <section aria-label="Transcript" style="flex: 1; min-height: 0; background: {{t.surface}}; border: 1px solid {{t.border}}; border-radius: 10px; display: flex; flex-direction: column; overflow: hidden">
+            <div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid {{t.border}}">
+              <span style="font-size: 15px; font-weight: 600">Transcript</span>
+              <span style="height: 26px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; display: flex; align-items: center; gap: 8px; padding: 0 8px; font-size: 12px">Edited 6 Oct 2026, current<svg width="10" height="6" viewBox="0 0 10 6" aria-hidden="true"><path d="M1 1l4 4 4-4" fill="none" stroke="{{t.text2}}" stroke-width="1.5"></path></svg></span>
+              <div style="flex: 1"></div>
+              <span style="font-size: 12px; color: {{t.success}}">✓ All changes saved</span>
+              <button style="height: 26px; padding: 0 8px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; color: {{t.text}}; font: inherit; font-size: 12px">Undo edit</button>
+              <button disabled style="height: 26px; padding: 0 8px; border-radius: 6px; border: 1px solid {{t.border}}; background: {{t.surface}}; color: {{t.text2}}; opacity: 0.6; font: inherit; font-size: 12px">Redo</button>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: {{t.canvas}}; border-bottom: 1px solid {{t.border}}; font-size: 12px; flex-wrap: wrap">
+              <span style="height: 24px; width: 150px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; display: flex; align-items: center; padding: 0 8px; box-sizing: border-box; font-size: 12px" aria-label="Find in transcript">release</span>
+              <span style="color: {{t.text2}}">2 of 3</span>
+              <button style="height: 24px; padding: 0 8px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; color: {{t.text}}; font: inherit; font-size: 12px">Previous</button>
+              <button style="height: 24px; padding: 0 8px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; color: {{t.text}}; font: inherit; font-size: 12px">Next</button>
+              <label style="display: flex; align-items: center; gap: 4px"><span style="width: 14px; height: 14px; border-radius: 3px; border: 1px solid {{t.borderStrong}}; box-sizing: border-box"></span>Match case</label>
+              <label style="display: flex; align-items: center; gap: 4px"><span style="width: 14px; height: 14px; border-radius: 3px; border: 1px solid {{t.borderStrong}}; box-sizing: border-box"></span>Whole word</label>
+              <span style="height: 24px; width: 120px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; display: flex; align-items: center; padding: 0 8px; box-sizing: border-box; color: {{t.text2}}" aria-label="Replace with">Replace with</span>
+              <button style="height: 24px; padding: 0 8px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; color: {{t.text}}; font: inherit; font-size: 12px">Replace</button>
+              <button style="height: 24px; padding: 0 8px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; color: {{t.text}}; font: inherit; font-size: 12px">Replace all</button>
+            </div>
+            <div style="flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column">
+              <sc-for list="{{segs}}" as="s" hint-placeholder-count="6">
+                <div style="display: grid; grid-template-columns: 62px 170px minmax(0, 1fr); gap: 10px; padding: 8px 12px; background: {{s.bg}}; border-bottom: 1px solid {{t.hover}}; align-items: start">
+                  <button style="height: 22px; border-radius: 3px; border: none; background: {{t.tRunning}}; color: {{t.running}}; font-family: 'Source Code Pro', ui-monospace, monospace; font-size: 12px; font-weight: 500">{{s.time}}</button>
+                  <button style="height: 22px; border-radius: 3px; border: 1px solid {{t.border}}; background: transparent; color: {{t.text}}; font: inherit; font-size: 12px; text-align: left; padding: 0 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{s.speaker}}</button>
+                  <div style="font-size: 13px; line-height: 1.5; padding: {{s.pad}}; border-radius: 6px; border: {{s.border}}; background: {{s.fieldBg}}">{{s.a}}<span style="background: {{s.hlBg}}; color: {{t.text}}; border-radius: 2px; box-shadow: {{s.hlRing}}">{{s.hl}}</span>{{s.b}}</div>
+                </div>
+              </sc-for>
+            </div>
+          </section>
+        </div>
+        <aside aria-label="Outputs" style="width: 330px; flex-shrink: 0; border-left: 1px solid {{t.border}}; padding: 14px 16px; box-sizing: border-box; display: flex; flex-direction: column; gap: 10px; background: {{t.canvas}}">
+          <span style="font-size: 15px; font-weight: 600">Outputs</span>
+          <div role="tablist" style="display: flex; flex-wrap: wrap; gap: 2px 4px; border-bottom: 1px solid {{t.border}}">
+            <sc-for list="{{tabs}}" as="tb" hint-placeholder-count="6"><button role="tab" style="height: 28px; padding: 0 8px; border: none; border-bottom: 2px solid {{tb.rule}}; background: transparent; color: {{tb.color}}; font: inherit; font-size: 12px; font-weight: {{tb.weight}}">{{tb.label}}</button></sc-for>
+          </div>
+          <div style="font-size: 13px; font-weight: 600">Transcribe this recording</div>
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <label style="display: flex; gap: 8px; align-items: flex-start; padding: 8px; border-radius: 6px; border: 1px solid {{t.accent}}; background: {{t.surface}}"><span style="width: 14px; height: 14px; border-radius: 7px; border: 4px solid {{t.accent}}; box-sizing: border-box; margin-top: 2px; flex-shrink: 0"></span><span style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 13px; font-weight: 600">whisper.cpp</span><span style="font-size: 12px; color: {{t.success}}">⌂ On this computer · Installed</span></span></label>
+            <label style="display: flex; gap: 8px; align-items: flex-start; padding: 8px; border-radius: 6px; border: 1px solid {{t.border}}; background: {{t.surface}}; opacity: 0.85"><span style="width: 14px; height: 14px; border-radius: 7px; border: 1px solid {{t.borderStrong}}; box-sizing: border-box; margin-top: 2px; flex-shrink: 0"></span><span style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 13px; font-weight: 600">Apple Speech</span><span style="font-size: 12px; color: {{t.neutral}}">– Unavailable</span></span></label>
+            <label style="display: flex; gap: 8px; align-items: flex-start; padding: 8px; border-radius: 6px; border: 1px solid {{t.border}}; background: {{t.surface}}; opacity: 0.85"><span style="width: 14px; height: 14px; border-radius: 7px; border: 1px solid {{t.borderStrong}}; box-sizing: border-box; margin-top: 2px; flex-shrink: 0"></span><span style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 13px; font-weight: 600">OpenRouter</span><span style="font-size: 12px; color: {{t.warning}}">⊘ Blocked by Local-only Mode</span><span style="font-size: 12px; color: {{t.text2}}">Through a cloud provider</span></span></label>
+          </div>
+          <div style="display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 12px"><span style="color: {{t.text2}}">Model</span><span>ggml-base.en</span><span style="color: {{t.text2}}">Estimated charge before dispatch</span><span>None, runs locally</span></div>
+          <button style="height: 30px; border-radius: 6px; border: 1px solid {{t.accent}}; background: {{t.accent}}; color: {{t.accentText}}; font: inherit; font-size: 13px; font-weight: 600">Run transcription</button>
+          <div style="font-size: 12px; color: {{t.text2}}; line-height: 1.5">Only the stage you choose runs again. A model chosen here applies to this recording alone.</div>
+        </aside>
+      </main>
+    </div>
+    <div role="status" style="height: 26px; display: flex; align-items: center; gap: 12px; padding: 0 16px; font-size: 12px; color: {{t.text2}}; border-top: 1px solid {{t.border}}">
+      <span>Playing at 1×</span><div style="flex: 1"></div><span>Ready</span>
+      <span style="padding: 1px 8px; border-radius: 3px; background: {{t.tSuccess}}; color: {{t.success}}; font-weight: 600">✓ Local only</span>
+    </div>
+  </div>
+  <sc-if value="{{notesOn}}" hint-placeholder-val="{{ true }}">
+    <div style="height: 280px; box-sizing: border-box; border-top: 1px solid {{t.border}}; background: {{t.surface}}; padding: 18px 24px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 22px; font-size: 12px; line-height: 1.5; color: {{t.text2}}">
+      <div style="display: flex; flex-direction: column; gap: 6px"><strong style="color: {{t.text}}; font-size: 13px">egui mapping: layout</strong>
+        <div>CentralPanel holds header, player and transcript. The outputs column is the screen's aside: Screen::has_aside, SidePanel::right with the vendored ResizeHandle, width persisted in ShellState.panels.</div>
+        <div>Facts are an egui::Grid with sm labels in text_secondary over md values. Hash is monospace, twelve characters, as the provenance rule says.</div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px"><strong style="color: {{t.text}}; font-size: 13px">Waveform and ruler</strong>
+        <div>One egui::Mesh of 1 px columns from the peak pyramid, as built. Columns before the playhead use accent, after use wave_remaining (3.65 and 3.71:1). Playhead is painter.vline 2 pt text_primary; the clock text also carries position, so the two fills never stand alone.</div>
+        <div>Speaker regions from speaker_turns: rect_filled in tint_running and tint_waiting with the label painted in text, so speakers differ by name, not hue.</div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px"><strong style="color: {{t.text}}; font-size: 13px">Transport and keys, as built</strong>
+        <div>Buttons named Play or Pause, Back 10 s, Forward 10 s; icons are painter shapes (convex_polygon, two rect_filled). Speed is a ComboBox 0.5× to 2×, volume a Slider.</div>
+        <div>Space, J, K, L, comma and period, suppressed in text entry. Scrubber: arrows 5 s, PageUp and PageDown 30 s, Home, End. Unknown duration hides the slider and says "Duration unknown".</div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px"><strong style="color: {{t.text}}; font-size: 13px">Transcript</strong>
+        <div>ScrollArea::show_rows over pages of 200. Find highlight via LayoutJob sections with tint_warning background; the current match adds a 1 pt focus_ring outline. Playing segment row fill is bg_selected.</div>
+        <div>Timestamp chips only when the alignment permits seeking; derived timing reads "(approximate)". Enter or double-click edits, Escape cancels, Ctrl+Z undo.</div>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light"},"notes":{"editor":"enum","options":["on","off"],"default":"on"},"$preview":{"width":1280,"height":1100}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const THEMES = {
+      light: { canvas: '#f4f6fa', surface: '#ffffff', raised: '#ffffff', selected: '#e2ebff', hover: '#edf1f7', text: '#172544', text2: '#4d5873', inverse: '#ffffff', border: '#d9dfea', borderStrong: '#6b7690', accent: '#0a4fe0', accentText: '#ffffff', accentHover: '#0841b8', neutral: '#4d5873', running: '#0a4fe0', waiting: '#7a4a00', success: '#0f6b3f', warning: '#8a4b00', danger: '#a1121f', focus: '#0b57ff', waveRem: '#7c869e', tNeutral: '#edeef1', tRunning: '#e6edfc', tWaiting: '#f2ede6', tSuccess: '#e7f0ec', tWarning: '#f3ede6', tDanger: '#f6e7e9', shadow: '0 8px 24px rgba(23,37,68,0.16)', mark: './assets/plaudon-mark-light.svg' },
+      dark: { canvas: '#0b1220', surface: '#111a2c', raised: '#18233a', selected: '#1c3366', hover: '#1a2540', text: '#f2f6ff', text2: '#a9b4d0', inverse: '#0b1220', border: '#27334d', borderStrong: '#6d7a99', accent: '#6ea8ff', accentText: '#0b1220', accentHover: '#8cbaff', neutral: '#a9b4d0', running: '#6ea8ff', waiting: '#e3b667', success: '#67c391', warning: '#e8a35c', danger: '#f08a92', focus: '#8fc2ff', waveRem: '#66739a', tNeutral: '#293346', tRunning: '#20314e', tWaiting: '#333335', tSuccess: '#1f353c', tWarning: '#333034', tDanger: '#352c3c', shadow: '0 8px 24px rgba(0,0,0,0.5)', mark: './assets/plaudon-mark-dark.svg' }
+    };
+    const t = THEMES[this.props.theme === 'dark' ? 'dark' : 'light'];
+    const notesOn = this.props.notes !== 'off';
+    const NAV = [['L', 'Library', 'Ctrl+1'], ['I', 'Inbox', 'Ctrl+2'], ['J', 'Jobs', 'Ctrl+3'], ['T', 'Templates', 'Ctrl+4'], ['S', 'Settings', 'Ctrl+5'], ['D', 'Devices', 'Ctrl+6'], ['P', 'People', 'Ctrl+7']];
+    const nav = NAV.map(([g, l, k], i) => ({ g, l, k, bg: i === 0 ? t.selected : 'transparent', weight: i === 0 ? 600 : 400, tileBg: i === 0 ? t.accent : t.hover, tileFg: i === 0 ? t.accentText : t.text2 }));
+    const N = 138, play = 34;
+    let seed = 7;
+    const rnd = () => { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
+    const bars = [];
+    for (let i = 0; i < N; i++) {
+      const env = 0.35 + 0.65 * Math.abs(Math.sin(i / 9)) * (0.6 + 0.4 * Math.sin(i / 23));
+      const h = Math.max(4, Math.round(60 * env * (0.45 + 0.55 * rnd())));
+      bars.push({ h, c: i < play ? t.accent : t.waveRem });
+    }
+    const playX = play * 5 - 1;
+    const pxPerMin = (N * 5) / 48.2;
+    const ticks = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45].map((m) => ({ x: Math.round(m * pxPerMin), label: m + ':00' }));
+    const reg = (a, b, label, k) => ({ x: Math.round(a * pxPerMin), w: Math.round((b - a) * pxPerMin) - 2, label, bg: k ? t.tWaiting : t.tRunning, fg: k ? t.waiting : t.running });
+    const regions = [reg(0, 6.5, 'Maya (confirmed)', 0), reg(6.5, 14, 'Speaker 2 (inferred cluster)', 1), reg(14, 22, 'Maya (confirmed)', 0), reg(22, 31, 'Speaker 2 (inferred cluster)', 1), reg(31, 40, 'Maya (confirmed)', 0), reg(40, 48.2, 'Speaker 2', 1)];
+    const S = (time, speaker, a, hl, b, mode) => ({
+      time, speaker, a, hl, b,
+      bg: mode === 'playing' ? t.selected : 'transparent',
+      hlBg: hl ? t.tWarning : 'transparent',
+      hlRing: mode === 'match' ? '0 0 0 1px ' + t.focus : 'none',
+      border: mode === 'edit' ? '2px solid ' + t.focus : '2px solid transparent',
+      fieldBg: mode === 'edit' ? t.surface : 'transparent',
+      pad: '2px 6px'
+    });
+    const segs = [
+      S('11:02', 'Maya (confirmed)', 'Okay, so the cut-off for the ', 'release', ' branch is Thursday, not Friday.', ''),
+      S('11:31', 'Speaker 2 (inferred cluster)', 'That works if the migration lands first. I can pair on it tomorrow morning.', '', '', ''),
+      S('12:01', 'Maya (confirmed)', 'Good. Then the ', 'release', ' notes go out with the build, and support gets them the day before.', 'match'),
+      S('12:40', 'Speaker 2 (inferred cluster)', 'I will draft them tonight and send them round for a read.', '', '', 'edit'),
+      S('13:12', 'Maya (confirmed)', 'One more thing about the dashboards: the numbers there are still from last week.', '', '', '')
+    ];
+    segs[2].bg = t.selected;
+    const TABS = ['Transcription', 'Summarize', 'Outputs', 'Review', 'History', 'Export'];
+    const tabs = TABS.map((label, i) => ({ label, rule: i === 0 ? t.accent : 'transparent', color: i === 0 ? t.text : t.text2, weight: i === 0 ? 600 : 400 }));
+    return { t, notesOn, rootH: notesOn ? 1100 : 820, nav, bars, playX, playKnob: playX - 4, ticks, regions, segs, tabs };
+  }
+}
+</script>
+</body>
+</html>

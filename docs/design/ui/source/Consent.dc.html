@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Cloud consent sheet</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Source+Code+Pro:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#0a4fe0}a:hover{color:#0841b8}
+</style>
+</helmet>
+<div style="width: 1280px; height: {{rootH}}px; background: {{t.canvas}}; font-family: Inter, system-ui, sans-serif; color: {{t.text}}; display: flex; flex-direction: column; overflow: hidden">
+  <div style="width: 1280px; height: 820px; display: flex; flex-direction: column; flex-shrink: 0; position: relative">
+    <div style="height: 28px; display: flex; align-items: center; gap: 18px; padding: 0 16px; font-size: 13px; border-bottom: 1px solid {{t.border}}"><span>File</span><span>View</span><span>Go</span><span>Help</span></div>
+    <div style="height: 44px; display: flex; align-items: center; gap: 8px; padding: 0 16px; border-bottom: 1px solid {{t.border}}">
+      <span style="height: 28px; width: 110px; border-radius: 6px; background: {{t.accent}}"></span>
+      <span style="height: 28px; width: 140px; border-radius: 6px; border: 1px solid {{t.borderStrong}}"></span>
+      <span style="height: 28px; width: 150px; border-radius: 6px; border: 1px solid {{t.borderStrong}}"></span>
+      <div style="flex: 1"></div><span style="font-size: 15px; font-weight: 600">Library</span>
+    </div>
+    <div style="height: 722px; display: flex">
+      <div style="width: 216px; border-right: 1px solid {{t.border}}; padding: 12px 10px; box-sizing: border-box; display: flex; flex-direction: column; gap: 6px">
+        <div style="display: flex; align-items: center; gap: 10px; padding: 4px 8px 10px"><img src="{{t.mark}}" alt="" style="height: 26px"><span style="font-size: 15px; font-weight: 700">Plaudon</span></div>
+        <span style="height: 32px; border-radius: 6px; background: {{t.selected}}"></span><span style="height: 32px"></span><span style="height: 32px"></span><span style="height: 32px"></span>
+      </div>
+      <div style="flex: 1; padding: 16px 22px; display: flex; flex-direction: column; gap: 12px">
+        <span style="height: 22px; width: 300px; border-radius: 3px; background: {{t.hover}}"></span>
+        <span style="height: 110px; border-radius: 10px; background: {{t.surface}}; border: 1px solid {{t.border}}"></span>
+        <span style="flex: 1; border-radius: 10px; background: {{t.surface}}; border: 1px solid {{t.border}}"></span>
+      </div>
+      <div style="width: 330px; border-left: 1px solid {{t.border}}; padding: 16px; box-sizing: border-box; display: flex; flex-direction: column; gap: 10px">
+        <span style="font-size: 15px; font-weight: 600">Outputs</span>
+        <span style="height: 160px; border-radius: 10px; background: {{t.surface}}; border: 1px solid {{t.border}}"></span>
+      </div>
+    </div>
+    <div style="height: 26px; display: flex; align-items: center; gap: 12px; padding: 0 16px; font-size: 12px; color: {{t.text2}}; border-top: 1px solid {{t.border}}">
+      <span>Ready</span><div style="flex: 1"></div>
+      <span style="padding: 1px 8px; border-radius: 3px; background: {{t.tWarning}}; color: {{t.warning}}; font-weight: 600">! Network allowed for providers you enable</span>
+    </div>
+
+    <div style="position: absolute; left: 0; top: 0; width: 1280px; height: 820px; background: {{t.overlay}}"></div>
+
+    <div role="dialog" aria-modal="true" aria-labelledby="consent-title" style="position: absolute; left: 330px; top: 52px; width: 620px; background: {{t.raised}}; border: 1px solid {{t.border}}; border-radius: 10px; box-shadow: {{t.shadow}}; padding: 20px 22px; box-sizing: border-box; display: flex; flex-direction: column; gap: 12px">
+      <h2 id="consent-title" style="margin: 0; font-size: 19px; font-weight: 700">Send this content to a cloud provider?</h2>
+      <p style="margin: 0; font-size: 13px; line-height: 1.5; color: {{t.text2}}">Summarization would be performed by a model reached through OpenRouter. Only what is listed under Data transferred leaves this computer, for this request.</p>
+      <div style="display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 6px 14px; font-size: 13px; padding: 10px 12px; border-radius: 6px; background: {{t.canvas}}; border: 1px solid {{t.border}}">
+        <span style="color: {{t.text2}}">Model</span><span>[model id from the verified list]</span>
+        <span style="color: {{t.text2}}">Provider route</span><span>OpenRouter, [resolved provider route]</span>
+        <span style="color: {{t.text2}}">Data transferred</span><span>Transcript text of the current revision. Never audio, file paths or your key.</span>
+        <span style="color: {{t.text2}}">Retention posture</span><span style="color: {{t.success}}; font-weight: 600">✓ Zero retention documented for this route</span>
+        <span style="color: {{t.text2}}">Estimated charge</span><span style="color: {{t.warning}}; font-weight: 600">! Unknown: no price is advertised for this route</span>
+      </div>
+      <label style="display: flex; gap: 8px; align-items: flex-start; font-size: 13px"><span style="width: 16px; height: 16px; border-radius: 3px; background: {{t.accent}}; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px"><svg width="10" height="8" viewBox="0 0 10 8" aria-hidden="true"><path d="M1 4l3 3 5-6" fill="none" stroke="{{t.accentText}}" stroke-width="1.8"></path></svg></span>Require documented zero retention. If it cannot be confirmed for this exact route, nothing is sent.</label>
+      <label style="display: flex; gap: 8px; align-items: flex-start; font-size: 13px"><span style="width: 16px; height: 16px; border-radius: 3px; background: {{t.accent}}; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; box-shadow: 0 0 0 2px {{t.raised}}, 0 0 0 4px {{t.focus}}"><svg width="10" height="8" viewBox="0 0 10 8" aria-hidden="true"><path d="M1 4l3 3 5-6" fill="none" stroke="{{t.accentText}}" stroke-width="1.8"></path></svg></span>I accept that the charge for this run cannot be estimated in advance</label>
+      <fieldset style="border: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px">
+        <legend style="font-size: 13px; font-weight: 600; padding: 0; margin-bottom: 6px">How long should this apply?</legend>
+        <sc-for list="{{scopes}}" as="s" hint-placeholder-count="3">
+          <label style="display: flex; gap: 10px; align-items: flex-start; padding: 6px 8px; border-radius: 6px; background: {{s.bg}}">
+            <span style="width: 16px; height: 16px; border-radius: 8px; border: {{s.ring}}; box-sizing: border-box; flex-shrink: 0; margin-top: 1px"></span>
+            <span style="display: flex; flex-direction: column; gap: 1px"><span style="font-size: 13px; font-weight: 600">{{s.label}}</span><span style="font-size: 12px; color: {{t.text2}}">{{s.desc}}</span></span>
+          </label>
+        </sc-for>
+      </fieldset>
+      <label style="font-size: 12px; color: {{t.text2}}; display: flex; align-items: center; gap: 10px">Spending cap for a single run (USD)<span style="height: 26px; width: 140px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.surface}}; display: flex; align-items: center; padding: 0 8px; box-sizing: border-box; color: {{t.text2}}">Leave empty to keep the current limit</span></label>
+      <p style="margin: 0; font-size: 12px; line-height: 1.5; color: {{t.text2}}">Zero retention still processes your content outside this device, and it does not retroactively delete provider data, exports, logs or backups created earlier.</p>
+      <div style="display: flex; align-items: center; gap: 8px; border-top: 1px solid {{t.border}}; padding-top: 12px">
+        <span style="font-size: 11px; color: {{t.text2}}">Disclosure version 2026-02-01</span>
+        <div style="flex: 1"></div>
+        <button style="height: 30px; padding: 0 12px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.raised}}; color: {{t.text}}; font: inherit; font-size: 13px">Cancel</button>
+        <button style="height: 30px; padding: 0 12px; border-radius: 6px; border: 1px solid {{t.borderStrong}}; background: {{t.raised}}; color: {{t.text}}; font: inherit; font-size: 13px">Save preference without sending</button>
+        <button style="height: 30px; padding: 0 14px; border-radius: 6px; border: 1px solid {{t.accent}}; background: {{t.accent}}; color: {{t.accentText}}; font: inherit; font-size: 13px; font-weight: 600">Approve and continue</button>
+      </div>
+    </div>
+  </div>
+  <sc-if value="{{notesOn}}" hint-placeholder-val="{{ true }}">
+    <div style="height: 280px; box-sizing: border-box; border-top: 1px solid {{t.border}}; background: {{t.surface}}; padding: 18px 24px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 22px; font-size: 12px; line-height: 1.5; color: {{t.text2}}">
+      <div style="display: flex; flex-direction: column; gap: 6px"><strong style="color: {{t.text}}; font-size: 13px">egui mapping: consent sheet</strong>
+        <div>egui::Modal::new(Id::new("cloud-consent-sheet")).backdrop_color(overlay), Frame fill bg_raised, radius.large, window_shadow. Width 620 pt, content in a ScrollArea so it survives the 560 pt minimum height.</div>
+        <div>Facts are an egui::Grid on a bg_canvas Frame. Scopes are radio_value rows; the selected row also fills bg_selected so the choice isn't just a dot.</div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px"><strong style="color: {{t.text}}; font-size: 13px">Built-in refusals, as built</strong>
+        <div>The sheet opens on Ask every time, which authorises nothing. If zero retention is required and the route can't confirm it, Approve is replaced by the refusal "Zero retention cannot be confirmed" and nothing is sent.</div>
+        <div>An unknown price is "Unknown", never $0, and Approve stays disabled until the cost checkbox is ticked.</div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px"><strong style="color: {{t.text}}; font-size: 13px">Focus and keys</strong>
+        <div>Focus lands on the first control and stays inside the Modal; Escape closes it as Cancel (close_overlay, not rebindable). Tab order follows reading order; the primary sits last, on the right.</div>
+        <div>Status bar shows the enforced policy: Local-only is off here, so the warning tone reads "Network allowed for providers you enable".</div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px"><strong style="color: {{t.text}}; font-size: 13px">Placeholders</strong>
+        <div>Bracketed values stand for what the backend returns at run time. The UI composes no provider or price string of its own; the second body sentence here is my placeholder for the route's own description.</div>
+        <div>Overlay light rgba(11, 18, 32, 0.45) over the window, dark rgba(0, 0, 0, 0.6).</div>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light"},"notes":{"editor":"enum","options":["on","off"],"default":"on"},"$preview":{"width":1280,"height":1100}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const THEMES = {
+      light: { canvas: '#f4f6fa', surface: '#ffffff', raised: '#ffffff', selected: '#e2ebff', hover: '#edf1f7', text: '#172544', text2: '#4d5873', border: '#d9dfea', borderStrong: '#6b7690', accent: '#0a4fe0', accentText: '#ffffff', success: '#0f6b3f', warning: '#8a4b00', danger: '#a1121f', focus: '#0b57ff', overlay: 'rgba(11,18,32,0.45)', tWarning: '#f3ede6', shadow: '0 8px 24px rgba(23,37,68,0.16)', mark: './assets/plaudon-mark-light.svg' },
+      dark: { canvas: '#0b1220', surface: '#111a2c', raised: '#18233a', selected: '#1c3366', hover: '#1a2540', text: '#f2f6ff', text2: '#a9b4d0', border: '#27334d', borderStrong: '#6d7a99', accent: '#6ea8ff', accentText: '#0b1220', success: '#67c391', warning: '#e8a35c', danger: '#f08a92', focus: '#8fc2ff', overlay: 'rgba(0,0,0,0.6)', tWarning: '#333034', shadow: '0 8px 24px rgba(0,0,0,0.5)', mark: './assets/plaudon-mark-dark.svg' }
+    };
+    const t = THEMES[this.props.theme === 'dark' ? 'dark' : 'light'];
+    const notesOn = this.props.notes !== 'off';
+    const sel = 1;
+    const scopes = [
+      { label: 'Ask every time', desc: 'Records the preference only. It does not authorise this run, so nothing will be sent now.' },
+      { label: 'Allow for this recording', desc: 'Covers further cloud runs for this recording with this model.' },
+      { label: 'Allow for this model policy', desc: 'Covers any recording processed with this model until you revoke it.' }
+    ].map((s, i) => ({ ...s, bg: i === sel ? t.selected : 'transparent', ring: i === sel ? '5px solid ' + t.accent : '1px solid ' + t.borderStrong }));
+    return { t, notesOn, rootH: notesOn ? 1100 : 820, scopes };
+  }
+}
+</script>
+</body>
+</html>

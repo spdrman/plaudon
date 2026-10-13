@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Plaudon tokens and contrast</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Source+Code+Pro:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#0a4fe0}a:hover{color:#0841b8}
+</style>
+</helmet>
+<div style="width: 1280px; height: 1800px; box-sizing: border-box; background: #f4f6fa; font-family: Inter, system-ui, sans-serif; color: #172544; padding: 40px 48px; display: flex; flex-direction: column; gap: 20px">
+  <div style="display: flex; align-items: baseline; justify-content: space-between">
+    <h1 style="margin: 0; font-size: 24px; font-weight: 700">Tokens for crates/ui/src/theme/tokens.rs</h1>
+    <div style="font-size: 13px; color: #4d5873">Field names are the ColorRoles fields. Light replaces LIGHT, dark replaces DARK. HC_LIGHT and HC_DARK stay as they are.</div>
+  </div>
+
+  <div style="background: #ffffff; border: 1px solid #d9dfea; border-radius: 10px; overflow: hidden">
+    <div style="display: grid; grid-template-columns: 170px 150px 150px minmax(0, 1fr) 96px; font-size: 12px; font-weight: 600; color: #4d5873; background: #f4f6fa; border-bottom: 1px solid #d9dfea">
+      <div style="padding: 8px 12px">Field</div><div style="padding: 8px 12px">Light</div><div style="padding: 8px 12px">Dark</div><div style="padding: 8px 12px">Usage and egui slot</div><div style="padding: 8px 12px">Change</div>
+    </div>
+    <sc-for list="{{roles}}" as="r" hint-placeholder-count="28">
+      <div style="display: grid; grid-template-columns: 170px 150px 150px minmax(0, 1fr) 96px; font-size: 12px; border-bottom: 1px solid #edf1f7; align-items: center">
+        <div style="padding: 3px 12px; font-family: 'Source Code Pro', ui-monospace, monospace; font-size: 12px">{{r.name}}</div>
+        <div style="padding: 3px 12px; display: flex; align-items: center; gap: 8px"><span style="width: 14px; height: 14px; border-radius: 3px; border: 1px solid #d9dfea; background: {{r.light}}"></span><span style="font-family: 'Source Code Pro', ui-monospace, monospace">{{r.light}}</span></div>
+        <div style="padding: 3px 12px; display: flex; align-items: center; gap: 8px"><span style="width: 14px; height: 14px; border-radius: 3px; border: 1px solid #6d7a99; background: {{r.dark}}"></span><span style="font-family: 'Source Code Pro', ui-monospace, monospace">{{r.dark}}</span></div>
+        <div style="padding: 3px 12px; color: #4d5873">{{r.usage}}</div>
+        <div style="padding: 3px 12px; font-weight: 600; color: {{r.kindColor}}">{{r.kind}}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="display: grid; grid-template-columns: 1.35fr 1fr; gap: 20px">
+    <div style="background: #ffffff; border: 1px solid #d9dfea; border-radius: 10px; overflow: hidden">
+      <div style="padding: 10px 14px; font-size: 15px; font-weight: 600; border-bottom: 1px solid #d9dfea">Measured contrast, WCAG 2.x formula</div>
+      <div style="display: grid; grid-template-columns: minmax(0, 1fr) 60px 74px 74px; font-size: 12px; font-weight: 600; color: #4d5873; background: #f4f6fa">
+        <div style="padding: 6px 14px">Pair</div><div style="padding: 6px 8px">Needs</div><div style="padding: 6px 8px">Light</div><div style="padding: 6px 8px">Dark</div>
+      </div>
+      <sc-for list="{{pairs}}" as="p" hint-placeholder-count="24">
+        <div style="display: grid; grid-template-columns: minmax(0, 1fr) 60px 74px 74px; font-size: 12px; border-top: 1px solid #edf1f7">
+          <div style="padding: 3px 14px; font-family: 'Source Code Pro', ui-monospace, monospace">{{p.pair}}</div>
+          <div style="padding: 3px 8px; color: #4d5873">{{p.need}}</div>
+          <div style="padding: 3px 8px; font-weight: 600; color: #0f6b3f">✓ {{p.l}}</div>
+          <div style="padding: 3px 8px; font-weight: 600; color: #0f6b3f">✓ {{p.d}}</div>
+        </div>
+      </sc-for>
+      <div style="padding: 10px 14px; font-size: 12px; line-height: 1.5; color: #4d5873; border-top: 1px solid #d9dfea">Computed by a script over these exact hex values, same formula as tokens::contrast_ratio. border_subtle is decorative (1.34 and 1.38) and never the only edge of a control. Disabled controls are exempt under WCAG but still draw text_secondary at 0.6 alpha so they read as present.</div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 20px">
+      <div style="background: #ffffff; border: 1px solid #d9dfea; border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px">
+        <div style="font-size: 15px; font-weight: 600">Spacing, SPACE[0..=8]</div>
+        <div style="display: flex; align-items: flex-end; gap: 14px">
+          <sc-for list="{{spaces}}" as="s" hint-placeholder-count="9">
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 4px"><div style="width: {{s.px}}px; height: {{s.px}}px; min-width: 2px; min-height: 2px; background: #0a4fe0; border-radius: 2px"></div><span style="font-size: 11px; color: #4d5873">{{s.label}}</span></div>
+          </sc-for>
+        </div>
+        <div style="font-size: 12px; color: #4d5873; line-height: 1.5">item_spacing 8 by 4, button_padding 12 by 4, window_margin 16, indent 24. Screens pad the main region with space(6) = 24.</div>
+      </div>
+      <div style="background: #ffffff; border: 1px solid #d9dfea; border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px">
+        <div style="font-size: 15px; font-weight: 600">Type, tokens.text</div>
+        <div style="font-size: 24px; font-weight: 700">xxl 24 Screen title</div>
+        <div style="font-size: 19px; font-weight: 600">xl 19 Heading, Modal title</div>
+        <div style="font-size: 15px; font-weight: 600">lg 15 Section heading</div>
+        <div style="font-size: 13px">md 13 Body and buttons, line height 1.5</div>
+        <div style="font-size: 12px; color: #4d5873">sm 12 Column headers, facts, captions</div>
+        <div style="font-size: 11px; color: #4d5873">xs 11 Shortcut hints, badge tags</div>
+        <div style="font-size: 13px; font-family: 'Source Code Pro', ui-monospace, monospace">mono 13 0:01:07 · 3f9a1c0e2b7d</div>
+        <div style="display: flex; gap: 8px; align-items: flex-start; margin-top: 4px"><span style="font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 3px; border: 1px solid #8a4b00; color: #8a4b00; flex-shrink: 0">PROPOSED</span><span style="font-size: 12px; line-height: 1.5; color: #4d5873">Inter, the brand face, through FontDefinitions (Regular and SemiBold TTF, OFL, one licence-register row). Today the shell uses egui's built-in proportional face and Hack for mono; the layout holds with either.</span></div>
+      </div>
+      <div style="background: #ffffff; border: 1px solid #d9dfea; border-radius: 10px; padding: 14px 16px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 16px; font-size: 12px">
+        <div style="grid-column: 1 / 3; font-size: 15px; font-weight: 600">Radius, motion, focus, sizes</div>
+        <div style="display: flex; align-items: center; gap: 8px"><span style="width: 28px; height: 20px; border: 2px solid #6b7690; border-radius: 3px"></span>radius.small 3, badges</div>
+        <div style="display: flex; align-items: center; gap: 8px"><span style="width: 28px; height: 20px; border: 2px solid #6b7690; border-radius: 6px"></span>radius.medium 6, controls</div>
+        <div style="display: flex; align-items: center; gap: 8px"><span style="width: 28px; height: 20px; border: 2px solid #6b7690; border-radius: 10px"></span>radius.large 10, cards, Modal</div>
+        <div style="display: flex; align-items: center; gap: 8px"><span style="width: 28px; height: 20px; border-radius: 6px; outline: 2px solid #0b57ff; outline-offset: 2px; background: #ffffff; border: 1px solid #6b7690"></span>focus 2 pt, offset 2 (3 pt in HC)</div>
+        <div style="color: #4d5873">motion.fast 90 ms, animation_time</div>
+        <div style="color: #4d5873">motion.normal 160 ms, aside open and close</div>
+        <div style="color: #4d5873">MIN_TARGET_SIZE 24 pt, interact_size.y</div>
+        <div style="color: #4d5873">Window 1280 by 820, min 880 by 560, compact rail below 1040</div>
+        <div style="grid-column: 1 / 3; color: #4d5873; line-height: 1.5">Shadow, Modal and popups only: window_shadow and popup_shadow = Shadow offset [0, 8], blur 24, spread 0, rgba(23, 37, 68, 0.16) light and rgba(0, 0, 0, 0.5) dark.</div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1800}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const K = { changed: '#0a4fe0', same: '#4d5873', proposed: '#8a4b00' };
+    const row = (name, light, dark, usage, kind) => ({ name, light, dark, usage, kind: kind === 'proposed' ? 'PROPOSED' : kind, kindColor: K[kind] });
+    const roles = [
+      row('bg_canvas', '#f4f6fa', '#0b1220', 'panel_fill. The window behind every surface: rail, toolbar, status bar.', 'changed'),
+      row('bg_surface', '#ffffff', '#111a2c', 'extreme_bg_color, inactive widget fill, cards, table body, text fields.', 'changed'),
+      row('bg_raised', '#ffffff', '#18233a', 'window_fill. Modal, popups, menus, toasts, the palette.', 'changed'),
+      row('bg_selected', '#e2ebff', '#1c3366', 'selection.bg_fill, widgets.active fill, selected row, current nav tab.', 'changed'),
+      row('bg_hover', '#edf1f7', '#1a2540', 'widgets.hovered fill, hovered row, faint_bg_color, code_bg_color.', 'changed'),
+      row('text_primary', '#172544', '#f2f6ff', 'Body, headings, inactive and hovered fg_stroke. Light value is brand ink.', 'changed'),
+      row('text_secondary', '#4d5873', '#a9b4d0', 'Supporting text, facts, column headers, noninteractive fg_stroke.', 'changed'),
+      row('text_inverse', '#ffffff', '#0b1220', 'Text on a danger fill (Delete permanently).', 'changed'),
+      row('border_subtle', '#d9dfea', '#27334d', 'Hairlines, separators, card strokes. Decorative only.', 'changed'),
+      row('border_strong', '#6b7690', '#6d7a99', 'Edges that must be seen: text fields, checkboxes, ComboBox, hovered stroke.', 'changed'),
+      row('accent', '#0a4fe0', '#6ea8ff', 'Primary button fill, hyperlink_color, selected tab rule, waveform before the playhead.', 'changed'),
+      row('accent_text', '#ffffff', '#0b1220', 'Text and glyphs on accent.', 'changed'),
+      row('status_neutral', '#4d5873', '#a9b4d0', 'Queued, Cancelled, Not evaluated, Not transcribed.', 'changed'),
+      row('status_running', '#0a4fe0', '#6ea8ff', 'Running locally, Importing, Transcribing, Verifying.', 'changed'),
+      row('status_waiting', '#7a4a00', '#e3b667', 'Waiting for you, network, model, source, authorization.', 'same'),
+      row('status_success', '#0f6b3f', '#67c391', 'Completed, Imported, Local only, anchor resolved.', 'same'),
+      row('status_warning', '#8a4b00', '#e8a35c', 'Stale, Experimental, Cloud outcome unknown, network allowed.', 'same'),
+      row('status_danger', '#a1121f', '#f08a92', 'Failed, Unsupported, Refused, destructive confirm.', 'same'),
+      row('focus_ring', '#0b57ff', '#8fc2ff', 'widgets.active.bg_stroke at tokens.focus.width. Light value is brand royal.', 'changed'),
+      row('overlay', 'rgba(11,18,32,.45)', 'rgba(0,0,0,.60)', 'Modal backdrop, Modal::new(id).backdrop_color(overlay).', 'changed'),
+      row('accent_hover', '#0841b8', '#8cbaff', 'Primary button hovered and pressed fill.', 'proposed'),
+      row('wave_remaining', '#7c869e', '#66739a', 'Waveform columns after the playhead.', 'proposed'),
+      row('tint_neutral', '#edeef1', '#293346', 'Badge fill behind status_neutral text.', 'proposed'),
+      row('tint_running', '#e6edfc', '#20314e', 'Badge fill behind status_running text; speaker region A.', 'proposed'),
+      row('tint_waiting', '#f2ede6', '#333335', 'Badge fill behind status_waiting text; speaker region B.', 'proposed'),
+      row('tint_success', '#e7f0ec', '#1f353c', 'Badge fill behind status_success text, Local only badge.', 'proposed'),
+      row('tint_warning', '#f3ede6', '#333034', 'Badge fill behind status_warning text.', 'proposed'),
+      row('tint_danger', '#f6e7e9', '#352c3c', 'Badge fill behind status_danger text, error notice.', 'proposed')
+    ];
+    const p = (pair, need, l, d) => ({ pair, need, l: l.toFixed(2), d: d.toFixed(2) });
+    const pairs = [
+      p('text_primary / bg_canvas', '4.5', 14.02, 17.30),
+      p('text_primary / bg_surface', '4.5', 15.17, 16.06),
+      p('text_primary / bg_raised', '4.5', 15.17, 14.48),
+      p('text_primary / bg_selected', '4.5', 12.68, 11.31),
+      p('text_primary / bg_hover', '4.5', 13.38, 14.03),
+      p('text_secondary / bg_canvas', '4.5', 6.56, 9.03),
+      p('text_secondary / bg_surface', '4.5', 7.10, 8.38),
+      p('text_secondary / bg_raised', '4.5', 7.10, 7.55),
+      p('text_secondary / bg_selected', '4.5', 5.93, 5.91),
+      p('text_secondary / bg_hover', '4.5', 6.26, 7.32),
+      p('accent (link) / bg_surface', '4.5', 6.55, 7.21),
+      p('accent (link) / bg_canvas', '4.5', 6.05, 7.76),
+      p('accent_text / accent', '4.5', 6.55, 7.76),
+      p('accent_text / accent_hover', '4.5', 8.54, 9.44),
+      p('status_neutral / bg_surface', '4.5', 7.10, 8.38),
+      p('status_running / bg_surface', '4.5', 6.55, 7.21),
+      p('status_waiting / bg_surface', '4.5', 7.48, 9.23),
+      p('status_success / bg_surface', '4.5', 6.57, 8.11),
+      p('status_warning / bg_surface', '4.5', 6.80, 8.13),
+      p('status_danger / bg_surface', '4.5', 8.01, 7.25),
+      p('status_running / tint_running', '4.5', 5.58, 5.41),
+      p('status_success / tint_success', '4.5', 5.66, 6.00),
+      p('status_warning / tint_warning', '4.5', 5.85, 6.09),
+      p('status_danger / tint_danger', '4.5', 6.68, 5.55),
+      p('status_waiting / tint_waiting', '4.5', 6.42, 6.70),
+      p('status_neutral / tint_neutral', '4.5', 6.12, 6.11),
+      p('border_strong / bg_surface', '3', 4.55, 4.05),
+      p('border_strong / bg_raised', '3', 4.55, 3.65),
+      p('border_strong / bg_canvas', '3', 4.20, 4.36),
+      p('focus_ring / bg_surface', '3', 5.50, 9.38),
+      p('focus_ring / bg_raised', '3', 5.50, 8.45),
+      p('focus_ring / bg_canvas', '3', 5.08, 10.10),
+      p('wave_remaining / bg_surface', '3', 3.65, 3.71),
+      p('accent (wave played) / bg_surface', '3', 6.55, 7.21)
+    ];
+    const spaces = [0, 2, 4, 8, 12, 16, 24, 32, 48].map((v, i) => ({ px: v, label: i + ': ' + v }));
+    return { roles, pairs, spaces };
+  }
+}
+</script>
+</body>
+</html>
