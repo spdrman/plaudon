@@ -6,9 +6,320 @@
   "sample_rate_hz": 16000,
   "recipe": {
     "clean": "LibriSpeech test-clean FLAC, decoded to 16 kHz mono by plaudon-audio, consecutive utterances of one reader concatenated and trimmed to the plan's utterance length",
+    "noise_musan": "the clean fixture summed with one file of the MUSAN `noise` subset at 10.0 dB SNR, the noise scaled by the ratio of the two RMS levels and the sum divided by its peak only if it would clip; the file and the offset come from the sha256 of the fixture token, so the mixture is reproducible from the corpus",
     "opus_low_bitrate": "ffmpeg -i <wav> -c:a libopus -b:a 12k -ar 16000 -ac 1 <ogg>, decoded back to 16 kHz mono PCM by the same binary",
     "room_impulse_response": "image-source impulse response of a 5.0 x 4.0 x 2.7 m room, wall reflection 0.6, source (1.2, 1.0, 1.5) m, receiver (3.4, 2.6, 1.2) m, 12 image orders, convolved and peak-normalised in this tool",
     "telephone_bandpass": "two-pole RBJ high-pass at 300 Hz followed by a two-pole RBJ low-pass at 3400 Hz, Q = 0.7071, applied in this tool"
+  },
+  "noise": {
+    "corpus": "MUSAN",
+    "corpus_licence": "CC-BY-4.0",
+    "attribution": "MUSAN (Snyder, Chen and Povey, openslr.org/17), CC-BY-4.0; used as test material only, never redistributed",
+    "subset": "noise",
+    "snr_db": 10.0,
+    "selection": "file index = sha256(token)[0..8] mod |files|, start offset = sha256(token)[8..16] mod (len - window + 1), over the sorted relative paths of every wav under musan/noise",
+    "files": [
+      {
+        "path": "noise/free-sound/noise-free-sound-0000.wav",
+        "sha256": "38624671753649af38f97b5872463017badcb3e29411787a95f6f2beb9edbfec",
+        "duration_ms": 17658
+      },
+      {
+        "path": "noise/free-sound/noise-free-sound-0026.wav",
+        "sha256": "eb9b600d3408b7aafd1c342777ee2e3969ea2fe61225799af76415202b78725d",
+        "duration_ms": 3797
+      },
+      {
+        "path": "noise/free-sound/noise-free-sound-0056.wav",
+        "sha256": "925c115ffd48222ddbc7a74c7a0a0c9f590a773fb4a953cc86a16106f64bba4a",
+        "duration_ms": 9742
+      },
+      {
+        "path": "noise/free-sound/noise-free-sound-0061.wav",
+        "sha256": "17e4e224676fb0a77594c4037baeb861314c6577b243e528a54a91854e278cd2",
+        "duration_ms": 11049
+      },
+      {
+        "path": "noise/free-sound/noise-free-sound-0062.wav",
+        "sha256": "b99e9571dca3521269ef132db6dc8a9c475d9166bca315c3c7fc968b623b9028",
+        "duration_ms": 6066
+      },
+      {
+        "path": "noise/free-sound/noise-free-sound-0079.wav",
+        "sha256": "ebb62443e188c36930d0abd0bfd105a90176abeb909a9ac5a779bbb915f82b00",
+        "duration_ms": 6000
+      },
+      {
+        "path": "noise/free-sound/noise-free-sound-0083.wav",
+        "sha256": "5440195706e3438a523811a009a78140e942098e96c367faf8d877839d3dd8dc",
+        "duration_ms": 591
+      },
+      {
+        "path": "noise/free-sound/noise-free-sound-0098.wav",
+        "sha256": "201d5751774666d5c8b7204a9035d59aba26042443cdfddeea16aafe76a43faa",
+        "duration_ms": 2766
+      },
+      {
+        "path": "noise/free-sound/noise-free-sound-0112.wav",
+        "sha256": "1f895ca3d20967d8df577cf9db1b0e95e80c3e50fa068e3af23fd5a2e0fa671e",
+        "duration_ms": 1014
+      },
+      {
+        "path": "noise/free-sound/noise-free-sound-0118.wav",
+        "sha256": "8dd9e60a1e43bde6407c6181d3eabad775898724d3db5abbf457e501fc414a1b",
+        "duration_ms": 17410
+      },
+      {
+        "path": "noise/free-sound/noise-free-sound-0135.wav",
+        "sha256": "b2a10dbf91a6d6e17c84fa4ab4bf2502e2085cc0ce64b140b98ac5ee261e250c",
+        "duration_ms": 3004
+      },
+      {
+        "path": "noise/free-sound/noise-free-sound-0184.wav",
+        "sha256": "0dbf22f9fe47112820bf783dc031a72f46772bb4fe7f170de4f493e6fc417295",
+        "duration_ms": 32407
+      },
+      {
+        "path": "noise/free-sound/noise-free-sound-0216.wav",
+        "sha256": "e96591615aa3ff6485456e02a43218aff45b91e5c6d424bc7c2b3a34213fbc62",
+        "duration_ms": 38458
+      },
+      {
+        "path": "noise/free-sound/noise-free-sound-0226.wav",
+        "sha256": "45c7e67735c508354ed04889135ea64526cf3e2ba14fecbd521d16ecaedac558",
+        "duration_ms": 26197
+      },
+      {
+        "path": "noise/free-sound/noise-free-sound-0234.wav",
+        "sha256": "17d3b415c3bdcbb99841a2e5e7fcaee4779b7c889ac3639cdc6f7da211d3cccf",
+        "duration_ms": 75017
+      },
+      {
+        "path": "noise/free-sound/noise-free-sound-0239.wav",
+        "sha256": "3fa14881f1f49aa09e525f21f5e037da4c5d1068ce8206e12876a1193cd053cd",
+        "duration_ms": 37505
+      },
+      {
+        "path": "noise/free-sound/noise-free-sound-0285.wav",
+        "sha256": "8cc1f171ae4c68629d17da843e78f7cd6c09daf516aab12803fd52ce682463a2",
+        "duration_ms": 4092
+      },
+      {
+        "path": "noise/free-sound/noise-free-sound-0288.wav",
+        "sha256": "6b2a0c478696cf21c0c693a7e8f38cefd62925791793850e8a0c7007863b08b1",
+        "duration_ms": 59688
+      },
+      {
+        "path": "noise/free-sound/noise-free-sound-0301.wav",
+        "sha256": "d3ccd49ad6396c187816edd50284066c7f254b8713ca179e3d673455291e43b4",
+        "duration_ms": 180949
+      },
+      {
+        "path": "noise/free-sound/noise-free-sound-0320.wav",
+        "sha256": "934980d328bf6b134517b0ba75f203e954a00f589a6f4519c41d07c0ea448706",
+        "duration_ms": 6739
+      },
+      {
+        "path": "noise/free-sound/noise-free-sound-0322.wav",
+        "sha256": "2ed74ae472ec754c5fbc2f97f36815c25db5d99208c03b2ff0a6bd716f0d8f38",
+        "duration_ms": 31033
+      },
+      {
+        "path": "noise/free-sound/noise-free-sound-0336.wav",
+        "sha256": "e6797c27e8cce24846a40ab7b922b3630decc1e4fab1fd056df4d695c926ad65",
+        "duration_ms": 48082
+      },
+      {
+        "path": "noise/free-sound/noise-free-sound-0406.wav",
+        "sha256": "ef9faab1dbfc9effdbff5a56fb22d840f62b1de2b64d11db02f27262d1f29bb3",
+        "duration_ms": 19831
+      },
+      {
+        "path": "noise/free-sound/noise-free-sound-0467.wav",
+        "sha256": "494994b85f166e43541141c6c2a60c74a24e8a9bd9a3457a4150bd34b8b5d56e",
+        "duration_ms": 14173
+      },
+      {
+        "path": "noise/free-sound/noise-free-sound-0483.wav",
+        "sha256": "e52fca7b3858b1a86ea2e3910c3eddb66dd1f57802eefcbddee259c920106317",
+        "duration_ms": 22595
+      },
+      {
+        "path": "noise/free-sound/noise-free-sound-0488.wav",
+        "sha256": "4ea0da083576619b9b29641908f32fddb07afa48301c4f0a79e8fa18a8194f32",
+        "duration_ms": 5656
+      },
+      {
+        "path": "noise/free-sound/noise-free-sound-0506.wav",
+        "sha256": "15146fddb15ccdb712537e0d76cf6b9d02232a6f0fdfa2110bbbb3cc2959506e",
+        "duration_ms": 24581
+      },
+      {
+        "path": "noise/free-sound/noise-free-sound-0519.wav",
+        "sha256": "92775adc18e26b5ce5dc10fca02ad26bc2df8e786eb9fda2f4bdd19f277ca6e8",
+        "duration_ms": 33593
+      },
+      {
+        "path": "noise/free-sound/noise-free-sound-0521.wav",
+        "sha256": "d2bbdb00557e427e9502a14453b06f5f2ba65c5a5f57c3f5c056d9863a0564d8",
+        "duration_ms": 7000
+      },
+      {
+        "path": "noise/free-sound/noise-free-sound-0535.wav",
+        "sha256": "9db8e56f6d5304b01c92ea5729ace869c7f9116f38daf1c43c7bb593eac18659",
+        "duration_ms": 18137
+      },
+      {
+        "path": "noise/free-sound/noise-free-sound-0541.wav",
+        "sha256": "3534e533d8b1d913a79e02f865aef99d6a75acdd7f9d66f502f11c3a74394fd0",
+        "duration_ms": 16378
+      },
+      {
+        "path": "noise/free-sound/noise-free-sound-0544.wav",
+        "sha256": "615dd331183ab6d82fb5ba5ce59c021f20f2ccf988c9dbb4fd1898b5a0e93c3a",
+        "duration_ms": 107064
+      },
+      {
+        "path": "noise/free-sound/noise-free-sound-0594.wav",
+        "sha256": "962c8e90e6053e3fca2f376ac73f9a98b1b5b4711e0bc59676b5d157e9666f18",
+        "duration_ms": 141177
+      },
+      {
+        "path": "noise/free-sound/noise-free-sound-0601.wav",
+        "sha256": "5d7dca2ae663ea6d630b36eb60f4679bfc9394eb9021b1f36405a265f1b2e6ee",
+        "duration_ms": 4239
+      },
+      {
+        "path": "noise/free-sound/noise-free-sound-0620.wav",
+        "sha256": "8354f39a0711e2ee8e716126ce5b72fc25197e7be2e56aef3061aa2ad5d59342",
+        "duration_ms": 11566
+      },
+      {
+        "path": "noise/free-sound/noise-free-sound-0630.wav",
+        "sha256": "a37b5d9b8c04d923f3407b6244508f2695ba6f7f3b4e6d0e6f6faa11d36ea37b",
+        "duration_ms": 3108
+      },
+      {
+        "path": "noise/free-sound/noise-free-sound-0633.wav",
+        "sha256": "5c7608079ac35d1839a4b67bff4297e39eee1ee98511c5c5057ea5ab0fde949a",
+        "duration_ms": 18272
+      },
+      {
+        "path": "noise/free-sound/noise-free-sound-0640.wav",
+        "sha256": "5dd4086007f68d7ecf5d50edf8016cb15a73397afa8c71e418ddd5a56337d858",
+        "duration_ms": 32783
+      },
+      {
+        "path": "noise/free-sound/noise-free-sound-0652.wav",
+        "sha256": "5a6f3cd3675c10b46f016e0d20789940d85408dd1853a91dc5c03f8f2805f9f1",
+        "duration_ms": 5699
+      },
+      {
+        "path": "noise/free-sound/noise-free-sound-0675.wav",
+        "sha256": "e110f6c02eae3d2f6f4c9db134e9e4642c64eac0b47848d0f340ad980cacf00e",
+        "duration_ms": 8769
+      },
+      {
+        "path": "noise/free-sound/noise-free-sound-0680.wav",
+        "sha256": "b72177b7c43e564ba2df9c96de686a5ff0e267abf5e53f79b34116b0554db20d",
+        "duration_ms": 14568
+      },
+      {
+        "path": "noise/free-sound/noise-free-sound-0682.wav",
+        "sha256": "ecfecbb442c10e5c153fa945fe0f396b1eb9e55e64fc377aed6207547ab7524a",
+        "duration_ms": 18181
+      },
+      {
+        "path": "noise/free-sound/noise-free-sound-0687.wav",
+        "sha256": "fc0627deb19e0c8fbca3c31f6ede2c43ef87981f8d90965e4b25665c53de1453",
+        "duration_ms": 20802
+      },
+      {
+        "path": "noise/free-sound/noise-free-sound-0695.wav",
+        "sha256": "da1d592113b4254de59343b6f967e7cff64348f591723be19a97dbf73ec58dd5",
+        "duration_ms": 9423
+      },
+      {
+        "path": "noise/free-sound/noise-free-sound-0712.wav",
+        "sha256": "ab67270d3ed1c98af13852292b95e3c302b127a84959bcf596bb692aa6297c81",
+        "duration_ms": 2847
+      },
+      {
+        "path": "noise/free-sound/noise-free-sound-0725.wav",
+        "sha256": "128b5843e05a845b8966fd47efa53de9b46bc87eb9d83e6d8f7a53deafc66926",
+        "duration_ms": 33229
+      },
+      {
+        "path": "noise/free-sound/noise-free-sound-0743.wav",
+        "sha256": "1a1fae0f4d4190ee5d2ea9acf3ce83d44312409b4866b24194243c7dcf891cda",
+        "duration_ms": 43964
+      },
+      {
+        "path": "noise/free-sound/noise-free-sound-0746.wav",
+        "sha256": "12298bf3697cfc6665f7abf63206313be780eec475dc09684e82af5e4f33a9f1",
+        "duration_ms": 227
+      },
+      {
+        "path": "noise/free-sound/noise-free-sound-0751.wav",
+        "sha256": "a7e3873af43b653aa00d30c4ff87116c9cffd4452b1be7890ae0ab5070049876",
+        "duration_ms": 1446
+      },
+      {
+        "path": "noise/free-sound/noise-free-sound-0755.wav",
+        "sha256": "c4ca37e134cde1b37ced0abed553c12c45dbf423582f6803935c9f5acc0aea31",
+        "duration_ms": 14419
+      },
+      {
+        "path": "noise/free-sound/noise-free-sound-0756.wav",
+        "sha256": "7d8f3ff25357bc523e45c3f040f90dc1e72dd1a600885c9dc58c750f4a7ec631",
+        "duration_ms": 4158
+      },
+      {
+        "path": "noise/free-sound/noise-free-sound-0762.wav",
+        "sha256": "8005f5687f054befdc932883f4166b2b9548e5060fe716e12b48fa440682fd6a",
+        "duration_ms": 12800
+      },
+      {
+        "path": "noise/free-sound/noise-free-sound-0791.wav",
+        "sha256": "6ebd8e21f7662e121f0f05b38d3a4b5051a88789782f53eddc94e7456cc42753",
+        "duration_ms": 9000
+      },
+      {
+        "path": "noise/free-sound/noise-free-sound-0794.wav",
+        "sha256": "fa40b2e79c4fffd9a5d532ec7b72a2c67c09cd62bc36f7757397b2d16f076ae1",
+        "duration_ms": 4434
+      },
+      {
+        "path": "noise/free-sound/noise-free-sound-0826.wav",
+        "sha256": "12d76c69aa5c9193a37e5bb45dc87ff714e7563697d89db8d17d5dd8ab83f127",
+        "duration_ms": 11181
+      },
+      {
+        "path": "noise/free-sound/noise-free-sound-0833.wav",
+        "sha256": "1c45b024e6a544e553b45ffdb3140c71ba2c88195744eaa27aa65c22db8b24f1",
+        "duration_ms": 4973
+      },
+      {
+        "path": "noise/sound-bible/noise-sound-bible-0021.wav",
+        "sha256": "0bf3a5a6e53385209053357b7d5f8e95d8bebee30573f37ef0ee005c46cc2217",
+        "duration_ms": 12721
+      },
+      {
+        "path": "noise/sound-bible/noise-sound-bible-0046.wav",
+        "sha256": "88f857ae4f0a5037b3098d4c3d5fc89d6ce20390ae288abc06cf6d546e8aad7e",
+        "duration_ms": 809
+      },
+      {
+        "path": "noise/sound-bible/noise-sound-bible-0049.wav",
+        "sha256": "513c0be716a628abee990f31b8a9d31aad8590ba27ca696a9b93aba6f127568d",
+        "duration_ms": 49345
+      },
+      {
+        "path": "noise/sound-bible/noise-sound-bible-0058.wav",
+        "sha256": "c5a52359ef70a2011656d7a89962924d87241987fc8207f6b7cceec611f72d2e",
+        "duration_ms": 1332
+      }
+    ]
   },
   "speaker_assignment": {
     "cohort-01": "1995",
@@ -98,6 +409,16 @@
       ]
     },
     {
+      "token": "roster-01/4/noise_musan",
+      "path": "roster-01/4/noise_musan.wav",
+      "sha256": "ade3e797f23ac30242edbc9cfbfb2e3baddb8870339faec9c66619c6e3c8c819",
+      "duration_ms": 3000,
+      "sources": [
+        "61-70968-0003.flac",
+        "musan:noise/free-sound/noise-free-sound-0633.wav"
+      ]
+    },
+    {
       "token": "roster-01/4/telephone_bandpass",
       "path": "roster-01/4/telephone_bandpass.wav",
       "sha256": "4acfe57a17f20fa024000ef861809a39ad265e8b6d1b485e685de8fe7cb090e7",
@@ -132,6 +453,17 @@
       "sources": [
         "61-70968-0003.flac",
         "61-70968-0004.flac"
+      ]
+    },
+    {
+      "token": "roster-01/5/noise_musan",
+      "path": "roster-01/5/noise_musan.wav",
+      "sha256": "c33eefbf0822995a748814dfc9b90904b699e7dda964f7fb8ba0a507ddcf971d",
+      "duration_ms": 3000,
+      "sources": [
+        "61-70968-0003.flac",
+        "61-70968-0004.flac",
+        "musan:noise/free-sound/noise-free-sound-0680.wav"
       ]
     },
     {
@@ -175,6 +507,17 @@
       ]
     },
     {
+      "token": "roster-01/6/noise_musan",
+      "path": "roster-01/6/noise_musan.wav",
+      "sha256": "f61b768ebc2d01a43081ff34d513db70504ecf0885ecf6dcde9b425174b9f327",
+      "duration_ms": 3000,
+      "sources": [
+        "61-70968-0004.flac",
+        "61-70968-0005.flac",
+        "musan:noise/free-sound/noise-free-sound-0098.wav"
+      ]
+    },
+    {
       "token": "roster-01/6/telephone_bandpass",
       "path": "roster-01/6/telephone_bandpass.wav",
       "sha256": "c98ddf70f5beb33b1da2fdf90fc21c68bbfefa8fb180c9577ce1a917d8d90853",
@@ -214,6 +557,16 @@
       ]
     },
     {
+      "token": "roster-01/7/noise_musan",
+      "path": "roster-01/7/noise_musan.wav",
+      "sha256": "12fde3288f74753095d8febdc4569f22c1cce7e86519586277d9009f3c33f0e4",
+      "duration_ms": 3000,
+      "sources": [
+        "61-70968-0005.flac",
+        "musan:noise/free-sound/noise-free-sound-0336.wav"
+      ]
+    },
+    {
       "token": "roster-01/7/telephone_bandpass",
       "path": "roster-01/7/telephone_bandpass.wav",
       "sha256": "b2803c115933f34dc5898283639e2d3b228a5d154746a63029c506a3004168ae",
@@ -248,6 +601,17 @@
       "sources": [
         "61-70968-0005.flac",
         "61-70968-0006.flac"
+      ]
+    },
+    {
+      "token": "roster-01/8/noise_musan",
+      "path": "roster-01/8/noise_musan.wav",
+      "sha256": "afe5030f8c35db8ed79eec6cd21cda765facf82a775c34707f1cf9843e35f9ab",
+      "duration_ms": 3000,
+      "sources": [
+        "61-70968-0005.flac",
+        "61-70968-0006.flac",
+        "musan:noise/free-sound/noise-free-sound-0519.wav"
       ]
     },
     {
@@ -328,6 +692,17 @@
       ]
     },
     {
+      "token": "roster-02/4/noise_musan",
+      "path": "roster-02/4/noise_musan.wav",
+      "sha256": "72783314a8db93e39c92592acc472d53e3c8ebcd02c78ccbff82be3f2b2d3487",
+      "duration_ms": 3000,
+      "sources": [
+        "121-121726-0001.flac",
+        "121-121726-0002.flac",
+        "musan:noise/free-sound/noise-free-sound-0000.wav"
+      ]
+    },
+    {
       "token": "roster-02/4/telephone_bandpass",
       "path": "roster-02/4/telephone_bandpass.wav",
       "sha256": "cb86689865d0669eac9985cd3f24e498b25e646dae6d6eb485279171a0db202f",
@@ -367,6 +742,16 @@
       ]
     },
     {
+      "token": "roster-02/5/noise_musan",
+      "path": "roster-02/5/noise_musan.wav",
+      "sha256": "f24375e708e90a156ff08a0591aeada014e51ba28c0d61d0fbe21ebf4bfc93ac",
+      "duration_ms": 3000,
+      "sources": [
+        "121-121726-0002.flac",
+        "musan:noise/free-sound/noise-free-sound-0216.wav"
+      ]
+    },
+    {
       "token": "roster-02/5/telephone_bandpass",
       "path": "roster-02/5/telephone_bandpass.wav",
       "sha256": "2c9bf01dc90d571d5f57837c24afd3a3a0bf6ee1303cf696fa6b9c04107f1bed",
@@ -401,6 +786,17 @@
       "sources": [
         "121-121726-0002.flac",
         "121-121726-0003.flac"
+      ]
+    },
+    {
+      "token": "roster-02/6/noise_musan",
+      "path": "roster-02/6/noise_musan.wav",
+      "sha256": "d673a25ec8f77c8c4f66d6342811567ad879cd4cc8041aceca07cc19766a6d07",
+      "duration_ms": 3000,
+      "sources": [
+        "121-121726-0002.flac",
+        "121-121726-0003.flac",
+        "musan:noise/free-sound/noise-free-sound-0467.wav"
       ]
     },
     {
@@ -443,6 +839,16 @@
       ]
     },
     {
+      "token": "roster-02/7/noise_musan",
+      "path": "roster-02/7/noise_musan.wav",
+      "sha256": "a04056e7448a257904706ea038e16a1ef67bee44b28a0a7ff00f9c09d5e2e363",
+      "duration_ms": 3000,
+      "sources": [
+        "121-121726-0003.flac",
+        "musan:noise/free-sound/noise-free-sound-0483.wav"
+      ]
+    },
+    {
       "token": "roster-02/7/telephone_bandpass",
       "path": "roster-02/7/telephone_bandpass.wav",
       "sha256": "fc0b37e7926b0b3a3844e737cb11ed0f06aca7377b8ee7978ead8eb30d99bc85",
@@ -477,6 +883,17 @@
       "sources": [
         "121-121726-0003.flac",
         "121-121726-0004.flac"
+      ]
+    },
+    {
+      "token": "roster-02/8/noise_musan",
+      "path": "roster-02/8/noise_musan.wav",
+      "sha256": "a2f98e537edeb1de5529c91db0d90940ac29332c2e8a246b1771f68e075a6c3a",
+      "duration_ms": 3000,
+      "sources": [
+        "121-121726-0003.flac",
+        "121-121726-0004.flac",
+        "musan:noise/free-sound/noise-free-sound-0601.wav"
       ]
     },
     {
@@ -556,6 +973,17 @@
       ]
     },
     {
+      "token": "roster-03/4/noise_musan",
+      "path": "roster-03/4/noise_musan.wav",
+      "sha256": "ff2347c7856911804ade0001a4e1cd81f16cefcd38128b3b9ac92dc1fa19a51f",
+      "duration_ms": 3000,
+      "sources": [
+        "237-126133-0000.flac",
+        "237-126133-0001.flac",
+        "musan:noise/free-sound/noise-free-sound-0521.wav"
+      ]
+    },
+    {
       "token": "roster-03/4/telephone_bandpass",
       "path": "roster-03/4/telephone_bandpass.wav",
       "sha256": "4d5b003167c372f2e9a9c88ba1622b23091794c46f968ef3c3f76f95e2a1c0ed",
@@ -595,6 +1023,16 @@
       ]
     },
     {
+      "token": "roster-03/5/noise_musan",
+      "path": "roster-03/5/noise_musan.wav",
+      "sha256": "4b00173fabb582a3a22738eba71b60c97dfbc12c88d0d004f48acf4d0ed6e41d",
+      "duration_ms": 3000,
+      "sources": [
+        "237-126133-0001.flac",
+        "musan:noise/free-sound/noise-free-sound-0544.wav"
+      ]
+    },
+    {
       "token": "roster-03/5/telephone_bandpass",
       "path": "roster-03/5/telephone_bandpass.wav",
       "sha256": "7142d85f1e9e431f55d4795ef822b2dccbb561a403024c6000ed1c9e82f6a8ee",
@@ -628,6 +1066,16 @@
       "duration_ms": 3000,
       "sources": [
         "237-126133-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-03/6/noise_musan",
+      "path": "roster-03/6/noise_musan.wav",
+      "sha256": "017fdaae9e7f3708039b726e6a1b7f9edb4765cfdfdf642722e65877949481e8",
+      "duration_ms": 3000,
+      "sources": [
+        "237-126133-0001.flac",
+        "musan:noise/free-sound/noise-free-sound-0756.wav"
       ]
     },
     {
@@ -667,6 +1115,16 @@
       ]
     },
     {
+      "token": "roster-03/7/noise_musan",
+      "path": "roster-03/7/noise_musan.wav",
+      "sha256": "232e881c30933670c7a0db86c5e78b9f1f153d064b9d071bb3859fe05856b3ed",
+      "duration_ms": 3000,
+      "sources": [
+        "237-126133-0001.flac",
+        "musan:noise/free-sound/noise-free-sound-0083.wav"
+      ]
+    },
+    {
       "token": "roster-03/7/telephone_bandpass",
       "path": "roster-03/7/telephone_bandpass.wav",
       "sha256": "b36a833c4e00c7796961f2df00715c23ed54a73e44611c60ace16a1912075f60",
@@ -701,6 +1159,17 @@
       "sources": [
         "237-126133-0001.flac",
         "237-126133-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-03/8/noise_musan",
+      "path": "roster-03/8/noise_musan.wav",
+      "sha256": "f3fc427ea5b550bfaddaa9769ad912830925de9d1f7a169af58bc70b43b71a07",
+      "duration_ms": 3000,
+      "sources": [
+        "237-126133-0001.flac",
+        "237-126133-0002.flac",
+        "musan:noise/free-sound/noise-free-sound-0620.wav"
       ]
     },
     {
@@ -781,6 +1250,16 @@
       ]
     },
     {
+      "token": "roster-04/4/noise_musan",
+      "path": "roster-04/4/noise_musan.wav",
+      "sha256": "694416f30cf4bcbb90dd704ff536558569d4bc1701fc91ea30b6a3f031d06f42",
+      "duration_ms": 3000,
+      "sources": [
+        "260-123286-0002.flac",
+        "musan:noise/free-sound/noise-free-sound-0184.wav"
+      ]
+    },
+    {
       "token": "roster-04/4/telephone_bandpass",
       "path": "roster-04/4/telephone_bandpass.wav",
       "sha256": "9d70f6db8ed14bdc6d361532f8147741859d19036ef124dcc525df27c370266b",
@@ -814,6 +1293,16 @@
       "duration_ms": 3000,
       "sources": [
         "260-123286-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-04/5/noise_musan",
+      "path": "roster-04/5/noise_musan.wav",
+      "sha256": "e3b0f9afd9ec6b371c9d1bc332a5120ecba09846bbbf79b1df303af5297884ec",
+      "duration_ms": 3000,
+      "sources": [
+        "260-123286-0002.flac",
+        "musan:noise/free-sound/noise-free-sound-0762.wav"
       ]
     },
     {
@@ -851,6 +1340,17 @@
       "sources": [
         "260-123286-0002.flac",
         "260-123286-0003.flac"
+      ]
+    },
+    {
+      "token": "roster-04/6/noise_musan",
+      "path": "roster-04/6/noise_musan.wav",
+      "sha256": "85fa66f4678f24a61f37b688b98a951c17d724fe99448b45dbcbe3cfcaa14110",
+      "duration_ms": 3000,
+      "sources": [
+        "260-123286-0002.flac",
+        "260-123286-0003.flac",
+        "musan:noise/free-sound/noise-free-sound-0135.wav"
       ]
     },
     {
@@ -893,6 +1393,16 @@
       ]
     },
     {
+      "token": "roster-04/7/noise_musan",
+      "path": "roster-04/7/noise_musan.wav",
+      "sha256": "6c3255fcc4c7118f62145c2e5d627f8c716dc72c67f1cbe98554e9caa6f04949",
+      "duration_ms": 3000,
+      "sources": [
+        "260-123286-0003.flac",
+        "musan:noise/sound-bible/noise-sound-bible-0049.wav"
+      ]
+    },
+    {
       "token": "roster-04/7/telephone_bandpass",
       "path": "roster-04/7/telephone_bandpass.wav",
       "sha256": "3e2b4c3184eda81f33faac5c1f56556c335053fc1f73584c823976e9a5e967dc",
@@ -926,6 +1436,16 @@
       "duration_ms": 3000,
       "sources": [
         "260-123286-0003.flac"
+      ]
+    },
+    {
+      "token": "roster-04/8/noise_musan",
+      "path": "roster-04/8/noise_musan.wav",
+      "sha256": "923016ce27389e8c5876b7f975d342f7926ded67da6844d4a033084363b69af2",
+      "duration_ms": 3000,
+      "sources": [
+        "260-123286-0003.flac",
+        "musan:noise/free-sound/noise-free-sound-0285.wav"
       ]
     },
     {
@@ -1002,6 +1522,16 @@
       ]
     },
     {
+      "token": "roster-05/4/noise_musan",
+      "path": "roster-05/4/noise_musan.wav",
+      "sha256": "d6d5c99c92f58d5eb7264f0435a69e62be703cde738afefb67a311905156091b",
+      "duration_ms": 3000,
+      "sources": [
+        "672-122797-0001.flac",
+        "musan:noise/free-sound/noise-free-sound-0746.wav"
+      ]
+    },
+    {
       "token": "roster-05/4/telephone_bandpass",
       "path": "roster-05/4/telephone_bandpass.wav",
       "sha256": "f3ed54157fd57b34d7a43352ff340c528e94ceae407b2171d0188e52634b2013",
@@ -1035,6 +1565,16 @@
       "duration_ms": 3000,
       "sources": [
         "672-122797-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-05/5/noise_musan",
+      "path": "roster-05/5/noise_musan.wav",
+      "sha256": "a63396a55d027553747766035b463e2ee69bbb41a5ae25e9fbdcded2448c3741",
+      "duration_ms": 3000,
+      "sources": [
+        "672-122797-0001.flac",
+        "musan:noise/free-sound/noise-free-sound-0594.wav"
       ]
     },
     {
@@ -1072,6 +1612,17 @@
       "sources": [
         "672-122797-0001.flac",
         "672-122797-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-05/6/noise_musan",
+      "path": "roster-05/6/noise_musan.wav",
+      "sha256": "b23142560b224295a71af69818dd06fc399355b702d1d0e3ef0bcbb860a0ce47",
+      "duration_ms": 3000,
+      "sources": [
+        "672-122797-0001.flac",
+        "672-122797-0002.flac",
+        "musan:noise/free-sound/noise-free-sound-0079.wav"
       ]
     },
     {
@@ -1114,6 +1665,16 @@
       ]
     },
     {
+      "token": "roster-05/7/noise_musan",
+      "path": "roster-05/7/noise_musan.wav",
+      "sha256": "871d44c35c655d8d8ad2e97740c08941edd52c5fd75987b4ad30feebe8654b31",
+      "duration_ms": 3000,
+      "sources": [
+        "672-122797-0002.flac",
+        "musan:noise/free-sound/noise-free-sound-0301.wav"
+      ]
+    },
+    {
       "token": "roster-05/7/telephone_bandpass",
       "path": "roster-05/7/telephone_bandpass.wav",
       "sha256": "4e583b88a2696117604d35eb7a46d4a73ab9ffa3ba3ef6d61aa15db86128924e",
@@ -1147,6 +1708,16 @@
       "duration_ms": 3000,
       "sources": [
         "672-122797-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-05/8/noise_musan",
+      "path": "roster-05/8/noise_musan.wav",
+      "sha256": "91d261e215225913b0f656da99974a4c69eadfce2c1ee1b44e7beb96ad0180bd",
+      "duration_ms": 3000,
+      "sources": [
+        "672-122797-0002.flac",
+        "musan:noise/free-sound/noise-free-sound-0118.wav"
       ]
     },
     {
@@ -1223,6 +1794,17 @@
       ]
     },
     {
+      "token": "roster-06/4/noise_musan",
+      "path": "roster-06/4/noise_musan.wav",
+      "sha256": "2827a30c353885c3ed77c34156e36df5df62f2affe6b9cc610ed8239d9389060",
+      "duration_ms": 3000,
+      "sources": [
+        "908-157963-0000.flac",
+        "908-157963-0001.flac",
+        "musan:noise/free-sound/noise-free-sound-0062.wav"
+      ]
+    },
+    {
       "token": "roster-06/4/telephone_bandpass",
       "path": "roster-06/4/telephone_bandpass.wav",
       "sha256": "bf9b348ed18d0ede7f2cc9651b375503e270578baa673025e95545a32c8175df",
@@ -1260,6 +1842,17 @@
       "sources": [
         "908-157963-0001.flac",
         "908-157963-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-06/5/noise_musan",
+      "path": "roster-06/5/noise_musan.wav",
+      "sha256": "f0e4ba71b53f5b6013faddb9a6a7820edda2dd4cfcfa5606751866e87ec62780",
+      "duration_ms": 3000,
+      "sources": [
+        "908-157963-0001.flac",
+        "908-157963-0002.flac",
+        "musan:noise/free-sound/noise-free-sound-0751.wav"
       ]
     },
     {
@@ -1303,6 +1896,17 @@
       ]
     },
     {
+      "token": "roster-06/6/noise_musan",
+      "path": "roster-06/6/noise_musan.wav",
+      "sha256": "b7da1961ddcc7f12f51df285b9661f95f94dd8dbfc97a03bcb07ba1b56410553",
+      "duration_ms": 3000,
+      "sources": [
+        "908-157963-0002.flac",
+        "908-157963-0003.flac",
+        "musan:noise/free-sound/noise-free-sound-0234.wav"
+      ]
+    },
+    {
       "token": "roster-06/6/telephone_bandpass",
       "path": "roster-06/6/telephone_bandpass.wav",
       "sha256": "0b6a0b04e6c721b4ec1b198a036bea1bf8b7fe4e0c525ee469f1a0a48a8bc93f",
@@ -1343,6 +1947,17 @@
       ]
     },
     {
+      "token": "roster-06/7/noise_musan",
+      "path": "roster-06/7/noise_musan.wav",
+      "sha256": "54f6506fa0ad1b0a384ed0ff96bc81080d4cb494caafaa21b67846ad56916c40",
+      "duration_ms": 3000,
+      "sources": [
+        "908-157963-0003.flac",
+        "908-157963-0004.flac",
+        "musan:noise/free-sound/noise-free-sound-0535.wav"
+      ]
+    },
+    {
       "token": "roster-06/7/telephone_bandpass",
       "path": "roster-06/7/telephone_bandpass.wav",
       "sha256": "0d8d93242936f93038598cae217fb90111723872a55e42e09ed8ede5301111b1",
@@ -1379,6 +1994,16 @@
       "duration_ms": 3000,
       "sources": [
         "908-157963-0004.flac"
+      ]
+    },
+    {
+      "token": "roster-06/8/noise_musan",
+      "path": "roster-06/8/noise_musan.wav",
+      "sha256": "de108095916014a70cde33d64b6340c290b836e811a15e3eb97fa853103d200a",
+      "duration_ms": 3000,
+      "sources": [
+        "908-157963-0004.flac",
+        "musan:noise/free-sound/noise-free-sound-0675.wav"
       ]
     },
     {
@@ -1456,6 +2081,17 @@
       ]
     },
     {
+      "token": "roster-07/4/noise_musan",
+      "path": "roster-07/4/noise_musan.wav",
+      "sha256": "460f0c155d8d2b2d0162e13b281180559131ac8c59fce688a628d8796d4b562b",
+      "duration_ms": 3000,
+      "sources": [
+        "1089-134686-0001.flac",
+        "1089-134686-0002.flac",
+        "musan:noise/free-sound/noise-free-sound-0288.wav"
+      ]
+    },
+    {
       "token": "roster-07/4/telephone_bandpass",
       "path": "roster-07/4/telephone_bandpass.wav",
       "sha256": "2c3ea8dc55b3c0b10cbb33f519d07eaf55dd7a11f04be4129c92c94f7fe3377f",
@@ -1495,6 +2131,16 @@
       ]
     },
     {
+      "token": "roster-07/5/noise_musan",
+      "path": "roster-07/5/noise_musan.wav",
+      "sha256": "f20c52b8d8e363e19b2e5a555a4de6edcab0fc9be560449cc515408e8a56788f",
+      "duration_ms": 3000,
+      "sources": [
+        "1089-134686-0002.flac",
+        "musan:noise/free-sound/noise-free-sound-0682.wav"
+      ]
+    },
+    {
       "token": "roster-07/5/telephone_bandpass",
       "path": "roster-07/5/telephone_bandpass.wav",
       "sha256": "b72f0509adde142ba86298427b16955d94166164e09c8f0a8358c7b34240e284",
@@ -1529,6 +2175,17 @@
       "sources": [
         "1089-134686-0002.flac",
         "1089-134686-0003.flac"
+      ]
+    },
+    {
+      "token": "roster-07/6/noise_musan",
+      "path": "roster-07/6/noise_musan.wav",
+      "sha256": "deb1717700cd21fe6c7d17262e7cbcb3a8ac099af9d6833a73a7e35636fef417",
+      "duration_ms": 3000,
+      "sources": [
+        "1089-134686-0002.flac",
+        "1089-134686-0003.flac",
+        "musan:noise/free-sound/noise-free-sound-0687.wav"
       ]
     },
     {
@@ -1572,6 +2229,17 @@
       ]
     },
     {
+      "token": "roster-07/7/noise_musan",
+      "path": "roster-07/7/noise_musan.wav",
+      "sha256": "b83679a8be9781b3c332eed4d6b89ab69eb50faa8ede9917bf45eea23d6dad53",
+      "duration_ms": 3000,
+      "sources": [
+        "1089-134686-0003.flac",
+        "1089-134686-0004.flac",
+        "musan:noise/free-sound/noise-free-sound-0833.wav"
+      ]
+    },
+    {
       "token": "roster-07/7/telephone_bandpass",
       "path": "roster-07/7/telephone_bandpass.wav",
       "sha256": "54005e936a046d9d943dec171721dde3e76fc86e61d5090bad2adcc07122d151",
@@ -1608,6 +2276,16 @@
       "duration_ms": 3000,
       "sources": [
         "1089-134686-0004.flac"
+      ]
+    },
+    {
+      "token": "roster-07/8/noise_musan",
+      "path": "roster-07/8/noise_musan.wav",
+      "sha256": "ccf8bd96eded146b396349f925bea2a4f573cf5615894a8a557af659c2dcbd84",
+      "duration_ms": 3000,
+      "sources": [
+        "1089-134686-0004.flac",
+        "musan:noise/free-sound/noise-free-sound-0725.wav"
       ]
     },
     {
@@ -1684,6 +2362,16 @@
       ]
     },
     {
+      "token": "roster-08/4/noise_musan",
+      "path": "roster-08/4/noise_musan.wav",
+      "sha256": "d09dcea76ed5df1e5824293a98aff38262511f26db1413d583e1321e364a222b",
+      "duration_ms": 3000,
+      "sources": [
+        "1188-133604-0001.flac",
+        "musan:noise/free-sound/noise-free-sound-0061.wav"
+      ]
+    },
+    {
       "token": "roster-08/4/telephone_bandpass",
       "path": "roster-08/4/telephone_bandpass.wav",
       "sha256": "b05bc21c3a16b45de315eed11b37985c95e6795148b0be3ab3dce488bd81e77e",
@@ -1717,6 +2405,16 @@
       "duration_ms": 3000,
       "sources": [
         "1188-133604-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-08/5/noise_musan",
+      "path": "roster-08/5/noise_musan.wav",
+      "sha256": "d18988ef7a87aea7d092d622708e81e8d25c95f2584fca629920f0b117103ae2",
+      "duration_ms": 3000,
+      "sources": [
+        "1188-133604-0001.flac",
+        "musan:noise/free-sound/noise-free-sound-0640.wav"
       ]
     },
     {
@@ -1754,6 +2452,17 @@
       "sources": [
         "1188-133604-0001.flac",
         "1188-133604-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-08/6/noise_musan",
+      "path": "roster-08/6/noise_musan.wav",
+      "sha256": "2b0aa1869d5aaaa78d04abc786f0da92ab3d92b71814e84b7ea0c8feeb9b0902",
+      "duration_ms": 3000,
+      "sources": [
+        "1188-133604-0001.flac",
+        "1188-133604-0002.flac",
+        "musan:noise/free-sound/noise-free-sound-0630.wav"
       ]
     },
     {
@@ -1796,6 +2505,16 @@
       ]
     },
     {
+      "token": "roster-08/7/noise_musan",
+      "path": "roster-08/7/noise_musan.wav",
+      "sha256": "a60e78eeeb9eca59d29f3f1c0f1dad44e57556ad0aebff7b9be4143f7c4ba64d",
+      "duration_ms": 3000,
+      "sources": [
+        "1188-133604-0002.flac",
+        "musan:noise/free-sound/noise-free-sound-0488.wav"
+      ]
+    },
+    {
       "token": "roster-08/7/telephone_bandpass",
       "path": "roster-08/7/telephone_bandpass.wav",
       "sha256": "550f19592e2c8480d994d072a8f50db69b5def6d5129469eddc9df2a38969e05",
@@ -1829,6 +2548,16 @@
       "duration_ms": 3000,
       "sources": [
         "1188-133604-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-08/8/noise_musan",
+      "path": "roster-08/8/noise_musan.wav",
+      "sha256": "db36f8e2f59e82af7b57db8bd030c93d1bcd97ac77f03220ba19292fe5fc39f9",
+      "duration_ms": 3000,
+      "sources": [
+        "1188-133604-0002.flac",
+        "musan:noise/free-sound/noise-free-sound-0320.wav"
       ]
     },
     {
@@ -1905,6 +2634,17 @@
       ]
     },
     {
+      "token": "roster-09/4/noise_musan",
+      "path": "roster-09/4/noise_musan.wav",
+      "sha256": "917d1f4bc27bec356fe22e469ec4e5965093df653f06a797edca936034f565c2",
+      "duration_ms": 3000,
+      "sources": [
+        "1221-135766-0000.flac",
+        "1221-135766-0001.flac",
+        "musan:noise/free-sound/noise-free-sound-0239.wav"
+      ]
+    },
+    {
       "token": "roster-09/4/telephone_bandpass",
       "path": "roster-09/4/telephone_bandpass.wav",
       "sha256": "00abdc390ccdb93f9aea76594a9049f1d558c6db5f7b3bd1f728577fb8cc3b20",
@@ -1944,6 +2684,16 @@
       ]
     },
     {
+      "token": "roster-09/5/noise_musan",
+      "path": "roster-09/5/noise_musan.wav",
+      "sha256": "28d4e9d2db6a8531c6b2019f7c715ab8082f60c15801fd5271ffc579cd8c847a",
+      "duration_ms": 3000,
+      "sources": [
+        "1221-135766-0001.flac",
+        "musan:noise/free-sound/noise-free-sound-0712.wav"
+      ]
+    },
+    {
       "token": "roster-09/5/telephone_bandpass",
       "path": "roster-09/5/telephone_bandpass.wav",
       "sha256": "58d2b5b98e1f1a03dc5b333b663a2e61d50b927478ee3fecfc64307cdb0f405a",
@@ -1977,6 +2727,16 @@
       "duration_ms": 3000,
       "sources": [
         "1221-135766-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-09/6/noise_musan",
+      "path": "roster-09/6/noise_musan.wav",
+      "sha256": "130f11c00ee12aa44196d9e2174b2955c0f7d0c378b7e3f5e50479c6490ba12c",
+      "duration_ms": 3000,
+      "sources": [
+        "1221-135766-0001.flac",
+        "musan:noise/free-sound/noise-free-sound-0406.wav"
       ]
     },
     {
@@ -2016,6 +2776,16 @@
       ]
     },
     {
+      "token": "roster-09/7/noise_musan",
+      "path": "roster-09/7/noise_musan.wav",
+      "sha256": "dfe8044ee71ad42d6820336cf5d01451124d26cbe38a6385b688240345c5b4c4",
+      "duration_ms": 3000,
+      "sources": [
+        "1221-135766-0001.flac",
+        "musan:noise/sound-bible/noise-sound-bible-0046.wav"
+      ]
+    },
+    {
       "token": "roster-09/7/telephone_bandpass",
       "path": "roster-09/7/telephone_bandpass.wav",
       "sha256": "01d47a7ea81c5141114ac684c70db93abae9b93cab0013807096e51dd16808b6",
@@ -2049,6 +2819,16 @@
       "duration_ms": 3000,
       "sources": [
         "1221-135766-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-09/8/noise_musan",
+      "path": "roster-09/8/noise_musan.wav",
+      "sha256": "b6992fe474a7176e0d99a5dd9454330583ed5923309aca417ebaa296976bb75a",
+      "duration_ms": 3000,
+      "sources": [
+        "1221-135766-0001.flac",
+        "musan:noise/free-sound/noise-free-sound-0794.wav"
       ]
     },
     {
@@ -2125,6 +2905,16 @@
       ]
     },
     {
+      "token": "roster-10/4/noise_musan",
+      "path": "roster-10/4/noise_musan.wav",
+      "sha256": "d1f758912a3920283578a5c697e8e8453a4da4b12c626cd45f491ff8963bb34f",
+      "duration_ms": 3000,
+      "sources": [
+        "1284-1180-0001.flac",
+        "musan:noise/free-sound/noise-free-sound-0791.wav"
+      ]
+    },
+    {
       "token": "roster-10/4/telephone_bandpass",
       "path": "roster-10/4/telephone_bandpass.wav",
       "sha256": "0e3d03259afd1af8dacb3ea5f0e8afeb28815c3cb9189fc648555133a72cd610",
@@ -2159,6 +2949,17 @@
       "sources": [
         "1284-1180-0001.flac",
         "1284-1180-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-10/5/noise_musan",
+      "path": "roster-10/5/noise_musan.wav",
+      "sha256": "50e1ca7f416ccb4d78ba5a0544e0c51c6c4f65a3990ae08547acb860961a332d",
+      "duration_ms": 3000,
+      "sources": [
+        "1284-1180-0001.flac",
+        "1284-1180-0002.flac",
+        "musan:noise/free-sound/noise-free-sound-0541.wav"
       ]
     },
     {
@@ -2201,6 +3002,16 @@
       ]
     },
     {
+      "token": "roster-10/6/noise_musan",
+      "path": "roster-10/6/noise_musan.wav",
+      "sha256": "7a6711532c4bbbdf990e7a958037abcf1908b8b91c794dcf7732a54ff4760d31",
+      "duration_ms": 3000,
+      "sources": [
+        "1284-1180-0002.flac",
+        "musan:noise/free-sound/noise-free-sound-0695.wav"
+      ]
+    },
+    {
       "token": "roster-10/6/telephone_bandpass",
       "path": "roster-10/6/telephone_bandpass.wav",
       "sha256": "8169bf717b63d660718cb39451296f49b507379ff2714150640d24eaf6398676",
@@ -2235,6 +3046,17 @@
       "sources": [
         "1284-1180-0002.flac",
         "1284-1180-0003.flac"
+      ]
+    },
+    {
+      "token": "roster-10/7/noise_musan",
+      "path": "roster-10/7/noise_musan.wav",
+      "sha256": "09d7f5a77eb0e95f1fdcb07dbdcca94cbea3c05e57b93cfdb47d306ffd9e0e83",
+      "duration_ms": 3000,
+      "sources": [
+        "1284-1180-0002.flac",
+        "1284-1180-0003.flac",
+        "musan:noise/free-sound/noise-free-sound-0226.wav"
       ]
     },
     {
@@ -2274,6 +3096,16 @@
       "duration_ms": 3000,
       "sources": [
         "1284-1180-0003.flac"
+      ]
+    },
+    {
+      "token": "roster-10/8/noise_musan",
+      "path": "roster-10/8/noise_musan.wav",
+      "sha256": "ae0c3e2a10dfd8cad6e0b638dcd41d7ea16ddbed6a1d4d3c740a3f2e52124bc2",
+      "duration_ms": 3000,
+      "sources": [
+        "1284-1180-0003.flac",
+        "musan:noise/free-sound/noise-free-sound-0652.wav"
       ]
     },
     {
@@ -2350,6 +3182,17 @@
       ]
     },
     {
+      "token": "roster-11/4/noise_musan",
+      "path": "roster-11/4/noise_musan.wav",
+      "sha256": "1a053109686ce3eda307e39ef87001178dbfa17b5108c5608956e04caaba4902",
+      "duration_ms": 3000,
+      "sources": [
+        "1320-122612-0000.flac",
+        "1320-122612-0001.flac",
+        "musan:noise/sound-bible/noise-sound-bible-0021.wav"
+      ]
+    },
+    {
       "token": "roster-11/4/telephone_bandpass",
       "path": "roster-11/4/telephone_bandpass.wav",
       "sha256": "52c7d5d7967159248068823532cec8d7ae02cbb3664e52a52621803fbaf46e8d",
@@ -2389,6 +3232,16 @@
       ]
     },
     {
+      "token": "roster-11/5/noise_musan",
+      "path": "roster-11/5/noise_musan.wav",
+      "sha256": "fd99b0bbe620264a25fc6ce4a746cc04c6095572883fc8c2fa00e2ea40a2dfee",
+      "duration_ms": 3000,
+      "sources": [
+        "1320-122612-0001.flac",
+        "musan:noise/free-sound/noise-free-sound-0743.wav"
+      ]
+    },
+    {
       "token": "roster-11/5/telephone_bandpass",
       "path": "roster-11/5/telephone_bandpass.wav",
       "sha256": "5e337d9205b207dadc9faed62cb78bb9269b31901ba2cb06d1cd6954ee902ab0",
@@ -2422,6 +3275,16 @@
       "duration_ms": 3000,
       "sources": [
         "1320-122612-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-11/6/noise_musan",
+      "path": "roster-11/6/noise_musan.wav",
+      "sha256": "ddb71eb89acb2943032793306fe80834c1dbd955b1e0b0b59a9e99e5d1a814e4",
+      "duration_ms": 3000,
+      "sources": [
+        "1320-122612-0001.flac",
+        "musan:noise/free-sound/noise-free-sound-0826.wav"
       ]
     },
     {
@@ -2462,6 +3325,17 @@
       ]
     },
     {
+      "token": "roster-11/7/noise_musan",
+      "path": "roster-11/7/noise_musan.wav",
+      "sha256": "31b6f83c437b0a1c631b8f448f949ea67d06a59b69f4d1a80cddee7b46f18e27",
+      "duration_ms": 3000,
+      "sources": [
+        "1320-122612-0001.flac",
+        "1320-122612-0002.flac",
+        "musan:noise/free-sound/noise-free-sound-0755.wav"
+      ]
+    },
+    {
       "token": "roster-11/7/telephone_bandpass",
       "path": "roster-11/7/telephone_bandpass.wav",
       "sha256": "f7205169a9bc88a39e93ec643a93bd87d7fd70489190bb3ce21e6514bdeff0d1",
@@ -2498,6 +3372,16 @@
       "duration_ms": 3000,
       "sources": [
         "1320-122612-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-11/8/noise_musan",
+      "path": "roster-11/8/noise_musan.wav",
+      "sha256": "47b69d18ac45d8b6c9895b4355c1597be01661e6503e93cd0c9f90f253f04aa9",
+      "duration_ms": 3000,
+      "sources": [
+        "1320-122612-0002.flac",
+        "musan:noise/free-sound/noise-free-sound-0506.wav"
       ]
     },
     {
@@ -2574,6 +3458,16 @@
       ]
     },
     {
+      "token": "roster-12/4/noise_musan",
+      "path": "roster-12/4/noise_musan.wav",
+      "sha256": "3b428a26f1da06ed148e5e0a635cbaa5900106ee16072bc420ca6490e1968b45",
+      "duration_ms": 3000,
+      "sources": [
+        "1580-141083-0001.flac",
+        "musan:noise/sound-bible/noise-sound-bible-0058.wav"
+      ]
+    },
+    {
       "token": "roster-12/4/telephone_bandpass",
       "path": "roster-12/4/telephone_bandpass.wav",
       "sha256": "160934ac91eef5d3546c58eb507f27161215c2b20eb36b48515a6cd5b480b9c3",
@@ -2607,6 +3501,16 @@
       "duration_ms": 3000,
       "sources": [
         "1580-141083-0001.flac"
+      ]
+    },
+    {
+      "token": "roster-12/5/noise_musan",
+      "path": "roster-12/5/noise_musan.wav",
+      "sha256": "2570754a68453bb1495d330f753a2b6e70f9559d83ad5c874427c6fed3260586",
+      "duration_ms": 3000,
+      "sources": [
+        "1580-141083-0001.flac",
+        "musan:noise/free-sound/noise-free-sound-0112.wav"
       ]
     },
     {
@@ -2644,6 +3548,17 @@
       "sources": [
         "1580-141083-0001.flac",
         "1580-141083-0002.flac"
+      ]
+    },
+    {
+      "token": "roster-12/6/noise_musan",
+      "path": "roster-12/6/noise_musan.wav",
+      "sha256": "1bb2adebcc078776e7fc79b167fa349b6bd0342605cb1c11f449d17293065759",
+      "duration_ms": 3000,
+      "sources": [
+        "1580-141083-0001.flac",
+        "1580-141083-0002.flac",
+        "musan:noise/free-sound/noise-free-sound-0322.wav"
       ]
     },
     {
@@ -2686,6 +3601,16 @@
       ]
     },
     {
+      "token": "roster-12/7/noise_musan",
+      "path": "roster-12/7/noise_musan.wav",
+      "sha256": "c007c593eb357a3177bbee5cdb11c44907511c47c380068d6877bf28877bb229",
+      "duration_ms": 3000,
+      "sources": [
+        "1580-141083-0002.flac",
+        "musan:noise/free-sound/noise-free-sound-0026.wav"
+      ]
+    },
+    {
       "token": "roster-12/7/telephone_bandpass",
       "path": "roster-12/7/telephone_bandpass.wav",
       "sha256": "8cc34d70300e4da963fbfa134737d86c8bcec656b52959665d5fa9ccc4616e58",
@@ -2720,6 +3645,17 @@
       "sources": [
         "1580-141083-0002.flac",
         "1580-141083-0003.flac"
+      ]
+    },
+    {
+      "token": "roster-12/8/noise_musan",
+      "path": "roster-12/8/noise_musan.wav",
+      "sha256": "351e08ee7e7cd069fbac9adfe7e904f9ec3f1c98adb11447c30ea25635a1cc93",
+      "duration_ms": 3000,
+      "sources": [
+        "1580-141083-0002.flac",
+        "1580-141083-0003.flac",
+        "musan:noise/free-sound/noise-free-sound-0056.wav"
       ]
     },
     {
