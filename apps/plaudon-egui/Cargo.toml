@@ -59,6 +59,9 @@ plaudon-ui = { workspace = true }
 plaudon-ai-apple = { workspace = true, optional = true }
 eframe = { workspace = true, features = ["default_fonts", "wgpu", "accesskit"] }
 egui = { workspace = true, features = ["default_fonts"] }
+# Decodes the brand kit PNG into the RGBA the window and tray icons take.
+# PNG only: the workspace entry carries `default-features = false`.
+image = { workspace = true }
 rfd = { workspace = true, features = ["xdg-portal"] }
 tokio = { workspace = true }
 tracing = { workspace = true }
@@ -102,8 +105,6 @@ eframe = { workspace = true, features = ["x11", "wayland"] }
 # recording HTTPS transport. All four are already in the graph through
 # `plaudon-app`.
 async-trait = { workspace = true }
-# PNG encoding for the demo capture (`tests/demo_capture.rs`).
-image = { workspace = true }
 # The scripted speech and text engines the processing tests run against.
 plaudon-app = { workspace = true, features = ["test-support"] }
 plaudon-ai-openrouter = { workspace = true }
