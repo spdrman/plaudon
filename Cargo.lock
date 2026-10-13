@@ -4375,6 +4375,7 @@ dependencies = [
  "hex",
  "ort",
  "plaudon-ai-contracts",
+ "plaudon-ai-diarization",
  "plaudon-app-core",
  "plaudon-audio",
  "plaudon-domain",

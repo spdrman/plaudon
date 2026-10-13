@@ -37,9 +37,10 @@
 
 use std::fmt;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, LazyLock, Mutex};
 
 use async_trait::async_trait;
+use ort::environment::Environment;
 use ort::session::Session;
 use ort::value::Tensor;
 use plaudon_ai_contracts::job::JobContext;
@@ -126,6 +127,27 @@ impl From<EngineError> for EmbedError {
     }
 }
 
+/// The ONNX Runtime environment every engine in this crate shares.
+///
+/// `ort` allows exactly one environment per process and refuses the second
+/// with a runtime error. Two engines exist here — the embedding checkpoint and
+/// the segmentation checkpoint of [`crate::segmentation`] — and a pipeline
+/// that opens both would otherwise fail on whichever it opened second, which
+/// is a failure with nothing to do with either model. The first caller builds
+/// it and every later caller gets that one result, including the failure.
+static ENVIRONMENT: LazyLock<Result<Environment, String>> = LazyLock::new(|| {
+    ort::environment::init()
+        .build()
+        .map_err(|error| error.to_string())
+});
+
+/// The shared environment, or the failure that building it produced.
+pub(crate) fn environment() -> Result<&'static Environment, EngineError> {
+    ENVIRONMENT
+        .as_ref()
+        .map_err(|error| EngineError::Runtime(error.clone()))
+}
+
 /// How the session is configured.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EngineOptions {
@@ -173,7 +195,7 @@ impl Default for EngineOptions {
 /// threshold is a property of a checkpoint (VP-051), and a build that silently
 /// ran a different numerical engine on each platform would make "the same
 /// threshold" a claim nobody checked.
-fn cpu_only(
+pub(crate) fn cpu_only(
     builder: ort::session::builder::SessionBuilder,
 ) -> Result<ort::session::builder::SessionBuilder, EngineError> {
     Ok(builder
@@ -221,10 +243,7 @@ impl SpeakerEmbeddingModel {
         let started = std::time::Instant::now();
         verify_artifact(artifact, path)?;
 
-        let environment = ort::environment::init()
-            .build()
-            .map_err(|error| EngineError::Runtime(error.to_string()))?;
-        let builder = Session::builder(&environment)?
+        let builder = Session::builder(environment()?)?
             .with_intra_threads(options.intra_op_threads)?
             .with_inter_threads(1)?;
         let session = cpu_only(builder)?.commit_from_file(path)?;
