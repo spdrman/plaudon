@@ -243,7 +243,7 @@ not this change:
 | `clippy` | `plaudon-egress-monitor` has 5 lint errors (`single_match_else` and friends) under `-D warnings` |
 | `tests` | `plaudon-diagnostics`' `committed_fixtures_pass_the_repository_gate`: committed updater/archive/eval fixtures trip the secret scanner on `device_token_hex`. Reproduced natively as well as on the runner, so it is not a runner artefact |
 | `tests` (native half) | `cargo test -p plaudon-app --all-features` builds a test binary that cannot start: `dyld: Library not loaded: @rpath/libswift_Concurrency.dylib`. `crates/ai-apple/build.rs` emits `-Wl,-rpath,/usr/lib/swift` only for its own package's targets, so a dependent crate's test binary has no such rpath. CI's macos-15 `rust` job runs the same command |
-| `egui-suites` | `plaudon-ui`'s `a_jobs_deep_link_is_announced_on_the_row_it_names` fails |
+| `egui-suites` | `plaudon-ui`'s `a_jobs_deep_link_is_announced_on_the_row_it_names` fails — **fixed in #275**: it was a race, not a broken assertion. The screen's first frame put two `list_jobs` answers in flight, and the later one overwrote the page the test had seeded |
 | `apple-hermetic` | the job's workflow-wide `RUSTFLAGS: -D warnings` turns `plaudon-jobs`' `#[inline(always)]` into an error, so the clippy step cannot compile a dependency |
 | `coverage` | `scripts/coverage.sh` passes `--branch`, which needs `-Z coverage-options=branch`, which needs nightly; `rust-toolchain.toml` pins **stable**. The CI job would fail identically |
 

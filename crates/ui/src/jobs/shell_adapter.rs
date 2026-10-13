@@ -54,7 +54,14 @@ impl JobsShellScreen {
 
     /// Read the first page under the current filters, and the storage facts
     /// the §J7 capacity comparison needs.
+    ///
+    /// This is the screen's whole first-frame load, so it latches `loaded`:
+    /// the subscription resynchronisation the shell fans out before the first
+    /// frame asks for exactly this read, and reading again from [`Screen::ui`]
+    /// would put two `list_jobs` answers in flight for one startup — the later
+    /// of which overwrites the page the earlier one drew.
     fn load(&mut self, cx: &mut ScreenCtx<'_>) {
+        self.loaded = true;
         cx.send(AppCommand::ListJobs(self.screen.first_page_request()));
         cx.send(AppCommand::GetCapabilities);
     }
@@ -87,7 +94,6 @@ impl Screen for JobsShellScreen {
 
     fn ui(&mut self, ui: &mut egui::Ui, cx: &mut ScreenCtx<'_>) {
         if !self.loaded {
-            self.loaded = true;
             self.load(cx);
         }
         self.follow_route(cx);
