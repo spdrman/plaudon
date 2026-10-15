@@ -181,6 +181,7 @@ fn the_permitted_mode_subsystem_purpose_table_is_exhaustive_and_fails_closed() {
 
     let mut allowed = 0usize;
     let mut refused = 0usize;
+    let mut gated = 0usize;
     for (subsystem, permitted_purposes) in valid {
         for purpose in EgressPurpose::ALL {
             let destination = if *subsystem == Subsystem::PlaudCloudCli {
@@ -191,7 +192,15 @@ fn the_permitted_mode_subsystem_purpose_table_is_exhaustive_and_fails_closed() {
             let request =
                 EgressRequest::new(*subsystem, destination, purpose, PayloadClass::Metadata);
             let result = policy.authorize(&request);
-            if permitted_purposes.contains(&purpose) {
+            if *subsystem == Subsystem::PlaudCloudCli && purpose == EgressPurpose::AssetDownload {
+                // The guided CLI install (#303) is a valid purpose for the
+                // subsystem, but only a per-action grant can approve it, so a
+                // standing grant refuses it with its own reason.
+                let denied = result.expect_err("a standing grant never installs");
+                assert_eq!(denied.reason, DenyReason::ActionNotApproved);
+                assert_eq!(denied.user_action, None);
+                gated += 1;
+            } else if permitted_purposes.contains(&purpose) {
                 assert!(
                     result.is_ok(),
                     "{} / {} should be allowed, got {result:?}",
@@ -217,7 +226,8 @@ fn the_permitted_mode_subsystem_purpose_table_is_exhaustive_and_fails_closed() {
     }
 
     assert_eq!(allowed, 13);
-    assert_eq!(refused, 8 * EgressPurpose::ALL.len() - 13);
+    assert_eq!(gated, 1);
+    assert_eq!(refused, 8 * EgressPurpose::ALL.len() - 13 - 1);
 }
 
 fn representative_host(subsystem: Subsystem) -> &'static str {

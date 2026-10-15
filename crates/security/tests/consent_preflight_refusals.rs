@@ -329,8 +329,9 @@ fn credential_validation_is_labelled_as_a_credential_at_the_egress_gate() {
     );
 }
 
-/// Every consent purpose maps onto exactly one egress purpose, and the three
-/// content-bearing purposes share the inference dispatch.
+/// Every consent purpose maps onto exactly one egress purpose, the three
+/// content-bearing purposes share the inference dispatch, and the two
+/// per-action purposes keep egress purposes of their own.
 #[test]
 fn every_consent_purpose_maps_onto_one_egress_purpose() {
     let cases = [
@@ -349,6 +350,13 @@ fn every_consent_purpose_maps_onto_one_egress_purpose() {
         (
             ConsentPurpose::TranscriptTool,
             EgressPurpose::InferenceDispatch,
+        ),
+        // The two per-action purposes (#303) map onto egress purposes the
+        // relay subsystem refuses, so they can never ride a dispatch.
+        (ConsentPurpose::ModelDownload, EgressPurpose::ModelDownload),
+        (
+            ConsentPurpose::DependencyInstall,
+            EgressPurpose::AssetDownload,
         ),
     ];
     let mut labels = BTreeSet::new();
