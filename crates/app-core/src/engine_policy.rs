@@ -1023,4 +1023,125 @@ mod tests {
             other => panic!("expected whisper, got {other:?}"),
         }
     }
+
+    // ---------------------------------------------------------- #306 ----
+    //
+    // The released v0.1.0 macOS bundle was built without the Swift bridge,
+    // and the Engines screen blamed the user's Mac for it: "not provided by
+    // this system ... Update macOS". A build decision has to be reported as
+    // a build decision, and a genuinely old macOS keeps its own sentence.
+
+    fn apple_engines() -> [EngineId; 2] {
+        [
+            EngineId::new(APPLE_ENGINE_ID),
+            EngineId::new(APPLE_TEXT_ENGINE_ID),
+        ]
+    }
+
+    fn platform(detail: &str) -> AvailabilityReason {
+        AvailabilityReason::PlatformUnsupported {
+            platform: detail.into(),
+        }
+    }
+
+    #[test]
+    fn issue_306_a_build_without_the_bridge_says_so() {
+        for engine in apple_engines() {
+            let explanation = explain(&engine, &platform("bridge_not_linked"));
+            assert!(
+                explanation
+                    .headline
+                    .contains("built without the Apple bridge"),
+                "{engine:?}: {}",
+                explanation.headline
+            );
+            assert_eq!(explanation.code, "build_without_apple_bridge");
+        }
+    }
+
+    #[test]
+    fn issue_306_a_build_without_the_bridge_does_not_blame_the_system() {
+        for engine in apple_engines() {
+            let explanation = explain(&engine, &platform("bridge_not_linked"));
+            assert!(
+                !explanation.headline.contains("not provided by this system"),
+                "{engine:?}: {}",
+                explanation.headline
+            );
+            assert!(
+                !explanation.actions.contains(&CorrectiveAction::UpdateMacOs),
+                "updating macOS cannot add a bridge the build left out"
+            );
+            assert!(explanation
+                .actions
+                .contains(&CorrectiveAction::UseLocalWhisper));
+        }
+    }
+
+    #[test]
+    fn issue_306_a_build_compiled_without_the_frameworks_is_a_build_fact_too() {
+        // `#if canImport(Speech)` failing is decided by the SDK at compile
+        // time, not by the Mac the bundle runs on.
+        for detail in [
+            "speech_framework_absent",
+            "foundation_models_framework_absent",
+        ] {
+            let explanation = explain(&EngineId::new(APPLE_ENGINE_ID), &platform(detail));
+            assert_eq!(explanation.code, "build_without_apple_bridge", "{detail}");
+            assert!(
+                !explanation.actions.contains(&CorrectiveAction::UpdateMacOs),
+                "{detail}"
+            );
+        }
+    }
+
+    #[test]
+    fn issue_306_an_older_macos_keeps_an_honest_update_message() {
+        for detail in [
+            "speech_requires_macos_26",
+            "foundation_models_requires_macos_26",
+        ] {
+            let explanation = explain(&EngineId::new(APPLE_ENGINE_ID), &platform(detail));
+            assert_eq!(explanation.code, "macos_too_old", "{detail}");
+            assert!(
+                explanation.headline.contains("macOS 26 or later"),
+                "{detail}: {}",
+                explanation.headline
+            );
+            assert_eq!(
+                explanation.actions,
+                vec![
+                    CorrectiveAction::UpdateMacOs,
+                    CorrectiveAction::UseLocalWhisper
+                ]
+            );
+        }
+    }
+
+    #[test]
+    fn issue_306_off_macos_the_sentence_names_the_os_not_the_build() {
+        let explanation = explain(&EngineId::new(APPLE_ENGINE_ID), &platform("not_macos"));
+        assert_eq!(explanation.code, "not_macos");
+        assert!(
+            explanation.headline.contains("only on macOS"),
+            "{}",
+            explanation.headline
+        );
+        assert!(!explanation.actions.contains(&CorrectiveAction::UpdateMacOs));
+    }
+
+    #[test]
+    fn issue_306_the_causes_have_distinct_codes() {
+        let engine = EngineId::new(APPLE_ENGINE_ID);
+        let codes: std::collections::BTreeSet<_> = [
+            "bridge_not_linked",
+            "speech_requires_macos_26",
+            "not_macos",
+            "something_unforeseen",
+        ]
+        .iter()
+        .map(|detail| explain(&engine, &platform(detail)).code)
+        .collect();
+        assert_eq!(codes.len(), 4, "{codes:?}");
+    }
 }

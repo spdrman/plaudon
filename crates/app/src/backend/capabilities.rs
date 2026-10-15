@@ -464,6 +464,44 @@ mod tests {
         }
     }
 
+    #[test]
+    fn issue_306_a_macos_build_without_the_bridge_says_the_build_lacks_it() {
+        // The Engines screen of the released bundle told the user to update
+        // macOS for something the build itself left out.
+        if !cfg!(target_os = "macos") || cfg!(feature = "apple-bridge") {
+            return;
+        }
+        for entry in apple_engine_entries() {
+            let reason = entry
+                .unavailable_reason
+                .expect("an unavailable row says why");
+            assert!(
+                reason.contains("built without the Apple bridge"),
+                "{}: {reason}",
+                entry.engine_id
+            );
+            assert!(
+                !reason.contains("Update macOS") && !reason.contains("not provided by this system"),
+                "{}: {reason}",
+                entry.engine_id
+            );
+        }
+    }
+
+    #[test]
+    fn issue_306_off_macos_the_rows_name_the_os_not_the_build() {
+        if cfg!(target_os = "macos") {
+            return;
+        }
+        for entry in apple_engine_entries() {
+            let reason = entry
+                .unavailable_reason
+                .expect("an unavailable row says why");
+            assert!(reason.contains("only on macOS"), "{reason}");
+            assert!(!reason.contains("Update macOS"), "{reason}");
+        }
+    }
+
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn installed_models_are_discovered_from_disk() {
         let fixture = backend_fixture().await;

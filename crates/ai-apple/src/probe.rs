@@ -990,6 +990,35 @@ mod tests {
     }
 
     #[test]
+    fn issue_306_an_unlinked_bridge_names_the_build_on_macos_and_the_os_elsewhere() {
+        // On a Mac the only way to reach `NotLinked` is a build without the
+        // bridge; anywhere else the OS simply has no Apple frameworks. The
+        // two must not share one detail, or the sentence built from it has
+        // to be vague enough to be true in both, which is what #306 was.
+        let availability = probe_once(&crate::UnlinkedBridge, Some("en-US"), PROBE_BUDGET);
+        let expected = if cfg!(target_os = "macos") {
+            "bridge_not_linked"
+        } else {
+            "not_macos"
+        };
+        for reason in [
+            AppleCapabilities::from_availability(&availability, AssetDownloadConsent::Withheld)
+                .speech
+                .availability_reason,
+            AppleCapabilities::from_availability(&availability, AssetDownloadConsent::Withheld)
+                .text_model
+                .availability_reason,
+        ] {
+            assert_eq!(
+                reason,
+                AvailabilityReason::PlatformUnsupported {
+                    platform: expected.to_owned()
+                }
+            );
+        }
+    }
+
+    #[test]
     fn an_abi_mismatch_refuses_before_any_operation_runs() {
         let bridge = FakeBridge::new().with_abi_version(crate::envelope::EXPECTED_ABI_VERSION + 1);
         let availability = probe_once(&bridge, None, PROBE_BUDGET);

@@ -759,3 +759,82 @@ fn both_packaging_scripts_fail_closed_without_credentials() {
         "there is no notarization on Windows; the report must say so rather than claim success"
     );
 }
+
+// ------------------------------------------------------- #306 bridge ----
+//
+// The v0.1.0 bundle was packaged without the Swift Apple bridge, and nothing
+// in the packager or the release workflow could have linked it: the feature
+// list was hard-coded to `local-whisper`. These pin the packager's ability to
+// link the bridge whenever the active SDK can compile it, and its duty to say
+// in the signing report which way it went.
+
+fn macos_packager() -> String {
+    read_repo("scripts/package-macos-egui.sh")
+}
+
+fn read_repo(relative: &str) -> String {
+    std::fs::read_to_string(repo_root().join(relative))
+        .unwrap_or_else(|error| panic!("{relative}: {error}"))
+}
+
+#[test]
+fn issue_306_the_macos_packager_takes_an_apple_bridge_mode() {
+    let script = macos_packager();
+    for mode in ["--apple-bridge", "auto", "require", "off"] {
+        assert!(
+            script.contains(mode),
+            "package-macos-egui.sh has no `{mode}` for the Apple bridge"
+        );
+    }
+}
+
+#[test]
+fn issue_306_auto_mode_asks_the_sdk_by_building_the_bridge() {
+    // "Can this SDK build the bridge" is answered by compiling it, not by
+    // comparing version numbers somebody wrote down once.
+    let script = macos_packager();
+    assert!(
+        script.contains("scripts/build-apple-bridge.sh"),
+        "the packager must try the real bridge build to decide"
+    );
+    assert!(
+        script.contains("apple-bridge"),
+        "a successful bridge build must add the `apple-bridge` feature"
+    );
+}
+
+#[test]
+fn issue_306_the_signing_report_records_the_bridge() {
+    let script = macos_packager();
+    assert!(
+        script.contains("\"apple_bridge\":"),
+        "the signing report must say whether the Apple bridge was linked"
+    );
+    assert!(
+        script.contains("\"apple_bridge_detail\":"),
+        "and why, when it was not"
+    );
+}
+
+#[test]
+fn issue_306_the_linked_or_unlinked_claim_is_checked_on_the_binary() {
+    // A report line is a claim about a binary, so the packager inspects the
+    // binary: the bridge entry point must be present when linked, and
+    // check-no-apple-symbols.sh must pass when not.
+    let script = macos_packager();
+    assert!(script.contains("plaudon_apple_probe_speech"), "{script}");
+    assert!(script.contains("scripts/check-no-apple-symbols.sh"));
+}
+
+#[test]
+fn issue_306_the_release_workflow_asks_for_the_bridge() {
+    let workflow = read_repo(".github/workflows/release.yml");
+    assert!(
+        workflow.contains("--apple-bridge auto"),
+        "release.yml must let the packager link the bridge when the SDK can build it"
+    );
+    assert!(
+        workflow.contains("apple_bridge"),
+        "release.yml must surface the report's apple_bridge field"
+    );
+}
