@@ -326,6 +326,16 @@ fn choosing_a_text_engine_carries_both_current_ids() {
     let mut harness = harness(EnginesSection::default(), data);
     harness.run();
 
+    // Opening the section asks once where the PLAUD CLI stands, for the
+    // block #303 added under the engines. That is the only thing it may ask
+    // for before anyone touches it, and it must not ask again on every frame.
+    assert_eq!(harness.state().command_names(), ["detect_plaud_toolchain"]);
+    assert_eq!(
+        harness.state_mut().out.drain().len(),
+        1,
+        "nothing but the toolchain check on the opening frame"
+    );
+
     harness
         .get_by_label("Use OpenRouter for summarization")
         .click();

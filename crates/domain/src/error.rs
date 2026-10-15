@@ -639,69 +639,98 @@ impl DiagnosticLog {
 mod tests {
     use super::*;
 
+    /// The published code set, in order, as `schemas/error-envelope.v1.schema.json`
+    /// lists it. The schema is the one place the contract is written down:
+    /// this test and every other test that cares how many codes there are
+    /// read it from there, so adding a code means editing the schema (where a
+    /// reviewer sees it and where two branches adding codes conflict in git)
+    /// rather than bumping a count in several suites.
+    fn published_codes() -> Vec<String> {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../schemas/error-envelope.v1.schema.json");
+        let text = std::fs::read_to_string(&path)
+            .unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
+        let schema: serde_json::Value = serde_json::from_str(&text).expect("schema parses");
+        schema["properties"]["code"]["enum"]
+            .as_array()
+            .expect("the schema lists the codes")
+            .iter()
+            .map(|v| v.as_str().expect("every code is a string").to_owned())
+            .collect()
+    }
+
     #[test]
     fn the_code_set_is_closed_and_stable() {
         let codes: Vec<&str> = AppErrorCode::ALL.iter().map(|c| c.as_str()).collect();
+        let published = published_codes();
         assert_eq!(
-            codes,
-            [
-                "CLI_MISSING",
-                "CLI_UNSUPPORTED",
-                "AUTHENTICATION_REQUIRED",
-                "AUTH_CANCELED",
-                "SOURCE_UNAVAILABLE",
-                "REMOTE_RATE_LIMITED",
-                "LINK_EXPIRED",
-                "ASSET_NOT_FOUND",
-                "MALFORMED_OUTPUT",
-                "DOWNLOAD_INTERRUPTED",
-                "INTEGRITY_FAILED",
-                "RADIO_PERMISSION_DENIED",
-                "DEVICE_BUSY",
-                "DEVICE_DISCONNECTED",
-                "UNSUPPORTED_FIRMWARE",
-                "AUTH_BOOTSTRAP_REQUIRED",
-                "AUTH_REJECTED",
-                "TRANSFER_INCOMPLETE",
-                "UNSUPPORTED_CODEC",
-                "NOT_PRESENT_ON_DEVICE",
-                "DEVICE_POWER_LOW",
-                "UNSUPPORTED_MEDIA",
-                "MEDIA_VALIDATION_FAILED",
-                "STORAGE_UNAVAILABLE",
-                "STORAGE_FULL",
-                "MIGRATION_FAILED",
-                "RECORD_NOT_FOUND",
-                "CONFLICT",
-                "ARCHIVE_PATH_REJECTED",
-                "CROSS_VOLUME_COMMIT",
-                "CONSENT_REQUIRED",
-                "LOCAL_ONLY_MODE",
-                "POLICY_UNRESOLVED",
-                "CAPABILITY_UNVERIFIED",
-                "MODEL_UNAVAILABLE",
-                "OUTCOME_UNKNOWN",
-                "PROVIDER_REJECTED",
-                "SCHEMA_VALIDATION_FAILED",
-                "CONTEXT_TOO_LARGE",
-                "CANCELED",
-                "TIMEOUT",
-                "INVALID_ARGUMENT",
-                "CONFIRMATION_REQUIRED",
-                "COST_ACKNOWLEDGEMENT_REQUIRED",
-                "BUDGET_EXCEEDED",
-                "SECRET_STORE_LOCKED",
-                "EGRESS_DENIED",
-                "COMMAND_NOT_AUTHORIZED",
-                "HELPER_FAILED",
-                "EXPORT_DESTINATION_REJECTED",
-                "CAPTIONS_UNAVAILABLE",
-                "ARCHIVE_REJECTED",
-                "ARCHIVE_DECRYPTION_FAILED",
-                "SECRET_EXCLUSION_FAILED",
-                "INTERNAL_ERROR",
-            ]
+            codes, published,
+            "AppErrorCode::ALL must match the published schema exactly, in order: \
+             a code is never renamed, dropped or reordered without changing the contract"
         );
+        // The codes every release so far has shipped. They may be joined by
+        // new ones, but never lose one: an envelope already stored or sent
+        // has to keep meaning the same thing.
+        for shipped in [
+            "CLI_MISSING",
+            "CLI_UNSUPPORTED",
+            "AUTHENTICATION_REQUIRED",
+            "AUTH_CANCELED",
+            "SOURCE_UNAVAILABLE",
+            "REMOTE_RATE_LIMITED",
+            "LINK_EXPIRED",
+            "ASSET_NOT_FOUND",
+            "MALFORMED_OUTPUT",
+            "DOWNLOAD_INTERRUPTED",
+            "INTEGRITY_FAILED",
+            "RADIO_PERMISSION_DENIED",
+            "DEVICE_BUSY",
+            "DEVICE_DISCONNECTED",
+            "UNSUPPORTED_FIRMWARE",
+            "AUTH_BOOTSTRAP_REQUIRED",
+            "AUTH_REJECTED",
+            "TRANSFER_INCOMPLETE",
+            "UNSUPPORTED_CODEC",
+            "NOT_PRESENT_ON_DEVICE",
+            "DEVICE_POWER_LOW",
+            "UNSUPPORTED_MEDIA",
+            "MEDIA_VALIDATION_FAILED",
+            "STORAGE_UNAVAILABLE",
+            "STORAGE_FULL",
+            "MIGRATION_FAILED",
+            "RECORD_NOT_FOUND",
+            "CONFLICT",
+            "ARCHIVE_PATH_REJECTED",
+            "CROSS_VOLUME_COMMIT",
+            "CONSENT_REQUIRED",
+            "LOCAL_ONLY_MODE",
+            "POLICY_UNRESOLVED",
+            "CAPABILITY_UNVERIFIED",
+            "MODEL_UNAVAILABLE",
+            "NO_SPEECH_MODEL",
+            "OUTCOME_UNKNOWN",
+            "PROVIDER_REJECTED",
+            "SCHEMA_VALIDATION_FAILED",
+            "CONTEXT_TOO_LARGE",
+            "CANCELED",
+            "TIMEOUT",
+            "INVALID_ARGUMENT",
+            "CONFIRMATION_REQUIRED",
+            "COST_ACKNOWLEDGEMENT_REQUIRED",
+            "BUDGET_EXCEEDED",
+            "SECRET_STORE_LOCKED",
+            "EGRESS_DENIED",
+            "COMMAND_NOT_AUTHORIZED",
+            "HELPER_FAILED",
+            "EXPORT_DESTINATION_REJECTED",
+            "CAPTIONS_UNAVAILABLE",
+            "ARCHIVE_REJECTED",
+            "ARCHIVE_DECRYPTION_FAILED",
+            "SECRET_EXCLUSION_FAILED",
+            "INTERNAL_ERROR",
+        ] {
+            assert!(codes.contains(&shipped), "{shipped} was dropped from the set");
+        }
     }
 
     #[test]

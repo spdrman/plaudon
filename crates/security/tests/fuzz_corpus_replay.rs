@@ -2119,10 +2119,26 @@ mod replay {
                 serde_json::from_str(&encoded).expect("envelope deserializes");
             assert_eq!(back, envelope);
         }
+        // The size the loop above has to have covered comes from the
+        // published contract, not from a count pinned here: a new code lands
+        // in `schemas/error-envelope.v1.schema.json` and this suite follows,
+        // while a code that exists in Rust but was never published (or the
+        // reverse) still fails it.
+        let schema_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../schemas/error-envelope.v1.schema.json");
+        let schema: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(&schema_path)
+                .unwrap_or_else(|e| panic!("read {}: {e}", schema_path.display())),
+        )
+        .expect("schema parses");
+        let published = schema["properties"]["code"]["enum"]
+            .as_array()
+            .expect("the schema lists the codes")
+            .len();
         assert_eq!(
             AppErrorCode::ALL.len(),
-            55,
-            "the closed error-code set changed size"
+            published,
+            "the closed error-code set and the published schema disagree on its size"
         );
     }
 

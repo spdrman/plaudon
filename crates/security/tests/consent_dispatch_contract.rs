@@ -897,7 +897,32 @@ fn approval_implies_a_superset_grant_on_every_axis() {
         }
     }
 
-    assert_eq!(checked, 4 * 3 * 3 * 5 * 2 * 2 * 2);
+    // Every axis is walked in full. The sizes come from the axes themselves
+    // (the `ALL` sets and the local arrays above), so a purpose or content
+    // type added elsewhere widens the cross product instead of breaking a
+    // pinned total; what this still catches is a loop that stops early.
+    let requires_privacy_restriction_values = 2;
+    assert_eq!(
+        checked,
+        ConsentPurpose::ALL.len()
+            * ContentType::ALL.len()
+            * routes.len()
+            * retentions.len()
+            * requires_privacy_restriction_values
+            * recordings.len()
+            * disclosures.len()
+    );
+    // A repeated entry would inflate the product without adding a case.
+    assert_eq!(
+        ConsentPurpose::ALL.iter().collect::<BTreeSet<_>>().len(),
+        ConsentPurpose::ALL.len(),
+        "ConsentPurpose::ALL repeats a purpose"
+    );
+    assert_eq!(
+        ContentType::ALL.iter().collect::<BTreeSet<_>>().len(),
+        ContentType::ALL.len(),
+        "ContentType::ALL repeats a content type"
+    );
     assert!(
         approved > 0,
         "the cross product must contain approvable requests"
