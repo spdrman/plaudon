@@ -389,6 +389,13 @@ pub async fn build_ports_with(
         voice_profiles: Arc::clone(&backend) as Arc<dyn VoiceProfilesPort>,
         models: Arc::new(
             crate::backend::models::ModelsBackend::new(app_data_dir, events.clone())
+                // Local-only Mode is read from the stored preferences, and
+                // every per-action download or install grant is written to
+                // the same consent log the cloud grants live in (#303).
+                .with_egress(
+                    Arc::clone(&backend) as Arc<dyn SettingsPort>,
+                    crate::backend::consent::ConsentStore::new(backend.store().db().pool().clone()),
+                )
                 .with_seams(model_seams),
         ),
         update: Arc::new(crate::backend::update::UpdateBackend::new(

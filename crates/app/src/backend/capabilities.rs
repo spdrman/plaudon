@@ -113,6 +113,23 @@ impl LocalBackend {
         let models_dir = self.store().models_dir();
         let whisper_models = installed_models(&models_dir.join("whisper.cpp"));
         let apple = apple_engine_entries();
+        let installed: std::collections::BTreeSet<String> = whisper_models
+            .iter()
+            .filter(|model| model.installed)
+            .map(|model| model.model_id.clone())
+            .collect();
+        let whisper_offers = crate::backend::model_setup::offers_for(
+            plaudon_app_core::models::catalogue::committed(),
+            "whisper.cpp",
+            &installed,
+        );
+        // The smallest download that would make the engine usable, from the
+        // committed catalogue's exact figures (issue #305); nothing when
+        // every offer is already installed.
+        let whisper_download = whisper_offers
+            .iter()
+            .find(|offer| !offer.installed)
+            .map(|offer| offer.size_bytes);
 
         let mut entries = vec![EngineInventoryEntry {
             engine_id: "whisper.cpp".to_owned(),
@@ -125,11 +142,9 @@ impl LocalBackend {
                 NO_EVIDENCE.to_owned()
             }),
             installed_models: whisper_models,
-            // The download size depends on the model the user picks; this
-            // build has no catalog, so it reports unknown rather than a guess.
-            download_bytes_required: None,
+            download_bytes_required: whisper_download,
             requires_network: false,
-            catalogue: Vec::new(),
+            catalogue: whisper_offers,
         }];
         entries.extend(apple);
         entries.push(EngineInventoryEntry {
@@ -380,7 +395,14 @@ mod tests {
                     engine.engine_id
                 );
             }
-            assert_eq!(engine.download_bytes_required, None);
+            // Only whisper.cpp has a catalogue, and its figure is the
+            // smallest pinned download, never a guess (issue #305).
+            let expected = (engine.engine_id == "whisper.cpp").then_some(77_691_713);
+            assert_eq!(
+                engine.download_bytes_required, expected,
+                "{}",
+                engine.engine_id
+            );
         }
         assert!(!capabilities.openrouter_key_present);
         assert_eq!(

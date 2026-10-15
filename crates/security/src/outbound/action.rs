@@ -19,8 +19,11 @@ use std::sync::Arc;
 use parking_lot::Mutex;
 
 use super::subprocess::GatedProcessLauncher;
-use super::{EgressDenied, EgressPurpose, EgressTicket, OutboundPolicy, Subsystem};
-use crate::consent::{ConsentGrant, ConsentPurpose};
+use super::{
+    user_action_for, ApprovalSource, DenyReason, Destination, EgressDenied, EgressPurpose,
+    EgressRequest, EgressTicket, NetworkGrant, OutboundPolicy, PayloadClass, Subsystem,
+};
+use crate::consent::{ConsentGrant, ConsentPurpose, GrantScope, ProviderRoute};
 
 /// Disclosure version recorded on every action grant.
 pub const ACTION_DISCLOSURE_VERSION: &str = "2026-10-14.action-egress";
@@ -45,19 +48,55 @@ pub struct ActionScope {
 
 impl ActionScope {
     /// The scope of downloading one model file from `url`.
+    ///
+    /// The URL must be one the gate would accept at all: HTTPS, a public DNS
+    /// name, no credentials. Its query and fragment are not part of what is
+    /// approved, so a URL carrying either is refused.
     pub fn model_download(
         url: &str,
         delivery_host_suffix: Option<&str>,
     ) -> Result<Self, EgressDenied> {
-        let _ = (url, delivery_host_suffix);
-        unimplemented!("issue #303: per-action download scope")
+        let destination = Destination::url(url)?;
+        let parsed = url::Url::parse(url).map_err(|_| {
+            refusal(
+                DenyReason::MalformedDestination,
+                Subsystem::ModelDistribution,
+                "<unparseable-url>",
+            )
+        })?;
+        let host = destination.host().unwrap_or_default().to_owned();
+        if parsed.query().is_some() || parsed.fragment().is_some() || parsed.path().len() <= 1 {
+            return Err(refusal(
+                DenyReason::MalformedDestination,
+                Subsystem::ModelDistribution,
+                &destination.label(),
+            ));
+        }
+        Ok(Self {
+            subsystem: Subsystem::ModelDistribution,
+            purpose: EgressPurpose::ModelDownload,
+            consent_purpose: ConsentPurpose::ModelDownload,
+            host,
+            resource: parsed.path().to_owned(),
+            delivery_host_suffix: delivery_host_suffix.map(str::to_ascii_lowercase),
+        })
     }
 
     /// The scope of installing one package from `host`.
     #[must_use]
     pub fn dependency_install(host: &str, package: &str) -> Self {
-        let _ = (host, package);
-        unimplemented!("issue #303: per-action install scope")
+        Self {
+            subsystem: Subsystem::PlaudCloudCli,
+            purpose: EgressPurpose::AssetDownload,
+            consent_purpose: ConsentPurpose::DependencyInstall,
+            host: host.to_ascii_lowercase(),
+            resource: package.to_owned(),
+            delivery_host_suffix: None,
+        }
+    }
+
+    fn label(&self) -> String {
+        format!("https://{}", self.host)
     }
 }
 
@@ -91,8 +130,44 @@ impl ActionEgressGrant {
         id: impl Into<String>,
         now_unix: i64,
     ) -> Result<Self, EgressDenied> {
-        let _ = (local_only, scope, approval, id.into(), now_unix);
-        unimplemented!("issue #303: approve a per-action grant")
+        // Local-only Mode first, so its refusal names the real reason: no
+        // approval could have changed the answer.
+        if local_only {
+            return Err(refusal(
+                DenyReason::LocalOnlyMode,
+                scope.subsystem,
+                &scope.label(),
+            ));
+        }
+        if !approval.host.eq_ignore_ascii_case(&scope.host) || approval.resource != scope.resource {
+            return Err(refusal(
+                DenyReason::ActionNotApproved,
+                scope.subsystem,
+                &scope.label(),
+            ));
+        }
+        let mut hosts = vec![scope.host.clone()];
+        if let Some(suffix) = &scope.delivery_host_suffix {
+            hosts.push(suffix.clone());
+        }
+        let grant = NetworkGrant::new(
+            ApprovalSource::UserSettingsConfirmation,
+            now_unix,
+            ACTION_DISCLOSURE_VERSION,
+        )
+        .with_allowed_hosts(hosts)
+        .with_model_downloads_approved(scope.purpose == EgressPurpose::ModelDownload)
+        .with_dependency_install_approved(
+            scope.consent_purpose == ConsentPurpose::DependencyInstall,
+        );
+        Ok(Self {
+            id: id.into(),
+            scope,
+            policy: Arc::new(OutboundPolicy::network_permitted(grant)),
+            granted_at_unix: now_unix,
+            revoked: AtomicBool::new(false),
+            revoked_at_unix: Mutex::new(None),
+        })
     }
 
     /// The grant's identifier, which is also its consent-log id.
@@ -113,35 +188,123 @@ impl ActionEgressGrant {
         self.revoked.load(Ordering::SeqCst)
     }
 
+    fn ended(&self) -> EgressDenied {
+        refusal(
+            DenyReason::ActionNotApproved,
+            self.scope.subsystem,
+            &self.scope.label(),
+        )
+    }
+
     /// A ticket for requesting `url`, which must be the approved file on the
     /// approved host.
     pub fn authorize_url(&self, url: &str) -> Result<EgressTicket, EgressDenied> {
-        let _ = (url, &self.policy, self.granted_at_unix);
-        unimplemented!("issue #303: authorize the approved url")
+        if self.is_revoked() || self.scope.purpose != EgressPurpose::ModelDownload {
+            return Err(self.ended());
+        }
+        let destination = Destination::url(url)?;
+        let parsed = url::Url::parse(url).map_err(|_| self.ended())?;
+        let same_host = destination.host() == Some(self.scope.host.as_str());
+        let same_file = parsed.path() == self.scope.resource
+            && parsed.query().is_none()
+            && parsed.fragment().is_none();
+        if !same_host || !same_file {
+            return Err(refusal(
+                DenyReason::ActionNotApproved,
+                self.scope.subsystem,
+                &destination.label(),
+            ));
+        }
+        self.policy.authorize(&EgressRequest::new(
+            self.scope.subsystem,
+            destination,
+            self.scope.purpose,
+            PayloadClass::None,
+        ))
     }
 
     /// Whether a redirect to `url` stays inside what the user approved.
+    ///
+    /// The approved host itself, or a server under the delivery domain the
+    /// disclosure named. Anything else, including a lookalike that merely
+    /// ends in the same letters, is refused.
     pub fn authorize_redirect(&self, url: &str) -> Result<(), EgressDenied> {
-        let _ = url;
-        unimplemented!("issue #303: authorize a redirect hop")
+        if self.is_revoked() || self.scope.purpose != EgressPurpose::ModelDownload {
+            return Err(self.ended());
+        }
+        let destination = Destination::url(url)?;
+        let host = destination.host().unwrap_or_default();
+        let on_host = host == self.scope.host;
+        let on_delivery = self
+            .scope
+            .delivery_host_suffix
+            .as_deref()
+            .is_some_and(|suffix| host == suffix || host.ends_with(&format!(".{suffix}")));
+        if !on_host && !on_delivery {
+            return Err(refusal(
+                DenyReason::ActionNotApproved,
+                self.scope.subsystem,
+                &destination.label(),
+            ));
+        }
+        self.policy
+            .authorize(&EgressRequest::new(
+                self.scope.subsystem,
+                destination,
+                self.scope.purpose,
+                PayloadClass::None,
+            ))
+            .map(|_| ())
     }
 
     /// The process launcher for an approved install, gated by this grant.
     pub fn launcher(&self) -> Result<GatedProcessLauncher, EgressDenied> {
-        unimplemented!("issue #303: launcher under a per-action grant")
+        if self.is_revoked() || self.scope.consent_purpose != ConsentPurpose::DependencyInstall {
+            return Err(self.ended());
+        }
+        Ok(GatedProcessLauncher::new(Arc::clone(&self.policy)))
     }
 
     /// The consent-log row for this grant.
+    ///
+    /// "Ask every time" with no content type: the row records the action and
+    /// can never be matched as consent for a dispatch of user content.
     #[must_use]
     pub fn consent_record(&self) -> ConsentGrant {
-        let _ = &self.revoked_at_unix;
-        unimplemented!("issue #303: consent record of a per-action grant")
+        let mut record = ConsentGrant::new(
+            self.id.clone(),
+            GrantScope::AskEveryTime,
+            self.scope.consent_purpose,
+            ACTION_DISCLOSURE_VERSION,
+            self.granted_at_unix,
+        )
+        .with_route(ProviderRoute::new(
+            self.scope.host.clone(),
+            self.scope.resource.clone(),
+        ));
+        record.revoked_at_unix = *self.revoked_at_unix.lock();
+        record
     }
 
     /// End the action: nothing more may be authorized under this grant.
     /// Returns the revoked consent-log row.
     pub fn revoke(&self, now_unix: i64) -> ConsentGrant {
-        let _ = now_unix;
-        unimplemented!("issue #303: revoke a per-action grant")
+        {
+            let mut revoked_at = self.revoked_at_unix.lock();
+            if revoked_at.is_none() {
+                *revoked_at = Some(now_unix);
+            }
+        }
+        self.revoked.store(true, Ordering::SeqCst);
+        self.consent_record()
+    }
+}
+
+fn refusal(reason: DenyReason, subsystem: Subsystem, label: &str) -> EgressDenied {
+    EgressDenied {
+        reason,
+        subsystem,
+        destination_label: label.to_owned(),
+        user_action: user_action_for(reason),
     }
 }

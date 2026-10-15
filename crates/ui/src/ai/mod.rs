@@ -129,6 +129,9 @@ pub enum AiIntent {
         /// Suggested file name, including the extension.
         suggested_file_name: String,
     },
+    /// Ask for a model weights file, then dispatch `import_model_file` for
+    /// it (issue #305).
+    PickModelFile,
     /// Ask for a folder, then dispatch `export_media` into it.
     PickMediaExportDirectory {
         /// Recording being exported.

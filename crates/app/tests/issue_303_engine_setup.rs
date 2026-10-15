@@ -218,7 +218,7 @@ fn issue_303_local_only_mode_refuses_a_download_and_makes_no_request() {
         0,
         "Local-only Mode made a request"
     );
-    assert!(harness.installed_ids().is_empty());
+    assert_eq!(harness.installed_ids(), Vec::<String>::new());
     assert!(
         harness.capabilities().preferences.local_only_mode,
         "a refused download must never turn Local-only Mode off"
@@ -238,7 +238,7 @@ fn issue_303_local_only_mode_refuses_the_guided_cli_install_without_launching_an
         approved_package: "@plaud-ai/cli@0.3.15".to_owned(),
     }));
     assert_eq!(envelope.code, AppErrorCode::LocalOnlyMode, "{envelope:?}");
-    assert!(harness.capabilities().cloud_consents.is_empty());
+    assert_eq!(harness.capabilities().cloud_consents, Vec::new());
 }
 
 /* --------------------------------------------------- per-action approval */
@@ -259,7 +259,7 @@ fn issue_303_a_download_whose_approval_names_another_file_is_refused_before_any_
     assert_eq!(envelope.code, AppErrorCode::EgressDenied, "{envelope:?}");
 
     assert_eq!(harness.transport.opens(), 0);
-    assert!(harness.installed_ids().is_empty());
+    assert_eq!(harness.installed_ids(), Vec::<String>::new());
 }
 
 #[test]
@@ -342,7 +342,7 @@ fn issue_303_a_download_whose_bytes_do_not_match_the_checksum_is_refused_and_rem
     let envelope = harness.reject(AppCommand::InstallModelDownload(download_request()));
 
     assert_eq!(envelope.code, AppErrorCode::IntegrityFailed, "{envelope:?}");
-    assert!(harness.installed_ids().is_empty());
+    assert_eq!(harness.installed_ids(), Vec::<String>::new());
     let AppResponse::ListLocalModels(list) = harness.call(AppCommand::ListLocalModels) else {
         panic!("wrong response");
     };
@@ -414,7 +414,7 @@ fn issue_303_importing_a_file_with_the_wrong_checksum_is_refused() {
         model_id: None,
     }));
     assert_eq!(envelope.code, AppErrorCode::IntegrityFailed, "{envelope:?}");
-    assert!(harness.installed_ids().is_empty());
+    assert_eq!(harness.installed_ids(), Vec::<String>::new());
 }
 
 /* ---------------------------------------------------------- PLAUD CLI */
@@ -538,7 +538,7 @@ fn issue_303_an_install_approval_for_another_package_is_refused() {
         approved_package: "@plaud-ai/cli@latest".to_owned(),
     }));
     assert_eq!(envelope.code, AppErrorCode::EgressDenied, "{envelope:?}");
-    assert!(harness.capabilities().cloud_consents.is_empty());
+    assert_eq!(harness.capabilities().cloud_consents, Vec::new());
 }
 
 /* -------------------------------------------- the inventory, issue #305 */
@@ -571,7 +571,13 @@ fn issue_305_the_engine_inventory_reports_the_catalogue_download_size_and_offers
     assert!(whisper.catalogue.len() >= 3, "{:?}", whisper.catalogue);
     for offer in &whisper.catalogue {
         assert_eq!(offer.host, "huggingface.co");
-        assert!(offer.file.ends_with(".bin"), "{}", offer.file);
+        assert!(
+            std::path::Path::new(&offer.file)
+                .extension()
+                .is_some_and(|extension| extension == "bin"),
+            "{}",
+            offer.file
+        );
         assert_eq!(offer.licence_spdx_id, "MIT");
         assert!(offer.size_bytes > 0);
     }

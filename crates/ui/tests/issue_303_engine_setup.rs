@@ -718,6 +718,25 @@ fn settings(local_only: bool) -> Harness<'static, SettingsApp> {
 fn issue_303_settings_keeps_the_same_actions_as_step_three() {
     let mut harness = settings(false);
     harness.run();
+    assert!(
+        harness
+            .state()
+            .out
+            .command_names()
+            .contains(&"detect_plaud_toolchain"),
+        "Settings must detect the PLAUD CLI too"
+    );
+    {
+        let SettingsApp { section, out, .. } = harness.state_mut();
+        section.on_response(
+            "detect_plaud_toolchain",
+            &Ok(AppResponse::DetectPlaudToolchain(toolchain(
+                false, false, false,
+            ))),
+            out,
+        );
+    }
+    harness.run();
 
     let labels: Vec<String> = a11y::nodes(&harness)
         .into_iter()
@@ -735,15 +754,6 @@ fn issue_303_settings_keeps_the_same_actions_as_step_three() {
             "Settings lacks {wanted:?}: {labels:?}"
         );
     }
-    assert!(
-        harness
-            .state()
-            .out
-            .command_names()
-            .contains(&"detect_plaud_toolchain"),
-        "Settings must detect the PLAUD CLI too"
-    );
-
     harness
         .get_by_label("Download Whisper tiny (multilingual)")
         .click();

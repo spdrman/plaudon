@@ -9,7 +9,7 @@
 
 use std::path::PathBuf;
 
-use plaudon_domain::error::AppError;
+use plaudon_domain::error::{AppError, AppErrorCode};
 
 use crate::dto::{
     InspectModelPackRequest, InspectModelPackResponse, InstallModelFromPackRequest,
@@ -107,10 +107,32 @@ pub async fn verify_local_model(
 }
 
 /// Download one model from the committed catalogue (issue #303).
+///
+/// Every disclosure is a field, and each one is checked here before the port
+/// is reached: a view that forgot to show the licence, the footprint or the
+/// host and file cannot start a download.
 pub async fn install_model_download(
     ports: &AppPorts,
     request: crate::dto::InstallModelDownloadRequest,
 ) -> Result<InstallModelResponse, AppError> {
+    if request.licence_accepted_spdx_id.trim().is_empty() {
+        return Err(AppError::new(
+            AppErrorCode::InvalidArgument,
+            "the model's licence has not been accepted",
+        ));
+    }
+    if !request.footprint_acknowledged {
+        return Err(AppError::new(
+            AppErrorCode::InvalidArgument,
+            "the disk and memory footprint has not been acknowledged",
+        ));
+    }
+    if request.approved_host.trim().is_empty() || request.approved_file.trim().is_empty() {
+        return Err(AppError::new(
+            AppErrorCode::InvalidArgument,
+            "the host and file to contact have not been approved",
+        ));
+    }
     ports.models.install_download(request).await
 }
 
@@ -127,10 +149,14 @@ pub async fn import_model_file(
     ports: &AppPorts,
     request: crate::dto::ImportModelFileRequest,
 ) -> Result<InstallModelResponse, AppError> {
-    ports
-        .models
-        .import_file(PathBuf::from(request.path), request.model_id)
-        .await
+    let path = PathBuf::from(request.path.trim());
+    if !path.is_absolute() {
+        return Err(AppError::new(
+            AppErrorCode::InvalidArgument,
+            "a model file must be chosen with the file picker",
+        ));
+    }
+    ports.models.import_file(path, request.model_id).await
 }
 
 /// What this machine has of the PLAUD Cloud CLI toolchain.

@@ -30,10 +30,12 @@ use plaudon_domain::ids::RecordingId;
 use plaudon_domain::transcript::AlignmentOrigin;
 
 use crate::ai::{
-    AiOutput, ExportMenu, OutputsViewer, ProcessingHistory, RecordingContext, ReviewPanel,
-    SummarizationPanel, TranscriptionPanel, VoiceContext,
+    AiIntent, AiOutput, ExportMenu, OutputsViewer, ProcessingHistory, RecordingContext,
+    ReviewPanel, SummarizationPanel, TranscriptionPanel, VoiceContext,
 };
 use crate::screens::people::{picker_person, PickerPerson};
+use crate::widgets::error_notice::{error_notice, ErrorNoticeAction};
+use plaudon_app::job_presentation::ControlIntent;
 
 /// Jobs asked for per page of the processing history.
 pub const JOB_PAGE_SIZE: u32 = 50;
@@ -435,8 +437,20 @@ impl AiBinding {
         });
 
         if let Some(envelope) = self.error.clone() {
-            ui.label(&envelope.message);
-            ui.label(format!("Diagnostic id {}", envelope.diagnostic_id));
+            // The shared notice, so an envelope's own corrective controls are
+            // offered here too: for "no speech model is installed", install
+            // and import straight from the error (issue #305).
+            match error_notice(ui, &envelope, "") {
+                Some(ErrorNoticeAction::InstallSpeechModel) => {
+                    out.push(AiIntent::Navigate(ControlIntent::InstallSpeechModel));
+                }
+                Some(ErrorNoticeAction::ImportModelFile) => out.push(AiIntent::PickModelFile),
+                Some(ErrorNoticeAction::OpenSettings) => {
+                    out.push(AiIntent::Navigate(ControlIntent::OpenSettings));
+                }
+                Some(ErrorNoticeAction::Retry) => self.error = None,
+                None => {}
+            }
         }
 
         // The catalogue is asked for before the borrowed context exists:

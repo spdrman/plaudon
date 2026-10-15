@@ -23,6 +23,7 @@ pub mod devices;
 pub mod export;
 pub mod import;
 pub mod jobs;
+pub mod model_setup;
 pub mod models;
 pub mod outputs;
 pub mod people;

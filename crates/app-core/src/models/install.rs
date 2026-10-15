@@ -242,6 +242,11 @@ impl<'a> ModelInstaller<'a> {
         self
     }
 
+    fn cancelled(&self) -> bool {
+        self.cancel
+            .is_some_and(|flag| flag.load(std::sync::atomic::Ordering::SeqCst))
+    }
+
     /// Check disk and RAM without transferring anything (§14.4).
     ///
     /// A staging file plus the final file coexist during the atomic rename
@@ -377,6 +382,14 @@ impl<'a> ModelInstaller<'a> {
         let mut received = resume_from;
         let mut transferred = 0u64;
         loop {
+            // The user's "Cancel download" is honoured between chunks, and a
+            // cancelled transfer keeps nothing: a partial file the user asked
+            // to stop is not something to resume behind their back.
+            if self.cancelled() {
+                drop(file);
+                let _ = std::fs::remove_file(staging_path);
+                return Err(ModelError::Cancelled);
+            }
             let read = match reader.read(&mut buffer) {
                 Ok(0) => break,
                 Ok(read) => read,
@@ -408,6 +421,11 @@ impl<'a> ModelInstaller<'a> {
                 received_bytes: received,
                 total_bytes: entry.size_bytes,
             });
+        }
+        if self.cancelled() {
+            drop(file);
+            let _ = std::fs::remove_file(staging_path);
+            return Err(ModelError::Cancelled);
         }
         file.flush()
             .map_err(|source| ModelError::io(staging_path, &source))?;

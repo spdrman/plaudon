@@ -18,7 +18,16 @@ pub enum ErrorControl {
     Retry(&'static str),
     /// Send the user to settings, under this label.
     Settings(&'static str),
+    /// Offer both ways to get a speech model: install one, or import a file
+    /// the user already has (issue #305).
+    InstallOrImportModel,
 }
+
+/// Label of the install control a missing speech model offers.
+pub const INSTALL_MODEL_LABEL: &str = "Install a model";
+
+/// Label of the import control a missing speech model offers.
+pub const IMPORT_MODEL_LABEL: &str = "Import a model file";
 
 /// What the user chose.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -41,9 +50,10 @@ pub fn control_for(envelope: &ErrorEnvelope) -> ErrorControl {
         Some(ErrorAction::WaitAndRetry) => ErrorControl::Retry("Retry"),
         Some(ErrorAction::RefreshSourceLink) => ErrorControl::Retry("Refresh and retry"),
         Some(ErrorAction::FreeDiskSpace) => ErrorControl::Settings("Open storage settings"),
-        Some(ErrorAction::ChooseAnotherModel | ErrorAction::InstallSpeechModel) => {
-            ErrorControl::Settings("Choose another engine")
-        }
+        Some(ErrorAction::ChooseAnotherModel) => ErrorControl::Settings("Choose another engine"),
+        // There is no other engine to choose when none has a model: offer the
+        // two things that fix it, right here.
+        Some(ErrorAction::InstallSpeechModel) => ErrorControl::InstallOrImportModel,
         Some(ErrorAction::ReviewLocalOnlyMode) => ErrorControl::Settings("Review local-only mode"),
         Some(ErrorAction::ReviewConsent) => ErrorControl::Settings("Review cloud consent"),
         Some(ErrorAction::OpenSettings) => ErrorControl::Settings("Open settings"),
@@ -109,6 +119,16 @@ pub fn error_notice(
                 if ui.button(label).clicked() {
                     chosen = Some(ErrorNoticeAction::OpenSettings);
                 }
+            }
+            ErrorControl::InstallOrImportModel => {
+                ui.horizontal_wrapped(|ui| {
+                    if ui.button(INSTALL_MODEL_LABEL).clicked() {
+                        chosen = Some(ErrorNoticeAction::InstallSpeechModel);
+                    }
+                    if ui.button(IMPORT_MODEL_LABEL).clicked() {
+                        chosen = Some(ErrorNoticeAction::ImportModelFile);
+                    }
+                });
             }
         }
 

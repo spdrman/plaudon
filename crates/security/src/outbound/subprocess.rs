@@ -253,15 +253,59 @@ pub const PLAUD_CLI_PACKAGE: &str = "@plaud-ai/cli@0.3.15";
 pub const NPM_REGISTRY_HOST: &str = "registry.npmjs.org";
 
 /// The pinned package-manager program name for the guided install.
-pub const NPM_PROGRAM: &str = "npm";
+pub const NPM_PROGRAM: &str = super::PLAUD_CLI_INSTALLER_PROGRAM;
+
+/// The registry flag the guided install passes, so npm cannot be pointed at
+/// another registry by the user's own `.npmrc`.
+pub const NPM_REGISTRY_FLAG: &str = "--registry=https://registry.npmjs.org/";
+
+/// The command the guided install runs, as text the user can copy and run
+/// themselves instead.
+#[must_use]
+pub fn cli_install_command_text() -> String {
+    format!("{NPM_PROGRAM} install --global {NPM_REGISTRY_FLAG} {PLAUD_CLI_PACKAGE}")
+}
 
 impl GatedProcessLauncher {
     /// Prepare `npm install --global @plaud-ai/cli@0.3.15` against the public
     /// registry. Every argument is a literal from this module, so nothing the
     /// user typed can reach the command line (issue #303, §7.1).
+    ///
+    /// The policy decides on the program's leaf name, so only `npm` passes,
+    /// and only under a grant that approved this one install: a policy that
+    /// merely has Local-only Mode off refuses it.
     pub fn prepare_cli_install(&self, discovered_npm: &Path) -> Result<GatedCommand, SpawnError> {
-        let _ = discovered_npm;
-        unimplemented!("issue #303: guided PLAUD CLI install")
+        let program_label = discovered_npm
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("<non-utf8>")
+            .to_owned();
+        let request = EgressRequest::new(
+            Subsystem::PlaudCloudCli,
+            Destination::subprocess(program_label),
+            EgressPurpose::AssetDownload,
+            PayloadClass::None,
+        );
+        let ticket = self.policy.authorize(&request)?;
+        let args = [
+            CliArg::Literal("install"),
+            CliArg::Literal("--global"),
+            CliArg::Literal(NPM_REGISTRY_FLAG),
+            CliArg::Literal(PLAUD_CLI_PACKAGE),
+        ];
+        let mut rendered = Vec::with_capacity(args.len());
+        for arg in &args {
+            rendered.push(arg.render()?);
+        }
+        Ok(GatedCommand {
+            ticket,
+            program: discovered_npm.to_path_buf(),
+            args: rendered,
+            env: scrubbed_env(),
+            // A cold npm cache on a slow line takes minutes, not seconds.
+            timeout: Duration::from_secs(600),
+            max_output_bytes: 8 * 1024 * 1024,
+        })
     }
 }
 
@@ -291,6 +335,18 @@ mod tests {
 
     fn launcher(policy: OutboundPolicy) -> GatedProcessLauncher {
         GatedProcessLauncher::new(Arc::new(policy))
+    }
+
+    #[test]
+    fn the_registry_flag_names_the_registry_host_the_disclosure_names() {
+        assert_eq!(
+            NPM_REGISTRY_FLAG,
+            format!("--registry=https://{NPM_REGISTRY_HOST}/")
+        );
+        assert_eq!(
+            cli_install_command_text(),
+            "npm install --global --registry=https://registry.npmjs.org/ @plaud-ai/cli@0.3.15"
+        );
     }
 
     #[test]

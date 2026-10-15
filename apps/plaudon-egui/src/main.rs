@@ -162,6 +162,15 @@ fn native_hooks(store: ShellStateStore, runtime: tokio::runtime::Handle) -> Host
         pick_save_path: Arc::new(|suggested| {
             rfd::FileDialog::new().set_file_name(suggested).save_file()
         }),
+        // Issue #303/#305: "Import a model file I already have". The file is
+        // checked against the catalogue's size and SHA-256 before it is
+        // installed, so the filter is a convenience, not a check.
+        pick_open_file: Arc::new(|title| {
+            rfd::FileDialog::new()
+                .set_title(title)
+                .add_filter("Model weights", &["bin"])
+                .pick_file()
+        }),
         // Matrix row C10: the view never spawns a process; the opener does,
         // with an argument vector and never a shell.
         reveal_in_folder: Arc::new(|path| {

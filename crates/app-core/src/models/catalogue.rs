@@ -10,7 +10,7 @@
 
 use std::sync::LazyLock;
 
-use super::manifest::{ModelEntry, ModelId, ModelManifest, MANIFEST_SCHEMA_VERSION};
+use super::manifest::{parse_manifest, ModelEntry, ModelId, ModelManifest, ModelSource};
 
 /// The one host every catalogue download is requested from.
 pub const CATALOGUE_HOST: &str = "huggingface.co";
@@ -24,9 +24,13 @@ pub const DELIVERY_HOST_SUFFIX: &str = "hf.co";
 /// The upstream revision every catalogue URL is pinned to.
 pub const CATALOGUE_REVISION: &str = "5359861c739e955e79d9a303bcbc70fb988958b1";
 
-static COMMITTED: LazyLock<ModelManifest> = LazyLock::new(|| ModelManifest {
-    schema_version: MANIFEST_SCHEMA_VERSION,
-    models: Vec::new(),
+/// The catalogue document, compiled in so it cannot change after review.
+const DOCUMENT: &[u8] = include_bytes!("../../catalogue/whisper-cpp.v1.json");
+
+static COMMITTED: LazyLock<ModelManifest> = LazyLock::new(|| {
+    // A malformed committed catalogue is a build defect, caught by this
+    // crate's tests before anything ships; there is no runtime input here.
+    parse_manifest(DOCUMENT).expect("the committed model catalogue is valid")
 });
 
 /// The catalogue this build ships.
@@ -57,4 +61,35 @@ pub fn for_engine(engine: &str) -> Vec<&'static ModelEntry> {
 #[must_use]
 pub fn smallest_for_engine(engine: &str) -> Option<&'static ModelEntry> {
     for_engine(engine).into_iter().next()
+}
+
+/// The host and URL path of a catalogue download, as the disclosure names
+/// them: `("huggingface.co", "/ggerganov/whisper.cpp/resolve/<rev>/<file>")`.
+///
+/// `None` for an entry that is not a download.
+#[must_use]
+pub fn host_and_file(entry: &ModelEntry) -> Option<(String, String)> {
+    let ModelSource::Remote { url } = &entry.source else {
+        return None;
+    };
+    let rest = url.strip_prefix("https://")?;
+    let slash = rest.find('/')?;
+    let (host, path) = rest.split_at(slash);
+    Some((host.to_ascii_lowercase(), path.to_owned()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn host_and_file_split_a_catalogue_url_into_what_the_disclosure_names() {
+        let entry = smallest_for_engine("whisper.cpp").expect("a whisper model");
+        let (host, file) = host_and_file(entry).expect("a download");
+        assert_eq!(host, CATALOGUE_HOST);
+        assert_eq!(
+            file,
+            format!("/ggerganov/whisper.cpp/resolve/{CATALOGUE_REVISION}/ggml-tiny.bin")
+        );
+    }
 }

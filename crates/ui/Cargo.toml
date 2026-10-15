@@ -46,5 +46,7 @@ plaudon-app-core = { workspace = true }
 # has to survive the screen that displays it.
 plaudon-source-plaud-cli = { workspace = true }
 plaudon-ui-testkit = { workspace = true }
+# The issue #303 evidence frames are written as PNGs.
+image = { workspace = true }
 serde_json = { workspace = true }
 tempfile = { workspace = true }

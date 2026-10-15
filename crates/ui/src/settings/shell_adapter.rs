@@ -92,6 +92,18 @@ fn apply(
                     picked.push((PickedPath::Folder(purpose), path.display().to_string()));
                 }
             }
+            SettingsIntent::PickFile(FilePurpose::ModelFile) => {
+                // An existing weights file to import: an open dialog, never a
+                // save dialog (issue #303).
+                if let Some(path) =
+                    (cx.hooks().pick_open_file)(FilePurpose::ModelFile.dialog_title())
+                {
+                    picked.push((
+                        PickedPath::File(FilePurpose::ModelFile),
+                        path.display().to_string(),
+                    ));
+                }
+            }
             SettingsIntent::PickFile(purpose) => {
                 // The shell's host hooks offer a folder picker and a save
                 // picker; an archive to restore is an existing file, so it is
@@ -111,6 +123,18 @@ fn apply(
         }
     }
     picked
+}
+
+/// Measured progress carried by a `model.install_progress` event.
+fn install_progress(event: &plaudon_app::dto::UiEvent) -> Option<(u64, u64)> {
+    if event.kind != plaudon_app::dto::EventKind::ModelInstallProgress {
+        return None;
+    }
+    let model = event.payload.get("model")?;
+    Some((
+        model.get("received_bytes")?.as_u64()?,
+        model.get("total_bytes")?.as_u64()?,
+    ))
 }
 
 /// The file name the restore dialog opens on.
@@ -235,6 +259,16 @@ impl Screen for SettingsShellScreen {
         self.load(cx);
     }
 
+    fn on_ui_event(&mut self, event: &plaudon_app::dto::UiEvent, cx: &mut ScreenCtx<'_>) {
+        if let Some((received, total)) = install_progress(event) {
+            self.screen.install_progress(received, total);
+        }
+        if event.kind == plaudon_app::dto::EventKind::ModelAvailabilityChanged {
+            cx.send(plaudon_app::command::AppCommand::GetCapabilities);
+            cx.send(plaudon_app::command::AppCommand::ListLocalModels);
+        }
+    }
+
     fn on_open_archive(&mut self, path: &str, _cx: &mut ScreenCtx<'_>) -> bool {
         self.screen.open_archive(path)
     }
@@ -278,7 +312,13 @@ impl Screen for OnboardingShellScreen {
             ui.label("Reading what this machine can do…");
         }
         let mut copied = Vec::new();
-        apply(&mut self.out, cx, &mut copied);
+        let picked = apply(&mut self.out, cx, &mut copied);
+        for (path, value) in picked {
+            self.screen.path_picked(path, &value, &mut self.out);
+        }
+        if !self.out.is_empty() {
+            apply(&mut self.out, cx, &mut copied);
+        }
         for text in copied {
             ui.ctx().copy_text(text);
         }
@@ -296,6 +336,16 @@ impl Screen for OnboardingShellScreen {
         }
         self.screen.on_response(command, result, &mut self.out);
         apply(&mut self.out, cx, &mut Vec::new());
+    }
+
+    fn on_ui_event(&mut self, event: &plaudon_app::dto::UiEvent, cx: &mut ScreenCtx<'_>) {
+        if let Some((received, total)) = install_progress(event) {
+            self.screen.install_progress(received, total);
+        }
+        // A model arrived or went: re-read the inventory so step 3 shows it.
+        if event.kind == plaudon_app::dto::EventKind::ModelAvailabilityChanged {
+            cx.send(plaudon_app::command::AppCommand::GetCapabilities);
+        }
     }
 }
 

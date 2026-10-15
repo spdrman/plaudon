@@ -13,7 +13,7 @@
 //! compile error rather than a silently dead control.
 
 use plaudon_app::command::AppCommand;
-use plaudon_app::dto::{ExportMediaRequest, ExportRecordingRequest};
+use plaudon_app::dto::{ExportMediaRequest, ExportRecordingRequest, ImportModelFileRequest};
 use plaudon_app::job_presentation::ControlIntent;
 
 use crate::ai::{AiIntent, AiOutput, SeekRequest};
@@ -69,6 +69,17 @@ pub fn apply_ai_output(out: AiOutput, cx: &mut ScreenCtx<'_>) -> Vec<SeekRequest
                     }));
                 }
             }
+            AiIntent::PickModelFile => {
+                // Issue #305: "Import a model file" straight from the error.
+                // The import is checked against the catalogue's checksums, so
+                // the dialog's answer is a candidate, never trusted as is.
+                if let Some(path) = (cx.hooks().pick_open_file)("Choose a model file to import") {
+                    cx.send(AppCommand::ImportModelFile(ImportModelFileRequest {
+                        path: path.to_string_lossy().into_owned(),
+                        model_id: None,
+                    }));
+                }
+            }
             AiIntent::PickMediaExportDirectory {
                 recording_id,
                 include_sanitized_derivative,
@@ -106,7 +117,10 @@ fn navigate(control: ControlIntent, cx: &mut ScreenCtx<'_>) {
         | ControlIntent::ReviewLocalOnlyMode
         | ControlIntent::OpenStorageSettings
         | ControlIntent::OpenPermissionSettings
-        | ControlIntent::OpenSettings => cx.navigate(Route::Settings),
+        | ControlIntent::OpenSettings
+        // The engine setup, with its install and import controls, is in
+        // Settings › Engines (issue #305).
+        | ControlIntent::InstallSpeechModel => cx.navigate(Route::Settings),
         ControlIntent::OpenPlaudConnect
         | ControlIntent::RefreshSourceLink
         | ControlIntent::OpenCliSetup => cx.navigate(Route::SettingsSources),

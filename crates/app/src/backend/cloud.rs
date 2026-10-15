@@ -1320,13 +1320,29 @@ impl CloudPort for LocalBackend {
                 request.model_override.as_ref(),
             )
             .await
-            .map_err(|err| store_error("cannot resolve the model", err))?
-            .ok_or_else(|| {
-                AppError::new(
-                    AppErrorCode::ModelUnavailable,
-                    "no model is configured for this stage",
-                )
-            })?;
+            .map_err(|err| store_error("cannot resolve the model", err))?;
+        // Issue #305: a local transcription with no speech model on this
+        // machine says exactly that, and carries the install/import action,
+        // instead of "the selected model is not available" about a model the
+        // user never selected.
+        let local_transcription = request.stage == Stage::Transcribe
+            && effective
+                .as_ref()
+                .is_none_or(|effective| !effective.choice.is_cloud());
+        if local_transcription
+            && !crate::backend::processing::stt::a_local_engine_is_installed(self)
+        {
+            return Err(AppError::new(
+                AppErrorCode::NoSpeechModel,
+                "no local speech engine has a model installed",
+            ));
+        }
+        let effective = effective.ok_or_else(|| {
+            AppError::new(
+                AppErrorCode::ModelUnavailable,
+                "no model is configured for this stage",
+            )
+        })?;
 
         // A local engine never touches the network from here.
         if !effective.choice.is_cloud() {

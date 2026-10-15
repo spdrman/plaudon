@@ -24,6 +24,10 @@ pub type PickFolder = Arc<dyn Fn() -> Option<PathBuf> + Send + Sync>;
 /// cancels.
 pub type PickSavePath = Arc<dyn Fn(&str) -> Option<PathBuf> + Send + Sync>;
 
+/// Picks an existing file to open, given the dialog's title; `None` when the
+/// user cancels.
+pub type PickOpenFile = Arc<dyn Fn(&str) -> Option<PathBuf> + Send + Sync>;
+
 /// Persists the shell's presentation state, off the render thread.
 pub type SaveShellState = Arc<dyn Fn(ShellState) + Send + Sync>;
 
@@ -40,6 +44,9 @@ pub struct HostHooks {
     /// Ask the user where to write a file, given a suggested name. `None`
     /// when they cancel.
     pub pick_save_path: PickSavePath,
+    /// Ask the user for an existing file to open, given the dialog's title.
+    /// `None` when they cancel.
+    pub pick_open_file: PickOpenFile,
     /// Persist the shell's presentation state. The binary writes it off the
     /// render thread; the view never opens a file.
     pub save_shell_state: SaveShellState,
@@ -71,6 +78,7 @@ impl HostHooks {
             pick_audio_files: Arc::new(Vec::new),
             pick_folder: Arc::new(|| None),
             pick_save_path: Arc::new(|_| None),
+            pick_open_file: Arc::new(|_| None),
             save_shell_state: Arc::new(|_| {}),
             reveal_in_folder: Arc::new(|_| {}),
         }

@@ -279,6 +279,9 @@ pub enum ControlIntent {
     OpenDeviceDiagnostics,
     /// Show the CLI installation instructions.
     OpenCliSetup,
+    /// Install a speech model, or import one, from the engine setup
+    /// (issue #305).
+    InstallSpeechModel,
 }
 
 /// One corrective control: the words on it and what it asks for.
@@ -324,7 +327,11 @@ pub fn envelope_action_control(
             label: "Retry import",
             intent: ControlIntent::RetryImport,
         },
-        Some(ErrorAction::ChooseAnotherModel | ErrorAction::InstallSpeechModel) => ActionControl {
+        Some(ErrorAction::InstallSpeechModel) => ActionControl {
+            label: "Install a model",
+            intent: ControlIntent::InstallSpeechModel,
+        },
+        Some(ErrorAction::ChooseAnotherModel) => ActionControl {
             label: "Choose another model",
             intent: ControlIntent::ChooseLocalEngine,
         },
