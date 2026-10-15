@@ -20,7 +20,7 @@ use plaudon_export::archive::crypto::{
 use plaudon_export::archive::manifest::{
     host_os, ArchiveHeader, Compression, Manifest, ManifestEntry, ManifestTotals, ProtectionKind,
     FORMAT_VERSION, INTEGRITY_NOTE, MAGIC, MANIFEST_PATH, MANIFEST_SCHEMA_VERSION,
-    MAX_HEADER_BYTES, MAX_MANIFEST_BYTES, NONPORTABLE_SETTINGS,
+    MAX_FRAME_HEADER_BYTES, MAX_HEADER_BYTES, MAX_MANIFEST_BYTES, NONPORTABLE_SETTINGS,
 };
 use plaudon_export::archive::reader::{self, EntrySink, VerifyingSink};
 use plaudon_export::archive::DEFAULT_LIMITS;
@@ -1185,4 +1185,79 @@ fn opening_an_archive_that_is_not_there_is_a_storage_failure_not_a_rejection() {
         error.code(),
         plaudon_domain::error::AppErrorCode::StorageUnavailable
     );
+}
+
+// ---------------------------------------------------------------------------
+// Framing ceilings, on the writing side as well as the reading side
+// ---------------------------------------------------------------------------
+
+#[test]
+fn a_header_past_the_ceiling_is_refused_before_a_single_byte_is_written() {
+    let mut header = plaintext_header();
+    header.manifest_schema_version = "v".repeat(MAX_HEADER_BYTES as usize);
+
+    let mut out = Vec::new();
+    let error =
+        container::write_preamble(&mut out, ProtectionKind::Plaintext, &header).unwrap_err();
+
+    match rejection(&error) {
+        ArchiveRejection::Malformed(detail) => assert_eq!(detail, "header is too large"),
+        other => panic!("unexpected {other:?}"),
+    }
+    assert!(
+        out.is_empty(),
+        "a file we cannot finish must not be started"
+    );
+}
+
+#[test]
+fn a_frame_header_past_the_ceiling_is_refused_before_a_single_byte_is_written() {
+    let entry = store_entry(
+        &format!(
+            "records/{}.json",
+            "n".repeat(MAX_FRAME_HEADER_BYTES as usize)
+        ),
+        b"{}",
+    );
+
+    let mut out = Vec::new();
+    let error = container::write_frame_header(&mut out, &entry).unwrap_err();
+
+    match rejection(&error) {
+        ArchiveRejection::Malformed(detail) => assert_eq!(detail, "frame header is too large"),
+        other => panic!("unexpected {other:?}"),
+    }
+    assert!(out.is_empty(), "no frame is emitted for an entry we refuse");
+}
+
+#[test]
+fn a_frame_length_that_stops_mid_word_is_not_read_as_a_terminator() {
+    // Three of the four length bytes: the body ended inside the frame header,
+    // which is damage, not the zero-length terminator.
+    let error = container::read_frame_header(&mut &[0u8, 0, 0][..]).unwrap_err();
+    match rejection(&error) {
+        ArchiveRejection::Malformed(detail) => {
+            assert_eq!(detail, "the archive ends inside a frame header");
+        }
+        other => panic!("unexpected {other:?}"),
+    }
+
+    // All four bytes present and zero is the terminator, not a failure.
+    assert!(container::read_frame_header(&mut &0u32.to_le_bytes()[..])
+        .unwrap()
+        .is_none());
+}
+
+#[test]
+fn a_frame_header_shorter_than_it_declares_is_refused() {
+    let mut bytes = 512u32.to_le_bytes().to_vec();
+    bytes.extend_from_slice(br#"{"path":"records/a.json""#);
+
+    let error = container::read_frame_header(&mut &bytes[..]).unwrap_err();
+    match rejection(&error) {
+        ArchiveRejection::Malformed(detail) => {
+            assert_eq!(detail, "the archive ends inside a frame header");
+        }
+        other => panic!("unexpected {other:?}"),
+    }
 }

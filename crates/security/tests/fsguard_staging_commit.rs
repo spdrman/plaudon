@@ -328,6 +328,8 @@ fn the_reconciler_counts_what_it_leaves_alone() {
     std::fs::create_dir(root.join(format!("plaudon-1-{}", "z".repeat(32)))).expect("bad token");
     // Our prefix but a non-numeric pid.
     std::fs::create_dir(root.join(format!("plaudon-pid-{}", "a".repeat(32)))).expect("bad pid");
+    // Our prefix and a well-formed token, but no pid at all between them.
+    std::fs::create_dir(root.join(format!("plaudon--{}", "c".repeat(32)))).expect("empty pid");
     // Our name shape, but a file rather than a directory.
     std::fs::write(root.join(format!("plaudon-2-{}", "b".repeat(32))), b"x").expect("file");
 
@@ -335,7 +337,7 @@ fn the_reconciler_counts_what_it_leaves_alone() {
     let report =
         PrivateTempDir::reconcile_abandoned(root, "plaudon", 3600, now).expect("reconcile runs");
     assert_eq!(report.removed, 0, "nothing here is ours to remove");
-    assert!(report.skipped_foreign >= 4, "{report:?}");
+    assert!(report.skipped_foreign >= 5, "{report:?}");
     assert_eq!(report.failed, 0, "{report:?}");
 
     assert!(root.join("user-folder").is_dir());
@@ -370,5 +372,175 @@ fn two_staging_directories_are_independent_roots() {
             .reason(),
         PathRejection::OutsideRoot,
         "one staging directory cannot reach into another"
+    );
+}
+
+/// Set the mode of a directory we own, for the failure-injection tests below.
+#[cfg(unix)]
+fn chmod(dir: &Path, mode: u32) {
+    use std::os::unix::fs::PermissionsExt;
+
+    std::fs::set_permissions(dir, std::fs::Permissions::from_mode(mode)).expect("set mode");
+}
+
+/// Whether the mode just set actually denies this process. A build running as
+/// root is not denied anything, and a permission test there would assert
+/// nothing; those runs skip instead of reporting a false pass.
+#[cfg(unix)]
+fn mode_is_enforced(dir: &Path) -> bool {
+    let probe = dir.join("mode-probe");
+    if std::fs::write(&probe, b"x").is_ok() {
+        let _ = std::fs::remove_file(&probe);
+        return false;
+    }
+    true
+}
+
+/// A staging base that exists but cannot be written to fails closed: the error
+/// is the operating system's, not a silent fall back to some other directory.
+#[cfg(unix)]
+#[test]
+fn a_staging_base_that_refuses_creation_fails_closed() {
+    let base = tempfile::tempdir().expect("temp base");
+    let locked = base.path().join("read-only-base");
+    std::fs::create_dir(&locked).expect("locked base");
+    chmod(&locked, 0o500);
+    if !mode_is_enforced(&locked) {
+        chmod(&locked, 0o700);
+        return;
+    }
+
+    let error = PrivateTempDir::create(Some(&locked), "plaudon")
+        .expect_err("a base that cannot be written to has no staging directory");
+    let entries = std::fs::read_dir(&locked).expect("still listable").count();
+    chmod(&locked, 0o700);
+
+    assert_eq!(error.reason(), PathRejection::Io);
+    assert_eq!(error.detail(), Some("PermissionDenied"));
+    assert_eq!(entries, 0, "nothing was left behind in the locked base");
+}
+
+/// A reconciler base that is a file is an error. The one base shape that is
+/// *not* an error is a base that does not exist yet, which is the first run on
+/// a new machine.
+#[test]
+fn reconciling_a_base_that_is_not_a_directory_is_an_error_not_an_empty_report() {
+    let base = tempfile::tempdir().expect("temp base");
+    let file = base.path().join("staging-base");
+    std::fs::write(&file, b"not a directory").expect("plant a file");
+
+    let error = PrivateTempDir::reconcile_abandoned(&file, "plaudon", 3600, 2_000_000_000)
+        .expect_err("a non-directory base is not 'nothing to reconcile'");
+    assert_eq!(error.reason(), PathRejection::Io);
+    assert_ne!(
+        error.detail(),
+        Some("NotFound"),
+        "only a missing base reports success"
+    );
+    assert_eq!(
+        std::fs::read(&file).expect("intact"),
+        b"not a directory",
+        "the file is never read as a directory nor removed"
+    );
+
+    let report = PrivateTempDir::reconcile_abandoned(
+        &base.path().join("absent"),
+        "plaudon",
+        3600,
+        2_000_000_000,
+    )
+    .expect("a base that does not exist yet is the first-run case");
+    assert_eq!(report, ReconcileReport::default());
+}
+
+/// An entry whose name is not UTF-8 cannot be our staging directory — our names
+/// are ASCII — so it is counted as foreign and left where it is.
+///
+/// Not macOS: APFS and HFS+ refuse a non-UTF-8 name with `EILSEQ`, so the case
+/// cannot be planted there at all.
+#[cfg(all(unix, not(target_os = "macos")))]
+#[test]
+fn an_entry_whose_name_is_not_utf8_is_foreign_and_left_alone() {
+    use std::ffi::OsString;
+    use std::os::unix::ffi::OsStringExt;
+
+    let base = tempfile::tempdir().expect("temp base");
+    let mut raw = b"plaudon-1-".to_vec();
+    raw.extend_from_slice(&[0xff; 32]);
+    let planted = base.path().join(OsString::from_vec(raw));
+    std::fs::create_dir(&planted).expect("plant a non-UTF-8 entry");
+
+    let report = PrivateTempDir::reconcile_abandoned(base.path(), "plaudon", 0, 2_000_000_000)
+        .expect("reconcile runs");
+    assert_eq!(report.skipped_foreign, 1, "{report:?}");
+    assert_eq!(report.removed, 0, "{report:?}");
+    assert_eq!(report.failed, 0, "{report:?}");
+    assert!(planted.is_dir(), "a name we cannot read is never removed");
+}
+
+/// An entry that matches our name shape but cannot be inspected is counted as a
+/// failure, not removed on the strength of its name alone — the name is the
+/// cheapest thing for someone else to forge.
+#[cfg(unix)]
+#[test]
+fn an_entry_that_cannot_be_inspected_is_counted_as_failed() {
+    let base = tempfile::tempdir().expect("temp base");
+    let staging = base.path().join("staging");
+    std::fs::create_dir(&staging).expect("staging base");
+    let abandoned = staging.join(format!("plaudon-1-{}", "a".repeat(32)));
+    std::fs::create_dir(&abandoned).expect("abandoned directory");
+
+    // Listable but not searchable: `read_dir` yields the entry, `lstat` on it
+    // is refused.
+    chmod(&staging, 0o400);
+    if std::fs::symlink_metadata(&abandoned).is_ok() {
+        chmod(&staging, 0o700);
+        return;
+    }
+
+    let report = PrivateTempDir::reconcile_abandoned(&staging, "plaudon", 0, 2_000_000_000);
+    chmod(&staging, 0o700);
+
+    let report = report.expect("reconcile runs");
+    assert_eq!(report.failed, 1, "{report:?}");
+    assert_eq!(report.removed, 0, "{report:?}");
+    assert_eq!(report.skipped_foreign, 0, "{report:?}");
+    assert!(abandoned.is_dir(), "an uninspectable entry is left alone");
+}
+
+/// An abandoned directory the reconciler is not allowed to delete is reported
+/// as a failure rather than as a removal, so a startup report cannot claim
+/// space it did not reclaim.
+#[cfg(unix)]
+#[test]
+fn an_abandoned_directory_that_cannot_be_removed_is_counted_as_failed() {
+    let base = tempfile::tempdir().expect("temp base");
+    let staging = base.path().join("staging");
+    std::fs::create_dir(&staging).expect("staging base");
+    let abandoned = staging.join(format!("plaudon-1-{}", "b".repeat(32)));
+    std::fs::create_dir(&abandoned).expect("abandoned directory");
+    std::fs::write(abandoned.join("import.part"), b"partial").expect("partial file");
+
+    // Listable and searchable, but not writable: the entry can be identified
+    // as ours and as abandoned, and then neither emptied nor unlinked.
+    chmod(&abandoned, 0o500);
+    chmod(&staging, 0o500);
+    if !mode_is_enforced(&staging) {
+        chmod(&staging, 0o700);
+        chmod(&abandoned, 0o700);
+        return;
+    }
+
+    let report = PrivateTempDir::reconcile_abandoned(&staging, "plaudon", 0, 2_000_000_000);
+    chmod(&staging, 0o700);
+    chmod(&abandoned, 0o700);
+
+    let report = report.expect("reconcile runs");
+    assert_eq!(report.failed, 1, "{report:?}");
+    assert_eq!(report.removed, 0, "{report:?}");
+    assert_eq!(report.skipped_recent, 0, "{report:?}");
+    assert!(
+        abandoned.join("import.part").is_file(),
+        "the directory it could not remove is intact"
     );
 }

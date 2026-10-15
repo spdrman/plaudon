@@ -542,3 +542,198 @@ fn an_original_that_does_not_match_its_identity_is_removed_rather_than_kept() {
     assert_eq!(report.stripped_metadata, Vec::<String>::new());
     assert_eq!(std::fs::read(&report.path).unwrap(), b"the real bytes");
 }
+
+#[test]
+fn an_original_whose_declared_length_is_wrong_is_removed_even_when_its_digest_matches() {
+    let dir = tempfile::tempdir().unwrap();
+    let out = destination(dir.path(), "out");
+    let source = dir.path().join("blob.wav");
+    std::fs::write(&source, b"the real bytes").unwrap();
+
+    // The digest of the copied bytes agrees; the length the asset row declares
+    // does not. The two facts have to agree or the export is not the asset it
+    // claims to be.
+    let mut identity = MediaIdentity::of_bytes(b"the real bytes", "wav");
+    identity.byte_length += 1;
+
+    let error =
+        media::export_original(&source, &identity, &out, "meeting.wav", "Original").unwrap_err();
+    assert!(matches!(error, ExportError::IntegrityFailed));
+    assert_eq!(std::fs::read_dir(out.directory()).unwrap().count(), 0);
+}
+
+#[test]
+fn a_riff_file_that_is_not_wave_is_not_sanitized_as_a_wav() {
+    let dir = tempfile::tempdir().unwrap();
+    let out = destination(dir.path(), "out");
+
+    // RIFF, twelve readable bytes, but the form type is not WAVE: we do not
+    // know which chunks carry audio, so we refuse instead of rewriting it.
+    let avi = dir.path().join("clip.avi");
+    let mut bytes = b"RIFF".to_vec();
+    bytes.extend_from_slice(&64u32.to_le_bytes());
+    bytes.extend_from_slice(b"AVI LIST\0\0\0\0");
+    std::fs::write(&avi, &bytes).unwrap();
+
+    assert!(matches!(
+        SanitizableContainer::detect(&avi).unwrap_err(),
+        ExportError::SanitizationUnsupported(_)
+    ));
+    assert!(matches!(
+        media::export_sanitized(&avi, &out, "clip.avi").unwrap_err(),
+        ExportError::SanitizationUnsupported(_)
+    ));
+    assert_eq!(std::fs::read_dir(out.directory()).unwrap().count(), 0);
+}
+
+#[test]
+fn a_leading_sync_byte_without_an_mpeg_sync_word_is_not_sanitized_as_an_mp3() {
+    let dir = tempfile::tempdir().unwrap();
+
+    // 0xFF alone is not an MPEG frame: the following three bits have to be set
+    // as well, or any binary blob starting with a 0xFF byte would be treated
+    // as audio we can strip.
+    let blob = dir.path().join("blob.bin");
+    std::fs::write(&blob, [0xFFu8, 0x0F, 0x90, 0x00, 0x11]).unwrap();
+
+    assert!(matches!(
+        SanitizableContainer::detect(&blob).unwrap_err(),
+        ExportError::SanitizationUnsupported(_)
+    ));
+}
+
+#[test]
+fn a_wav_chunk_that_runs_past_the_end_of_the_file_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let out = destination(dir.path(), "out");
+
+    // A `data` chunk declaring a kilobyte with eight bytes behind it. The
+    // chunk list still scans, so the refusal has to come from the copy.
+    let mut bytes = b"RIFF".to_vec();
+    bytes.extend_from_slice(&1_060u32.to_le_bytes());
+    bytes.extend_from_slice(b"WAVE");
+    bytes.extend_from_slice(b"fmt ");
+    bytes.extend_from_slice(&16u32.to_le_bytes());
+    bytes.extend_from_slice(&fmt_chunk());
+    bytes.extend_from_slice(b"data");
+    bytes.extend_from_slice(&1_024u32.to_le_bytes());
+    bytes.extend_from_slice(&[7u8; 8]);
+    let source = dir.path().join("truncated.wav");
+    std::fs::write(&source, &bytes).unwrap();
+
+    let error = media::export_sanitized(&source, &out, "truncated.wav").unwrap_err();
+    assert!(matches!(error, ExportError::SanitizationUnsupported(_)));
+    assert_eq!(
+        std::fs::read_dir(out.directory()).unwrap().count(),
+        0,
+        "a partial derivative is never left behind"
+    );
+    assert_eq!(
+        std::fs::read(&source).unwrap(),
+        bytes,
+        "the source is read-only"
+    );
+}
+
+#[test]
+fn an_odd_length_audio_chunk_keeps_its_riff_pad_byte() {
+    let dir = tempfile::tempdir().unwrap();
+    let out = destination(dir.path(), "out");
+    // RIFF requires a pad byte after an odd-length chunk. Dropping it would
+    // move every following chunk by one byte and make the derivative unreadable.
+    let original = wav(&[(b"fmt ", fmt_chunk()), (b"data", vec![1, 2, 3])]);
+    let source = dir.path().join("odd.wav");
+    std::fs::write(&source, &original).unwrap();
+
+    let report = media::export_sanitized(&source, &out, "odd.wav").unwrap();
+
+    let produced = std::fs::read(&report.path).unwrap();
+    assert_eq!(report.stripped_metadata, Vec::<String>::new());
+    assert_eq!(produced, original, "nothing to strip, nothing to change");
+    assert_eq!(report.byte_length, 48);
+    assert_eq!(produced[produced.len() - 1], 0, "the pad byte survives");
+}
+
+#[test]
+fn a_file_too_short_to_carry_an_id3_header_is_copied_without_claiming_a_strip() {
+    let dir = tempfile::tempdir().unwrap();
+    let out = destination(dir.path(), "out");
+    // Three bytes: enough to be detected as MPEG audio, too few to hold either
+    // an ID3v2 header (ten bytes) or an ID3v1 trailer (128).
+    let source = dir.path().join("stub.mp3");
+    std::fs::write(&source, b"ID3").unwrap();
+
+    let report = media::export_sanitized(&source, &out, "stub.mp3").unwrap();
+
+    assert_eq!(report.stripped_metadata, Vec::<String>::new());
+    assert_eq!(report.byte_length, 3);
+    assert_eq!(std::fs::read(&report.path).unwrap(), b"ID3");
+}
+
+#[test]
+fn an_id3_tag_past_the_metadata_ceiling_is_refused_even_when_the_file_is_long_enough() {
+    let dir = tempfile::tempdir().unwrap();
+    let out = destination(dir.path(), "out");
+
+    // One byte past the 8 MiB we are willing to skip over, inside a file long
+    // enough for the length to be self-consistent: the ceiling, not the file
+    // size, is what refuses this.
+    let declared: u64 = 8 * 1024 * 1024 + 1;
+    let mut header = b"ID3\x03\x00\x00".to_vec();
+    header.extend_from_slice(&synchsafe(declared));
+
+    let source = dir.path().join("fat-tag.mp3");
+    {
+        let mut file = std::fs::File::create(&source).unwrap();
+        std::io::Write::write_all(&mut file, &header).unwrap();
+        file.set_len(9 * 1024 * 1024).unwrap();
+    }
+
+    let error = media::export_sanitized(&source, &out, "fat-tag.mp3").unwrap_err();
+    assert!(matches!(error, ExportError::SanitizationUnsupported(_)));
+    assert_eq!(std::fs::read_dir(out.directory()).unwrap().count(), 0);
+}
+
+/// ID3v2 lengths are seven bits per byte, with the high bit always clear.
+fn synchsafe(size: u64) -> [u8; 4] {
+    [
+        u8::try_from((size >> 21) & 0x7f).unwrap(),
+        u8::try_from((size >> 14) & 0x7f).unwrap(),
+        u8::try_from((size >> 7) & 0x7f).unwrap(),
+        u8::try_from(size & 0x7f).unwrap(),
+    ]
+}
+
+#[test]
+fn declared_entry_lengths_that_exceed_the_archive_total_are_refused_from_the_declaration() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut builder = builder(dir.path());
+    // The blob is never opened: the ceilings are enforced from what the caller
+    // declares, before a single byte is staged or read.
+    let blob = dir.path().join("library-blob.wav");
+    let digest = "a".repeat(64);
+
+    let per_entry = DEFAULT_LIMITS.max_entry_bytes;
+    let allowed = DEFAULT_LIMITS.max_total_bytes / per_entry;
+    for index in 0..allowed {
+        builder
+            .add_media(&format!("media/{index:04}.wav"), &blob, &digest, per_entry)
+            .unwrap();
+    }
+    assert_eq!(u64::try_from(builder.entry_count()).unwrap(), allowed);
+
+    let error = builder
+        .add_media("media/one-too-many.wav", &blob, &digest, per_entry)
+        .unwrap_err();
+    match error {
+        ExportError::ArchiveRejected(ArchiveRejection::SizeCeilingExceeded(detail)) => {
+            assert_eq!(detail, "archive total is too large");
+        }
+        other => panic!("unexpected {other:?}"),
+    }
+    assert_eq!(
+        u64::try_from(builder.entry_count()).unwrap(),
+        allowed,
+        "the refused entry is not staged"
+    );
+}
