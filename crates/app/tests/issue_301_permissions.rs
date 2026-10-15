@@ -87,7 +87,7 @@ fn issue_301_the_deep_links_are_the_documented_panes() {
     assert_eq!(pane.deep_link(SettingsHost::Other), None);
     assert_eq!(
         pane.control_label(SettingsHost::MacOs),
-        Some("Open System Settings → Privacy & Security → Bluetooth")
+        Some("Open System Settings > Privacy & Security > Bluetooth")
     );
     assert_eq!(
         pane.control_label(SettingsHost::Windows),

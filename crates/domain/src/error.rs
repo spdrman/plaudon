@@ -147,6 +147,16 @@ error_codes! {
     /// The operating system denied radio access.
     RadioPermissionDenied => "RADIO_PERMISSION_DENIED", retryable: false, action: Some(ErrorAction::OpenPermissionSettings),
         message: "Bluetooth access is not permitted for this application.";
+    /// The operating system has not asked the user for radio access yet, or
+    /// the user has not answered (macOS TCC "not determined").
+    RadioPermissionNotDetermined => "RADIO_PERMISSION_NOT_DETERMINED", retryable: false, action: Some(ErrorAction::OpenPermissionSettings),
+        message: "Bluetooth access has not been granted to this application yet.";
+    /// The Bluetooth adapter is present but switched off.
+    RadioPoweredOff => "RADIO_POWERED_OFF", retryable: false, action: Some(ErrorAction::OpenPermissionSettings),
+        message: "Bluetooth is turned off on this computer.";
+    /// The host reported no usable Bluetooth adapter.
+    RadioNoAdapter => "RADIO_NO_ADAPTER", retryable: false, action: Some(ErrorAction::OpenPermissionSettings),
+        message: "No usable Bluetooth adapter was found on this computer.";
     /// The device is busy with another host or operation.
     DeviceBusy => "DEVICE_BUSY", retryable: true, action: Some(ErrorAction::WaitAndRetry),
         message: "The device is busy. Close other applications connected to it and try again.";
@@ -650,6 +660,9 @@ mod tests {
                 "DOWNLOAD_INTERRUPTED",
                 "INTEGRITY_FAILED",
                 "RADIO_PERMISSION_DENIED",
+                "RADIO_PERMISSION_NOT_DETERMINED",
+                "RADIO_POWERED_OFF",
+                "RADIO_NO_ADAPTER",
                 "DEVICE_BUSY",
                 "DEVICE_DISCONNECTED",
                 "UNSUPPORTED_FIRMWARE",

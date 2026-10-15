@@ -221,6 +221,15 @@ pub enum DeviceError {
     /// The operating system denied radio access.
     #[error("radio permission denied")]
     RadioPermissionDenied,
+    /// The operating system has not been answered about radio access yet.
+    #[error("radio permission not determined")]
+    RadioPermissionNotDetermined,
+    /// The Bluetooth adapter is switched off.
+    #[error("the bluetooth adapter is powered off")]
+    RadioPoweredOff,
+    /// The host reported no usable Bluetooth adapter.
+    #[error("no usable bluetooth adapter")]
+    RadioNoAdapter,
     /// The device is busy with another host or operation.
     #[error("the device is busy")]
     DeviceBusy,
@@ -260,6 +269,9 @@ impl From<DeviceError> for AppError {
     fn from(error: DeviceError) -> Self {
         let code = match error {
             DeviceError::RadioPermissionDenied => AppErrorCode::RadioPermissionDenied,
+            DeviceError::RadioPermissionNotDetermined => AppErrorCode::RadioPermissionNotDetermined,
+            DeviceError::RadioPoweredOff => AppErrorCode::RadioPoweredOff,
+            DeviceError::RadioNoAdapter => AppErrorCode::RadioNoAdapter,
             DeviceError::DeviceBusy => AppErrorCode::DeviceBusy,
             DeviceError::DeviceDisconnected => AppErrorCode::DeviceDisconnected,
             DeviceError::UnsupportedFirmware => AppErrorCode::UnsupportedFirmware,
@@ -472,6 +484,12 @@ mod tests {
                 DeviceError::RadioPermissionDenied,
                 "RADIO_PERMISSION_DENIED",
             ),
+            (
+                DeviceError::RadioPermissionNotDetermined,
+                "RADIO_PERMISSION_NOT_DETERMINED",
+            ),
+            (DeviceError::RadioPoweredOff, "RADIO_POWERED_OFF"),
+            (DeviceError::RadioNoAdapter, "RADIO_NO_ADAPTER"),
             (DeviceError::DeviceBusy, "DEVICE_BUSY"),
             (DeviceError::DeviceDisconnected, "DEVICE_DISCONNECTED"),
             (DeviceError::UnsupportedFirmware, "UNSUPPORTED_FIRMWARE"),

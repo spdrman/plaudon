@@ -12,6 +12,7 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use plaudon_app::permissions::SystemSettingsPane;
 use plaudon_app::shell_state::ShellState;
 
 /// Picks audio files to import; empty when the user cancels.
@@ -30,6 +31,9 @@ pub type SaveShellState = Arc<dyn Fn(ShellState) + Send + Sync>;
 /// Shows a path selected in the OS file manager (parity row C10).
 pub type RevealInFolder = Arc<dyn Fn(&Path) + Send + Sync>;
 
+/// Opens a system settings pane (#301); the error is a plain reason to show.
+pub type OpenSystemSettings = Arc<dyn Fn(SystemSettingsPane) -> Result<(), String> + Send + Sync>;
+
 /// What the shell may ask the host to do.
 #[derive(Clone)]
 pub struct HostHooks {
@@ -46,6 +50,9 @@ pub struct HostHooks {
     /// Show a path selected in the OS file manager. The view never spawns a
     /// process; the binary does it through `plaudon_platform::opener`.
     pub reveal_in_folder: RevealInFolder,
+    /// Open a system settings pane, such as the Bluetooth privacy row. The
+    /// binary does it through `plaudon_platform::opener`.
+    pub open_system_settings: OpenSystemSettings,
 }
 
 impl fmt::Debug for HostHooks {
@@ -73,6 +80,9 @@ impl HostHooks {
             pick_save_path: Arc::new(|_| None),
             save_shell_state: Arc::new(|_| {}),
             reveal_in_folder: Arc::new(|_| {}),
+            open_system_settings: Arc::new(|_| {
+                Err("this run has no system settings to open".to_owned())
+            }),
         }
     }
 }

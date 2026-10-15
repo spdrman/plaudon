@@ -122,7 +122,11 @@ jobs:
       # both were tried. Until an image ships Xcode 27, a released bundle
       # reports the Apple engines as unavailable in this build, and
       # `cargo_features` in the signing report says exactly what was built.
-      PLAUDON_RELEASE_FEATURES: local-whisper
+      #
+      # `hardware-scan` is the real Bluetooth radio (#301). Without it the
+      # bundle answers every scan with SOURCE_UNAVAILABLE. The packaging script
+      # adds it on its own as well; naming it here keeps the report honest.
+      PLAUDON_RELEASE_FEATURES: local-whisper,hardware-scan
     steps:
       - uses: actions/checkout@v4
 
@@ -290,9 +294,10 @@ jobs:
       # that MSBuild's FileTracker runs past MAX_PATH under the default
       # D:\a\plaudon\plaudon\target. The packaging script honours this.
       CARGO_TARGET_DIR: C:\pt
-      # No apple-bridge on Windows; the local whisper engine is what makes a
-      # released installer different from a development build.
-      PLAUDON_RELEASE_FEATURES: local-whisper
+      # No apple-bridge on Windows; the local whisper engine and the real
+      # Bluetooth radio (`hardware-scan`, #301) are what make a released
+      # installer different from a development build.
+      PLAUDON_RELEASE_FEATURES: local-whisper,hardware-scan
       # The toolset version scripts/package-windows-egui.ps1 insists on.
       WIX_VERSION: "5.0.2"
     steps:

@@ -76,8 +76,19 @@ export CXXFLAGS="${CXXFLAGS:--isystem $SDKROOT/usr/include/c++/v1}"
 export MACOSX_DEPLOYMENT_TARGET="$DEPLOYMENT_TARGET"
 JOBS="${CARGO_BUILD_JOBS:-2}"
 
-BUILD_ARGS=(build --release -j "$JOBS" -p plaudon-egui)
-[ -n "$FEATURES" ] && BUILD_ARGS+=(--features "$FEATURES")
+# A shipped bundle always carries the real Bluetooth radio (#301): without
+# `hardware-scan` every scan answers SOURCE_UNAVAILABLE. It is off by default
+# only so CI and headless builds need no Bluetooth stack. A --skip-build run
+# reuses a binary this script did not build, so the report keeps whatever
+# features it was told about rather than claiming the radio.
+if [ "$SKIP_BUILD" = "0" ]; then
+  case ",${FEATURES// /,}," in
+    *,hardware-scan,*) ;;
+    *) FEATURES="${FEATURES:+$FEATURES,}hardware-scan" ;;
+  esac
+fi
+
+BUILD_ARGS=(build --release -j "$JOBS" -p plaudon-egui --features "$FEATURES")
 
 if [ "$SKIP_BUILD" = "0" ]; then
   echo "==> building plaudon-egui (release, -j $JOBS, features: ${FEATURES:-none})"

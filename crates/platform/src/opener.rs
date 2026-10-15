@@ -34,6 +34,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::Mutex;
 
+use plaudon_app::permissions::{SettingsHost, SystemSettingsPane};
 use url::Url;
 
 use crate::{lock, Platform};
@@ -171,6 +172,56 @@ pub fn open_url_command(platform: Platform, url: &Url) -> CommandSpec {
         ),
         Platform::Linux => CommandSpec::new(LINUX_XDG_OPEN, [argument]),
     }
+}
+
+/// The command that opens a system settings pane (#301).
+///
+/// Settings deep links (`x-apple.systempreferences:`, `ms-settings:`) are not
+/// web links, so they do not go through [`open_url_command`] and its
+/// [`ALLOWED_URL_SCHEMES`] check. They do not need it: each pane is a
+/// compiled-in constant from [`plaudon_app::permissions`], and the only input
+/// is which pane.
+///
+/// # Errors
+///
+/// [`OpenError::UnsupportedPlatform`] on Linux, which has no settings link
+/// every desktop environment honours.
+pub fn system_settings_command(
+    platform: Platform,
+    pane: SystemSettingsPane,
+) -> Result<CommandSpec, OpenError> {
+    let host = match platform {
+        Platform::MacOs => SettingsHost::MacOs,
+        Platform::Windows => SettingsHost::Windows,
+        Platform::Linux => SettingsHost::Other,
+    };
+    let link = pane
+        .deep_link(host)
+        .ok_or_else(|| OpenError::UnsupportedPlatform {
+            reason: "this desktop has no system settings link for Bluetooth".to_owned(),
+        })?;
+    let argument = OsString::from(link);
+    Ok(match platform {
+        Platform::MacOs => CommandSpec::new(MACOS_OPEN, [argument]),
+        Platform::Windows => CommandSpec::new(
+            WINDOWS_RUNDLL,
+            [OsString::from(WINDOWS_URL_HANDLER), argument],
+        ),
+        Platform::Linux => CommandSpec::new(LINUX_XDG_OPEN, [argument]),
+    })
+}
+
+/// Open a system settings pane on the host this binary was built for.
+///
+/// # Errors
+///
+/// [`OpenError::UnsupportedPlatform`] when the host has no link for `pane`,
+/// and [`OpenError::Spawn`] when the handler could not be started.
+pub fn open_system_settings(pane: SystemSettingsPane) -> Result<(), OpenError> {
+    let platform = Platform::host().ok_or_else(|| OpenError::UnsupportedPlatform {
+        reason: "no system settings application is known for this operating system".to_owned(),
+    })?;
+    system_settings_command(platform, pane)?.spawn()
 }
 
 /// Parse and authorise an outbound URL.

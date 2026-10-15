@@ -121,6 +121,11 @@ impl DevicesShellScreen {
                 self.imports.push(id);
             }
             DeviceIntent::OpenAccountSettings => cx.navigate(Route::SettingsSources),
+            DeviceIntent::OpenSystemSettings(pane) => {
+                if let Err(reason) = (cx.hooks().open_system_settings)(pane) {
+                    self.state.settings_not_opened(&reason);
+                }
+            }
             command_intent => self.send_intent(command_intent, cx),
         }
     }

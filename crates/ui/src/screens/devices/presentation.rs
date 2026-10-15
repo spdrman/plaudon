@@ -242,6 +242,9 @@ pub const fn radio_heading(state: RadioState) -> Option<&'static str> {
     match state {
         RadioState::Scanned => None,
         RadioState::PermissionDenied => Some("Bluetooth access is not permitted"),
+        RadioState::PermissionNotDetermined => Some("Bluetooth access has not been granted yet"),
+        RadioState::PoweredOff => Some("Bluetooth is turned off"),
+        RadioState::NoAdapter => Some("No Bluetooth adapter is available"),
         RadioState::UnavailableInBuild => Some("This build cannot scan for Bluetooth devices"),
     }
 }

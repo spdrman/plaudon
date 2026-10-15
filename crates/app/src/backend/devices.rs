@@ -70,6 +70,7 @@ use crate::dto::{
 };
 use crate::error::{internal, invalid_argument};
 use crate::events::{EventDraft, EventPublisher};
+use crate::permissions::radio_state_for;
 use crate::ports::DevicesPort;
 use crate::secrets::SecretValue;
 
@@ -114,6 +115,32 @@ pub const COMPLETENESS_UNKNOWN: &str = "How complete this listing is has not bee
 /// Radio message when the OS denied access.
 pub const RADIO_DENIED_MESSAGE: &str = "Bluetooth access is not permitted for this application, \
      so no scan ran. Allow Bluetooth for Plaudon in your system settings, then scan again.";
+
+/// Radio message when the user has not answered the Bluetooth prompt yet.
+pub const RADIO_NOT_DETERMINED_MESSAGE: &str = "Plaudon has not been given Bluetooth access \
+     yet, so no scan ran. This is not the same as no devices being nearby. Answer the system's \
+     Bluetooth prompt, or allow Plaudon under Bluetooth in your system settings, then scan again.";
+
+/// Radio message when the adapter is switched off.
+pub const RADIO_POWERED_OFF_MESSAGE: &str = "Bluetooth is turned off on this computer, so no \
+     scan ran. This is not the same as no devices being nearby. Turn Bluetooth on, then scan \
+     again.";
+
+/// Radio message when the host reports no usable adapter.
+pub const RADIO_NO_ADAPTER_MESSAGE: &str = "This computer reported no usable Bluetooth \
+     adapter, so no scan ran. This is not the same as no devices being nearby. Check that the \
+     adapter is connected and enabled, then scan again. Import files works without a device.";
+
+/// The plain-language message for a radio that refused a scan.
+const fn radio_refusal_message(state: RadioState) -> &'static str {
+    match state {
+        RadioState::PermissionNotDetermined => RADIO_NOT_DETERMINED_MESSAGE,
+        RadioState::PoweredOff => RADIO_POWERED_OFF_MESSAGE,
+        RadioState::NoAdapter => RADIO_NO_ADAPTER_MESSAGE,
+        RadioState::UnavailableInBuild => RADIO_UNAVAILABLE_MESSAGE,
+        RadioState::PermissionDenied | RadioState::Scanned => RADIO_DENIED_MESSAGE,
+    }
+}
 
 /// Radio message when this build has no radio.
 pub const RADIO_UNAVAILABLE_MESSAGE: &str = "This build of Plaudon cannot scan for Bluetooth \
@@ -1214,15 +1241,19 @@ impl DevicesPort for DevicesBackend {
                         },
                         adverts,
                     ),
-                    Err(err) if err.code() == AppErrorCode::RadioPermissionDenied => (
-                        RadioStatusDto {
-                            state: RadioState::PermissionDenied,
-                            code: Some(AppErrorCode::RadioPermissionDenied.as_str().to_owned()),
-                            message: RADIO_DENIED_MESSAGE.to_owned(),
-                        },
-                        Vec::new(),
-                    ),
-                    Err(err) => return Err(err),
+                    // Every radio refusal is a state with its own cause, not
+                    // an error and never an empty room (#301).
+                    Err(err) => match radio_state_for(err.code()) {
+                        Some(state) => (
+                            RadioStatusDto {
+                                state,
+                                code: Some(err.code().as_str().to_owned()),
+                                message: radio_refusal_message(state).to_owned(),
+                            },
+                            Vec::new(),
+                        ),
+                        None => return Err(err),
+                    },
                 }
             }
         };
@@ -2329,7 +2360,10 @@ cells:
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn issue_301_an_unanswered_permission_prompt_has_its_own_state() {
         let radio = issue_301_scan_failing_with("RADIO_PERMISSION_NOT_DETERMINED").await;
-        assert_eq!(issue_301_state_name(radio.state), "permission_not_determined");
+        assert_eq!(
+            issue_301_state_name(radio.state),
+            "permission_not_determined"
+        );
         assert_eq!(
             radio.code.as_deref(),
             Some("RADIO_PERMISSION_NOT_DETERMINED")
@@ -2358,8 +2392,14 @@ cells:
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn issue_301_every_radio_refusal_reads_differently() {
-        let mut seen = vec![RADIO_DENIED_MESSAGE.to_owned(), RADIO_UNAVAILABLE_MESSAGE.to_owned()];
-        let mut states = vec!["permission_denied".to_owned(), "unavailable_in_build".to_owned()];
+        let mut seen = vec![
+            RADIO_DENIED_MESSAGE.to_owned(),
+            RADIO_UNAVAILABLE_MESSAGE.to_owned(),
+        ];
+        let mut states = vec![
+            "permission_denied".to_owned(),
+            "unavailable_in_build".to_owned(),
+        ];
         for wire in [
             "RADIO_PERMISSION_NOT_DETERMINED",
             "RADIO_POWERED_OFF",

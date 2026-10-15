@@ -435,7 +435,7 @@ fn issue_301_the_bluetooth_settings_control_asks_the_host_to_open_the_pane() {
     harness.run_steps(2);
 
     let control = if cfg!(target_os = "macos") {
-        "Open System Settings → Privacy & Security → Bluetooth"
+        "Open System Settings > Privacy & Security > Bluetooth"
     } else if cfg!(target_os = "windows") {
         "Open Settings → Bluetooth & devices"
     } else {

@@ -27,7 +27,10 @@ fn args(platform: Platform) -> (String, Vec<String>) {
 fn issue_301_macos_opens_privacy_and_security_bluetooth() {
     assert_eq!(
         args(Platform::MacOs),
-        ("open".to_owned(), vec![MACOS_BLUETOOTH_PRIVACY_URL.to_owned()])
+        (
+            "open".to_owned(),
+            vec![MACOS_BLUETOOTH_PRIVACY_URL.to_owned()]
+        )
     );
 }
 

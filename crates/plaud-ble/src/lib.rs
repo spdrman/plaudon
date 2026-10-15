@@ -25,6 +25,7 @@
 
 pub mod actor;
 pub mod discovery;
+pub mod permission;
 pub mod session;
 pub mod transport;
 

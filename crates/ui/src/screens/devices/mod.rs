@@ -32,6 +32,7 @@ use plaudon_app::dto::{
     DeviceListingDto, DeviceProbeDto, DeviceProbeRequest, DeviceScanDto, DeviceSection,
     DeviceSyncPolicyDto, DeviceSyncPolicyRequest, ListNearbyDevicesRequest, RadioState,
 };
+use plaudon_app::permissions::{settings_pane_for, SettingsHost, SystemSettingsPane};
 use plaudon_domain::error::ErrorEnvelope;
 
 use self::badge::badge_inline;
@@ -120,6 +121,9 @@ pub enum DeviceIntent {
     ImportAudioFiles,
     /// Go to the settings destination, where the account connector lives.
     OpenAccountSettings,
+    /// Ask the host to open a system settings pane (#301). Host work: the
+    /// view never spawns a process.
+    OpenSystemSettings(SystemSettingsPane),
 }
 
 impl std::fmt::Debug for DeviceIntent {
@@ -163,6 +167,7 @@ impl std::fmt::Debug for DeviceIntent {
             ),
             Self::ImportAudioFiles => f.write_str("ImportAudioFiles"),
             Self::OpenAccountSettings => f.write_str("OpenAccountSettings"),
+            Self::OpenSystemSettings(pane) => write!(f, "OpenSystemSettings({pane:?})"),
         }
     }
 }
@@ -179,7 +184,9 @@ impl DeviceIntent {
             Self::Import { .. } => Some(DeviceOp::Import),
             Self::Disconnect { .. } => Some(DeviceOp::Disconnect),
             Self::SetSyncPolicy { .. } => Some(DeviceOp::SyncPolicy),
-            Self::ImportAudioFiles | Self::OpenAccountSettings => None,
+            Self::ImportAudioFiles | Self::OpenAccountSettings | Self::OpenSystemSettings(_) => {
+                None
+            }
         }
     }
 
@@ -236,7 +243,9 @@ impl DeviceIntent {
                 peripheral_id,
                 enable_when_nearby,
             })),
-            Self::ImportAudioFiles | Self::OpenAccountSettings => None,
+            Self::ImportAudioFiles | Self::OpenAccountSettings | Self::OpenSystemSettings(_) => {
+                None
+            }
         }
     }
 }
@@ -287,6 +296,9 @@ pub struct DevicesState {
     pending: BTreeSet<DeviceOp>,
     errors: BTreeMap<DeviceOp, ErrorEnvelope>,
     listed_once: bool,
+    /// Which settings application the Bluetooth control targets. `None`
+    /// means the host this binary was built for.
+    settings_host: Option<SettingsHost>,
 }
 
 impl DevicesState {
@@ -337,6 +349,28 @@ impl DevicesState {
     #[must_use]
     pub fn notice(&self) -> Option<&str> {
         self.notice.as_deref()
+    }
+
+    /// Render the settings control as it looks on `host`, rather than on the
+    /// host this binary was built for. Lets a Linux test run check, and
+    /// render, the macOS and Windows controls; the click still goes to the
+    /// real host's hook.
+    pub fn set_settings_host(&mut self, host: SettingsHost) {
+        self.settings_host = Some(host);
+    }
+
+    /// The settings application the Bluetooth control targets.
+    #[must_use]
+    pub fn settings_host(&self) -> SettingsHost {
+        self.settings_host.unwrap_or_else(SettingsHost::current)
+    }
+
+    /// Show why the host could not open a system settings pane, so a click
+    /// that did nothing still says so.
+    pub fn settings_not_opened(&mut self, reason: &str) {
+        self.notice = Some(format!(
+            "The system settings could not be opened ({reason}). Open them by hand."
+        ));
     }
 
     /// Record that `intent` was dispatched.
@@ -560,6 +594,16 @@ pub fn devices_screen(ui: &mut Ui, state: &mut DevicesState) -> Vec<DeviceIntent
             ui.horizontal(|ui| {
                 if ui.button("Scan again").clicked() {
                     intents.push(DeviceIntent::Scan);
+                }
+                // Only where a pane can actually help, and only where the
+                // host has a link to it: a Linux desktop gets no control
+                // rather than one that silently does nothing.
+                if let Some(pane) = settings_pane_for(state_value) {
+                    if let Some(label) = pane.control_label(state.settings_host()) {
+                        if ui.button(label).clicked() {
+                            intents.push(DeviceIntent::OpenSystemSettings(pane));
+                        }
+                    }
                 }
                 if ui.button("Import audio files instead").clicked() {
                     intents.push(DeviceIntent::ImportAudioFiles);

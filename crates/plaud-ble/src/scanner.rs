@@ -8,11 +8,47 @@
 
 use std::time::Duration;
 
-use btleplug::api::{Central, Manager as _, Peripheral as _, ScanFilter};
+use btleplug::api::{Central, CentralState, Manager as _, Peripheral as _, ScanFilter};
 use btleplug::platform::Manager;
 use plaudon_recording_sources::device::DeviceError;
 
 use crate::discovery::{AdvertisementVerdict, Candidate, DiscoveryPolicy, ObservedAdvertisement};
+use crate::permission::{
+    host_authorization, radio_gate, refused_before_touching_the_radio, AdapterPower,
+};
+
+/// How long to wait for a freshly created manager to learn the adapter's
+/// power state. CoreBluetooth reports "unknown" until its first state
+/// callback, which normally arrives within a few hundred milliseconds.
+const POWER_STATE_SETTLE: Duration = Duration::from_secs(2);
+
+/// The adapter's power state, waiting briefly while the stack still says
+/// "unknown".
+async fn adapter_power(adapter: &btleplug::platform::Adapter) -> AdapterPower {
+    let deadline = tokio::time::Instant::now() + POWER_STATE_SETTLE;
+    loop {
+        match adapter.adapter_state().await {
+            Ok(CentralState::PoweredOn) => return AdapterPower::On,
+            Ok(CentralState::PoweredOff) => return AdapterPower::Off,
+            Ok(CentralState::Unknown) | Err(_) => {}
+        }
+        if tokio::time::Instant::now() >= deadline {
+            return AdapterPower::Unknown;
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+}
+
+/// The error for a radio that failed partway, decided by the same gate so a
+/// late failure still names its real cause rather than "denied".
+fn refusal(power: Option<AdapterPower>) -> DeviceError {
+    match radio_gate(host_authorization(), power) {
+        Err(error) => error,
+        // Authorized and powered, yet the stack refused: the adapter is not
+        // usable for a scan.
+        Ok(()) => DeviceError::RadioNoAdapter,
+    }
+}
 
 /// Result of one scan pass.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -27,25 +63,32 @@ pub struct ScanReport {
 
 /// Perform one read-only scan pass.
 ///
-/// A missing or unauthorized radio is reported as
-/// [`DeviceError::RadioPermissionDenied`] rather than as an empty result, so
-/// the UI can tell "no devices nearby" apart from "we were not allowed to
-/// look".
+/// A radio that cannot be used is reported as an error, never as an empty
+/// result, so the UI can tell "no devices nearby" apart from "we could not
+/// look". Each refusal keeps its own cause (#301): an explicit denial, an
+/// unanswered macOS prompt, a switched-off adapter and a missing adapter are
+/// [`crate::permission::radio_gate`]'s four answers.
 pub async fn scan_once(
     policy: &DiscoveryPolicy,
     duration: Duration,
 ) -> Result<ScanReport, DeviceError> {
-    let manager = Manager::new()
-        .await
-        .map_err(|_| DeviceError::RadioPermissionDenied)?;
-    let adapters = manager
-        .adapters()
-        .await
-        .map_err(|_| DeviceError::RadioPermissionDenied)?;
-    let adapter = adapters
-        .into_iter()
-        .next()
-        .ok_or(DeviceError::RadioPermissionDenied)?;
+    // A denial is final; asking the stack again would only fail later.
+    refused_before_touching_the_radio(host_authorization())?;
+
+    // Creating the manager is what shows the macOS prompt when it has not
+    // been answered yet. A host with no Bluetooth service at all (no BlueZ on
+    // Linux) fails here, which is "no usable adapter".
+    let manager = Manager::new().await.map_err(|_| refusal(None))?;
+    let adapter = match manager.adapters().await {
+        Ok(adapters) => adapters.into_iter().next(),
+        Err(_) => None,
+    };
+    let Some(adapter) = adapter else {
+        return Err(refusal(None));
+    };
+    let power = adapter_power(&adapter).await;
+    radio_gate(host_authorization(), Some(power))?;
+
     let adapter_name = adapter
         .adapter_info()
         .await
@@ -54,7 +97,7 @@ pub async fn scan_once(
     adapter
         .start_scan(ScanFilter::default())
         .await
-        .map_err(|_| DeviceError::RadioPermissionDenied)?;
+        .map_err(|_| refusal(Some(power)))?;
     tokio::time::sleep(duration).await;
     let peripherals = adapter
         .peripherals()

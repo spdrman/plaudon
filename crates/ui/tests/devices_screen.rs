@@ -15,6 +15,7 @@ use plaudon_app::dto::{
     DeviceAuthStatusDto, DeviceDisconnectDto, DeviceIdentityAssurance, DeviceImportDto,
     DeviceSection, DeviceTransferState, RadioState,
 };
+use plaudon_app::permissions::SettingsHost;
 use plaudon_ui::screens::devices::{
     devices_screen, DeviceIntent, DeviceOp, DeviceOutcome, DevicesState, SCAN_TIMEOUT_MS,
 };
@@ -151,7 +152,7 @@ fn issue_301_state(wire: &str) -> RadioState {
 /// rather than one that silently does nothing.
 fn issue_301_settings_control() -> Option<&'static str> {
     if cfg!(target_os = "macos") {
-        Some("Open System Settings → Privacy & Security → Bluetooth")
+        Some("Open System Settings > Privacy & Security > Bluetooth")
     } else if cfg!(target_os = "windows") {
         Some("Open Settings → Bluetooth & devices")
     } else {
@@ -175,8 +176,14 @@ fn issue_301_assert_refusal(wire_state: &str, code: &str, heading: &str) {
     let message = format!("Radio message for {wire_state}.");
     let mut harness = issue_301_refused(wire_state, code, &message);
 
-    assert!(says(&harness, heading), "{wire_state}: heading {heading:?} missing");
-    assert!(says(&harness, &message), "{wire_state}: the DTO message is shown");
+    assert!(
+        says(&harness, heading),
+        "{wire_state}: heading {heading:?} missing"
+    );
+    assert!(
+        says(&harness, &message),
+        "{wire_state}: the DTO message is shown"
+    );
     assert!(
         says(&harness, &format!("Reason code: {code}")),
         "{wire_state}: the reason code is shown"
@@ -251,10 +258,127 @@ fn issue_301_a_build_without_a_radio_offers_no_settings_control() {
     );
     // No setting can give a binary a radio it was not built with.
     for control in [
-        "Open System Settings → Privacy & Security → Bluetooth",
+        "Open System Settings > Privacy & Security > Bluetooth",
         "Open Settings → Bluetooth & devices",
     ] {
-        assert!(!says(&harness, control), "{control} offered for a radio-less build");
+        assert!(
+            !says(&harness, control),
+            "{control} offered for a radio-less build"
+        );
+    }
+}
+
+/// The control as each host draws it, checked on whatever host runs the
+/// suite, so the macOS and Windows labels are covered by a Linux run too.
+#[test]
+fn issue_301_each_host_labels_the_settings_control_after_its_own_settings_app() {
+    for (host, label) in [
+        (
+            SettingsHost::MacOs,
+            Some("Open System Settings > Privacy & Security > Bluetooth"),
+        ),
+        (
+            SettingsHost::Windows,
+            Some("Open Settings → Bluetooth & devices"),
+        ),
+        (SettingsHost::Other, None),
+    ] {
+        for wire in [
+            "permission_denied",
+            "permission_not_determined",
+            "powered_off",
+            "no_adapter",
+        ] {
+            let mut app = DevicesApp::new();
+            app.state.set_settings_host(host);
+            app.state
+                .applied(DeviceOutcome::Scan(fixtures::radio_refused(
+                    issue_301_state(wire),
+                    "Refused.",
+                )));
+            let mut harness = harness(app);
+            harness.run();
+            match label {
+                Some(label) => {
+                    harness.get_by_label(label).click();
+                    harness.run();
+                    assert_eq!(
+                        format!("{:?}", harness.state().intents),
+                        "[OpenSystemSettings(BluetoothPrivacy)]",
+                        "{host:?} {wire}"
+                    );
+                }
+                None => {
+                    for control in [
+                        "Open System Settings > Privacy & Security > Bluetooth",
+                        "Open Settings → Bluetooth & devices",
+                    ] {
+                        assert!(!says(&harness, control), "{host:?} {wire}: {control}");
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Renders every radio refusal as macOS draws it, for the pull request's
+/// evidence. Not a check: `--ignored` only, and it writes PNGs under
+/// `tests/visual/issue-301/`, where scripts/e2e-remote.sh copies them back.
+#[test]
+#[ignore = "renders evidence frames; run explicitly"]
+fn issue_301_capture_the_refusal_screens() {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/visual/issue-301");
+    std::fs::create_dir_all(&dir).expect("the frame directory is created");
+    for (index, (wire, code, message)) in [
+        (
+            "permission_not_determined",
+            "RADIO_PERMISSION_NOT_DETERMINED",
+            plaudon_app::backend::devices::RADIO_NOT_DETERMINED_MESSAGE,
+        ),
+        (
+            "permission_denied",
+            "RADIO_PERMISSION_DENIED",
+            plaudon_app::backend::devices::RADIO_DENIED_MESSAGE,
+        ),
+        (
+            "powered_off",
+            "RADIO_POWERED_OFF",
+            plaudon_app::backend::devices::RADIO_POWERED_OFF_MESSAGE,
+        ),
+        (
+            "no_adapter",
+            "RADIO_NO_ADAPTER",
+            plaudon_app::backend::devices::RADIO_NO_ADAPTER_MESSAGE,
+        ),
+        (
+            "unavailable_in_build",
+            "SOURCE_UNAVAILABLE",
+            plaudon_app::backend::devices::RADIO_UNAVAILABLE_MESSAGE,
+        ),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let mut app = DevicesApp::new();
+        app.state.set_settings_host(SettingsHost::MacOs);
+        let mut scan = fixtures::radio_refused(issue_301_state(wire), message);
+        scan.radio.code = Some(code.to_owned());
+        app.state.applied(DeviceOutcome::Scan(scan));
+        let mut harness = plaudon_ui_testkit::builder()
+            .with_size(egui::vec2(1100.0, 420.0))
+            .build_ui_state(
+                |ui, app: &mut DevicesApp| {
+                    let intents = devices_screen(ui, &mut app.state);
+                    app.intents.extend(intents);
+                },
+                app,
+            );
+        harness.run();
+        harness
+            .render()
+            .expect("the frame renders")
+            .save(dir.join(format!("{index}-{wire}.png")))
+            .expect("the frame is written");
     }
 }
 
