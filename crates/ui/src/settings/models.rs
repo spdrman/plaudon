@@ -137,6 +137,7 @@ impl LocalModelsSection {
             match model.origin {
                 ModelOriginDto::Pack => "Offline pack",
                 ModelOriginDto::Download => "Download",
+                ModelOriginDto::ImportedFile => "Imported file",
             },
         );
         section::fact_row(
@@ -349,6 +350,10 @@ fn offers_ui(
 }
 
 impl Section for LocalModelsSection {
+    fn on_install_progress(&mut self, received_bytes: u64, total_bytes: u64) {
+        self.install_progress(received_bytes, total_bytes);
+    }
+
     fn title(&self) -> &'static str {
         "Local models"
     }

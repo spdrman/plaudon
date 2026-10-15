@@ -255,17 +255,18 @@ impl OnboardingState {
 
 /// The sentence the engines step shows about downloading.
 ///
-/// Setup downloads nothing in either mode; saying "Local-only mode is on, so
-/// Plaudon downloads nothing" when it is on makes the guarantee concrete.
+/// Setup downloads nothing by itself in either mode. With Local-only Mode on
+/// it downloads nothing at all, and says the offline import still works; with
+/// it off, nothing is fetched until the user approves one named download
+/// (issue #303).
 #[must_use]
 pub const fn engines_download_note(local_only: bool) -> &'static str {
     if local_only {
-        "Local-only mode is on, so Plaudon downloads nothing — not even a model. Installing models \
-         happens in Settings once a model source is configured, or from the offline model pack \
-         shipped with the installer."
+        "Local-only mode is on, so Plaudon downloads nothing, not even a model. You can still \
+         import a model file you already have; that never touches the network."
     } else {
-        "This build downloads nothing during setup. Installing models happens in Settings once a \
-         model source is configured, or from the offline model pack shipped with the installer."
+        "Plaudon downloads nothing until you approve one specific download below. Each \
+         approval names the one host and file it covers, and ends when that download does."
     }
 }
 

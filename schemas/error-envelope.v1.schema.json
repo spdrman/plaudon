@@ -51,6 +51,7 @@
         "POLICY_UNRESOLVED",
         "CAPABILITY_UNVERIFIED",
         "MODEL_UNAVAILABLE",
+        "NO_SPEECH_MODEL",
         "OUTCOME_UNKNOWN",
         "PROVIDER_REJECTED",
         "SCHEMA_VALIDATION_FAILED",
@@ -100,7 +101,8 @@
         "CHARGE_DEVICE",
         "OPEN_DIAGNOSTICS",
         "CHOOSE_ANOTHER_MODEL",
-        "WAIT_AND_RETRY"
+        "WAIT_AND_RETRY",
+        "INSTALL_SPEECH_MODEL"
       ]
     },
     "diagnostic_id": {

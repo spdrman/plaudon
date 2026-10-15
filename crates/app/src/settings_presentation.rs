@@ -1098,6 +1098,7 @@ mod tests {
             }],
             download_bytes_required: None,
             requires_network: false,
+            catalogue: Vec::new(),
         }
     }
 

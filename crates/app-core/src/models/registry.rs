@@ -63,6 +63,9 @@ pub enum InstallOrigin {
     Download,
     /// Installed from a redistributable offline pack (F2.3).
     OfflinePack,
+    /// Imported from a file the user already had, after its checksum matched
+    /// the catalogue (issue #303).
+    ImportedFile,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

@@ -279,6 +279,39 @@ pub trait ModelsPort: Send + Sync {
         &self,
         model_id: String,
     ) -> Result<VerifyLocalModelResponse, AppError>;
+
+    /// Download one catalogue model under a grant for exactly that host and
+    /// file (issue #303). The caller has already checked the licence and the
+    /// footprint; the port checks Local-only Mode and the egress approval.
+    async fn install_download(
+        &self,
+        request: crate::dto::InstallModelDownloadRequest,
+    ) -> Result<InstallModelResponse, AppError>;
+
+    /// Ask a running download to stop.
+    async fn cancel_install(
+        &self,
+        model_id: String,
+    ) -> Result<crate::dto::CancelModelInstallResponse, AppError>;
+
+    /// Install a weights file the user already has, after its checksum
+    /// matched the catalogue. Works with Local-only Mode on.
+    async fn import_file(
+        &self,
+        path: PathBuf,
+        model_id: Option<String>,
+    ) -> Result<InstallModelResponse, AppError>;
+
+    /// What this machine has of the PLAUD Cloud CLI toolchain. Reads the
+    /// filesystem only.
+    async fn detect_plaud_toolchain(&self) -> Result<crate::dto::PlaudToolchainStatus, AppError>;
+
+    /// Run the guided `npm install` of the exercised PLAUD CLI release under
+    /// a grant for exactly that registry and package.
+    async fn install_plaud_cli(
+        &self,
+        request: crate::dto::InstallPlaudCliRequest,
+    ) -> Result<crate::dto::PlaudToolchainStatus, AppError>;
 }
 
 /// What the update subsystem can say without making a request (task N2.2).

@@ -107,6 +107,7 @@ fn engine(
         installed_models: Vec::new(),
         download_bytes_required: None,
         requires_network: false,
+        catalogue: Vec::new(),
     }
 }
 
@@ -288,7 +289,7 @@ fn update_data(checks_suppressed: bool, readiness: UpdateReadiness) -> SettingsD
 
 #[test]
 fn an_unsupported_engine_is_listed_with_its_reason_and_without_a_radio() {
-    let mut harness = harness(EnginesSection, engine_data());
+    let mut harness = harness(EnginesSection::default(), engine_data());
     harness.run();
 
     // Listed, with the backend's own status word and its own reason.
@@ -307,7 +308,7 @@ fn an_unsupported_engine_is_listed_with_its_reason_and_without_a_radio() {
 
 #[test]
 fn an_unknown_download_size_says_so_rather_than_showing_a_number() {
-    let mut harness = harness(EnginesSection, engine_data());
+    let mut harness = harness(EnginesSection::default(), engine_data());
     harness.run();
 
     harness.get_by_label("Needs 142 MB, 200 GB free on this disk.");
@@ -322,7 +323,7 @@ fn choosing_a_text_engine_carries_both_current_ids() {
         .expect("capabilities")
         .preferences
         .default_stt_engine_id = Some("whisper.cpp".to_owned());
-    let mut harness = harness(EnginesSection, data);
+    let mut harness = harness(EnginesSection::default(), data);
     harness.run();
 
     harness
@@ -351,7 +352,7 @@ fn the_application_choice_clears_a_preference() {
         .expect("capabilities")
         .preferences
         .default_stt_engine_id = Some("whisper.cpp".to_owned());
-    let mut harness = harness(EnginesSection, data);
+    let mut harness = harness(EnginesSection::default(), data);
     harness.run();
 
     harness
@@ -371,7 +372,7 @@ fn a_networked_engine_says_local_only_mode_will_not_make_a_request() {
         .expect("capabilities")
         .preferences
         .local_only_mode = true;
-    let mut harness = harness(EnginesSection, data);
+    let mut harness = harness(EnginesSection::default(), data);
     harness.run();
 
     harness.get_by_label("Using this engine requires network access.");
@@ -1007,7 +1008,7 @@ update."
 
 #[test]
 fn every_engine_control_is_reachable_by_keyboard() {
-    let mut harness = harness(EnginesSection, engine_data());
+    let mut harness = harness(EnginesSection::default(), engine_data());
     harness.run();
     let order = a11y::focus_order(&mut harness, 20);
 

@@ -68,6 +68,10 @@ tokio-util = { workspace = true }
 btleplug = { version = "0.11", optional = true }
 async-trait = { workspace = true }
 parking_lot = { workspace = true }
+# The HTTPS transport for a catalogue model download the user approved
+# (issue #303); every request and every redirect hop is put to the
+# per-action egress grant first.
+reqwest = { workspace = true }
 hex = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

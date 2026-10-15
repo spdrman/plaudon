@@ -475,6 +475,9 @@ pub enum DenyReason {
     /// mode, the grant or the destination: there is no configuration under
     /// which the same request would be allowed.
     VoiceBiometricNeverEgresses,
+    /// The request is not the one host and file the user approved for this
+    /// action, or the action has already ended (issue #303).
+    ActionNotApproved,
 }
 
 impl DenyReason {
@@ -492,6 +495,7 @@ impl DenyReason {
             DenyReason::TelemetryNotOptedIn => "telemetry_not_opted_in",
             DenyReason::PurposeNotValidForSubsystem => "purpose_not_valid_for_subsystem",
             DenyReason::VoiceBiometricNeverEgresses => "voice_biometric_never_egresses",
+            DenyReason::ActionNotApproved => "action_not_approved",
         }
     }
 
@@ -530,6 +534,10 @@ impl DenyReason {
             DenyReason::VoiceBiometricNeverEgresses => {
                 "Voice recognition data stays on this computer. The app refused to send it, \
                  and there is no setting that allows it."
+            }
+            DenyReason::ActionNotApproved => {
+                "Downloads and installs only reach the one host and file you approved for that \
+                 action, and only while it runs."
             }
         }
     }
@@ -660,6 +668,10 @@ pub struct NetworkGrant {
     pub telemetry_opted_in: bool,
     /// Pinned vendor hosts. An empty list means "no host is reachable".
     pub allowed_hosts: Vec<String>,
+    /// Whether this grant covers installing one named dependency (issue
+    /// #303). Only a per-action grant ever sets it, so turning Local-only
+    /// Mode off never lets the app run an installer by itself.
+    pub dependency_install_approved: bool,
 }
 
 impl NetworkGrant {
@@ -677,7 +689,15 @@ impl NetworkGrant {
             model_downloads_approved: false,
             telemetry_opted_in: false,
             allowed_hosts: default_allowed_hosts(),
+            dependency_install_approved: false,
         }
+    }
+
+    /// Record that the user approved installing one named dependency.
+    #[must_use]
+    pub fn with_dependency_install_approved(mut self, approved: bool) -> Self {
+        self.dependency_install_approved = approved;
+        self
     }
 
     #[must_use]
@@ -898,6 +918,12 @@ impl OutboundPolicy {
         if request.subsystem == Subsystem::Telemetry && !grant.telemetry_opted_in {
             return Err(DenyReason::TelemetryNotOptedIn);
         }
+        if request.subsystem == Subsystem::PlaudCloudCli
+            && request.purpose == EgressPurpose::AssetDownload
+            && !grant.dependency_install_approved
+        {
+            return Err(DenyReason::ActionNotApproved);
+        }
 
         // 4. Destination checks.
         match &request.destination {
@@ -923,7 +949,14 @@ impl OutboundPolicy {
                 if request.subsystem != Subsystem::PlaudCloudCli {
                     return Err(DenyReason::SubsystemNotNetworkCapable);
                 }
-                if !is_allowlisted_cli_program(program) {
+                // The guided install (issue #303) runs the package manager,
+                // and nothing else; every other purpose runs the CLI itself.
+                let pinned = if request.purpose == EgressPurpose::AssetDownload {
+                    is_allowlisted_installer_program(program)
+                } else {
+                    is_allowlisted_cli_program(program)
+                };
+                if !pinned {
                     return Err(DenyReason::DestinationNotAllowlisted);
                 }
                 Ok(())
@@ -1073,13 +1106,29 @@ fn is_allowlisted_cli_program(program: &str) -> bool {
     leaf == PLAUD_CLI_PROGRAM
 }
 
+/// The package manager the guided PLAUD CLI install runs (issue #303).
+pub const PLAUD_CLI_INSTALLER_PROGRAM: &str = "npm";
+
+fn is_allowlisted_installer_program(program: &str) -> bool {
+    let leaf = std::path::Path::new(program)
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or(program);
+    // `npm.cmd` on Windows is a batch shim, which would put `cmd.exe` between
+    // us and the arguments; only a real executable is accepted.
+    let leaf = leaf.strip_suffix(".exe").unwrap_or(leaf);
+    leaf == PLAUD_CLI_INSTALLER_PROGRAM
+}
+
 fn purpose_valid_for(subsystem: Subsystem, purpose: EgressPurpose) -> bool {
     use EgressPurpose::{
         AccountSync, AssetDownload, CredentialValidation, Diagnostic, InferenceDispatch,
         ManifestFetch, ModelCatalog, ModelDownload, TelemetryFlush, UpdateCheck,
     };
     match subsystem {
-        Subsystem::PlaudCloudCli => matches!(purpose, AccountSync | Diagnostic),
+        // `AssetDownload` is the guided install of the CLI itself, which a
+        // per-action grant has to approve separately (issue #303).
+        Subsystem::PlaudCloudCli => matches!(purpose, AccountSync | Diagnostic | AssetDownload),
         Subsystem::OpenRouter => matches!(
             purpose,
             CredentialValidation | ModelCatalog | InferenceDispatch | Diagnostic
@@ -1108,6 +1157,7 @@ fn user_action_for(reason: DenyReason) -> Option<crate::error::ErrorAction> {
     }
 }
 
+pub mod action;
 pub mod http;
 pub mod subprocess;
 

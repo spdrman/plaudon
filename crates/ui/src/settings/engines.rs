@@ -12,13 +12,16 @@
 //! run it, and here is why" into "this does not exist".
 
 use egui::{RichText, Ui};
-use plaudon_app::command::AppCommand;
-use plaudon_app::dto::{EngineStage, SetEnginePreferencesRequest};
+use plaudon_app::command::{AppCommand, AppResponse};
+use plaudon_app::dto::{EngineInventoryEntry, EngineStage, SetEnginePreferencesRequest};
 use plaudon_app::settings_presentation::{engine_rows, EngineRow};
+use plaudon_domain::error::ErrorEnvelope;
 
+use super::engine_setup::EngineSetup;
+use super::intent::SettingsIntent;
 use super::section;
 use super::theme::{SettingsTokens, Tone};
-use super::{Section, SettingsData, SettingsOutput};
+use super::{PickedPath, Section, SettingsData, SettingsOutput};
 
 /// Shown while `get_capabilities` has not answered.
 const NOT_READ_YET: &str = "The engine inventory has not been read yet.";
@@ -51,9 +54,12 @@ request: Plaudon refuses outbound network access until you turn Local-only mode 
 const NO_MODELS: &str = "No models installed for this engine.";
 
 /// The default-engine preferences (matrix rows C1/J-series companion to the
-/// engine inventory in `get_capabilities`).
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub struct EnginesSection;
+/// engine inventory in `get_capabilities`), and the same install, import and
+/// PLAUD CLI actions first-run step 3 offers (issue #303).
+#[derive(Debug, Default)]
+pub struct EnginesSection {
+    setup: EngineSetup,
+}
 
 /// Tone for a status word the backend chose.
 ///
@@ -75,8 +81,9 @@ fn engine_row(
     row: &EngineRow,
     noun: &str,
     selected: bool,
-    local_only: bool,
+    actions: &mut EngineActions<'_>,
 ) -> bool {
+    let local_only = actions.local_only;
     let mut chosen = false;
     ui.horizontal_wrapped(|ui| {
         ui.label(
@@ -117,8 +124,25 @@ fn engine_row(
             chosen = true;
         }
     }
+    if let Some(engine) = actions
+        .engines
+        .iter()
+        .find(|engine| engine.engine_id == row.engine_id)
+    {
+        actions
+            .setup
+            .engine_actions(ui, tokens, engine, local_only, actions.out);
+    }
     ui.add_space(6.0);
     chosen
+}
+
+/// What an engine row needs to offer its install and import controls.
+struct EngineActions<'a> {
+    setup: &'a mut EngineSetup,
+    engines: &'a [EngineInventoryEntry],
+    local_only: bool,
+    out: &'a mut SettingsOutput,
 }
 
 /// Render one stage.
@@ -133,7 +157,7 @@ fn stage_group(
     noun: &str,
     rows: &[EngineRow],
     selected: Option<&str>,
-    local_only: bool,
+    actions: &mut EngineActions<'_>,
 ) -> Option<Option<String>> {
     let mut choice: Option<Option<String>> = None;
     ui.label(RichText::new(heading).strong().color(tokens.text()));
@@ -147,7 +171,7 @@ fn stage_group(
     }
     for row in rows {
         let is_selected = selected == Some(row.engine_id.as_str());
-        if engine_row(ui, tokens, row, noun, is_selected, local_only) && !is_selected {
+        if engine_row(ui, tokens, row, noun, is_selected, actions) && !is_selected {
             choice = Some(Some(row.engine_id.clone()));
         }
     }
@@ -157,6 +181,25 @@ fn stage_group(
 impl Section for EnginesSection {
     fn title(&self) -> &'static str {
         "Engines"
+    }
+
+    fn on_response(
+        &mut self,
+        command: &'static str,
+        result: &Result<AppResponse, ErrorEnvelope>,
+        out: &mut SettingsOutput,
+    ) {
+        if self.setup.on_response(command, result) {
+            out.push(SettingsIntent::RefreshCapabilities);
+        }
+    }
+
+    fn on_path_picked(&mut self, picked: PickedPath, path: &str, out: &mut SettingsOutput) {
+        self.setup.path_picked(picked, path, out);
+    }
+
+    fn on_install_progress(&mut self, received_bytes: u64, total_bytes: u64) {
+        self.setup.install_progress(received_bytes, total_bytes);
     }
 
     fn ui(
@@ -178,6 +221,12 @@ impl Section for EnginesSection {
         let text = engine_rows(capabilities, EngineStage::Text);
         let local_only = preferences.local_only_mode;
 
+        let mut actions = EngineActions {
+            setup: &mut self.setup,
+            engines: &capabilities.engines,
+            local_only,
+            out,
+        };
         let stt_choice = stage_group(
             ui,
             tokens,
@@ -185,7 +234,7 @@ impl Section for EnginesSection {
             STT_NOUN,
             &stt,
             preferences.default_stt_engine_id.as_deref(),
-            local_only,
+            &mut actions,
         );
         ui.add_space(8.0);
         let text_choice = stage_group(
@@ -195,8 +244,10 @@ impl Section for EnginesSection {
             TEXT_NOUN,
             &text,
             preferences.default_text_engine_id.as_deref(),
-            local_only,
+            &mut actions,
         );
+        ui.add_space(8.0);
+        self.setup.plaud_cli(ui, tokens, local_only, out);
 
         // One command carries both stages, because `set_engine_preferences`
         // writes both fields: sending only the changed one would clear the

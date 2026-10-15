@@ -326,7 +326,11 @@ impl RecordingDetailScreen {
         if let Some(envelope) = self.error.clone() {
             match error_notice(ui, &envelope, "This recording could not be loaded.") {
                 Some(ErrorNoticeAction::Retry) => self.fetch(send),
-                Some(ErrorNoticeAction::OpenSettings) => {
+                Some(
+                    ErrorNoticeAction::OpenSettings
+                    | ErrorNoticeAction::InstallSpeechModel
+                    | ErrorNoticeAction::ImportModelFile,
+                ) => {
                     intents.push(DetailIntent::OpenSettings);
                 }
                 None => {}

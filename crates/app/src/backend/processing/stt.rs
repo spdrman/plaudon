@@ -66,7 +66,7 @@ impl std::fmt::Debug for EngineSeam {
 /// Preflight asks before a job is admitted: an absent model parks the job in
 /// `waiting_for_model`, which is a state the user can act on, rather than
 /// failing it (§14.4).
-pub(super) fn a_local_engine_is_installed(backend: &LocalBackend) -> bool {
+pub(crate) fn a_local_engine_is_installed(backend: &LocalBackend) -> bool {
     match &backend.processing().seam {
         EngineSeam::Substituted(engines) => !engines.is_empty(),
         EngineSeam::Host => {
@@ -89,10 +89,12 @@ async fn local(run: &RunContext, recording_id: RecordingId) -> Result<Completion
     let backend = run.backend();
     let media = backend.media_facts(recording_id).await?;
     let engines = host_engines(backend);
-    if engines.is_empty() {
+    if engines.is_empty() || !a_local_engine_is_installed(backend) {
+        // Issue #305: say that no speech model is installed, and offer the
+        // install, rather than blaming a model the user never selected.
         return Err(AppError::new(
-            AppErrorCode::ModelUnavailable,
-            "no local speech engine is available in this build",
+            AppErrorCode::NoSpeechModel,
+            "no local speech engine has a model installed",
         ));
     }
 

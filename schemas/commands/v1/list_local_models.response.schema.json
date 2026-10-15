@@ -78,7 +78,8 @@
           "type": "string",
           "enum": [
             "pack",
-            "download"
+            "download",
+            "imported_file"
           ]
         },
         "keep_offline": {

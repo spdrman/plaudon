@@ -24,15 +24,24 @@ pub enum ConsentPurpose {
     TranscriptTool,
     /// Validating the user's API key with a low-risk request (§4.4(3)).
     CredentialValidation,
+    /// Downloading one named model file the user chose (issue #303). Carries
+    /// no user content; recorded so every app-initiated download is in the
+    /// consent log, and never covers a dispatch.
+    ModelDownload,
+    /// Installing one named dependency the user chose, such as the PLAUD
+    /// Cloud CLI package (issue #303). Same rules as [`Self::ModelDownload`].
+    DependencyInstall,
 }
 
 impl ConsentPurpose {
     /// Every variant, for exhaustive decision-table tests.
-    pub const ALL: [ConsentPurpose; 4] = [
+    pub const ALL: [ConsentPurpose; 6] = [
         ConsentPurpose::Transcription,
         ConsentPurpose::Summarization,
         ConsentPurpose::TranscriptTool,
         ConsentPurpose::CredentialValidation,
+        ConsentPurpose::ModelDownload,
+        ConsentPurpose::DependencyInstall,
     ];
 
     /// Stable label. Fixed vocabulary, safe for logs and error envelopes.
@@ -43,6 +52,8 @@ impl ConsentPurpose {
             ConsentPurpose::Summarization => "summarization",
             ConsentPurpose::TranscriptTool => "transcript_tool",
             ConsentPurpose::CredentialValidation => "credential_validation",
+            ConsentPurpose::ModelDownload => "model_download",
+            ConsentPurpose::DependencyInstall => "dependency_install",
         }
     }
 }

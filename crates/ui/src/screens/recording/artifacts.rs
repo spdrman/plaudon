@@ -140,7 +140,11 @@ impl SourceArtifacts {
                     self.fetch(send);
                     None
                 }
-                Some(ErrorNoticeAction::OpenSettings) => Some(DetailIntent::OpenSettings),
+                Some(
+                    ErrorNoticeAction::OpenSettings
+                    | ErrorNoticeAction::InstallSpeechModel
+                    | ErrorNoticeAction::ImportModelFile,
+                ) => Some(DetailIntent::OpenSettings),
                 None => None,
             };
         }

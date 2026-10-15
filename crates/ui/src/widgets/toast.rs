@@ -77,6 +77,25 @@ pub struct Toast {
     pub title: String,
     /// Optional detail.
     pub body: Option<String>,
+    /// The corrective controls the toast offers, when it offers any.
+    pub action: Option<ToastAction>,
+}
+
+/// Corrective controls a toast can carry.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToastAction {
+    /// "Install a model" and "Import a model file", for a failure that needs a
+    /// speech model (issue #305).
+    InstallSpeechModel,
+}
+
+/// What the user pressed on a toast, for the shell to carry out.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToastChoice {
+    /// Go to the engine setup, where a model can be installed.
+    InstallSpeechModel,
+    /// Pick a model file and import it.
+    ImportModelFile,
 }
 
 /// The stack of messages currently showing.
@@ -95,6 +114,17 @@ impl Toasts {
 
     /// Add a toast and return its id.
     pub fn push(&mut self, tone: ToastTone, title: impl Into<String>, body: Option<String>) -> u64 {
+        self.push_with_action(tone, title, body, None)
+    }
+
+    /// Add a toast that offers corrective controls, and return its id.
+    pub fn push_with_action(
+        &mut self,
+        tone: ToastTone,
+        title: impl Into<String>,
+        body: Option<String>,
+        action: Option<ToastAction>,
+    ) -> u64 {
         self.next_id += 1;
         let id = self.next_id;
         self.items.push(Toast {
@@ -102,6 +132,7 @@ impl Toasts {
             tone,
             title: title.into(),
             body,
+            action,
         });
         if self.items.len() > MAX_TOASTS {
             self.items.remove(0);
@@ -131,11 +162,14 @@ impl Toasts {
         self.items.is_empty()
     }
 
-    /// Paint the stack in the bottom-right corner of `ctx`.
-    pub fn ui(&mut self, ctx: &egui::Context) {
+    /// Paint the stack in the bottom-right corner of `ctx`, returning what
+    /// the user pressed on one, if anything. A pressed control dismisses its
+    /// toast: the user has acted on it.
+    pub fn ui(&mut self, ctx: &egui::Context) -> Option<ToastChoice> {
         if self.items.is_empty() {
-            return;
+            return None;
         }
+        let mut choice = None;
         let tokens = Tokens::get(ctx);
         let mut dismissed = None;
         egui::Area::new(egui::Id::new("plaudon-toasts"))
@@ -173,6 +207,18 @@ impl Toasts {
                                         RichText::new(body).color(tokens.color.text_secondary),
                                     );
                                 }
+                                if toast.action == Some(ToastAction::InstallSpeechModel) {
+                                    ui.horizontal_wrapped(|ui| {
+                                        if ui.button("Install a model").clicked() {
+                                            choice = Some(ToastChoice::InstallSpeechModel);
+                                            dismissed = Some(toast.id);
+                                        }
+                                        if ui.button("Import a model file").clicked() {
+                                            choice = Some(ToastChoice::ImportModelFile);
+                                            dismissed = Some(toast.id);
+                                        }
+                                    });
+                                }
                                 if ui.button("Dismiss").clicked() {
                                     dismissed = Some(toast.id);
                                 }
@@ -184,6 +230,7 @@ impl Toasts {
         if let Some(id) = dismissed {
             self.dismiss(id);
         }
+        choice
     }
 }
 

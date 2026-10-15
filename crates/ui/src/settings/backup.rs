@@ -839,7 +839,7 @@ impl Section for BackupSection {
                 self.restore_result = None;
                 self.restore_error = None;
             }
-            PickedPath::Folder(_) => {}
+            PickedPath::Folder(_) | PickedPath::File(FilePurpose::ModelFile) => {}
         }
     }
 

@@ -39,8 +39,11 @@ use plaudon_app::settings_presentation::{engine_rows, status_glyph, status_label
 use plaudon_domain::capability::CapabilityStatus;
 use plaudon_domain::error::ErrorEnvelope;
 
+use crate::settings::engine_setup::EngineSetup;
 use crate::settings::section;
-use crate::settings::{SettingsOutput, SettingsTokens, Tone, VisualsTokens};
+use crate::settings::{
+    PickedPath, SettingsIntent, SettingsOutput, SettingsTokens, Tone, VisualsTokens,
+};
 
 /// The heading that stands above every step.
 const TITLE: &str = "Set up Plaudon";
@@ -153,6 +156,8 @@ pub struct OnboardingScreen {
     /// Step whose heading should take focus on the next frame, so that a step
     /// change is announced instead of being a silent repaint.
     focus_heading: Option<usize>,
+    /// Installing what the engines need (issue #303), shared with Settings.
+    setup: EngineSetup,
 }
 
 impl Default for OnboardingScreen {
@@ -173,6 +178,7 @@ impl fmt::Debug for OnboardingScreen {
             .field("complete_pending", &self.complete_pending)
             .field("error", &self.error)
             .field("focus_heading", &self.focus_heading)
+            .field("setup", &self.setup)
             .finish()
     }
 }
@@ -189,6 +195,7 @@ impl OnboardingScreen {
             complete_pending: false,
             error: None,
             focus_heading: None,
+            setup: EngineSetup::default(),
         }
     }
 
@@ -238,7 +245,7 @@ impl OnboardingScreen {
         match step {
             OnboardingStep::Privacy => Self::privacy_step(ui, tokens),
             OnboardingStep::Mode => self.mode_step(ui, tokens, out),
-            OnboardingStep::Engines => self.engines_step(ui, tokens, capabilities),
+            OnboardingStep::Engines => self.engines_step(ui, tokens, capabilities, out),
             OnboardingStep::Key => self.key_step(ui, tokens, out),
             OnboardingStep::Sources => self.sources_step(ui, tokens, capabilities),
             OnboardingStep::Finish => self.finish_step(ui, tokens, capabilities),
@@ -348,18 +355,34 @@ impl OnboardingScreen {
         }
     }
 
-    /// Step three: the engines this machine actually has.
+    /// Step three: the engines this machine actually has, and what each
+    /// needs installed (issue #303).
     fn engines_step(
         &mut self,
         ui: &mut Ui,
         tokens: &dyn SettingsTokens,
         capabilities: &Capabilities,
+        out: &mut SettingsOutput,
     ) {
+        // The answer to step two, not the stored preference: until the user
+        // has answered, setup's posture is Local-only.
+        let local_only = self.state.local_only();
+        section::note(ui, tokens, engines_download_note(local_only));
+        ui.add_space(8.0);
+
         let stt = engine_rows(capabilities, EngineStage::Stt);
         let text = engine_rows(capabilities, EngineStage::Text);
         for (rows, stage) in [(&stt, EngineStage::Stt), (&text, EngineStage::Text)] {
             for row in rows {
                 engine_entry(ui, tokens, row, stage);
+                if let Some(engine) = capabilities
+                    .engines
+                    .iter()
+                    .find(|engine| engine.engine_id == row.engine_id)
+                {
+                    self.setup
+                        .engine_actions(ui, tokens, engine, local_only, out);
+                }
             }
         }
         if stt.is_empty() && text.is_empty() {
@@ -367,7 +390,7 @@ impl OnboardingScreen {
         }
 
         ui.add_space(8.0);
-        section::note(ui, tokens, engines_download_note(self.state.local_only()));
+        self.setup.plaud_cli(ui, tokens, local_only, out);
         ui.add_space(8.0);
 
         ui.label(RichText::new(ENGINE_LEGEND).strong().color(tokens.text()));
@@ -506,13 +529,28 @@ impl OnboardingScreen {
         }
     }
 
+    /// Receive the path a file dialog this screen opened returned.
+    pub fn path_picked(&mut self, picked: PickedPath, path: &str, out: &mut SettingsOutput) {
+        self.setup.path_picked(picked, path, out);
+    }
+
+    /// Report download progress from a `model.install_progress` event.
+    pub fn install_progress(&mut self, received_bytes: u64, total_bytes: u64) {
+        self.setup.install_progress(received_bytes, total_bytes);
+    }
+
     /// Fold a command outcome into the screen.
     pub fn on_response(
         &mut self,
         command: &'static str,
         result: &Result<AppResponse, ErrorEnvelope>,
-        _out: &mut SettingsOutput,
+        out: &mut SettingsOutput,
     ) {
+        if self.setup.on_response(command, result) {
+            // A model was installed: re-read the inventory, so the engine
+            // becomes choosable on this very step.
+            out.push(SettingsIntent::RefreshCapabilities);
+        }
         match command {
             "set_local_only_mode" => {
                 self.mode_pending = false;

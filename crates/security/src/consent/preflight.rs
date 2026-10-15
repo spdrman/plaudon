@@ -81,6 +81,10 @@ impl DispatchRequest {
     pub const fn egress_purpose(&self) -> EgressPurpose {
         match self.purpose {
             ConsentPurpose::CredentialValidation => EgressPurpose::CredentialValidation,
+            // Neither is valid for the relay subsystem, so the gate refuses a
+            // dispatch that names one of them before consent is consulted.
+            ConsentPurpose::ModelDownload => EgressPurpose::ModelDownload,
+            ConsentPurpose::DependencyInstall => EgressPurpose::AssetDownload,
             ConsentPurpose::Transcription
             | ConsentPurpose::Summarization
             | ConsentPurpose::TranscriptTool => EgressPurpose::InferenceDispatch,

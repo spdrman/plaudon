@@ -132,6 +132,7 @@ pub fn engine(id: &str, name: &str, requires_network: bool) -> EngineInventoryEn
         }],
         download_bytes_required: None,
         requires_network,
+        catalogue: Vec::new(),
     }
 }
 

@@ -321,6 +321,7 @@ fn every_response_dto_matches_its_schema() {
             installed_models: Vec::new(),
             download_bytes_required: None,
             requires_network: false,
+            catalogue: Vec::new(),
         }],
         storage: StorageCapability {
             library_path: "/tmp/library".into(),

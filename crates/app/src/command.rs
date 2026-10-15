@@ -80,8 +80,10 @@ use crate::dto::{
     ValidateTemplateRequest, ValidateTemplateResponse,
 };
 use crate::dto::{
-    InspectModelPackRequest, InspectModelPackResponse, InstallModelFromPackRequest,
-    InstallModelResponse, ListLocalModelsResponse, RemoveLocalModelRequest,
+    CancelModelInstallRequest, CancelModelInstallResponse, ImportModelFileRequest,
+    InspectModelPackRequest, InspectModelPackResponse, InstallModelDownloadRequest,
+    InstallModelFromPackRequest, InstallModelResponse, InstallPlaudCliRequest,
+    ListLocalModelsResponse, PlaudToolchainStatus, RemoveLocalModelRequest,
     RemoveLocalModelResponse, VerifyLocalModelRequest, VerifyLocalModelResponse,
 };
 use crate::dto::{SetSegmentSpeakerRequest, SetSegmentSpeakerResponse};
@@ -243,6 +245,12 @@ command_surface! {
         "install_model_from_pack" => InstallModelFromPack: models::install_model_from_pack(InstallModelFromPackRequest) -> InstallModelResponse,
         "remove_local_model" => RemoveLocalModel: models::remove_local_model(RemoveLocalModelRequest) -> RemoveLocalModelResponse,
         "verify_local_model" => VerifyLocalModel: models::verify_local_model(VerifyLocalModelRequest) -> VerifyLocalModelResponse,
+        // Issue #303: catalogue downloads, the air-gapped import and the
+        // guided PLAUD CLI install, all behind per-action approvals.
+        "install_model_download" => InstallModelDownload: models::install_model_download(InstallModelDownloadRequest) -> InstallModelResponse,
+        "cancel_model_install" => CancelModelInstall: models::cancel_model_install(CancelModelInstallRequest) -> CancelModelInstallResponse,
+        "import_model_file" => ImportModelFile: models::import_model_file(ImportModelFileRequest) -> InstallModelResponse,
+        "install_plaud_cli" => InstallPlaudCli: models::install_plaud_cli(InstallPlaudCliRequest) -> PlaudToolchainStatus,
         "list_transcript_tools" => ListTranscriptTools: tools::list_transcript_tools(ListTranscriptToolsRequest) -> ListTranscriptToolsResponse,
         "ask_recording" => AskRecording: tools::ask_recording(AskRecordingRequest) -> AskRecordingResponse,
         "list_conversations" => ListConversations: tools::list_conversations(ListConversationsRequest) -> ListConversationsResponse,
@@ -281,6 +289,7 @@ command_surface! {
         "remove_openrouter_key" => RemoveOpenRouterKey: settings::remove_openrouter_key() -> StatusResponse,
         "get_shortcuts" => GetShortcuts: settings::get_shortcuts() -> ShortcutBindings,
         "list_local_models" => ListLocalModels: models::list_local_models() -> ListLocalModelsResponse,
+        "detect_plaud_toolchain" => DetectPlaudToolchain: models::detect_plaud_toolchain() -> PlaudToolchainStatus,
         "get_update_status" => GetUpdateStatus: update::get_update_status() -> UpdateStatus,
         "plaud_probe" => PlaudProbe: sources::plaud_probe() -> PlaudConnectorSnapshot,
         "plaud_disconnect" => PlaudDisconnect: sources::plaud_disconnect() -> PlaudDisconnectResponse,
@@ -449,7 +458,9 @@ mod tests {
         // consent-gated biometric tier (`VOICE_PROFILES_SPEC` §8), plus the
         // two task P2.6 added for the provenance list the split UI reads and
         // the clean-speech meter the enrolment flow shows (VP-091, VP-094).
-        assert_eq!(COMMAND_NAMES.len(), 98);
+        // Issue #303 added five: the catalogue download, its cancellation, the
+        // air-gapped file import, and the PLAUD CLI detection and install.
+        assert_eq!(COMMAND_NAMES.len(), 103);
     }
 
     /// Commands the egui screens added (EPIC O tasks O2.4, O2.6 and O2.7).
@@ -512,6 +523,12 @@ mod tests {
         // enrolment meter.
         "list_voice_exemplars",
         "get_cluster_speech",
+        // Issue #303: engine setup from first-run step 3 and Settings.
+        "install_model_download",
+        "cancel_model_install",
+        "import_model_file",
+        "detect_plaud_toolchain",
+        "install_plaud_cli",
     ];
 
     #[test]

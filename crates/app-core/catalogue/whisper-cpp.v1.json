@@ -1,0 +1,161 @@
+{
+  "schema_version": 1,
+  "models": [
+    {
+      "id": "whisper-tiny",
+      "engine": "whisper.cpp",
+      "version": "whisper-tiny",
+      "display_name": "Whisper tiny (multilingual)",
+      "file_name": "ggml-tiny.bin",
+      "size_bytes": 77691713,
+      "sha256": "be07e048e1e599ad46341c8d2a135645097a538221678b7acdd1b1919c6e1b21",
+      "languages": [],
+      "license": {
+        "spdx_id": "MIT",
+        "name": "MIT License",
+        "redistributable": true,
+        "text_file": "LICENSE-whisper.txt"
+      },
+      "source": {
+        "kind": "remote",
+        "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-tiny.bin"
+      },
+      "hardware": {
+        "min_ram_bytes": 1073741824,
+        "recommended_ram_bytes": 4294967296,
+        "notes": "The fastest and least accurate model. Good for a quick first draft on any machine, in any language whisper.cpp supports."
+      }
+    },
+    {
+      "id": "whisper-tiny-en",
+      "engine": "whisper.cpp",
+      "version": "whisper-tiny-en",
+      "display_name": "Whisper tiny (English)",
+      "file_name": "ggml-tiny.en.bin",
+      "size_bytes": 77704715,
+      "sha256": "921e4cf8686fdd993dcd081a5da5b6c365bfde1162e72b08d75ac75289920b1f",
+      "languages": [
+        "en"
+      ],
+      "license": {
+        "spdx_id": "MIT",
+        "name": "MIT License",
+        "redistributable": true,
+        "text_file": "LICENSE-whisper.txt"
+      },
+      "source": {
+        "kind": "remote",
+        "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-tiny.en.bin"
+      },
+      "hardware": {
+        "min_ram_bytes": 1073741824,
+        "recommended_ram_bytes": 4294967296,
+        "notes": "The fastest and least accurate model, tuned for English only."
+      }
+    },
+    {
+      "id": "whisper-base",
+      "engine": "whisper.cpp",
+      "version": "whisper-base",
+      "display_name": "Whisper base (multilingual)",
+      "file_name": "ggml-base.bin",
+      "size_bytes": 147951465,
+      "sha256": "60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe",
+      "languages": [],
+      "license": {
+        "spdx_id": "MIT",
+        "name": "MIT License",
+        "redistributable": true,
+        "text_file": "LICENSE-whisper.txt"
+      },
+      "source": {
+        "kind": "remote",
+        "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-base.bin"
+      },
+      "hardware": {
+        "min_ram_bytes": 1073741824,
+        "recommended_ram_bytes": 4294967296,
+        "notes": "A little slower than tiny and noticeably more accurate, in any language whisper.cpp supports."
+      }
+    },
+    {
+      "id": "whisper-base-en",
+      "engine": "whisper.cpp",
+      "version": "whisper-base-en",
+      "display_name": "Whisper base (English)",
+      "file_name": "ggml-base.en.bin",
+      "size_bytes": 147964211,
+      "sha256": "a03779c86df3323075f5e796cb2ce5029f00ec8869eee3fdfb897afe36c6d002",
+      "languages": [
+        "en"
+      ],
+      "license": {
+        "spdx_id": "MIT",
+        "name": "MIT License",
+        "redistributable": true,
+        "text_file": "LICENSE-whisper.txt"
+      },
+      "source": {
+        "kind": "remote",
+        "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-base.en.bin"
+      },
+      "hardware": {
+        "min_ram_bytes": 1073741824,
+        "recommended_ram_bytes": 4294967296,
+        "notes": "A little slower than tiny and noticeably more accurate, tuned for English only."
+      }
+    },
+    {
+      "id": "whisper-small",
+      "engine": "whisper.cpp",
+      "version": "whisper-small",
+      "display_name": "Whisper small (multilingual)",
+      "file_name": "ggml-small.bin",
+      "size_bytes": 487601967,
+      "sha256": "1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b",
+      "languages": [],
+      "license": {
+        "spdx_id": "MIT",
+        "name": "MIT License",
+        "redistributable": true,
+        "text_file": "LICENSE-whisper.txt"
+      },
+      "source": {
+        "kind": "remote",
+        "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-small.bin"
+      },
+      "hardware": {
+        "min_ram_bytes": 2147483648,
+        "recommended_ram_bytes": 8589934592,
+        "notes": "Clearly more accurate than base, and several times slower. Best on a machine with 8 GB of memory or more."
+      }
+    },
+    {
+      "id": "whisper-small-en",
+      "engine": "whisper.cpp",
+      "version": "whisper-small-en",
+      "display_name": "Whisper small (English)",
+      "file_name": "ggml-small.en.bin",
+      "size_bytes": 487614201,
+      "sha256": "c6138d6d58ecc8322097e0f987c32f1be8bb0a18532a3f88f734d1bbf9c41e5d",
+      "languages": [
+        "en"
+      ],
+      "license": {
+        "spdx_id": "MIT",
+        "name": "MIT License",
+        "redistributable": true,
+        "text_file": "LICENSE-whisper.txt"
+      },
+      "source": {
+        "kind": "remote",
+        "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-small.en.bin"
+      },
+      "hardware": {
+        "min_ram_bytes": 2147483648,
+        "recommended_ram_bytes": 8589934592,
+        "notes": "Clearly more accurate than base, and several times slower, tuned for English only. Best on a machine with 8 GB of memory or more."
+      }
+    }
+  ]
+}

@@ -54,11 +54,11 @@ use plaudon_app::dto::{
 use plaudon_app::event::{AppEvent, ResyncReason};
 use plaudon_app::shell_state::{PanelLayout, ShellState, SIDEBAR_WIDTH_RANGE};
 use plaudon_craft_ui::layout::SplitSize;
-use plaudon_domain::error::ErrorEnvelope;
+use plaudon_domain::error::{ErrorAction, ErrorEnvelope};
 
 use crate::activity::{unread, PAGE_SIZE as ACTIVITY_PAGE_SIZE};
 use crate::theme::{ThemeState, Tokens, COMPACT_LAYOUT_WIDTH};
-use crate::widgets::toast::{ToastTone, Toasts};
+use crate::widgets::toast::{ToastAction, ToastChoice, ToastTone, Toasts};
 
 use self::screen::ShellBus;
 
@@ -414,10 +414,15 @@ impl Shell {
                 // The envelope is all the user sees: a canonical message and
                 // a diagnostic id, never a path, a key or transcript text.
                 self.status.clone_from(&envelope.message);
-                self.bus.toasts.push(
+                // An envelope that needs a speech model offers the install and
+                // the import right on the toast (issue #305).
+                let action = (envelope.action == Some(ErrorAction::InstallSpeechModel))
+                    .then_some(ToastAction::InstallSpeechModel);
+                self.bus.toasts.push_with_action(
                     ToastTone::Danger,
                     envelope.message.clone(),
                     Some(format!("Diagnostic id {}", envelope.diagnostic_id)),
+                    action,
                 );
             }
             Ok(_) => {}
@@ -761,7 +766,21 @@ impl Shell {
             self.run_command(&id, host);
         }
         shortcuts::shortcuts_dialog(&ctx, &self.commands, &self.keymap, &mut self.shortcuts_open);
-        self.bus.toasts.ui(&ctx);
+        match self.bus.toasts.ui(&ctx) {
+            Some(ToastChoice::InstallSpeechModel) => self.navigate(Route::Settings),
+            Some(ToastChoice::ImportModelFile) => {
+                if let Some(path) = (host.hooks.pick_open_file)("Choose a model file to import") {
+                    self.send(
+                        host,
+                        AppCommand::ImportModelFile(plaudon_app::dto::ImportModelFileRequest {
+                            path: path.to_string_lossy().into_owned(),
+                            model_id: None,
+                        }),
+                    );
+                }
+            }
+            None => {}
+        }
         if std::mem::take(&mut self.bus.repaint) {
             ctx.request_repaint();
         }

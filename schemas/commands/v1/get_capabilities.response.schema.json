@@ -119,7 +119,8 @@
         "unavailable_reason",
         "installed_models",
         "download_bytes_required",
-        "requires_network"
+        "requires_network",
+        "catalogue"
       ],
       "properties": {
         "engine_id": {
@@ -164,6 +165,65 @@
           "minimum": 0
         },
         "requires_network": {
+          "type": "boolean"
+        },
+        "catalogue": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/catalogue_offer"
+          }
+        }
+      }
+    },
+    "catalogue_offer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "model_id",
+        "display_name",
+        "size_bytes",
+        "licence_spdx_id",
+        "licence_name",
+        "host",
+        "file",
+        "delivery_host_suffix",
+        "recommended_ram_bytes",
+        "installed"
+      ],
+      "properties": {
+        "model_id": {
+          "type": "string"
+        },
+        "display_name": {
+          "type": "string"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "licence_spdx_id": {
+          "type": "string"
+        },
+        "licence_name": {
+          "type": "string"
+        },
+        "host": {
+          "type": "string"
+        },
+        "file": {
+          "type": "string"
+        },
+        "delivery_host_suffix": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "recommended_ram_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "installed": {
           "type": "boolean"
         }
       }

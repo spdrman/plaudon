@@ -206,6 +206,8 @@ pub struct ModelInstaller<'a> {
     source: &'a dyn ModelByteSource,
     resources: &'a dyn SystemResources,
     observer: &'a dyn InstallObserver,
+    /// Set by the user's "Cancel download"; checked between chunks.
+    cancel: Option<&'a std::sync::atomic::AtomicBool>,
 }
 
 impl std::fmt::Debug for ModelInstaller<'_> {
@@ -228,7 +230,21 @@ impl<'a> ModelInstaller<'a> {
             source,
             resources,
             observer,
+            cancel: None,
         }
+    }
+
+    /// Stop the transfer as soon as `cancel` is set, removing the partial
+    /// file so a cancelled download leaves nothing behind.
+    #[must_use]
+    pub fn with_cancellation(mut self, cancel: &'a std::sync::atomic::AtomicBool) -> Self {
+        self.cancel = Some(cancel);
+        self
+    }
+
+    fn cancelled(&self) -> bool {
+        self.cancel
+            .is_some_and(|flag| flag.load(std::sync::atomic::Ordering::SeqCst))
     }
 
     /// Check disk and RAM without transferring anything (§14.4).
@@ -366,6 +382,14 @@ impl<'a> ModelInstaller<'a> {
         let mut received = resume_from;
         let mut transferred = 0u64;
         loop {
+            // The user's "Cancel download" is honoured between chunks, and a
+            // cancelled transfer keeps nothing: a partial file the user asked
+            // to stop is not something to resume behind their back.
+            if self.cancelled() {
+                drop(file);
+                let _ = std::fs::remove_file(staging_path);
+                return Err(ModelError::Cancelled);
+            }
             let read = match reader.read(&mut buffer) {
                 Ok(0) => break,
                 Ok(read) => read,
@@ -397,6 +421,11 @@ impl<'a> ModelInstaller<'a> {
                 received_bytes: received,
                 total_bytes: entry.size_bytes,
             });
+        }
+        if self.cancelled() {
+            drop(file);
+            let _ = std::fs::remove_file(staging_path);
+            return Err(ModelError::Cancelled);
         }
         file.flush()
             .map_err(|source| ModelError::io(staging_path, &source))?;

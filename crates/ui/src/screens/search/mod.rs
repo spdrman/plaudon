@@ -181,7 +181,11 @@ impl SearchScreen {
                         self.dispatch(query, None, send);
                     }
                 }
-                Some(ErrorNoticeAction::OpenSettings) => {
+                Some(
+                    ErrorNoticeAction::OpenSettings
+                    | ErrorNoticeAction::InstallSpeechModel
+                    | ErrorNoticeAction::ImportModelFile,
+                ) => {
                     intents.push(SearchIntent::OpenSettings);
                 }
                 None => {}

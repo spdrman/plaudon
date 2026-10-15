@@ -25,6 +25,7 @@ pub mod appearance;
 pub mod backup;
 pub mod consent;
 pub mod destination;
+pub mod engine_setup;
 pub mod engines;
 pub mod export;
 pub mod intent;
@@ -212,6 +213,10 @@ pub trait Section: std::fmt::Debug {
     /// Receive a path the user chose in a native dialog.
     fn on_path_picked(&mut self, picked: PickedPath, path: &str, out: &mut SettingsOutput) {}
 
+    /// Receive measured progress of a running model download, from a
+    /// `model.install_progress` event (issue #303).
+    fn on_install_progress(&mut self, received_bytes: u64, total_bytes: u64) {}
+
     /// Receive a portable archive the operating system asked us to open
     /// (parity row C10).
     ///
@@ -253,7 +258,7 @@ impl SettingsScreen {
                 Box::new(ai_key::AiKeySection::default()),
                 Box::new(consent::ConsentSection::default()),
                 Box::new(notifications::NotificationsSection),
-                Box::new(engines::EnginesSection),
+                Box::new(engines::EnginesSection::default()),
                 Box::new(templates::TemplatesSection),
                 Box::new(export::ExportSection::default()),
                 Box::new(shortcuts::ShortcutsSection::default()),
@@ -293,6 +298,13 @@ impl SettingsScreen {
         self.data.absorb(result);
         for section in &mut self.sections {
             section.on_response(command, result, out);
+        }
+    }
+
+    /// Hand measured download progress to the sections that show it.
+    pub fn install_progress(&mut self, received_bytes: u64, total_bytes: u64) {
+        for section in &mut self.sections {
+            section.on_install_progress(received_bytes, total_bytes);
         }
     }
 

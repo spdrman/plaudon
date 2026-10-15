@@ -24,10 +24,21 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
+use std::sync::atomic::AtomicBool;
+
+use plaudon_app_core::models::catalogue;
 use plaudon_app_core::models::{
-    DiskUsage, HostResources, InstallOrigin, InstalledModel, ModelEntry, ModelError, ModelId,
-    ModelPack, ModelRegistry, SystemResources,
+    DiskUsage, HostResources, InstallOrigin, InstallRequest, InstalledModel, ModelEntry,
+    ModelError, ModelId, ModelInstaller, ModelManifest, ModelPack, ModelRegistry, ModelSource,
+    NullInstallObserver, SystemResources, TransferError,
 };
+use plaudon_security::outbound::action::{ActionApproval, ActionEgressGrant, ActionScope};
+use plaudon_security::outbound::subprocess::{SpawnError, NPM_REGISTRY_HOST, PLAUD_CLI_PACKAGE};
+
+use crate::backend::model_setup;
+
+use crate::backend::consent::ConsentStore;
+use crate::ports::SettingsPort;
 use plaudon_domain::error::{AppError, AppErrorCode};
 use plaudon_domain::time::Timestamp;
 use tokio::sync::Mutex;
@@ -52,6 +63,46 @@ pub const MODEL_ROOT_DIR: &str = "models";
 /// does not look frozen.
 const PROGRESS_INTERVAL: Duration = Duration::from_millis(250);
 
+/// Opens the bytes of an approved catalogue download (issue #303).
+///
+/// The only argument that can reach the network is a URL the
+/// [`ActionEgressGrant`] has authorized; an implementation must call
+/// [`ActionEgressGrant::authorize_url`] before it connects and
+/// [`ActionEgressGrant::authorize_redirect`] before it follows a hop.
+pub trait ModelDownloadTransport: Send + Sync {
+    /// Open `url`, positioned `resume_from` bytes in.
+    fn open(
+        &self,
+        grant: &ActionEgressGrant,
+        url: &str,
+        resume_from: u64,
+    ) -> Result<Box<dyn std::io::Read + Send>, TransferError>;
+}
+
+/// What a hermetic run substitutes in model setup (issue #303).
+///
+/// `None` everywhere is production: the real HTTPS transport, the committed
+/// catalogue and the platform's search directories for node, npm and plaud.
+#[derive(Clone, Default)]
+pub struct ModelSetupSeams {
+    /// How an approved download's bytes are fetched.
+    pub transport: Option<Arc<dyn ModelDownloadTransport>>,
+    /// The catalogue downloads and imports are checked against.
+    pub catalogue: Option<plaudon_app_core::models::ModelManifest>,
+    /// Directories searched for node, npm and plaud.
+    pub toolchain_dirs: Option<Vec<PathBuf>>,
+}
+
+impl std::fmt::Debug for ModelSetupSeams {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ModelSetupSeams")
+            .field("transport", &self.transport.is_some())
+            .field("catalogue", &self.catalogue.is_some())
+            .field("toolchain_dirs", &self.toolchain_dirs)
+            .finish()
+    }
+}
+
 /// Local model management.
 pub struct ModelsBackend {
     root: PathBuf,
@@ -60,6 +111,20 @@ pub struct ModelsBackend {
     /// One install at a time: two concurrent installs would share one staging
     /// directory and one index file.
     install_lock: Mutex<()>,
+    /// Where Local-only Mode is read from. `None` refuses every download, as
+    /// if Local-only Mode were on: failing closed is the only safe default.
+    settings: Option<Arc<dyn SettingsPort>>,
+    /// The consent log every per-action grant is written to.
+    consents: Option<ConsentStore>,
+    /// How an approved download's bytes are fetched.
+    transport: Arc<dyn ModelDownloadTransport>,
+    /// Directories searched for node, npm and plaud; `None` is the platform's.
+    toolchain_dirs: Option<Vec<PathBuf>>,
+    /// Cancellation flags of running downloads, by model id.
+    cancels: parking_lot::Mutex<std::collections::BTreeMap<String, Arc<AtomicBool>>>,
+    /// The catalogue downloads and imports are checked against; `None` is the
+    /// committed one.
+    catalogue: Option<plaudon_app_core::models::ModelManifest>,
 }
 
 impl std::fmt::Debug for ModelsBackend {
@@ -89,6 +154,117 @@ impl ModelsBackend {
             events,
             resources,
             install_lock: Mutex::new(()),
+            settings: None,
+            consents: None,
+            transport: Arc::new(crate::backend::model_setup::HttpsModelTransport::new()),
+            toolchain_dirs: None,
+            cancels: parking_lot::Mutex::new(std::collections::BTreeMap::new()),
+            catalogue: None,
+        }
+    }
+
+    /// Apply whatever a hermetic run substituted.
+    #[must_use]
+    pub fn with_seams(mut self, seams: ModelSetupSeams) -> Self {
+        if let Some(transport) = seams.transport {
+            self.transport = transport;
+        }
+        if let Some(dirs) = seams.toolchain_dirs {
+            self.toolchain_dirs = Some(dirs);
+        }
+        self.catalogue = seams.catalogue;
+        self
+    }
+
+    /// Read Local-only Mode from `settings` and record every per-action grant
+    /// in `consents` (issue #303). Without this, downloads are refused.
+    #[must_use]
+    pub fn with_egress(mut self, settings: Arc<dyn SettingsPort>, consents: ConsentStore) -> Self {
+        self.settings = Some(settings);
+        self.consents = Some(consents);
+        self
+    }
+
+    /// Replace the download transport. Tests use this to count requests.
+    #[must_use]
+    pub fn with_transport(mut self, transport: Arc<dyn ModelDownloadTransport>) -> Self {
+        self.transport = transport;
+        self
+    }
+
+    /// Search only `dirs` for node, npm and plaud. Tests use this.
+    #[must_use]
+    pub fn with_toolchain_dirs(mut self, dirs: Vec<PathBuf>) -> Self {
+        self.toolchain_dirs = Some(dirs);
+        self
+    }
+
+    /// The catalogue downloads and imports are checked against.
+    fn catalogue(&self) -> &ModelManifest {
+        self.catalogue
+            .as_ref()
+            .unwrap_or_else(|| catalogue::committed())
+    }
+
+    /// Where node, npm and plaud are looked for.
+    fn toolchain_dirs(&self) -> Vec<PathBuf> {
+        self.toolchain_dirs
+            .clone()
+            .unwrap_or_else(model_setup::default_toolchain_dirs)
+    }
+
+    /// Whether Local-only Mode is on. A backend with no settings port, or a
+    /// settings read that fails, answers "on": failing closed is the only
+    /// safe default for an egress decision.
+    async fn local_only(&self) -> bool {
+        match &self.settings {
+            Some(settings) => settings
+                .preferences()
+                .await
+                .map_or(true, |preferences| preferences.local_only_mode),
+            None => true,
+        }
+    }
+
+    /// Approve one action and record it in the consent log.
+    async fn approve(
+        &self,
+        scope: ActionScope,
+        approved_host: &str,
+        approved_resource: &str,
+    ) -> Result<ActionEgressGrant, AppError> {
+        let local_only = self.local_only().await;
+        let approval = ActionApproval {
+            host: approved_host.to_owned(),
+            resource: approved_resource.to_owned(),
+        };
+        let now = Timestamp::now().as_millis().div_euclid(1000);
+        let id = format!("action-{}", uuid::Uuid::new_v4());
+        let grant = ActionEgressGrant::approve(local_only, scope, &approval, id, now)
+            .map_err(|denied| model_setup::egress_error(&denied))?;
+        let Some(consents) = &self.consents else {
+            // Unreachable in a wired backend (no settings means Local-only),
+            // but an unrecordable grant is not one to act on.
+            return Err(AppError::new(
+                AppErrorCode::EgressDenied,
+                "there is no consent log to record the approval in",
+            ));
+        };
+        consents.upsert_grant(&grant.consent_record()).await?;
+        Ok(grant)
+    }
+
+    /// End an action: revoke its grant, and say so in the consent log.
+    async fn end(&self, grant: &ActionEgressGrant) {
+        let now = Timestamp::now().as_millis().div_euclid(1000);
+        let record = grant.revoke(now);
+        if let Some(consents) = &self.consents {
+            if let Err(error) = consents.mark_revoked(&record.id, now).await {
+                tracing::warn!(
+                    code = error.code().as_str(),
+                    "an ended download or install was not marked revoked"
+                );
+            }
         }
     }
 
@@ -185,6 +361,7 @@ fn to_dto(model: &InstalledModel) -> LocalModelDto {
         origin: match model.installed_from {
             InstallOrigin::OfflinePack => ModelOriginDto::Pack,
             InstallOrigin::Download => ModelOriginDto::Download,
+            InstallOrigin::ImportedFile => ModelOriginDto::ImportedFile,
         },
         keep_offline: model.keep_offline,
     }
@@ -366,5 +543,207 @@ impl ModelsPort for ModelsBackend {
         })
         .await
         .map_err(|_| AppError::new(AppErrorCode::InternalError, "model verification panicked"))?
+    }
+
+    async fn install_download(
+        &self,
+        request: crate::dto::InstallModelDownloadRequest,
+    ) -> Result<InstallModelResponse, AppError> {
+        let id = Self::model_id(&request.model_id)?;
+        let catalogue = self.catalogue().clone();
+        let entry = catalogue
+            .find(&id)
+            .cloned()
+            .ok_or_else(|| AppError::from(ModelError::NotInManifest { id: id.to_string() }))?;
+        // The licence the view showed must be the one the catalogue declares:
+        // accepting "MIT" does not accept some other licence.
+        if request.licence_accepted_spdx_id != entry.license.spdx_id {
+            return Err(AppError::new(
+                AppErrorCode::InvalidArgument,
+                "the accepted licence is not the model's licence",
+            ));
+        }
+        let ModelSource::Remote { url } = &entry.source else {
+            return Err(AppError::new(
+                AppErrorCode::InvalidArgument,
+                "this catalogue entry is not a download",
+            ));
+        };
+        let delivery = catalogue::host_and_file(&entry)
+            .filter(|(host, _)| host == catalogue::CATALOGUE_HOST)
+            .map(|_| catalogue::DELIVERY_HOST_SUFFIX);
+        let scope = ActionScope::model_download(url, delivery)
+            .map_err(|denied| model_setup::egress_error(&denied))?;
+        let grant = Arc::new(
+            self.approve(scope, &request.approved_host, &request.approved_file)
+                .await?,
+        );
+
+        let _guard = self.install_lock.lock().await;
+        let cancel = Arc::new(AtomicBool::new(false));
+        self.cancels
+            .lock()
+            .insert(id.to_string(), Arc::clone(&cancel));
+
+        let root = self.root.clone();
+        let staging_path = ModelRegistry::open(&root)
+            .map_err(AppError::from)?
+            .staging_dir()
+            .join(format!("{id}.part"));
+        let total_bytes = entry.size_bytes;
+        let transport = Arc::clone(&self.transport);
+        let resources = Arc::clone(&self.resources);
+        let install_grant = Arc::clone(&grant);
+        let keep_offline = request.keep_offline;
+        let install = tokio::task::spawn_blocking(move || {
+            let mut registry = ModelRegistry::open(&root).map_err(AppError::from)?;
+            let policy = model_setup::GrantFetchPolicy(Arc::clone(&install_grant));
+            let source = model_setup::GrantByteSource {
+                grant: install_grant,
+                transport,
+            };
+            let installer =
+                ModelInstaller::new(&policy, &source, resources.as_ref(), &NullInstallObserver)
+                    .with_cancellation(&cancel);
+            let outcome = installer
+                .install(
+                    &mut registry,
+                    &entry,
+                    &InstallRequest {
+                        id: entry.id.clone(),
+                        keep_offline,
+                    },
+                )
+                .map_err(AppError::from)?;
+            Ok::<_, AppError>((outcome, registry.disk_usage()))
+        });
+        let result = tokio::select! {
+            result = install => result.map_err(|_| {
+                AppError::new(AppErrorCode::InternalError, "model download panicked")
+            }).and_then(|inner| inner),
+            () = self.report_progress(staging_path, total_bytes) => unreachable!(
+                "the progress sampler never returns; it is cancelled when the download finishes"
+            ),
+        };
+
+        // The action is over, however it ended: nothing more may be fetched
+        // under this approval.
+        self.cancels.lock().remove(id.as_str());
+        self.end(&grant).await;
+
+        let (outcome, usage) = result?;
+        self.publish(
+            EventKind::ModelAvailabilityChanged,
+            serde_json::json!({ "model_id": outcome.model.id.to_string(), "installed": true }),
+        )
+        .await;
+        Ok(InstallModelResponse {
+            transferred_bytes: outcome.transferred_bytes,
+            model: to_dto(&outcome.model),
+            disk: disk_dto(usage),
+        })
+    }
+
+    async fn cancel_install(
+        &self,
+        model_id: String,
+    ) -> Result<crate::dto::CancelModelInstallResponse, AppError> {
+        let id = Self::model_id(&model_id)?;
+        let flag = self.cancels.lock().get(id.as_str()).cloned();
+        let cancelled = flag.is_some_and(|flag| {
+            flag.store(true, std::sync::atomic::Ordering::SeqCst);
+            true
+        });
+        Ok(crate::dto::CancelModelInstallResponse { cancelled })
+    }
+
+    async fn import_file(
+        &self,
+        path: PathBuf,
+        model_id: Option<String>,
+    ) -> Result<InstallModelResponse, AppError> {
+        let expected = model_id.as_deref().map(Self::model_id).transpose()?;
+        let _guard = self.install_lock.lock().await;
+        let root = self.root.clone();
+        let catalogue = self.catalogue().clone();
+        let (model, usage) = tokio::task::spawn_blocking(move || {
+            let mut registry = ModelRegistry::open(&root).map_err(AppError::from)?;
+            let model = plaudon_app_core::models::import_model_file(
+                &mut registry,
+                &catalogue,
+                &path,
+                expected.as_ref(),
+                false,
+            )
+            .map_err(AppError::from)?;
+            Ok::<_, AppError>((model, registry.disk_usage()))
+        })
+        .await
+        .map_err(|_| AppError::new(AppErrorCode::InternalError, "model import panicked"))??;
+
+        self.publish(
+            EventKind::ModelAvailabilityChanged,
+            serde_json::json!({ "model_id": model.id.to_string(), "installed": true }),
+        )
+        .await;
+        Ok(InstallModelResponse {
+            transferred_bytes: model.byte_length,
+            model: to_dto(&model),
+            disk: disk_dto(usage),
+        })
+    }
+
+    async fn detect_plaud_toolchain(&self) -> Result<crate::dto::PlaudToolchainStatus, AppError> {
+        let dirs = self.toolchain_dirs();
+        tokio::task::spawn_blocking(move || model_setup::detect_toolchain(&dirs))
+            .await
+            .map_err(|_| AppError::new(AppErrorCode::InternalError, "detection panicked"))
+    }
+
+    async fn install_plaud_cli(
+        &self,
+        request: crate::dto::InstallPlaudCliRequest,
+    ) -> Result<crate::dto::PlaudToolchainStatus, AppError> {
+        let scope = ActionScope::dependency_install(NPM_REGISTRY_HOST, PLAUD_CLI_PACKAGE);
+        // Approval before anything else: in Local-only Mode, or for any other
+        // package, nothing is detected, recorded or launched.
+        let grant = self
+            .approve(scope, &request.approved_host, &request.approved_package)
+            .await?;
+        let dirs = self.toolchain_dirs();
+        let outcome = async {
+            let status = {
+                let dirs = dirs.clone();
+                tokio::task::spawn_blocking(move || model_setup::detect_toolchain(&dirs))
+                    .await
+                    .map_err(|_| AppError::new(AppErrorCode::InternalError, "detection panicked"))?
+            };
+            let npm = match (&status.npm.path, status.guided_install_available) {
+                (Some(path), true) => PathBuf::from(path),
+                _ => {
+                    return Err(AppError::new(
+                        AppErrorCode::CliMissing,
+                        "npm was not found, so the guided install cannot run",
+                    ))
+                }
+            };
+            let command = grant
+                .launcher()
+                .map_err(|denied| model_setup::egress_error(&denied))?
+                .prepare_cli_install(&npm)
+                .map_err(|error| match error {
+                    SpawnError::Denied(denied) => model_setup::egress_error(&denied),
+                    _ => AppError::new(AppErrorCode::HelperFailed, "npm could not be prepared"),
+                })?;
+            tokio::task::spawn_blocking(move || model_setup::run_install(command))
+                .await
+                .map_err(|_| AppError::new(AppErrorCode::InternalError, "install panicked"))?
+        }
+        .await;
+        self.end(&grant).await;
+        outcome?;
+        tokio::task::spawn_blocking(move || model_setup::detect_toolchain(&dirs))
+            .await
+            .map_err(|_| AppError::new(AppErrorCode::InternalError, "detection panicked"))
     }
 }

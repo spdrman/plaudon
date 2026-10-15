@@ -273,6 +273,17 @@ impl EngineConfig {
         self
     }
 
+    /// Replace the model-setup transport, catalogue and toolchain search
+    /// directories (issue #303).
+    ///
+    /// A test uses this to prove a refused download made no request, and to
+    /// detect node, npm and plaud in a directory it laid out itself.
+    #[must_use]
+    pub fn with_model_setup(mut self, seams: crate::backend::models::ModelSetupSeams) -> Self {
+        self.engines.models = seams;
+        self
+    }
+
     /// Replace the OS notifier; tests use
     /// [`crate::notify::UnsupportedNotifier`].
     #[must_use]
