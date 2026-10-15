@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/import_model_file.request.schema.json",
+  "title": "import_model_file.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "path"
+  ],
+  "properties": {
+    "path": {
+      "type": "string"
+    },
+    "model_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  }
+}

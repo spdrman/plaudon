@@ -116,6 +116,7 @@ fn apply(
 /// The file name the restore dialog opens on.
 const fn suggested_name(purpose: FilePurpose) -> &'static str {
     match purpose {
+        FilePurpose::ModelFile => "ggml-model.bin",
         FilePurpose::RestoreArchive => "library.plaudon",
     }
 }

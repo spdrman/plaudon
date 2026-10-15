@@ -99,6 +99,39 @@ pub struct EngineInventoryEntry {
     pub download_bytes_required: Option<u64>,
     /// Whether using the engine requires network egress.
     pub requires_network: bool,
+    /// Models the committed catalogue offers for this engine, smallest first
+    /// (issue #303). Empty for an engine with nothing to download.
+    #[serde(default)]
+    pub catalogue: Vec<CatalogueOfferDto>,
+}
+
+/// One model the committed, checksum-pinned catalogue offers (issue #303).
+///
+/// Everything the view needs to say what a download would contact before the
+/// user clicks: the one host, the one file on it, and the domain the host may
+/// hand the transfer to.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CatalogueOfferDto {
+    /// Catalogue entry id.
+    pub model_id: String,
+    /// Name shown to the user.
+    pub display_name: String,
+    /// Exact size of the weights, in bytes.
+    pub size_bytes: u64,
+    /// SPDX identifier of the licence.
+    pub licence_spdx_id: String,
+    /// Human-readable licence name.
+    pub licence_name: String,
+    /// The one host a download requests the file from.
+    pub host: String,
+    /// The file (URL path) on that host.
+    pub file: String,
+    /// The domain the host may redirect the transfer to, when it may.
+    pub delivery_host_suffix: Option<String>,
+    /// Memory the model recommends.
+    pub recommended_ram_bytes: u64,
+    /// Whether the model is installed already.
+    pub installed: bool,
 }
 
 /// Free and total space of the volume holding the library.
@@ -3365,6 +3398,9 @@ pub enum ModelOriginDto {
     Pack,
     /// Downloaded from a networked source.
     Download,
+    /// Imported from a file the user already had, after its checksum matched
+    /// the catalogue (issue #303).
+    ImportedFile,
 }
 
 /// One model present on this machine.
@@ -3524,6 +3560,104 @@ pub struct VerifyLocalModelResponse {
     pub expected_bytes: u64,
     /// What was found, in the user's terms.
     pub detail: String,
+}
+
+/// `install_model_download` request (issue #303).
+///
+/// Every approval is a field, and the command refuses without each one: the
+/// licence by SPDX identifier, the disk and memory footprint, and the exact
+/// host and file the view said would be contacted. A view that forgot to show
+/// any of them cannot start a download.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InstallModelDownloadRequest {
+    /// Catalogue entry to download.
+    pub model_id: String,
+    /// The user accepted the model's licence, named by its SPDX identifier.
+    pub licence_accepted_spdx_id: String,
+    /// The user acknowledged the disk and memory footprint.
+    pub footprint_acknowledged: bool,
+    /// The host the user approved contacting for this one download.
+    pub approved_host: String,
+    /// The file (URL path) the user approved fetching from that host.
+    pub approved_file: String,
+    /// Mark the model "keep downloaded for offline use".
+    #[serde(default)]
+    pub keep_offline: bool,
+}
+
+/// `cancel_model_install` request (issue #303).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CancelModelInstallRequest {
+    /// The model whose download should stop.
+    pub model_id: String,
+}
+
+/// `cancel_model_install` response.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CancelModelInstallResponse {
+    /// Whether a download of that model was running and has been told to stop.
+    pub cancelled: bool,
+}
+
+/// `import_model_file` request (issue #303): the air-gapped install.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ImportModelFileRequest {
+    /// The weights file the user picked.
+    pub path: String,
+    /// The catalogue entry the user says it is, when they said; otherwise the
+    /// file is matched against the whole catalogue by size and checksum.
+    #[serde(default)]
+    pub model_id: Option<String>,
+}
+
+/// Whether one program the PLAUD Cloud CLI needs is on this machine.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ToolPresence {
+    /// Program name, e.g. `node`.
+    pub program: String,
+    /// Where it was found, when it was.
+    pub path: Option<String>,
+}
+
+/// What this machine has of the PLAUD Cloud CLI toolchain (issue #303).
+///
+/// Detection reads the filesystem only: nothing is launched, so it works the
+/// same with Local-only Mode on.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlaudToolchainStatus {
+    /// Node.js.
+    pub node: ToolPresence,
+    /// npm, which the guided install runs.
+    pub npm: ToolPresence,
+    /// The `plaud` executable.
+    pub plaud: ToolPresence,
+    /// The `@plaud-ai/cli` version installed, read from its package manifest.
+    pub plaud_version: Option<String>,
+    /// The release this build has exercised.
+    pub exercised_release: String,
+    /// Whether the installed release is the exercised one; `None` when no
+    /// version could be read.
+    pub release_exercised: Option<bool>,
+    /// Names of what is missing, in install order.
+    pub missing: Vec<String>,
+    /// The install command, as text the user can copy and run themselves.
+    pub install_command: String,
+    /// The sign-in command, as text the user can copy and run themselves.
+    pub login_command: String,
+    /// Whether the guided install can run here (npm found, a platform whose
+    /// npm is a real executable rather than a script shim).
+    pub guided_install_available: bool,
+    /// One sentence summarising the state, in the user's terms.
+    pub summary: String,
+}
+
+/// `install_plaud_cli` request (issue #303).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InstallPlaudCliRequest {
+    /// The host the user approved contacting, which must be the registry.
+    pub approved_host: String,
+    /// The package the user approved installing, which must be the pinned one.
+    pub approved_package: String,
 }
 
 /* ------------------------------------------------- transcript tools (A11) */

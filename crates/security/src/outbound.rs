@@ -475,6 +475,9 @@ pub enum DenyReason {
     /// mode, the grant or the destination: there is no configuration under
     /// which the same request would be allowed.
     VoiceBiometricNeverEgresses,
+    /// The request is not the one host and file the user approved for this
+    /// action, or the action has already ended (issue #303).
+    ActionNotApproved,
 }
 
 impl DenyReason {
@@ -492,6 +495,7 @@ impl DenyReason {
             DenyReason::TelemetryNotOptedIn => "telemetry_not_opted_in",
             DenyReason::PurposeNotValidForSubsystem => "purpose_not_valid_for_subsystem",
             DenyReason::VoiceBiometricNeverEgresses => "voice_biometric_never_egresses",
+            DenyReason::ActionNotApproved => "action_not_approved",
         }
     }
 
@@ -530,6 +534,10 @@ impl DenyReason {
             DenyReason::VoiceBiometricNeverEgresses => {
                 "Voice recognition data stays on this computer. The app refused to send it, \
                  and there is no setting that allows it."
+            }
+            DenyReason::ActionNotApproved => {
+                "Downloads and installs only reach the one host and file you approved for that \
+                 action, and only while it runs."
             }
         }
     }
@@ -1108,6 +1116,7 @@ fn user_action_for(reason: DenyReason) -> Option<crate::error::ErrorAction> {
     }
 }
 
+pub mod action;
 pub mod http;
 pub mod subprocess;
 

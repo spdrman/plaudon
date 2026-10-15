@@ -1,0 +1,9 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/detect_plaud_toolchain.request.schema.json",
+  "title": "detect_plaud_toolchain.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [],
+  "properties": {}
+}

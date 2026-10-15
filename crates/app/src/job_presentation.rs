@@ -324,7 +324,7 @@ pub fn envelope_action_control(
             label: "Retry import",
             intent: ControlIntent::RetryImport,
         },
-        Some(ErrorAction::ChooseAnotherModel) => ActionControl {
+        Some(ErrorAction::ChooseAnotherModel | ErrorAction::InstallSpeechModel) => ActionControl {
             label: "Choose another model",
             intent: ControlIntent::ChooseLocalEngine,
         },

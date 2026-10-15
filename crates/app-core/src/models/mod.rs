@@ -7,11 +7,14 @@
 //! redistributable [`pack`] — cannot reach a network transport at all,
 //! because it never touches [`ModelByteSource`].
 
+pub mod catalogue;
+pub mod import_file;
 pub mod install;
 pub mod manifest;
 pub mod pack;
 pub mod registry;
 
+pub use import_file::import_model_file;
 pub use install::{
     ExplicitApprovalFetchPolicy, FetchRefused, HostResources, InstallObserver, InstallOutcome,
     InstallProgress, InstallRequest, LocalOnlyFetchPolicy, ModelByteSource, ModelFetchPolicy,
@@ -114,6 +117,18 @@ pub enum ModelError {
         path: String,
     },
 
+    /// The user cancelled the install. Nothing was installed and the partial
+    /// file was removed.
+    #[error("the install was cancelled; nothing was installed")]
+    Cancelled,
+
+    /// An imported file matches no catalogue entry, by size or by checksum.
+    #[error("the file ({observed_bytes} bytes) does not match any model in the catalogue")]
+    NoCatalogueMatch {
+        /// Size of the file that was offered.
+        observed_bytes: u64,
+    },
+
     /// Filesystem failure.
     #[error("io error at {path}: {detail}")]
     Io {
@@ -143,9 +158,10 @@ impl ModelError {
             ModelError::NotInManifest { .. } | ModelError::NotInstalled { .. } => {
                 AppErrorCode::ModelUnavailable
             }
-            ModelError::ChecksumMismatch { .. } | ModelError::SizeMismatch { .. } => {
-                AppErrorCode::IntegrityFailed
-            }
+            ModelError::ChecksumMismatch { .. }
+            | ModelError::SizeMismatch { .. }
+            | ModelError::NoCatalogueMatch { .. } => AppErrorCode::IntegrityFailed,
+            ModelError::Cancelled => AppErrorCode::Canceled,
             ModelError::InsufficientDisk { .. } => AppErrorCode::StorageFull,
             ModelError::InsufficientMemory { .. } | ModelError::ResourceProbeFailed(_) => {
                 AppErrorCode::ModelUnavailable

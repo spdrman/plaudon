@@ -243,6 +243,9 @@ pub struct EngineOverrides {
     /// `None` is this build's production arrangement: no diarizer, no
     /// embedder, and the OS credential store.
     pub voice: Option<VoiceEngines>,
+    /// The model-setup transport, catalogue and toolchain directories
+    /// (issue #303). Empty is production.
+    pub models: crate::backend::models::ModelSetupSeams,
 }
 
 /// The voice-profile engines and key store a hermetic run substitutes.
@@ -281,6 +284,7 @@ impl std::fmt::Debug for EngineOverrides {
             .field("text", &self.text.is_some())
             .field("cloud_transport", &self.cloud_transport.is_some())
             .field("voice", &self.voice.is_some())
+            .field("models", &self.models)
             .finish()
     }
 }
@@ -321,6 +325,7 @@ pub async fn build_ports_with(
     if let Some(text) = engines.text {
         opened = opened.with_text_model(text);
     }
+    let model_seams = engines.models;
     if let Some(voice) = engines.voice {
         opened = opened
             .with_voice_engines(voice.diarizer, voice.embedder)
@@ -382,10 +387,10 @@ pub async fn build_ports_with(
         speakers: Arc::clone(&backend) as Arc<dyn SpeakersPort>,
         people: Arc::clone(&backend) as Arc<dyn PeoplePort>,
         voice_profiles: Arc::clone(&backend) as Arc<dyn VoiceProfilesPort>,
-        models: Arc::new(crate::backend::models::ModelsBackend::new(
-            app_data_dir,
-            events.clone(),
-        )),
+        models: Arc::new(
+            crate::backend::models::ModelsBackend::new(app_data_dir, events.clone())
+                .with_seams(model_seams),
+        ),
         update: Arc::new(crate::backend::update::UpdateBackend::new(
             app_data_dir,
             Arc::clone(&backend) as Arc<dyn SettingsPort>,

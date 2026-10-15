@@ -129,6 +129,7 @@ impl LocalBackend {
             // build has no catalog, so it reports unknown rather than a guess.
             download_bytes_required: None,
             requires_network: false,
+            catalogue: Vec::new(),
         }];
         entries.extend(apple);
         entries.push(EngineInventoryEntry {
@@ -144,6 +145,7 @@ impl LocalBackend {
             installed_models: Vec::new(),
             download_bytes_required: None,
             requires_network: true,
+            catalogue: Vec::new(),
         });
         entries
     }
@@ -201,6 +203,7 @@ fn apple_engine_entries() -> Vec<EngineInventoryEntry> {
             // than none (§12).
             download_bytes_required: None,
             requires_network: false,
+            catalogue: Vec::new(),
         },
         EngineInventoryEntry {
             engine_id: plaudon_ai_apple::APPLE_FOUNDATION_ENGINE.to_owned(),
@@ -214,6 +217,7 @@ fn apple_engine_entries() -> Vec<EngineInventoryEntry> {
             installed_models: Vec::new(),
             download_bytes_required: None,
             requires_network: false,
+            catalogue: Vec::new(),
         },
     ]
 }

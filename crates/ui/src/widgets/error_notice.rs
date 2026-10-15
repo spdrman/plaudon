@@ -27,6 +27,10 @@ pub enum ErrorNoticeAction {
     Retry,
     /// Open the settings screen.
     OpenSettings,
+    /// Install a speech model (issue #305).
+    InstallSpeechModel,
+    /// Import a model file the user already has (issue #305).
+    ImportModelFile,
 }
 
 /// The control an envelope implies.
@@ -37,7 +41,9 @@ pub fn control_for(envelope: &ErrorEnvelope) -> ErrorControl {
         Some(ErrorAction::WaitAndRetry) => ErrorControl::Retry("Retry"),
         Some(ErrorAction::RefreshSourceLink) => ErrorControl::Retry("Refresh and retry"),
         Some(ErrorAction::FreeDiskSpace) => ErrorControl::Settings("Open storage settings"),
-        Some(ErrorAction::ChooseAnotherModel) => ErrorControl::Settings("Choose another engine"),
+        Some(ErrorAction::ChooseAnotherModel | ErrorAction::InstallSpeechModel) => {
+            ErrorControl::Settings("Choose another engine")
+        }
         Some(ErrorAction::ReviewLocalOnlyMode) => ErrorControl::Settings("Review local-only mode"),
         Some(ErrorAction::ReviewConsent) => ErrorControl::Settings("Review cloud consent"),
         Some(ErrorAction::OpenSettings) => ErrorControl::Settings("Open settings"),

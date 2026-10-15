@@ -137,6 +137,7 @@ impl LocalModelsSection {
             match model.origin {
                 ModelOriginDto::Pack => "Offline pack",
                 ModelOriginDto::Download => "Download",
+                ModelOriginDto::ImportedFile => "Imported file",
             },
         );
         section::fact_row(

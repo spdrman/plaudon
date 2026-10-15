@@ -244,6 +244,27 @@ impl GatedProcessLauncher {
     }
 }
 
+/// The npm package spec the guided PLAUD CLI install asks for: the one
+/// release this build has exercised (issue #303).
+pub const PLAUD_CLI_PACKAGE: &str = "@plaud-ai/cli@0.3.15";
+
+/// The registry the guided install names explicitly, so the disclosure and
+/// the request agree.
+pub const NPM_REGISTRY_HOST: &str = "registry.npmjs.org";
+
+/// The pinned package-manager program name for the guided install.
+pub const NPM_PROGRAM: &str = "npm";
+
+impl GatedProcessLauncher {
+    /// Prepare `npm install --global @plaud-ai/cli@0.3.15` against the public
+    /// registry. Every argument is a literal from this module, so nothing the
+    /// user typed can reach the command line (issue #303, §7.1).
+    pub fn prepare_cli_install(&self, discovered_npm: &Path) -> Result<GatedCommand, SpawnError> {
+        let _ = discovered_npm;
+        unimplemented!("issue #303: guided PLAUD CLI install")
+    }
+}
+
 /// Build the child environment: start from the parent, remove everything that
 /// could redirect code loading or carry a secret.
 #[must_use]

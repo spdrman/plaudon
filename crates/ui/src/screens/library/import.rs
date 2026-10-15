@@ -469,7 +469,9 @@ pub fn import_results_panel(ui: &mut Ui, session: &mut ImportSession) -> Option<
                         crate::widgets::error_notice::ErrorNoticeAction::Retry => {
                             Some(ImportIntent::PickFiles)
                         }
-                        crate::widgets::error_notice::ErrorNoticeAction::OpenSettings => {
+                        crate::widgets::error_notice::ErrorNoticeAction::OpenSettings
+                        | crate::widgets::error_notice::ErrorNoticeAction::InstallSpeechModel
+                        | crate::widgets::error_notice::ErrorNoticeAction::ImportModelFile => {
                             Some(ImportIntent::OpenSettings)
                         }
                     };

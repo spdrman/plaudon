@@ -898,6 +898,9 @@ pub fn consent(request: &GrantCloudConsentRequest) -> Result<ValidatedConsent, A
             content_type == ContentType::TranscriptText
         }
         ConsentPurpose::CredentialValidation => true,
+        // A download or install grant is recorded by the engine installer for
+        // one action; it is never something the cloud consent sheet grants.
+        ConsentPurpose::ModelDownload | ConsentPurpose::DependencyInstall => false,
     };
     if !compatible {
         return Err(invalid_argument(

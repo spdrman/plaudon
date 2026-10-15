@@ -257,7 +257,11 @@ impl LibraryScreen {
         if let Some(envelope) = self.list.error().cloned() {
             match error_notice(ui, &envelope, "Recordings could not be loaded.") {
                 Some(ErrorNoticeAction::Retry) => self.list.refresh(send),
-                Some(ErrorNoticeAction::OpenSettings) => {
+                Some(
+                    ErrorNoticeAction::OpenSettings
+                    | ErrorNoticeAction::InstallSpeechModel
+                    | ErrorNoticeAction::ImportModelFile,
+                ) => {
                     intents.push(LibraryIntent::OpenSettings);
                 }
                 None => {}

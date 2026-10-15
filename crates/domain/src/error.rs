@@ -105,6 +105,9 @@ pub enum ErrorAction {
     ChooseAnotherModel,
     /// Wait and try again later.
     WaitAndRetry,
+    /// Offer to install a speech model, or import a model file the user
+    /// already has (issue #305).
+    InstallSpeechModel,
 }
 
 error_codes! {
@@ -222,6 +225,10 @@ error_codes! {
     /// The requested model or engine is unavailable right now.
     ModelUnavailable => "MODEL_UNAVAILABLE", retryable: false, action: Some(ErrorAction::ChooseAnotherModel),
         message: "The selected model is not available on this machine.";
+    /// No speech-to-text model is installed, so nothing can be transcribed
+    /// locally yet (issue #305).
+    NoSpeechModel => "NO_SPEECH_MODEL", retryable: false, action: Some(ErrorAction::InstallSpeechModel),
+        message: "No speech model is installed on this machine, so there is nothing to transcribe with yet. Install a model, or import a model file you already have.";
 
     // ---- Inference and dispatch errors (spec 10.6, 10.7) ----
     /// The request was transmitted but the outcome is unknown.

@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/detect_plaud_toolchain.response.schema.json",
+  "title": "detect_plaud_toolchain.response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "node",
+    "npm",
+    "plaud",
+    "plaud_version",
+    "exercised_release",
+    "release_exercised",
+    "missing",
+    "install_command",
+    "login_command",
+    "guided_install_available",
+    "summary"
+  ],
+  "properties": {
+    "node": {
+      "$ref": "#/$defs/tool"
+    },
+    "npm": {
+      "$ref": "#/$defs/tool"
+    },
+    "plaud": {
+      "$ref": "#/$defs/tool"
+    },
+    "plaud_version": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "exercised_release": {
+      "type": "string"
+    },
+    "release_exercised": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "missing": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "install_command": {
+      "type": "string"
+    },
+    "login_command": {
+      "type": "string"
+    },
+    "guided_install_available": {
+      "type": "boolean"
+    },
+    "summary": {
+      "type": "string"
+    }
+  },
+  "$defs": {
+    "tool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "program",
+        "path"
+      ],
+      "properties": {
+        "program": {
+          "type": "string"
+        },
+        "path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    }
+  }
+}

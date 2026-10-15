@@ -37,6 +37,8 @@ impl FolderPurpose {
 /// What a file the user is about to pick is for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FilePurpose {
+    /// A model weights file to import (issue #303).
+    ModelFile,
     /// A portable archive to inspect and restore.
     RestoreArchive,
 }
@@ -46,6 +48,7 @@ impl FilePurpose {
     #[must_use]
     pub const fn dialog_title(self) -> &'static str {
         match self {
+            Self::ModelFile => "Choose a model file to import",
             Self::RestoreArchive => "Choose archive to restore",
         }
     }
@@ -54,6 +57,7 @@ impl FilePurpose {
     #[must_use]
     pub const fn extensions(self) -> &'static [&'static str] {
         match self {
+            Self::ModelFile => &["bin"],
             Self::RestoreArchive => &["plaudon"],
         }
     }

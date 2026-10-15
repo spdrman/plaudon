@@ -104,6 +104,7 @@ fn stt_engine(
         }],
         download_bytes_required: Some(488_000_000),
         requires_network: false,
+        catalogue: Vec::new(),
     }
 }
 
@@ -117,6 +118,7 @@ fn text_engine() -> EngineInventoryEntry {
         installed_models: Vec::new(),
         download_bytes_required: None,
         requires_network: true,
+        catalogue: Vec::new(),
     }
 }
 

@@ -506,6 +506,18 @@ impl OnboardingScreen {
         }
     }
 
+    /// Receive the path a file dialog this screen opened returned.
+    pub fn path_picked(
+        &mut self,
+        _picked: crate::settings::PickedPath,
+        _path: &str,
+        _out: &mut SettingsOutput,
+    ) {
+    }
+
+    /// Report download progress from a `model.install_progress` event.
+    pub fn install_progress(&mut self, _received_bytes: u64, _total_bytes: u64) {}
+
     /// Fold a command outcome into the screen.
     pub fn on_response(
         &mut self,

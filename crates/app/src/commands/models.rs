@@ -106,6 +106,48 @@ pub async fn verify_local_model(
     ports.models.verify_local_model(request.model_id).await
 }
 
+/// Download one model from the committed catalogue (issue #303).
+pub async fn install_model_download(
+    ports: &AppPorts,
+    request: crate::dto::InstallModelDownloadRequest,
+) -> Result<InstallModelResponse, AppError> {
+    ports.models.install_download(request).await
+}
+
+/// Ask a running model download to stop.
+pub async fn cancel_model_install(
+    ports: &AppPorts,
+    request: crate::dto::CancelModelInstallRequest,
+) -> Result<crate::dto::CancelModelInstallResponse, AppError> {
+    ports.models.cancel_install(request.model_id).await
+}
+
+/// Install a weights file the user already has (the air-gapped path).
+pub async fn import_model_file(
+    ports: &AppPorts,
+    request: crate::dto::ImportModelFileRequest,
+) -> Result<InstallModelResponse, AppError> {
+    ports
+        .models
+        .import_file(PathBuf::from(request.path), request.model_id)
+        .await
+}
+
+/// What this machine has of the PLAUD Cloud CLI toolchain.
+pub async fn detect_plaud_toolchain(
+    ports: &AppPorts,
+) -> Result<crate::dto::PlaudToolchainStatus, AppError> {
+    ports.models.detect_plaud_toolchain().await
+}
+
+/// Run the guided install of the exercised PLAUD CLI release.
+pub async fn install_plaud_cli(
+    ports: &AppPorts,
+    request: crate::dto::InstallPlaudCliRequest,
+) -> Result<crate::dto::PlaudToolchainStatus, AppError> {
+    ports.models.install_plaud_cli(request).await
+}
+
 /// A pack path is a directory the user picked, not free text.
 fn pack_path(raw: &str) -> Result<PathBuf, AppError> {
     let trimmed = raw.trim();

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/cancel_model_install.request.schema.json",
+  "title": "cancel_model_install.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "model_id"
+  ],
+  "properties": {
+    "model_id": {
+      "type": "string"
+    }
+  }
+}

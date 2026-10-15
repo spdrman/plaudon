@@ -206,6 +206,8 @@ pub struct ModelInstaller<'a> {
     source: &'a dyn ModelByteSource,
     resources: &'a dyn SystemResources,
     observer: &'a dyn InstallObserver,
+    /// Set by the user's "Cancel download"; checked between chunks.
+    cancel: Option<&'a std::sync::atomic::AtomicBool>,
 }
 
 impl std::fmt::Debug for ModelInstaller<'_> {
@@ -228,7 +230,16 @@ impl<'a> ModelInstaller<'a> {
             source,
             resources,
             observer,
+            cancel: None,
         }
+    }
+
+    /// Stop the transfer as soon as `cancel` is set, removing the partial
+    /// file so a cancelled download leaves nothing behind.
+    #[must_use]
+    pub fn with_cancellation(mut self, cancel: &'a std::sync::atomic::AtomicBool) -> Self {
+        self.cancel = Some(cancel);
+        self
     }
 
     /// Check disk and RAM without transferring anything (§14.4).

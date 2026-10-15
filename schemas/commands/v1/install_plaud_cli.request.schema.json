@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plaudon.app/schemas/commands/v1/install_plaud_cli.request.schema.json",
+  "title": "install_plaud_cli.request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "approved_host",
+    "approved_package"
+  ],
+  "properties": {
+    "approved_host": {
+      "type": "string"
+    },
+    "approved_package": {
+      "type": "string"
+    }
+  }
+}

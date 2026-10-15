@@ -24,10 +24,16 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
+use std::sync::atomic::AtomicBool;
+
 use plaudon_app_core::models::{
     DiskUsage, HostResources, InstallOrigin, InstalledModel, ModelEntry, ModelError, ModelId,
-    ModelPack, ModelRegistry, SystemResources,
+    ModelPack, ModelRegistry, SystemResources, TransferError,
 };
+use plaudon_security::outbound::action::ActionEgressGrant;
+
+use crate::backend::consent::ConsentStore;
+use crate::ports::SettingsPort;
 use plaudon_domain::error::{AppError, AppErrorCode};
 use plaudon_domain::time::Timestamp;
 use tokio::sync::Mutex;
@@ -52,6 +58,46 @@ pub const MODEL_ROOT_DIR: &str = "models";
 /// does not look frozen.
 const PROGRESS_INTERVAL: Duration = Duration::from_millis(250);
 
+/// Opens the bytes of an approved catalogue download (issue #303).
+///
+/// The only argument that can reach the network is a URL the
+/// [`ActionEgressGrant`] has authorized; an implementation must call
+/// [`ActionEgressGrant::authorize_url`] before it connects and
+/// [`ActionEgressGrant::authorize_redirect`] before it follows a hop.
+pub trait ModelDownloadTransport: Send + Sync {
+    /// Open `url`, positioned `resume_from` bytes in.
+    fn open(
+        &self,
+        grant: &ActionEgressGrant,
+        url: &str,
+        resume_from: u64,
+    ) -> Result<Box<dyn std::io::Read + Send>, TransferError>;
+}
+
+/// What a hermetic run substitutes in model setup (issue #303).
+///
+/// `None` everywhere is production: the real HTTPS transport, the committed
+/// catalogue and the platform's search directories for node, npm and plaud.
+#[derive(Clone, Default)]
+pub struct ModelSetupSeams {
+    /// How an approved download's bytes are fetched.
+    pub transport: Option<Arc<dyn ModelDownloadTransport>>,
+    /// The catalogue downloads and imports are checked against.
+    pub catalogue: Option<plaudon_app_core::models::ModelManifest>,
+    /// Directories searched for node, npm and plaud.
+    pub toolchain_dirs: Option<Vec<PathBuf>>,
+}
+
+impl std::fmt::Debug for ModelSetupSeams {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ModelSetupSeams")
+            .field("transport", &self.transport.is_some())
+            .field("catalogue", &self.catalogue.is_some())
+            .field("toolchain_dirs", &self.toolchain_dirs)
+            .finish()
+    }
+}
+
 /// Local model management.
 pub struct ModelsBackend {
     root: PathBuf,
@@ -60,6 +106,20 @@ pub struct ModelsBackend {
     /// One install at a time: two concurrent installs would share one staging
     /// directory and one index file.
     install_lock: Mutex<()>,
+    /// Where Local-only Mode is read from. `None` refuses every download, as
+    /// if Local-only Mode were on: failing closed is the only safe default.
+    settings: Option<Arc<dyn SettingsPort>>,
+    /// The consent log every per-action grant is written to.
+    consents: Option<ConsentStore>,
+    /// How an approved download's bytes are fetched.
+    transport: Arc<dyn ModelDownloadTransport>,
+    /// Directories searched for node, npm and plaud; `None` is the platform's.
+    toolchain_dirs: Option<Vec<PathBuf>>,
+    /// Cancellation flags of running downloads, by model id.
+    cancels: parking_lot::Mutex<std::collections::BTreeMap<String, Arc<AtomicBool>>>,
+    /// The catalogue downloads and imports are checked against; `None` is the
+    /// committed one.
+    catalogue: Option<plaudon_app_core::models::ModelManifest>,
 }
 
 impl std::fmt::Debug for ModelsBackend {
@@ -89,7 +149,49 @@ impl ModelsBackend {
             events,
             resources,
             install_lock: Mutex::new(()),
+            settings: None,
+            consents: None,
+            transport: Arc::new(RefusingTransport),
+            toolchain_dirs: None,
+            cancels: parking_lot::Mutex::new(std::collections::BTreeMap::new()),
+            catalogue: None,
         }
+    }
+
+    /// Apply whatever a hermetic run substituted.
+    #[must_use]
+    pub fn with_seams(mut self, seams: ModelSetupSeams) -> Self {
+        if let Some(transport) = seams.transport {
+            self.transport = transport;
+        }
+        if let Some(dirs) = seams.toolchain_dirs {
+            self.toolchain_dirs = Some(dirs);
+        }
+        self.catalogue = seams.catalogue;
+        self
+    }
+
+    /// Read Local-only Mode from `settings` and record every per-action grant
+    /// in `consents` (issue #303). Without this, downloads are refused.
+    #[must_use]
+    pub fn with_egress(mut self, settings: Arc<dyn SettingsPort>, consents: ConsentStore) -> Self {
+        self.settings = Some(settings);
+        self.consents = Some(consents);
+        self
+    }
+
+    /// Replace the download transport. Tests use this to count requests.
+    #[must_use]
+    pub fn with_transport(mut self, transport: Arc<dyn ModelDownloadTransport>) -> Self {
+        self.transport = transport;
+        self
+    }
+
+    /// Search only `dirs` for node, npm and plaud. Tests use this.
+    #[must_use]
+    pub fn with_toolchain_dirs(mut self, dirs: Vec<PathBuf>) -> Self {
+        self.toolchain_dirs = Some(dirs);
+        self
     }
 
     /// The model root.
@@ -151,6 +253,23 @@ impl ModelsBackend {
     }
 }
 
+/// The transport of a backend nobody gave one: refuses everything.
+#[derive(Debug, Clone, Copy)]
+struct RefusingTransport;
+
+impl ModelDownloadTransport for RefusingTransport {
+    fn open(
+        &self,
+        _grant: &ActionEgressGrant,
+        _url: &str,
+        _resume_from: u64,
+    ) -> Result<Box<dyn std::io::Read + Send>, TransferError> {
+        Err(TransferError::Unavailable(
+            "no download transport is configured".to_owned(),
+        ))
+    }
+}
+
 /// Open a pack, refusing anything whose payload does not hash to its manifest.
 fn open_pack(pack_path: &Path) -> Result<ModelPack, AppError> {
     let pack =
@@ -185,6 +304,7 @@ fn to_dto(model: &InstalledModel) -> LocalModelDto {
         origin: match model.installed_from {
             InstallOrigin::OfflinePack => ModelOriginDto::Pack,
             InstallOrigin::Download => ModelOriginDto::Download,
+            InstallOrigin::ImportedFile => ModelOriginDto::ImportedFile,
         },
         keep_offline: model.keep_offline,
     }
@@ -366,5 +486,50 @@ impl ModelsPort for ModelsBackend {
         })
         .await
         .map_err(|_| AppError::new(AppErrorCode::InternalError, "model verification panicked"))?
+    }
+
+    async fn install_download(
+        &self,
+        _request: crate::dto::InstallModelDownloadRequest,
+    ) -> Result<InstallModelResponse, AppError> {
+        Err(AppError::new(
+            AppErrorCode::ModelUnavailable,
+            "catalogue downloads are not implemented yet",
+        ))
+    }
+
+    async fn cancel_install(
+        &self,
+        _model_id: String,
+    ) -> Result<crate::dto::CancelModelInstallResponse, AppError> {
+        Ok(crate::dto::CancelModelInstallResponse { cancelled: false })
+    }
+
+    async fn import_file(
+        &self,
+        _path: PathBuf,
+        _model_id: Option<String>,
+    ) -> Result<InstallModelResponse, AppError> {
+        Err(AppError::new(
+            AppErrorCode::ModelUnavailable,
+            "importing a model file is not implemented yet",
+        ))
+    }
+
+    async fn detect_plaud_toolchain(&self) -> Result<crate::dto::PlaudToolchainStatus, AppError> {
+        Err(AppError::new(
+            AppErrorCode::CliMissing,
+            "toolchain detection is not implemented yet",
+        ))
+    }
+
+    async fn install_plaud_cli(
+        &self,
+        _request: crate::dto::InstallPlaudCliRequest,
+    ) -> Result<crate::dto::PlaudToolchainStatus, AppError> {
+        Err(AppError::new(
+            AppErrorCode::CliMissing,
+            "the guided install is not implemented yet",
+        ))
     }
 }

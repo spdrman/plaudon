@@ -240,6 +240,8 @@ pub const fn consent_purpose_label(purpose: ConsentPurpose) -> &'static str {
         ConsentPurpose::Summarization => "Summarization",
         ConsentPurpose::TranscriptTool => "Transcript tool",
         ConsentPurpose::CredentialValidation => "Credential validation",
+        ConsentPurpose::ModelDownload => "Model download",
+        ConsentPurpose::DependencyInstall => "Dependency install",
     }
 }
 
