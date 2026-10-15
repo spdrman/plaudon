@@ -76,6 +76,7 @@ fn apply(
     out: &mut SettingsOutput,
     cx: &mut ScreenCtx<'_>,
     copied: &mut Vec<String>,
+    repaint: Option<&egui::Context>,
 ) -> Vec<(PickedPath, String)> {
     let mut picked = Vec::new();
     for intent in out.drain() {
@@ -119,6 +120,11 @@ fn apply(
             }
             SettingsIntent::CopyText(text) => {
                 copied.push(text);
+            }
+            intent @ (SettingsIntent::CheckOsPermissions
+            | SettingsIntent::AskOsPermission(_)
+            | SettingsIntent::OpenOsPermissionSettings(_)) => {
+                crate::permissions::handle_intent(&cx.hooks().os_permissions, &intent, repaint);
             }
         }
     }
@@ -196,12 +202,12 @@ impl SettingsShellScreen {
 
     fn drain(&mut self, ui: &egui::Ui, cx: &mut ScreenCtx<'_>) {
         let mut copied = Vec::new();
-        let picked = apply(&mut self.out, cx, &mut copied);
+        let picked = apply(&mut self.out, cx, &mut copied, Some(ui.ctx()));
         for (path, value) in picked {
             self.screen.path_picked(path, &value, &mut self.out);
         }
         if !self.out.is_empty() {
-            apply(&mut self.out, cx, &mut copied);
+            apply(&mut self.out, cx, &mut copied, Some(ui.ctx()));
         }
         for text in copied {
             ui.ctx().copy_text(text);
@@ -235,6 +241,7 @@ impl Screen for SettingsShellScreen {
             self.load(cx);
         }
         let tokens = cx.tokens();
+        self.screen.data_mut().os_permissions = cx.hooks().os_permissions.latest();
         self.screen.ui_with_tokens(ui, &tokens, &mut self.out);
         self.drain(ui, cx);
     }
@@ -248,11 +255,11 @@ impl Screen for SettingsShellScreen {
     ) {
         self.screen.on_response(command, result, &mut self.out);
         let mut copied = Vec::new();
-        let picked = apply(&mut self.out, cx, &mut copied);
+        let picked = apply(&mut self.out, cx, &mut copied, None);
         for (path, value) in picked {
             self.screen.path_picked(path, &value, &mut self.out);
         }
-        apply(&mut self.out, cx, &mut copied);
+        apply(&mut self.out, cx, &mut copied, None);
     }
 
     fn on_resync(&mut self, _reason: ResyncReason, cx: &mut ScreenCtx<'_>) {
@@ -305,6 +312,8 @@ impl Screen for OnboardingShellScreen {
             self.requested = true;
         }
         let tokens = cx.tokens();
+        self.screen
+            .set_os_permissions(cx.hooks().os_permissions.latest());
         if let Some(capabilities) = self.capabilities.clone() {
             self.screen
                 .ui_with_tokens(ui, &tokens, &capabilities, &mut self.out);
@@ -312,12 +321,12 @@ impl Screen for OnboardingShellScreen {
             ui.label("Reading what this machine can do…");
         }
         let mut copied = Vec::new();
-        let picked = apply(&mut self.out, cx, &mut copied);
+        let picked = apply(&mut self.out, cx, &mut copied, Some(ui.ctx()));
         for (path, value) in picked {
             self.screen.path_picked(path, &value, &mut self.out);
         }
         if !self.out.is_empty() {
-            apply(&mut self.out, cx, &mut copied);
+            apply(&mut self.out, cx, &mut copied, Some(ui.ctx()));
         }
         for text in copied {
             ui.ctx().copy_text(text);
@@ -335,7 +344,7 @@ impl Screen for OnboardingShellScreen {
             self.capabilities = Some(capabilities.clone());
         }
         self.screen.on_response(command, result, &mut self.out);
-        apply(&mut self.out, cx, &mut Vec::new());
+        apply(&mut self.out, cx, &mut Vec::new(), None);
     }
 
     fn on_ui_event(&mut self, event: &plaudon_app::dto::UiEvent, cx: &mut ScreenCtx<'_>) {

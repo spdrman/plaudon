@@ -114,7 +114,7 @@ fn every_section_is_listed_once_and_in_the_published_order() {
     assert_eq!(before, sorted.len(), "a section title is used twice");
     assert_eq!(
         titles.len(),
-        14,
+        15,
         "a section was added or lost without updating this test: {titles:?}"
     );
     assert_eq!(

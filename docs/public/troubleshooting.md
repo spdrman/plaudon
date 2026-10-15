@@ -64,9 +64,11 @@ unlisted combination is not shown as connectable, because we have no evidence it
 works.
 
 **macOS asks for Bluetooth permission, or you denied it.** Grant it in System
-Settings under Privacy & Security → Bluetooth. Until then, discovery is
-disabled with that reason shown; the application never attempts access without
-permission.
+Settings under Privacy & Security → Bluetooth, or from **Settings → Privacy &
+Security permissions** in Plaudon, which opens that pane for you (see
+[Install on macOS](./install-macos.md#7-privacy--security-permissions)). Until
+then, discovery is disabled with that reason shown; the application never
+attempts access without permission.
 
 **Only some recordings appear.** A device that has already synchronised with the
 PLAUD phone app may offer only the recordings it has not yet transferred. The

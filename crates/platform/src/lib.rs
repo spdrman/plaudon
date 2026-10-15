@@ -35,6 +35,7 @@
 //! | [`theme`] | [`theme::OsThemeSource`] | [`theme::NativeOsTheme`] |
 //! | [`opener`] | [`opener::Opener`] | [`opener::NativeOpener`] |
 //! | [`notifications`] | [`notifications::NotificationPort`] | [`notifications::DispatcherNotifications`] |
+//! | [`os_permissions`] | `plaudon_app::os_permissions::OsPermissionProvider` | [`os_permissions::native`] (Core Bluetooth, `UserNotifications`, System Settings deep links) |
 //! | [`tray`] | [`tray::Tray`] | [`tray::NativeTray`] (reports honestly; see the module docs) |
 //! | [`associations`] | — (pure generators plus committed artifacts) | — |
 //! | [`dragdrop`] | — (pure classification) | — |
@@ -51,6 +52,7 @@ pub mod dialogs;
 pub mod dragdrop;
 pub mod notifications;
 pub mod opener;
+pub mod os_permissions;
 pub mod theme;
 pub mod tray;
 

@@ -15,6 +15,7 @@ pub mod activity;
 pub mod ai;
 pub mod jobs;
 pub mod onboarding;
+pub mod permissions;
 pub mod player;
 pub mod screens;
 pub mod settings;

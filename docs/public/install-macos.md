@@ -114,6 +114,37 @@ To see the flag before and after:
 xattr -l /Applications/Plaudon.app     # com.apple.quarantine: 0081;...;Safari;
 ```
 
+## 7. Privacy & Security permissions
+
+First-run setup has a **macOS Privacy & Security** step, and the same panel lives
+under **Settings → Privacy & Security permissions** so you can come back to it.
+Every permission is optional, and **Skip — do later** never blocks setup.
+
+| Permission | What needs it | Without it | Can Plaudon ask? |
+| --- | --- | --- | --- |
+| Bluetooth | Direct import from a PLAUD device | The device can't be found over Bluetooth | Yes, **Ask macOS** shows the system prompt |
+| Notifications | Banners when an import or transcription finishes | No banners; everything still shows in the app | Yes, **Ask macOS** shows the system prompt |
+| Removable Volumes | USB import from a PLAUD Note that mounts as a disk | USB import can't read the device | No, macOS asks the first time Plaudon reads it |
+| Files and Folders | A watched folder inside Desktop, Documents, Downloads or a network drive | That folder can't be read | No, macOS asks the first time Plaudon reads it |
+
+Each row has a button that opens the exact System Settings pane, numbered steps
+for doing it by hand, and a live status (granted, denied, not asked yet,
+restricted, or "not reported by macOS" for the two that macOS won't let apps
+read). The status refreshes when you press **Check again** and whenever you come
+back to the Plaudon window.
+
+Plaudon never asks for **Full Disk Access**: nothing it does reads a location only
+Full Disk Access unlocks. It doesn't ask for **Speech Recognition** either, because
+Apple's on-device transcription (`SpeechAnalyzer`) needs no grant to analyse a file.
+
+**Grants and the ad-hoc signature.** macOS ties each permission to the code
+signature of the build that received it. This build is ad-hoc signed (see below),
+so every release has a different signature and an update can look like a new
+app. After updating, a permission may show as not asked yet, or stop working
+while System Settings still shows it switched on. Switch Plaudon off and on again
+in that list (or remove it with the minus button and add it back), then press
+**Check again**.
+
 ## Why there is no signature
 
 Distributing a macOS application that opens without this dance requires an Apple
