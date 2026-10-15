@@ -188,6 +188,7 @@ impl fmt::Debug for OnboardingScreen {
             .field("error", &self.error)
             .field("focus_heading", &self.focus_heading)
             .field("setup", &self.setup)
+            .field("permissions_panel", &self.permissions_panel)
             .field("os_permissions", &self.os_permissions)
             .finish()
     }
@@ -302,7 +303,12 @@ impl OnboardingScreen {
             {
                 self.navigate(OnboardingAction::Back);
             }
-            if step.skippable() && ui.button("Skip this step").clicked() {
+            let skip = if step == OnboardingStep::Permissions {
+                SKIP_LATER
+            } else {
+                "Skip this step"
+            };
+            if step.skippable() && ui.button(skip).clicked() {
                 self.navigate(OnboardingAction::Skip);
             }
             if last_step {
@@ -331,6 +337,11 @@ impl OnboardingScreen {
     fn navigate(&mut self, action: OnboardingAction) {
         self.state.apply(action);
         self.focus_heading = Some(self.state.step_index());
+        if self.state.step() == OnboardingStep::Permissions {
+            // Arriving at the step, from either side, reads the statuses
+            // again: the user may have changed one in the meantime.
+            self.permissions_panel.reset();
+        }
     }
 
     /// Step one: what stays on this machine.
@@ -525,7 +536,8 @@ impl OnboardingScreen {
         tokens: &dyn SettingsTokens,
         out: &mut SettingsOutput,
     ) {
-        let _ = (ui, tokens, out, &mut self.permissions_panel);
+        self.permissions_panel
+            .ui(ui, tokens, &self.os_permissions, out);
     }
 
     /// The last step: review, then finish.

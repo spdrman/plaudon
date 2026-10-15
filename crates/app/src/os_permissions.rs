@@ -76,8 +76,10 @@ impl OsPermissionKind {
     /// Linux the list is empty, which is what makes the first-run step skip.
     #[must_use]
     pub const fn for_platform(platform: Platform) -> &'static [Self] {
-        let _ = platform;
-        &[]
+        match platform {
+            Platform::Macos => Self::ALL,
+            Platform::Windows | Platform::Linux => &[],
+        }
     }
 
     /// Stable identifier, for logs and test names.
@@ -94,14 +96,96 @@ impl OsPermissionKind {
     /// Everything the panel says about this permission.
     #[must_use]
     pub const fn guide(self) -> PermissionGuide {
-        PermissionGuide {
-            title: "",
-            needed_for: "",
-            without_it: "",
-            optional: false,
-            can_ask: false,
-            ask_note: "",
-            steps: &[],
+        match self {
+            Self::Bluetooth => PermissionGuide {
+                title: "Bluetooth",
+                needed_for: "Importing recordings straight from a PLAUD device over Bluetooth.",
+                without_it: "Plaudon cannot see your PLAUD device over Bluetooth. Importing \
+files, USB import and watched folders keep working.",
+                optional: true,
+                can_ask: true,
+                ask_note: "Ask macOS shows the system prompt once. If you already said no, \
+macOS will not ask again, so use Open System Settings instead.",
+                steps: &[
+                    "Press Open System Settings for Bluetooth below. It opens Privacy & \
+Security at the Bluetooth list.",
+                    "Find Plaudon in the list. If it is not there yet, press Ask macOS first.",
+                    "Switch Plaudon on. macOS may ask for your password.",
+                    "Come back to Plaudon. The status updates by itself, or press Check again.",
+                ],
+            },
+            Self::Notifications => PermissionGuide {
+                title: "Notifications",
+                needed_for: "Telling you when an import or a transcription finishes while \
+Plaudon is in the background.",
+                without_it: "No banners. Everything still shows up inside Plaudon.",
+                optional: true,
+                can_ask: true,
+                ask_note: "Ask macOS shows the system prompt once. After a no, only System \
+Settings can turn banners on.",
+                steps: &[
+                    "Press Open System Settings for Notifications below. It opens the \
+Notifications settings.",
+                    "Find Plaudon in the list of applications and select it.",
+                    "Switch Allow notifications on and pick the banner style you like.",
+                    "Come back to Plaudon. The status updates by itself, or press Check again.",
+                ],
+            },
+            Self::RemovableVolumes => PermissionGuide {
+                title: "Removable Volumes",
+                needed_for: "Importing from a PLAUD Note that shows up as a disk over USB.",
+                without_it: "macOS blocks reading the device, so USB import says it cannot \
+open it. Bluetooth and file import keep working.",
+                optional: true,
+                can_ask: false,
+                ask_note: "macOS has no way to ask ahead of time. It shows its own prompt the \
+first time Plaudon reads a connected device, and you choose Allow there. macOS also does not \
+let apps read this setting, so Plaudon cannot show whether it is on.",
+                steps: &[
+                    "Connect your PLAUD Note and start a USB import once, so Plaudon shows up \
+in the list.",
+                    "Press Open System Settings for Removable Volumes below. It opens Privacy \
+& Security at Files & Folders.",
+                    "Find Plaudon, open it and switch Removable Volumes on.",
+                    "Come back to Plaudon and start the import again.",
+                ],
+            },
+            Self::FilesAndFolders => PermissionGuide {
+                title: "Files and Folders",
+                needed_for: "Watching a folder inside Desktop, Documents, Downloads or on a \
+network drive for new recordings.",
+                without_it: "macOS blocks reading that folder, so the watched folder says it \
+cannot read it. Folders anywhere else, such as straight inside your home folder, need nothing.",
+                optional: true,
+                can_ask: false,
+                ask_note: "macOS has no way to ask ahead of time. It shows its own prompt the \
+first time Plaudon reads a protected folder, and you choose Allow there. macOS also does not \
+let apps read this setting, so Plaudon cannot show whether it is on.",
+                steps: &[
+                    "Add the watched folder in Plaudon once, so macOS asks and Plaudon shows up \
+in the list.",
+                    "Press Open System Settings for Files and Folders below. It opens Privacy \
+& Security at Files & Folders.",
+                    "Find Plaudon, open it and switch on the place your folder is in: \
+Desktop, Documents, Downloads or Network Volumes.",
+                    "Come back to Plaudon and press Check again.",
+                ],
+            },
+        }
+    }
+
+    /// The System Settings deep link for the pane where this permission is
+    /// granted. A fixed, compiled-in URI: nothing the user typed is in it.
+    #[must_use]
+    pub const fn settings_url(self) -> &'static str {
+        match self {
+            Self::Bluetooth => {
+                "x-apple.systempreferences:com.apple.preference.security?Privacy_Bluetooth"
+            }
+            Self::Notifications => "x-apple.systempreferences:com.apple.preference.notifications",
+            Self::RemovableVolumes | Self::FilesAndFolders => {
+                "x-apple.systempreferences:com.apple.preference.security?Privacy_FilesAndFolders"
+            }
         }
     }
 }
@@ -129,10 +213,20 @@ pub enum OsPermissionStatus {
 impl OsPermissionStatus {
     /// Glyph and word, so a status is never colour alone and "never asked" is
     /// never shown as a refusal.
+    ///
+    /// The tick and the cross are the heavy forms (U+2714, U+2716): those are
+    /// in egui's bundled emoji font, the light ones are not and would render
+    /// as an empty box.
     #[must_use]
     pub const fn label(self) -> (&'static str, &'static str) {
-        let _ = self;
-        ("", "")
+        match self {
+            Self::Granted => ("✔", "Granted"),
+            Self::Denied => ("✖", "Denied"),
+            Self::NotDetermined => ("…", "Not asked yet"),
+            Self::Restricted => ("⚠", "Restricted"),
+            Self::NotApplicable => ("–", "Not applicable"),
+            Self::NotReported => ("?", "Not reported by macOS"),
+        }
     }
 }
 
@@ -176,8 +270,11 @@ impl PermissionSnapshot {
     /// Read every permission that exists on `platform`, without prompting.
     #[must_use]
     pub fn read(provider: &dyn OsPermissionProvider, platform: Platform) -> Self {
-        let _ = (provider, platform);
-        Self::default()
+        Self::from_statuses(
+            OsPermissionKind::for_platform(platform)
+                .iter()
+                .map(|kind| (*kind, provider.status(*kind))),
+        )
     }
 
     /// The status of `kind`; `None` when it was not read.
@@ -269,6 +366,16 @@ struct FakeState {
     calls: Vec<FakeCall>,
 }
 
+impl FakeState {
+    /// What the fake reports for `kind`: what the test set, or never asked.
+    fn current(&self, kind: OsPermissionKind) -> OsPermissionStatus {
+        self.statuses
+            .get(&kind)
+            .copied()
+            .unwrap_or(OsPermissionStatus::NotDetermined)
+    }
+}
+
 impl FakePermissionProvider {
     /// A fake where nothing has been asked yet.
     #[must_use]
@@ -308,18 +415,28 @@ impl OsPermissionProvider for FakePermissionProvider {
     fn status(&self, kind: OsPermissionKind) -> OsPermissionStatus {
         let mut state = self.lock();
         state.calls.push(FakeCall::Status(kind));
-        OsPermissionStatus::NotApplicable
+        state.current(kind)
     }
 
     fn request(&self, kind: OsPermissionKind) -> OsPermissionStatus {
         let mut state = self.lock();
         state.calls.push(FakeCall::Request(kind));
-        OsPermissionStatus::NotApplicable
+        // Only a permission macOS can ask about has a prompt to answer; for
+        // the others nothing is shown, so nothing can change.
+        if kind.guide().can_ask && state.current(kind) == OsPermissionStatus::NotDetermined {
+            if let Some(answer) = state.answers.get(&kind).copied() {
+                state.statuses.insert(kind, answer);
+            }
+        }
+        state.current(kind)
     }
 
     fn open_settings(&self, kind: OsPermissionKind) -> Result<(), OpenSettingsError> {
         let mut state = self.lock();
         state.calls.push(FakeCall::OpenSettings(kind));
-        Ok(())
+        match &state.open_error {
+            Some(message) => Err(OpenSettingsError(message.clone())),
+            None => Ok(()),
+        }
     }
 }

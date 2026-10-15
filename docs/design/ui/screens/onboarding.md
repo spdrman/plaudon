@@ -1,6 +1,6 @@
 # First-run setup
 
-The six-step flow that gates the shell until it is finished. The board draws step two, "Network
+The six-step flow (seven on macOS, which adds a Privacy & Security permissions step before Finish, #307) that gates the shell until it is finished. The board draws step two, "Network
 policy". Source board `source/Onboarding.dc.html`. Pictures: [light](onboarding-light.png) (1280 by
 1100) and [dark](onboarding-dark.png) (1280 by 820).
 
@@ -76,7 +76,7 @@ keychain." after hand-over. Focus moves to the new step's heading on each Next, 
    step to `OnboardingStep` for the list, and decide what the pane heading is. Neither the heading text
    nor the list labels are asserted by a test today (`onboarding.rs` asserts only the progress label).
 2. **Progress line.** The repo prints "Set up Plaudon" as a heading and, separately, "Step 2 of 6" (capital
-   S) as a note, and a test finds it with `get_by_label("Step {n} of 6")`. The board has one line,
+   S) as a note, and a test finds it with `get_by_label("Step {n} of {total}")` (7 on macOS, 6 elsewhere). The board has one line,
    "Set up Plaudon · step 2 of 6". Keep the repo's separate label (the test and the screen reader read it
    as its own item) and place the two beside each other if you want the look.
 3. **Where the content lives.** The board's step-two pane carries a paragraph and a disclosure that the

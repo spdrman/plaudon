@@ -6,7 +6,6 @@
 //! section waits rather than guessing.
 
 use egui::Ui;
-use plaudon_app::dto::Platform;
 
 use super::{section, Section, SettingsData, SettingsOutput, SettingsTokens};
 use crate::permissions::PermissionsPanel;
@@ -18,15 +17,9 @@ pub const TITLE: &str = "Privacy & Security permissions";
 const WAITING: &str = "Reading which platform this is…";
 
 /// The permissions panel under Settings.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct PermissionsSection {
     panel: Option<PermissionsPanel>,
-}
-
-impl Default for PermissionsSection {
-    fn default() -> Self {
-        Self { panel: None }
-    }
 }
 
 impl Section for PermissionsSection {
@@ -41,8 +34,15 @@ impl Section for PermissionsSection {
         data: &SettingsData,
         out: &mut SettingsOutput,
     ) {
-        let _ = (ui, tokens, data, out, WAITING, Platform::host());
-        let _ = section::note;
-        let _ = &self.panel;
+        let Some(capabilities) = &data.capabilities else {
+            section::note(ui, tokens, WAITING);
+            return;
+        };
+        let platform = capabilities.os.platform;
+        let panel = match &mut self.panel {
+            Some(panel) if panel.platform() == platform => panel,
+            slot => slot.insert(PermissionsPanel::new(platform)),
+        };
+        panel.ui(ui, tokens, &data.os_permissions, out);
     }
 }

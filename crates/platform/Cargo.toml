@@ -25,9 +25,16 @@ arboard = { workspace = true }
 async-trait = { workspace = true }
 rfd = { workspace = true, features = ["xdg-portal"] }
 thiserror = { workspace = true }
+# Drives the async notification-permission calls from the permissions
+# panel's own thread (#307).
+tokio = { workspace = true }
 tracing = { workspace = true }
 url = { workspace = true }
 
+# CBManager.authorization and CBCentralManager, for the Bluetooth permission
+# (#307).
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = { workspace = true }
+
 [dev-dependencies]
 tempfile = { workspace = true }
-tokio = { workspace = true }

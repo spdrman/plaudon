@@ -69,8 +69,10 @@ impl OnboardingStep {
     /// up, which today means macOS ([`crate::os_permissions`]).
     #[must_use]
     pub const fn steps_for(platform: Platform) -> &'static [Self] {
-        let _ = platform;
-        Self::WITHOUT_PERMISSIONS
+        match platform {
+            Platform::Macos => Self::ALL,
+            Platform::Windows | Platform::Linux => Self::WITHOUT_PERMISSIONS,
+        }
     }
 
     /// Stable wire identifier.
@@ -104,7 +106,7 @@ impl OnboardingStep {
     /// Whether the user may leave the step without making any choice.
     #[must_use]
     pub const fn skippable(self) -> bool {
-        matches!(self, Self::Key | Self::Sources)
+        matches!(self, Self::Key | Self::Sources | Self::Permissions)
     }
 }
 
@@ -239,11 +241,7 @@ impl OnboardingState {
     /// (spec §5.3).
     #[must_use]
     pub fn progress_label(&self) -> String {
-        format!(
-            "Step {} of {}",
-            self.step_index + 1,
-            self.steps.len()
-        )
+        format!("Step {} of {}", self.step_index + 1, self.steps.len())
     }
 
     /// Apply one action. Anything the current step does not allow is a no-op,

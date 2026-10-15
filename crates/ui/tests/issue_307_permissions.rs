@@ -61,7 +61,10 @@ fn mixed() -> PermissionsReport {
 /// Nothing asked yet anywhere macOS can tell.
 fn fresh() -> PermissionsReport {
     report(&[
-        (OsPermissionKind::Bluetooth, OsPermissionStatus::NotDetermined),
+        (
+            OsPermissionKind::Bluetooth,
+            OsPermissionStatus::NotDetermined,
+        ),
         (
             OsPermissionKind::Notifications,
             OsPermissionStatus::NotDetermined,
@@ -247,8 +250,14 @@ fn issue_307_ask_macos_is_offered_only_where_there_is_an_api_and_a_prompt_left()
     let harness = panel(Platform::Macos, fresh());
     assert!(has(&harness, &ask_label(OsPermissionKind::Bluetooth)));
     assert!(has(&harness, &ask_label(OsPermissionKind::Notifications)));
-    assert!(!has(&harness, &ask_label(OsPermissionKind::RemovableVolumes)));
-    assert!(!has(&harness, &ask_label(OsPermissionKind::FilesAndFolders)));
+    assert!(!has(
+        &harness,
+        &ask_label(OsPermissionKind::RemovableVolumes)
+    ));
+    assert!(!has(
+        &harness,
+        &ask_label(OsPermissionKind::FilesAndFolders)
+    ));
 
     // Once refused, macOS never shows the prompt again, so a button that
     // promises one would be a lie: only System Settings can change it now.
@@ -275,11 +284,7 @@ fn issue_307_every_permission_has_a_button_for_its_exact_system_settings_pane() 
     for kind in OsPermissionKind::for_platform(Platform::Macos) {
         forget(&mut harness);
         click(&mut harness, &open_label(*kind));
-        assert_eq!(
-            panel_intents(&harness),
-            [Asked::Open(*kind)],
-            "{kind:?}"
-        );
+        assert_eq!(panel_intents(&harness), [Asked::Open(*kind)], "{kind:?}");
     }
 }
 
@@ -459,7 +464,9 @@ fn issue_307_off_macos_the_host_never_calls_the_provider() {
     handle_intent(&host, &SettingsIntent::CheckOsPermissions, None);
     assert!(fake.calls().is_empty(), "{:?}", fake.calls());
     assert_eq!(
-        host.latest().snapshot.map(|snapshot| snapshot.iter().count()),
+        host.latest()
+            .snapshot
+            .map(|snapshot| snapshot.iter().count()),
         Some(0)
     );
 }
@@ -567,7 +574,10 @@ fn issue_307_setup_shows_the_panel_on_its_own_step() {
     assert!(has(&harness, OnboardingStep::Permissions.title()));
     assert!(has(&harness, "Step 6 of 7"));
     assert!(has(&harness, &ask_label(OsPermissionKind::Bluetooth)));
-    assert!(has(&harness, &open_label(OsPermissionKind::FilesAndFolders)));
+    assert!(has(
+        &harness,
+        &open_label(OsPermissionKind::FilesAndFolders)
+    ));
     assert!(has(&harness, CHECK_AGAIN));
     assert!(says(&harness, SIGNING_NOTE));
     assert!(harness

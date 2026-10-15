@@ -17,10 +17,12 @@ use plaudon_app::dto::{
     Preferences, StatusResponse, StorageCapability,
 };
 use plaudon_app::onboarding::{engines_download_note, OnboardingStep};
+use plaudon_app::os_permissions::{OsPermissionKind, OsPermissionStatus, PermissionSnapshot};
 use plaudon_app::settings_presentation::format_bytes;
 use plaudon_domain::capability::CapabilityStatus;
 use plaudon_domain::error::ErrorEnvelope;
 use plaudon_ui::onboarding::OnboardingScreen;
+use plaudon_ui::permissions::PermissionsReport;
 use plaudon_ui::settings::{SettingsIntent, SettingsOutput};
 use plaudon_ui_testkit::a11y;
 
@@ -48,12 +50,21 @@ impl App {
 }
 
 fn harness_with(capabilities: Capabilities) -> Harness<'static, App> {
+    // The fixtures describe a Mac, so the flow is the macOS one whichever
+    // host runs the suite, on a Mac that has not been asked anything yet.
+    let mut screen = OnboardingScreen::for_platform(Platform::Macos);
+    screen.set_os_permissions(PermissionsReport {
+        snapshot: Some(PermissionSnapshot::from_statuses(
+            OsPermissionKind::for_platform(Platform::Macos)
+                .iter()
+                .map(|kind| (*kind, OsPermissionStatus::NotDetermined)),
+        )),
+        error: None,
+    });
     plaudon_ui_testkit::builder().build_ui_state(
         |ui, app: &mut App| app.view(ui),
         App {
-            // The fixtures describe a Mac, so the flow is the macOS one
-            // whichever host runs the suite.
-            screen: OnboardingScreen::for_platform(Platform::Macos),
+            screen,
             capabilities,
             out: SettingsOutput::new(),
             escape_seen: false,

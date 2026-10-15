@@ -24,7 +24,12 @@ fn issue_307_macos_lists_exactly_the_permissions_a_feature_needs() {
     let titles: Vec<&str> = MAC_KINDS.iter().map(|kind| kind.guide().title).collect();
     assert_eq!(
         titles,
-        ["Bluetooth", "Notifications", "Removable Volumes", "Files and Folders"]
+        [
+            "Bluetooth",
+            "Notifications",
+            "Removable Volumes",
+            "Files and Folders"
+        ]
     );
 }
 
@@ -50,8 +55,8 @@ fn issue_307_full_disk_access_and_speech_recognition_are_not_requested() {
 
 #[test]
 fn issue_307_windows_and_linux_have_no_privacy_permissions() {
-    assert!(OsPermissionKind::for_platform(Platform::Windows).is_empty());
-    assert!(OsPermissionKind::for_platform(Platform::Linux).is_empty());
+    assert_eq!(OsPermissionKind::for_platform(Platform::Windows), &[] as &[OsPermissionKind]);
+    assert_eq!(OsPermissionKind::for_platform(Platform::Linux), &[] as &[OsPermissionKind]);
 }
 
 #[test]
@@ -59,8 +64,14 @@ fn issue_307_every_permission_says_what_needs_it_what_happens_without_it_and_how
     for kind in MAC_KINDS {
         let guide = kind.guide();
         assert!(!guide.needed_for.is_empty(), "{kind:?}: what needs it?");
-        assert!(!guide.without_it.is_empty(), "{kind:?}: what happens without it?");
-        assert!(!guide.ask_note.is_empty(), "{kind:?}: how does asking work?");
+        assert!(
+            !guide.without_it.is_empty(),
+            "{kind:?}: what happens without it?"
+        );
+        assert!(
+            !guide.ask_note.is_empty(),
+            "{kind:?}: how does asking work?"
+        );
         assert!(
             guide.optional,
             "{kind:?}: Plaudon works without every one of these permissions"

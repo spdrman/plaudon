@@ -147,6 +147,13 @@ fn audio_output() -> plaudon_ui::screens::recording::AudioOutFactory {
 /// The real dialogs, and a state writer that never touches the render
 /// thread.
 fn native_hooks(store: ShellStateStore, runtime: tokio::runtime::Handle) -> HostHooks {
+    // Issue #307: the live macOS privacy statuses for first-run setup and
+    // Settings. The host reads them on its own thread, never the render
+    // thread, because an "Ask macOS" call waits for the user to answer.
+    let os_permissions = plaudon_ui::permissions::PermissionsHost::background(
+        plaudon_platform::os_permissions::native(&runtime),
+        plaudon_app::dto::Platform::host(),
+    );
     HostHooks {
         pick_audio_files: Arc::new(|| {
             rfd::FileDialog::new()
@@ -194,7 +201,7 @@ fn native_hooks(store: ShellStateStore, runtime: tokio::runtime::Handle) -> Host
                 }
             });
         }),
-        os_permissions: plaudon_ui::permissions::PermissionsHost::none(),
+        os_permissions,
     }
 }
 
