@@ -335,7 +335,7 @@ PLAUDON_DATA_DIR=/tmp/plaudon-smoke cargo run -j 2 -p plaudon-egui
 ```sh
 # macOS (arm64 .app + .zip + a signing report) — dist/macos-egui/
 scripts/package-macos-egui.sh
-scripts/package-macos-egui.sh --features apple-bridge
+scripts/package-macos-egui.sh --apple-bridge require   # default is auto: link it if the SDK can build it
 
 # Windows (x64 .msi + a signing report) — dist/windows-egui/
 pwsh scripts/package-windows-egui.ps1

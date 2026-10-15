@@ -601,9 +601,19 @@ pub fn probe_once(
 /// Translate a boundary failure into the bridge error vocabulary.
 fn ffi_error_to_bridge_error(error: &FfiError) -> BridgeError {
     match error {
+        // On a Mac the only road here is a build without the `apple-bridge`
+        // feature, so the detail names the build. Anywhere else there are no
+        // Apple frameworks to link, and the detail names the OS instead (#306).
         FfiError::NotLinked => BridgeError::new(
             BridgeErrorCode::PlatformUnsupported,
-            Some("bridge_not_linked".to_owned()),
+            Some(
+                if cfg!(target_os = "macos") {
+                    "bridge_not_linked"
+                } else {
+                    "not_macos"
+                }
+                .to_owned(),
+            ),
         ),
         FfiError::AbiMismatch { found, expected } => BridgeError::new(
             BridgeErrorCode::EngineFailure,

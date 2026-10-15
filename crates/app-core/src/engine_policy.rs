@@ -118,22 +118,9 @@ pub fn explain(engine_id: &EngineId, reason: &AvailabilityReason) -> Unavailabil
                 vec![CorrectiveAction::RetryProbe],
                 true,
             ),
-            AvailabilityReason::PlatformUnsupported { platform } => (
-                // Reached on Windows, on a macOS build without the bridge,
-                // and on a Mac older than the frameworks. The sentence must
-                // be true in all three, so it names the observation rather
-                // than guessing which one happened.
-                format!(
-                    "Apple on-device speech and language models are not provided by this \
-                     system ({platform})."
-                ),
-                "platform_unsupported",
-                vec![
-                    CorrectiveAction::UpdateMacOs,
-                    CorrectiveAction::UseLocalWhisper,
-                ],
-                false,
-            ),
+            AvailabilityReason::PlatformUnsupported { platform } => {
+                explain_platform_unsupported(platform)
+            }
             AvailabilityReason::HardwareUnsupported { detail } => (
                 format!("This Mac is not eligible for Apple on-device AI ({detail})."),
                 "hardware_unsupported",
@@ -220,6 +207,63 @@ pub fn explain(engine_id: &EngineId, reason: &AvailabilityReason) -> Unavailabil
         code,
         actions,
         transient,
+    }
+}
+
+/// Split `PlatformUnsupported` by its detail, because the three ways to reach
+/// it want three different sentences (#306).
+///
+/// A build without the bridge (or one whose SDK compiled the bridge without
+/// the frameworks) is a fact about this copy of the app, and updating macOS
+/// cannot change it. A Mac older than the frameworks is a fact about the
+/// system, and updating can. Off macOS there is nothing Apple to offer at
+/// all. An unrecognised detail is reported as observed, without guessing
+/// which of those it is.
+fn explain_platform_unsupported(
+    platform: &str,
+) -> (String, &'static str, Vec<CorrectiveAction>, bool) {
+    match platform {
+        "bridge_not_linked" => (
+            "This copy of Plaudon was built without the Apple bridge, so it cannot use Apple \
+             on-device speech or language models on any Mac (bridge_not_linked)."
+                .to_owned(),
+            "build_without_apple_bridge",
+            vec![CorrectiveAction::UseLocalWhisper],
+            false,
+        ),
+        "speech_framework_absent" | "foundation_models_framework_absent" => (
+            format!(
+                "This copy of Plaudon was built without the Apple framework this engine needs, \
+                 so it cannot use it on any Mac ({platform})."
+            ),
+            "build_without_apple_bridge",
+            vec![CorrectiveAction::UseLocalWhisper],
+            false,
+        ),
+        detail if detail.ends_with("_requires_macos_26") => (
+            format!(
+                "Apple on-device speech and language models need macOS 26 or later ({detail})."
+            ),
+            "macos_too_old",
+            vec![
+                CorrectiveAction::UpdateMacOs,
+                CorrectiveAction::UseLocalWhisper,
+            ],
+            false,
+        ),
+        "not_macos" => (
+            "Apple on-device speech and language models are available only on macOS (not_macos)."
+                .to_owned(),
+            "not_macos",
+            vec![CorrectiveAction::UseLocalWhisper],
+            false,
+        ),
+        other => (
+            format!("Apple on-device speech and language models are not available here ({other})."),
+            "platform_unsupported",
+            vec![CorrectiveAction::UseLocalWhisper],
+            false,
+        ),
     }
 }
 

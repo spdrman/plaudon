@@ -173,10 +173,11 @@ pub(crate) fn apple_probe_cache() -> std::sync::Arc<ProbeCache> {
 
 /// The two Apple rows, derived from a runtime probe.
 ///
-/// On a build without the bridge — every Windows build, and a macOS build
-/// without the `apple-bridge` feature — the probe answers
-/// `platform_unsupported` without touching an Apple framework, and these
-/// rows say so with the same vocabulary a real refusal would use.
+/// On a build without the bridge (every Windows build, and a macOS build
+/// without the `apple-bridge` feature) the probe answers
+/// `platform_unsupported` without touching an Apple framework. The detail
+/// says which of the two it is, so a bridgeless Mac build blames the build
+/// and not the user's macOS (#306).
 fn apple_engine_entries() -> Vec<EngineInventoryEntry> {
     // Blocking, and bounded at 100 ms by `PROBE_BUDGET`; a cached read is
     // microseconds. Availability is a precondition of every engine decision,
