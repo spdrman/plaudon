@@ -62,8 +62,13 @@ if (-not (Test-Path $Icon)) { Write-Error "reason=missing_binary: $Icon is absen
 $Jobs = if ($env:CARGO_BUILD_JOBS) { $env:CARGO_BUILD_JOBS } else { "2" }
 if (-not $SkipBuild) {
     Write-Host "==> building plaudon-egui and the automation CLI (release, -j $Jobs)"
-    $BuildArgs = @("build", "--release", "-j", $Jobs, "-p", "plaudon-egui")
-    if ($Features) { $BuildArgs += @("--features", $Features) }
+    # A shipped installer always carries the real Bluetooth radio (#301):
+    # without `hardware-scan` every scan answers SOURCE_UNAVAILABLE. It is
+    # off by default only so CI and headless builds need no Bluetooth stack.
+    $FeatureList = @($Features -split '[, ]' | Where-Object { $_ })
+    if ($FeatureList -notcontains "hardware-scan") { $FeatureList += "hardware-scan" }
+    $Features = $FeatureList -join ","
+    $BuildArgs = @("build", "--release", "-j", $Jobs, "-p", "plaudon-egui", "--features", $Features)
     & cargo @BuildArgs
     if ($LASTEXITCODE -ne 0) { Write-Error "reason=missing_binary: cargo build failed"; exit 1 }
     & cargo build --release -j $Jobs -p plaudon-automation --bin plaudon

@@ -4927,6 +4927,7 @@ dependencies = [
  "async-trait",
  "btleplug",
  "futures",
+ "objc2-core-bluetooth",
  "plaudon-domain",
  "plaudon-plaud-protocol",
  "plaudon-recording-sources",

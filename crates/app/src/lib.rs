@@ -37,6 +37,7 @@ pub mod job_presentation;
 pub mod media;
 pub mod notify;
 pub mod onboarding;
+pub mod permissions;
 pub mod ports;
 pub mod runtime;
 pub mod secrets;

@@ -2568,6 +2568,13 @@ pub enum RadioState {
     Scanned,
     /// The operating system denied radio access; nothing was scanned.
     PermissionDenied,
+    /// The user has not answered the operating system's Bluetooth prompt yet;
+    /// nothing was scanned.
+    PermissionNotDetermined,
+    /// The Bluetooth adapter is switched off; nothing was scanned.
+    PoweredOff,
+    /// The host reported no usable Bluetooth adapter; nothing was scanned.
+    NoAdapter,
     /// This build has no BLE radio; nothing was scanned.
     UnavailableInBuild,
 }

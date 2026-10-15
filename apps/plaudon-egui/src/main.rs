@@ -171,6 +171,14 @@ fn native_hooks(store: ShellStateStore, runtime: tokio::runtime::Handle) -> Host
                 tracing::debug!(%error, "the file manager could not be opened");
             }
         }),
+        // #301: the Bluetooth control on a refused radio. A fixed deep link
+        // per platform, spawned without a shell.
+        open_system_settings: Arc::new(|pane| {
+            plaudon_platform::opener::open_system_settings(pane).map_err(|error| {
+                tracing::debug!(%error, "the system settings could not be opened");
+                error.to_string()
+            })
+        }),
         save_shell_state: Arc::new(move |state: ShellState| {
             let store = store.clone();
             // Writing a few hundred bytes is still a blocking syscall, and a

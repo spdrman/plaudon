@@ -21,8 +21,6 @@
 
 mod support;
 
-use plaudon_app::runtime::AppEngine;
-
 #[test]
 fn the_published_build_flag_matches_the_feature_it_reports() {
     assert_eq!(
@@ -41,6 +39,7 @@ fn the_published_build_flag_matches_the_feature_it_reports() {
 fn a_default_build_reports_that_it_cannot_scan() {
     use plaudon_app::command::{AppCommand, AppResponse};
     use plaudon_app::dto::{ListNearbyDevicesRequest, RadioState};
+    use plaudon_app::runtime::AppEngine;
 
     let dir = tempfile::tempdir().expect("temporary library");
     let engine = AppEngine::start(plaudon_egui::with_build_hardware(support::config(

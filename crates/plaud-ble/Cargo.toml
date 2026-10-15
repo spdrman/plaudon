@@ -14,7 +14,7 @@ workspace = true
 [features]
 # The real radio scanner. Off by default so the workspace builds and tests
 # without a Bluetooth stack, and so CI never touches a radio (spec 18.3A).
-hardware-scan = ["dep:btleplug", "dep:futures", "dep:uuid"]
+hardware-scan = ["dep:btleplug", "dep:futures", "dep:uuid", "dep:objc2-core-bluetooth"]
 # Exposes the deterministic `FakeDevice` to downstream test harnesses. Never a
 # production dependency.
 test-support = ["dep:serde_json"]
@@ -32,6 +32,12 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }
 uuid = { workspace = true, optional = true }
+
+# Reads the macOS Bluetooth (TCC) authorization without creating a central
+# manager, so a scan can tell "not answered yet" from "denied" (#301). The
+# same version btleplug already links; only built with `hardware-scan`.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-core-bluetooth = { version = "0.2.2", optional = true, default-features = false, features = ["std", "CBManager"] }
 
 [dev-dependencies]
 proptest = { workspace = true }
