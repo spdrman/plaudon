@@ -55,8 +55,9 @@ fn issue_307_full_disk_access_and_speech_recognition_are_not_requested() {
 
 #[test]
 fn issue_307_windows_and_linux_have_no_privacy_permissions() {
-    assert_eq!(OsPermissionKind::for_platform(Platform::Windows), &[] as &[OsPermissionKind]);
-    assert_eq!(OsPermissionKind::for_platform(Platform::Linux), &[] as &[OsPermissionKind]);
+    let none: &[OsPermissionKind] = &[];
+    assert_eq!(OsPermissionKind::for_platform(Platform::Windows), none);
+    assert_eq!(OsPermissionKind::for_platform(Platform::Linux), none);
 }
 
 #[test]

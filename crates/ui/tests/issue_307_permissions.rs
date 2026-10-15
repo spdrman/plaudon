@@ -454,7 +454,7 @@ fn issue_307_the_host_leaves_every_other_intent_alone() {
         &SettingsIntent::RefreshCapabilities,
         None
     ));
-    assert!(fake.calls().is_empty());
+    assert_eq!(fake.calls(), Vec::<FakeCall>::new());
 }
 
 #[test]

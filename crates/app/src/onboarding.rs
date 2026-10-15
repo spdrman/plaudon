@@ -547,7 +547,7 @@ mod tests {
         assert_eq!(state.step(), OnboardingStep::Permissions);
         state.apply(OnboardingAction::Next);
         assert_eq!(state.step(), OnboardingStep::Finish);
-        assert!(state.skipped().is_empty());
+        assert_eq!(state.skipped(), &[] as &[OnboardingStep]);
     }
 
     #[test]

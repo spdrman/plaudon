@@ -203,7 +203,11 @@ pub fn handle_intent(
         SettingsIntent::AskOsPermission(kind) => host.ask(*kind, repaint),
         SettingsIntent::OpenOsPermissionSettings(kind) => {
             if let Err(error) = host.open_settings(*kind) {
-                tracing::debug!(kind = kind.as_str(), detail = %error.0, "System Settings did not open");
+                tracing::debug!(
+                    kind = kind.as_str(),
+                    detail = %error.0,
+                    "System Settings did not open"
+                );
             }
         }
         _ => return false,
