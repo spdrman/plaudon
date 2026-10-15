@@ -25,6 +25,7 @@
 
 use std::collections::BTreeSet;
 
+use plaudon_diagnostics::patterns::{pattern_set, ScanScope};
 use plaudon_diagnostics::redact::Redactor;
 use serde_json::Value;
 
@@ -105,7 +106,7 @@ impl ArchiveSecretScanner {
         if let Ok(value) = serde_json::from_str::<Value>(text) {
             walk(entry_path, "", None, &value, biometric_allowed, &mut found);
         } else {
-            scan_value(entry_path, "/", text, &mut found);
+            scan_value(entry_path, "/", text, biometric_allowed, &mut found);
             scan_embedding_shape(entry_path, "/", None, text, biometric_allowed, &mut found);
         }
         found.into_iter().collect()
@@ -143,7 +144,7 @@ fn walk(
             if is_expected_identity(key, text) {
                 return;
             }
-            scan_value(entry_path, field, text, found);
+            scan_value(entry_path, field, text, biometric_allowed, found);
         }
         Value::Array(items) => {
             for (index, item) in items.iter().enumerate() {
@@ -194,10 +195,32 @@ fn scan_embedding_shape(
     }
 }
 
-fn scan_value(entry_path: &str, field: &str, text: &str, found: &mut BTreeSet<SecretFinding>) {
+/// Scan one string value with the shared credential table.
+///
+/// `biometric_allowed` suppresses the *shape* patterns — the VP-112 catch-alls
+/// that match any long opaque run, declared [`ScanScope::RedactionOnly`] in the
+/// shared table — inside `voiceprofiles/`. That is the fourth documented
+/// exception above: a sealed embedding is exactly such a run, and it is the
+/// payload the encrypted-only namespace exists for, so scanning for its shape
+/// there would refuse every archive the feature can produce. A real credential
+/// shape — an API key, a bearer token, userinfo in a URL — is still fatal
+/// inside the namespace, which is why only the redaction-only patterns are
+/// skipped and the rest of the table still runs. `plaudon-secret-scan` makes
+/// the same distinction, from the same `scan_scope()`, so there is still one
+/// definition of which shapes are credentials.
+fn scan_value(
+    entry_path: &str,
+    field: &str,
+    text: &str,
+    biometric_allowed: bool,
+    found: &mut BTreeSet<SecretFinding>,
+) {
     let redactor = Redactor::shared();
     for window in windows(text) {
         for finding in redactor.matches(window) {
+            if biometric_allowed && is_shape_only(finding.pattern) {
+                continue;
+            }
             found.insert(SecretFinding {
                 entry_path: entry_path.to_owned(),
                 field: field.to_owned(),
@@ -205,6 +228,14 @@ fn scan_value(entry_path: &str, field: &str, text: &str, found: &mut BTreeSet<Se
             });
         }
     }
+}
+
+/// Whether `pattern` is a redaction-only shape rather than a credential shape.
+fn is_shape_only(pattern: &str) -> bool {
+    pattern_set()
+        .iter()
+        .find(|candidate| candidate.names().any(|name| name == pattern))
+        .is_some_and(|candidate| candidate.scan_scope() == ScanScope::RedactionOnly)
 }
 
 /// Whether this value is one of the documented identity shapes.
