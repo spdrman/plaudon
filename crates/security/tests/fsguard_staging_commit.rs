@@ -127,8 +127,26 @@ fn a_staged_name_that_does_not_fit_with_its_suffix_is_refused() {
         PathRejection::Empty
     );
 
+    // Exactly at the limit the length rule lets the name through. Whether the
+    // file can then be created is the filesystem's call, not the policy's: some
+    // (an overlay or an encrypted home) cap names below 255 bytes and answer
+    // with an I/O error, which is still not a length refusal.
     let fits = "f".repeat(255 - STAGED_SUFFIX.len());
-    let staged = staging.stage_file(&fits).expect("a name that fits");
+    match staging.stage_file(&fits) {
+        Ok(staged) => assert!(staged
+            .path()
+            .as_path()
+            .to_string_lossy()
+            .ends_with(STAGED_SUFFIX)),
+        Err(error) => assert_eq!(
+            error.reason(),
+            PathRejection::Io,
+            "only the filesystem may refuse a name that fits: {error:?}"
+        ),
+    }
+
+    // A comfortably short name is staged on every filesystem.
+    let staged = staging.stage_file(&"f".repeat(100)).expect("a short name");
     assert!(staged
         .path()
         .as_path()

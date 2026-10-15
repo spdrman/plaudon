@@ -325,12 +325,18 @@ fn relocation_refuses_a_destination_that_cannot_hold_the_blobs() {
     let (relative, _) = commit_bytes(&archive, b"small blob");
 
     // A sparse blob larger than any real volume. The pre-flight space check
-    // must refuse before a single byte is copied.
+    // must refuse before a single byte is copied. 1 PiB is fine on APFS, but
+    // ext4 caps a single file just under 16 TiB and answers EFBIG, so fall
+    // back to the largest length that filesystem accepts, still far beyond
+    // any disk this runs on.
     let blob = std::fs::OpenOptions::new()
         .write(true)
         .open(archive.absolute(&relative).unwrap())
         .unwrap();
-    blob.set_len(1 << 50).unwrap();
+    let sized = [1u64 << 50, (1u64 << 44) - (1u64 << 30)]
+        .into_iter()
+        .any(|len| blob.set_len(len).is_ok());
+    assert!(sized, "no sparse length was accepted by this filesystem");
     drop(blob);
 
     let destination = tempfile::tempdir().unwrap();

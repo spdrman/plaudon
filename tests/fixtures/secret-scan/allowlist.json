@@ -1,6 +1,11 @@
 {
   "entries": [
     {
+      "path": "**/fixtures/stt/interview/PROVENANCE.md",
+      "pattern": "device_token_hex",
+      "reason": "Provenance record of the public-domain NASA interview excerpt (#308). The 64-hex runs are the SHA-256 digests of the source MP3 and of the cut excerpt, which pin the fixture bytes; they are content addresses, not device tokens."
+    },
+    {
       "path": "**/secret-scan/documented/content-hashes.log",
       "pattern": "device_token_hex",
       "reason": "SHA-256 content digests of media assets (spec 13.3A). They are 64 hex characters, the same shape as a PLAUD legacy static device token, but they are derived from file bytes and are not credentials. Keeping them readable is what makes a deduplication bug diagnosable."

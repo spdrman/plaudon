@@ -2,9 +2,10 @@
 //!
 //! Every other suite runs with no crash point armed, so the registry's "is this
 //! the armed point?" comparison is only ever taken on its negative side. This
-//! target arms a real crash point that the process never reaches: the counters
-//! still advance, the comparison runs on its positive side for the name check,
-//! and nothing aborts.
+//! target arms a real crash point and reaches it fewer times than the armed
+//! occurrence: the counters still advance, the name comparison runs on its
+//! positive side, the occurrence comparison on its negative side, and nothing
+//! aborts.
 //!
 //! It holds exactly one test on purpose: the armed point is read once per
 //! process through a `LazyLock`, so the environment must be set before any
@@ -61,6 +62,13 @@ fn an_armed_crash_point_that_is_never_reached_leaves_the_process_alone() {
         assert_eq!(hits(&point), 1, "{point}");
     }
 
-    // The armed point itself was never reached, so the process is still here.
+    // The armed point itself was never reached so far...
     assert_eq!(hits("journal:abandoned"), 0);
+
+    // ...and reaching it below its armed occurrence (3) is counted but does
+    // not fire: the name matches, the hit count does not, so the process is
+    // still here to check the counter.
+    trip("journal:abandoned");
+    trip_dynamic("journal:abandoned");
+    assert_eq!(hits("journal:abandoned"), 2);
 }
