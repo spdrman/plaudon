@@ -1,0 +1,24 @@
+# Reference transcript for hwhap-407-excerpt.mp3 (issue #308).
+#
+# Copied verbatim from NASA's official transcript of Houston We Have a Podcast
+# episode 407, "A Place in Space to Call Home: Part 1":
+# https://www.nasa.gov/podcasts/houston-we-have-a-podcast/a-place-in-space-to-call-home-part-1/
+# The span runs from "Tracy, welcome" to "what that was like.", which is exactly
+# the audio in the excerpt. Nothing is corrected or tidied, see PROVENANCE.md.
+#
+# Format: [Speaker] lines mark turns, # lines are notes, everything else is speech.
+
+[Nilufar Ramji]
+Tracy, welcome to Houston We Have a Podcast. We are so happy to have you here.
+[Tracy Dyson]
+Thank you. It’s my pleasure.
+[Nilufar Ramji]
+So before we get into the topic of the space station, I want our listeners to get to know you. So tell us a little bit about you, your background, and maybe when you joined NASA, what what things were like at that time? What was human space flight exploration looking like at that time?
+[Tracy Dyson]
+I should go back to the the year of 1997 I had finished up my PhD and submitted my dissertation in the month of June, and I think it was the next month July, when I submitted my application for the astronaut program. And then I went on and did a postdoctoral fellow fellow fellowship in Southern California at UC Irvine. And it was during that period of time that I got the notice to that I was being offered an interview. And so that start that kicked it off. And and then later on that year, I was selected in August of 1998, just prior to turning- my birthday, in fact. And so I began in 1998 with the class group 17. We were called the Penguins, and we were not the largest class, but probably the second largest class of astronauts, with or without our international partner astronauts, we were 25 altogether.
+[Nilufar Ramji]
+Wow.
+[Tracy Dyson]
+Yeah, there was big but the group before us, the sardines, as they were called, had something like 44 so it was a huge, huge astronaut corps when we arrived. And there’s, you know, depending on which astronauts you asked, there was somewhere between 110 to 140 astronauts. I mean, it wherever it fell, at any one given time, there was a lot of astronauts during that period of time. And it was also a transition time where we were flying shuttles for individual missions, but transitioning to building the International Space Station. And so we, we the class of 1998 are kind of the babies of the International Space Station, because it was only a couple months after our arrival, while we were still astronaut candidates, that we launched the first element of the International Space Station, the functional cargo block.
+[Nilufar Ramji]
+That is really exciting. No one can see me right now. I’m smiling ear to ear, just because you actually helped build the space station. You put it together. Yeah, and it’s been up there for 25 years. Tell us a little bit about what that was like.

@@ -33,7 +33,7 @@ const REFERENCE: &str = "interview/hwhap-407-excerpt.reference.txt";
 const PROVENANCE: &str = "interview/PROVENANCE.md";
 
 /// SHA-256 of the committed excerpt. `PROVENANCE.md` records the same value.
-const EXCERPT_SHA256: &str = "PENDING";
+const EXCERPT_SHA256: &str = "90a533a5cfefc05a5ffbf0d5f7c5c13a3a0673c2e5a468bc44c6fb23b3e7e630";
 
 /// SHA-256 of the full source file the excerpt was cut from.
 const SOURCE_SHA256: &str = "a6b65f84a64161ca52ab5d6146db69c55a4add90bc0b914abfa84de0e61f60bb";
@@ -43,9 +43,13 @@ const EXCERPT_DURATION_MS: u64 = 152_400;
 
 /// Highest word error rate the tiny English model may score on the excerpt.
 ///
-/// Provisional until the fixture lands and the real rate is measured; see
-/// the PR for #308 for the measured figure and the margin applied to it.
-const WER_BOUND: f64 = 0.25;
+/// Measured on macOS arm64, CPU backend, greedy decoding: 0.0309, i.e. 13
+/// word edits against 421 reference words. The bound is set once from that
+/// measurement, not tuned: 0.10 leaves room for about 42 edits, so a
+/// whisper.cpp upgrade or a different SIMD path that shifts a dozen words
+/// still passes, while losing a single 30 s decode window (roughly 80 words,
+/// about 19%) or feeding the model mis-rated audio fails loudly.
+const WER_BOUND: f64 = 0.10;
 
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -191,19 +195,23 @@ fn reference_turns(path: &Path) -> Vec<String> {
         .collect()
 }
 
-/// Decoded length of the excerpt in 16 kHz samples.
+/// Decoded length of the excerpt in 16 kHz samples, decoded once per process
+/// (an unoptimised decode of 2.5 minutes of MP3 is slow enough to matter).
 fn canonical_frames(path: &Path) -> u64 {
-    let media = validate_media(path, &ValidationRequest::manual_import())
-        .unwrap_or_else(|error| panic!("excerpt failed validation: {error}"));
-    let mut sink = MemoryPcmSink::default();
-    decode_to_canonical_pcm(
-        &media,
-        &CanonicalPcmProfile::whisper_mono_16k(),
-        &mut sink,
-        &JobContext::new(JobId::new()),
-    )
-    .unwrap_or_else(|error| panic!("excerpt failed to decode: {error}"))
-    .frames
+    static FRAMES: std::sync::OnceLock<u64> = std::sync::OnceLock::new();
+    *FRAMES.get_or_init(|| {
+        let media = validate_media(path, &ValidationRequest::manual_import())
+            .unwrap_or_else(|error| panic!("excerpt failed validation: {error}"));
+        let mut sink = MemoryPcmSink::default();
+        decode_to_canonical_pcm(
+            &media,
+            &CanonicalPcmProfile::whisper_mono_16k(),
+            &mut sink,
+            &JobContext::new(JobId::new()),
+        )
+        .unwrap_or_else(|error| panic!("excerpt failed to decode: {error}"))
+        .frames
+    })
 }
 
 /// Run the real engine over the MP3, through the audio pipeline, once.
