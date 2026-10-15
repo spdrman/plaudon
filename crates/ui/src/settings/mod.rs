@@ -32,6 +32,7 @@ pub mod intent;
 pub mod links;
 pub mod models;
 pub mod notifications;
+pub mod permissions;
 pub mod privacy;
 pub mod section;
 pub mod shell_adapter;
@@ -95,6 +96,9 @@ pub struct SettingsData {
     /// the block renders as such: the feature is off until something says
     /// otherwise, and a missing answer is not a reading of the switch.
     pub voice_profiles: Option<VoiceProfileSettingsDto>,
+    /// The operating-system privacy permissions as last read (#307). Filled
+    /// by the shell from its permissions host, never by a command.
+    pub os_permissions: crate::permissions::PermissionsReport,
 }
 
 impl SettingsData {
@@ -258,6 +262,7 @@ impl SettingsScreen {
                 Box::new(ai_key::AiKeySection::default()),
                 Box::new(consent::ConsentSection::default()),
                 Box::new(notifications::NotificationsSection),
+                Box::new(permissions::PermissionsSection::default()),
                 Box::new(engines::EnginesSection::default()),
                 Box::new(templates::TemplatesSection),
                 Box::new(export::ExportSection::default()),

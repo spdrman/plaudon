@@ -14,6 +14,8 @@ use std::sync::Arc;
 
 use plaudon_app::shell_state::ShellState;
 
+use crate::permissions::PermissionsHost;
+
 /// Picks audio files to import; empty when the user cancels.
 pub type PickAudioFiles = Arc<dyn Fn() -> Vec<PathBuf> + Send + Sync>;
 
@@ -53,6 +55,9 @@ pub struct HostHooks {
     /// Show a path selected in the OS file manager. The view never spawns a
     /// process; the binary does it through `plaudon_platform::opener`.
     pub reveal_in_folder: RevealInFolder,
+    /// Reads, asks for and opens the settings of operating-system privacy
+    /// permissions (#307). The view never calls the provider itself.
+    pub os_permissions: PermissionsHost,
 }
 
 impl fmt::Debug for HostHooks {
@@ -81,6 +86,7 @@ impl HostHooks {
             pick_open_file: Arc::new(|_| None),
             save_shell_state: Arc::new(|_| {}),
             reveal_in_folder: Arc::new(|_| {}),
+            os_permissions: PermissionsHost::none(),
         }
     }
 }

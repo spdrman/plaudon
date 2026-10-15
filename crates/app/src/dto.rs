@@ -204,6 +204,21 @@ pub enum Platform {
     Linux,
 }
 
+impl Platform {
+    /// The platform this binary was compiled for. Anything that is neither
+    /// macOS nor Windows is reported as Linux, as `get_capabilities` does.
+    #[must_use]
+    pub const fn host() -> Self {
+        if cfg!(target_os = "macos") {
+            Self::Macos
+        } else if cfg!(target_os = "windows") {
+            Self::Windows
+        } else {
+            Self::Linux
+        }
+    }
+}
+
 /// Operating-system identity.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OsInfo {

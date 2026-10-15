@@ -30,7 +30,7 @@ use std::fmt;
 use egui::{Label, RichText, Sense, Ui};
 use plaudon_app::command::{AppCommand, AppResponse};
 use plaudon_app::dto::{
-    Capabilities, EngineStage, SetLocalOnlyModeRequest, SetOpenRouterKeyRequest,
+    Capabilities, EngineStage, Platform, SetLocalOnlyModeRequest, SetOpenRouterKeyRequest,
 };
 use plaudon_app::onboarding::{
     engines_download_note, mode_summary, OnboardingAction, OnboardingState, OnboardingStep,
@@ -39,6 +39,7 @@ use plaudon_app::settings_presentation::{engine_rows, status_glyph, status_label
 use plaudon_domain::capability::CapabilityStatus;
 use plaudon_domain::error::ErrorEnvelope;
 
+use crate::permissions::{PermissionsPanel, PermissionsReport};
 use crate::settings::engine_setup::EngineSetup;
 use crate::settings::section;
 use crate::settings::{
@@ -145,6 +146,10 @@ const FINISH_PROSE: &str =
 /// Shown in the summary when no engine was chosen.
 const NO_ENGINE_CHOSEN: &str = "Not chosen";
 
+/// The skip button of the permissions step, which leaves every permission
+/// for later and never blocks setup (#307).
+pub const SKIP_LATER: &str = "Skip — do later";
+
 /// The first-run setup screen.
 pub struct OnboardingScreen {
     state: OnboardingState,
@@ -158,6 +163,10 @@ pub struct OnboardingScreen {
     focus_heading: Option<usize>,
     /// Installing what the engines need (issue #303), shared with Settings.
     setup: EngineSetup,
+    /// The macOS permissions panel of the permissions step (#307).
+    permissions_panel: PermissionsPanel,
+    /// The permission statuses the shell last read.
+    os_permissions: PermissionsReport,
 }
 
 impl Default for OnboardingScreen {
@@ -179,16 +188,25 @@ impl fmt::Debug for OnboardingScreen {
             .field("error", &self.error)
             .field("focus_heading", &self.focus_heading)
             .field("setup", &self.setup)
+            .field("os_permissions", &self.os_permissions)
             .finish()
     }
 }
 
 impl OnboardingScreen {
-    /// A fresh first run.
+    /// A fresh first run, with the steps of the platform this binary runs on.
     #[must_use]
     pub fn new() -> Self {
+        Self::for_platform(Platform::host())
+    }
+
+    /// A fresh first run with the steps `platform` shows.
+    #[must_use]
+    pub fn for_platform(platform: Platform) -> Self {
         Self {
-            state: OnboardingState::new(),
+            state: OnboardingState::for_platform(platform),
+            permissions_panel: PermissionsPanel::new(platform),
+            os_permissions: PermissionsReport::default(),
             key_draft: String::new(),
             mode_pending: false,
             key_pending: false,
@@ -203,6 +221,11 @@ impl OnboardingScreen {
     #[must_use]
     pub const fn state(&self) -> &OnboardingState {
         &self.state
+    }
+
+    /// Hand over the permission statuses the shell last read.
+    pub fn set_os_permissions(&mut self, report: PermissionsReport) {
+        self.os_permissions = report;
     }
 
     /// Render with the tokens of the theme `egui` is painting with.
@@ -248,6 +271,7 @@ impl OnboardingScreen {
             OnboardingStep::Engines => self.engines_step(ui, tokens, capabilities, out),
             OnboardingStep::Key => self.key_step(ui, tokens, out),
             OnboardingStep::Sources => self.sources_step(ui, tokens, capabilities),
+            OnboardingStep::Permissions => self.permissions_step(ui, tokens, out),
             OnboardingStep::Finish => self.finish_step(ui, tokens, capabilities),
         }
 
@@ -494,7 +518,17 @@ impl OnboardingScreen {
         }
     }
 
-    /// Step six: review, then finish.
+    /// The macOS Privacy & Security step (#307).
+    fn permissions_step(
+        &mut self,
+        ui: &mut Ui,
+        tokens: &dyn SettingsTokens,
+        out: &mut SettingsOutput,
+    ) {
+        let _ = (ui, tokens, out, &mut self.permissions_panel);
+    }
+
+    /// The last step: review, then finish.
     fn finish_step(
         &mut self,
         ui: &mut Ui,

@@ -17,6 +17,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::dto::Platform;
+
 /// One step of first-run setup, in order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -31,13 +33,28 @@ pub enum OnboardingStep {
     Key,
     /// Where audio comes from.
     Sources,
+    /// The macOS Privacy & Security permissions the features need (#307).
+    /// Only on macOS; skipped everywhere else.
+    Permissions,
     /// Review and finish.
     Finish,
 }
 
 impl OnboardingStep {
-    /// Every step, in order.
+    /// Every step, in order, on the platform that has the most of them.
     pub const ALL: &'static [Self] = &[
+        Self::Privacy,
+        Self::Mode,
+        Self::Engines,
+        Self::Key,
+        Self::Sources,
+        Self::Permissions,
+        Self::Finish,
+    ];
+
+    /// The steps without the macOS permissions step, for every other
+    /// platform.
+    const WITHOUT_PERMISSIONS: &'static [Self] = &[
         Self::Privacy,
         Self::Mode,
         Self::Engines,
@@ -46,8 +63,15 @@ impl OnboardingStep {
         Self::Finish,
     ];
 
-    /// Index of the last step.
-    pub const LAST_INDEX: usize = Self::ALL.len() - 1;
+    /// The steps first-run setup shows on `platform`, in order.
+    ///
+    /// The permissions step exists only where there are permissions to set
+    /// up, which today means macOS ([`crate::os_permissions`]).
+    #[must_use]
+    pub const fn steps_for(platform: Platform) -> &'static [Self] {
+        let _ = platform;
+        Self::WITHOUT_PERMISSIONS
+    }
 
     /// Stable wire identifier.
     #[must_use]
@@ -58,6 +82,7 @@ impl OnboardingStep {
             Self::Engines => "engines",
             Self::Key => "key",
             Self::Sources => "sources",
+            Self::Permissions => "permissions",
             Self::Finish => "finish",
         }
     }
@@ -71,6 +96,7 @@ impl OnboardingStep {
             Self::Engines => "Transcription engines on this machine",
             Self::Key => "Optional: add an OpenRouter key",
             Self::Sources => "Where your audio comes from",
+            Self::Permissions => "macOS Privacy & Security",
             Self::Finish => "Finish setup",
         }
     }
@@ -106,6 +132,7 @@ pub enum OnboardingAction {
 /// Everything the flow remembers.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OnboardingState {
+    steps: &'static [OnboardingStep],
     step_index: usize,
     local_only: bool,
     mode_chosen: bool,
@@ -117,6 +144,7 @@ pub struct OnboardingState {
 impl Default for OnboardingState {
     fn default() -> Self {
         Self {
+            steps: OnboardingStep::steps_for(Platform::host()),
             step_index: 0,
             // Spec §16.2A: the default posture is the private one.
             local_only: true,
@@ -129,16 +157,37 @@ impl Default for OnboardingState {
 }
 
 impl OnboardingState {
-    /// A fresh flow.
+    /// A fresh flow for the platform this binary runs on.
     #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// A fresh flow with the steps `platform` shows.
+    #[must_use]
+    pub fn for_platform(platform: Platform) -> Self {
+        Self {
+            steps: OnboardingStep::steps_for(platform),
+            ..Self::default()
+        }
+    }
+
+    /// The steps this flow walks through, in order.
+    #[must_use]
+    pub const fn steps(&self) -> &'static [OnboardingStep] {
+        self.steps
+    }
+
+    /// Index of the last step of this flow.
+    #[must_use]
+    pub const fn last_index(&self) -> usize {
+        self.steps.len().saturating_sub(1)
+    }
+
     /// The step being shown.
     #[must_use]
     pub fn step(&self) -> OnboardingStep {
-        OnboardingStep::ALL
+        self.steps
             .get(self.step_index)
             .copied()
             .unwrap_or(OnboardingStep::Privacy)
@@ -153,7 +202,7 @@ impl OnboardingState {
     /// Whether the flow is on its last step.
     #[must_use]
     pub const fn is_last_step(&self) -> bool {
-        self.step_index >= OnboardingStep::LAST_INDEX
+        self.step_index >= self.last_index()
     }
 
     /// Whether Local-only Mode will be enforced.
@@ -193,7 +242,7 @@ impl OnboardingState {
         format!(
             "Step {} of {}",
             self.step_index + 1,
-            OnboardingStep::ALL.len()
+            self.steps.len()
         )
     }
 
@@ -214,7 +263,7 @@ impl OnboardingState {
                 if !step.skippable() {
                     return;
                 }
-                self.step_index = (self.step_index + 1).min(OnboardingStep::LAST_INDEX);
+                self.step_index = (self.step_index + 1).min(self.last_index());
                 if !self.skipped.contains(&step) {
                     self.skipped.push(step);
                 }
@@ -286,20 +335,20 @@ mod tests {
 
     #[test]
     fn the_flow_starts_private_and_unanswered() {
-        let state = OnboardingState::new();
+        let state = OnboardingState::for_platform(Platform::Macos);
         assert_eq!(state.step(), OnboardingStep::Privacy);
         assert!(state.local_only(), "the default posture is local only");
         assert!(
             !state.mode_chosen(),
             "never asked must not be stored as answered"
         );
-        assert_eq!(state.progress_label(), "Step 1 of 6");
+        assert_eq!(state.progress_label(), "Step 1 of 7");
     }
 
     #[test]
-    fn next_walks_the_six_steps_and_stops_at_the_last() {
-        let mut state = OnboardingState::new();
-        for expected in OnboardingStep::ALL.iter().skip(1) {
+    fn next_walks_every_step_and_stops_at_the_last() {
+        let mut state = OnboardingState::for_platform(Platform::Macos);
+        for expected in state.steps().iter().skip(1) {
             state.apply(OnboardingAction::Next);
             assert_eq!(state.step(), *expected);
         }
@@ -325,6 +374,7 @@ mod tests {
         assert!(!OnboardingStep::Engines.skippable());
         assert!(OnboardingStep::Key.skippable());
         assert!(OnboardingStep::Sources.skippable());
+        assert!(OnboardingStep::Permissions.skippable());
         assert!(!OnboardingStep::Finish.skippable());
     }
 
@@ -433,6 +483,80 @@ mod tests {
                 "expected step.as_str() to be non-empty"
             );
         }
-        assert_eq!(OnboardingStep::ALL.len(), 6);
+        assert_eq!(OnboardingStep::ALL.len(), 7);
+    }
+
+    #[test]
+    fn issue_307_the_macos_flow_has_a_permissions_step_just_before_finish() {
+        let state = OnboardingState::for_platform(Platform::Macos);
+        assert_eq!(
+            state.steps(),
+            &[
+                OnboardingStep::Privacy,
+                OnboardingStep::Mode,
+                OnboardingStep::Engines,
+                OnboardingStep::Key,
+                OnboardingStep::Sources,
+                OnboardingStep::Permissions,
+                OnboardingStep::Finish,
+            ]
+        );
+        assert_eq!(state.progress_label(), "Step 1 of 7");
+        assert_eq!(state.last_index(), 6);
+    }
+
+    #[test]
+    fn issue_307_the_permissions_step_is_skipped_off_macos() {
+        for platform in [Platform::Windows, Platform::Linux] {
+            let mut state = OnboardingState::for_platform(platform);
+            assert!(
+                !state.steps().contains(&OnboardingStep::Permissions),
+                "{platform:?} has no macOS permissions to set up"
+            );
+            assert_eq!(state.progress_label(), "Step 1 of 6");
+            for _ in 0..4 {
+                state.apply(OnboardingAction::Next);
+            }
+            assert_eq!(state.step(), OnboardingStep::Sources);
+            state.apply(OnboardingAction::Next);
+            assert_eq!(state.step(), OnboardingStep::Finish, "{platform:?}");
+            assert_eq!(state.progress_label(), "Step 6 of 6");
+            assert!(state.is_last_step());
+        }
+    }
+
+    #[test]
+    fn issue_307_the_permissions_step_can_be_left_for_later_and_that_is_recorded() {
+        assert!(OnboardingStep::Permissions.skippable());
+        let mut state = OnboardingState::for_platform(Platform::Macos);
+        for _ in 0..5 {
+            state.apply(OnboardingAction::Next);
+        }
+        assert_eq!(state.step(), OnboardingStep::Permissions);
+        state.apply(OnboardingAction::Skip);
+        assert_eq!(state.step(), OnboardingStep::Finish);
+        assert_eq!(state.skipped(), &[OnboardingStep::Permissions]);
+    }
+
+    #[test]
+    fn issue_307_next_never_waits_on_a_permission() {
+        // Nothing about a permission's status can hold the flow: Next on the
+        // permissions step always advances.
+        let mut state = OnboardingState::for_platform(Platform::Macos);
+        for _ in 0..5 {
+            state.apply(OnboardingAction::Next);
+        }
+        assert_eq!(state.step(), OnboardingStep::Permissions);
+        state.apply(OnboardingAction::Next);
+        assert_eq!(state.step(), OnboardingStep::Finish);
+        assert!(state.skipped().is_empty());
+    }
+
+    #[test]
+    fn issue_307_the_host_flow_matches_the_host_platform() {
+        assert_eq!(
+            OnboardingState::new().steps(),
+            OnboardingStep::steps_for(Platform::host())
+        );
     }
 }

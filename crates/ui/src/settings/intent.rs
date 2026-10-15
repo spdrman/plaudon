@@ -7,6 +7,7 @@
 //! without a Tokio runtime, a database or a file picker.
 
 use plaudon_app::command::AppCommand;
+use plaudon_app::os_permissions::OsPermissionKind;
 
 /// What a folder the user is about to pick is for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -99,6 +100,14 @@ pub enum SettingsIntent {
     CopyText(String),
     /// Re-read `get_capabilities`, because something changed that it reports.
     RefreshCapabilities,
+    /// Read the live status of every operating-system privacy permission,
+    /// without prompting (#307).
+    CheckOsPermissions,
+    /// Ask the operating system to show its prompt for one permission. Only
+    /// ever raised by a click on "Ask macOS".
+    AskOsPermission(OsPermissionKind),
+    /// Open the System Settings pane where one permission is granted.
+    OpenOsPermissionSettings(OsPermissionKind),
 }
 
 impl SettingsIntent {

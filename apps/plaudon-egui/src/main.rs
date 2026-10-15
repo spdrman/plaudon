@@ -194,6 +194,7 @@ fn native_hooks(store: ShellStateStore, runtime: tokio::runtime::Handle) -> Host
                 }
             });
         }),
+        os_permissions: plaudon_ui::permissions::PermissionsHost::none(),
     }
 }
 

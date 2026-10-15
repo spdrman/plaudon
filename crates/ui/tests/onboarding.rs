@@ -51,7 +51,9 @@ fn harness_with(capabilities: Capabilities) -> Harness<'static, App> {
     plaudon_ui_testkit::builder().build_ui_state(
         |ui, app: &mut App| app.view(ui),
         App {
-            screen: OnboardingScreen::new(),
+            // The fixtures describe a Mac, so the flow is the macOS one
+            // whichever host runs the suite.
+            screen: OnboardingScreen::for_platform(Platform::Macos),
             capabilities,
             out: SettingsOutput::new(),
             escape_seen: false,
@@ -213,16 +215,19 @@ fn advance_to(harness: &mut Harness<'_, App>, step: OnboardingStep) {
 }
 
 #[test]
-fn the_six_steps_appear_in_order_with_a_text_progress_label() {
+fn every_step_appears_in_order_with_a_text_progress_label() {
     let mut harness = harness();
     harness.run();
 
-    for (index, step) in OnboardingStep::ALL.iter().enumerate() {
+    let steps = harness.state().screen.state().steps();
+    assert_eq!(steps.len(), 7, "the macOS flow has seven steps");
+    let last = harness.state().screen.state().last_index();
+    for (index, step) in steps.iter().enumerate() {
         assert_eq!(harness.state().screen.state().step(), *step);
         // Progress is a sentence, not a bar on its own.
-        harness.get_by_label(&format!("Step {} of 6", index + 1));
+        harness.get_by_label(&format!("Step {} of {}", index + 1, steps.len()));
         assert!(has(&harness, step.title()), "{step:?} has no heading");
-        if index < OnboardingStep::LAST_INDEX {
+        if index < last {
             click(&mut harness, "Next");
         }
     }
@@ -255,7 +260,7 @@ fn only_the_account_steps_can_be_skipped_and_skipping_is_recorded() {
     let mut harness = harness();
     harness.run();
 
-    for step in OnboardingStep::ALL {
+    for step in harness.state().screen.state().steps() {
         assert_eq!(
             has(&harness, "Skip this step"),
             step.skippable(),
@@ -418,7 +423,8 @@ fn the_sources_step_renders_what_the_backend_reports() {
     click(&mut harness, "Continue to import audio");
     assert_eq!(
         harness.state().screen.state().step(),
-        OnboardingStep::Finish
+        OnboardingStep::Permissions,
+        "on a Mac the permissions step comes before finishing"
     );
 }
 
@@ -502,7 +508,7 @@ fn every_control_of_every_step_is_reachable_by_keyboard() {
     let mut harness = harness();
     harness.run();
 
-    let expected: [(OnboardingStep, &[&str]); 6] = [
+    let expected: [(OnboardingStep, &[&str]); 7] = [
         (
             OnboardingStep::Privacy,
             &["What would leave this machine if you opt in later", "Next"],
@@ -530,12 +536,23 @@ fn every_control_of_every_step_is_reachable_by_keyboard() {
             OnboardingStep::Sources,
             &["Continue to import audio", "Skip this step", "Next", "Back"],
         ),
+        (
+            OnboardingStep::Permissions,
+            &[
+                "Ask macOS for Bluetooth",
+                "Open System Settings for Bluetooth",
+                "Check again",
+                "Skip — do later",
+                "Next",
+                "Back",
+            ],
+        ),
         (OnboardingStep::Finish, &["Finish setup", "Back"]),
     ];
 
     for (step, labels) in expected {
         assert_eq!(harness.state().screen.state().step(), step);
-        let order = a11y::focus_order(&mut harness, 24);
+        let order = a11y::focus_order(&mut harness, 40);
         for label in labels {
             assert!(
                 order.iter().any(|reached| reached == label),
