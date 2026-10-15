@@ -914,10 +914,11 @@ async fn local_only_mode_is_enforced_by_the_policy_and_never_launches_the_cli() 
         .expect("local-only on");
 
     let envelope = harness.connect().await.expect_err("connect is denied");
+    // #304: the denial keeps its own code instead of reading as an outage.
     assert_envelope(
         &envelope,
-        AppErrorCode::SourceUnavailable,
-        Some(ErrorAction::WaitAndRetry),
+        AppErrorCode::LocalOnlyMode,
+        Some(ErrorAction::ReviewLocalOnlyMode),
     );
     let probe = harness.probe().await;
     assert_eq!(

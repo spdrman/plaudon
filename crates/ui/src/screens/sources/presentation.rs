@@ -150,6 +150,56 @@ pub fn next_action_control(action: &PlaudNextAction) -> Option<NextActionControl
     }
 }
 
+/// The control for `action`, worded for the state it is shown in.
+///
+/// In [`PlaudConnectorState::LocalOnlyBlocked`] the review control is the only
+/// way the connector comes on, so it says so (#304). It still only opens
+/// Privacy settings: the choice to leave Local-only Mode is the user's.
+#[must_use]
+pub fn next_action_control_in(
+    state: PlaudConnectorState,
+    action: &PlaudNextAction,
+) -> Option<NextActionControl> {
+    match (state, next_action_control(action)) {
+        (
+            PlaudConnectorState::LocalOnlyBlocked,
+            Some(NextActionControl::Action {
+                run: ControlRun::ReviewLocalOnlyMode,
+                ..
+            }),
+        ) => Some(NextActionControl::Action {
+            label: "Turn on the PLAUD connector\u{2026}",
+            run: ControlRun::ReviewLocalOnlyMode,
+        }),
+        (_, control) => control,
+    }
+}
+
+/// Whether the panel offers "Check again", which re-runs discovery and the
+/// version probe. Only for states a change on this computer can fix.
+#[must_use]
+pub const fn offers_check_again(state: PlaudConnectorState) -> bool {
+    matches!(
+        state,
+        PlaudConnectorState::Unconfigured
+            | PlaudConnectorState::IncompatibleVersion
+            | PlaudConnectorState::LocalOnlyBlocked
+            | PlaudConnectorState::RuntimeMissing
+    )
+}
+
+/// Whether there is anything to disconnect. A connector that never got past
+/// finding the tool has no session and no association to drop.
+#[must_use]
+pub const fn offers_disconnect(state: PlaudConnectorState) -> bool {
+    !matches!(
+        state,
+        PlaudConnectorState::Unconfigured
+            | PlaudConnectorState::LocalOnlyBlocked
+            | PlaudConnectorState::RuntimeMissing
+    )
+}
+
 /// Versions the diagnostics says would work, if it names any.
 #[must_use]
 pub fn usable_versions(action: &PlaudNextAction) -> &[String] {

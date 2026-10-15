@@ -21,8 +21,44 @@ pub const PACKAGE_NAME: &str = "@plaud-ai/cli";
 /// running it.
 #[must_use]
 pub fn read_installed_version(program: &Path) -> Option<CliVersion> {
-    let _ = program;
-    None
+    // `bin/plaud` is a symlink to `<package>/dist/index.js`; the manifest is a
+    // few directories above the real file.
+    let script = std::fs::canonicalize(program).ok()?;
+    script
+        .ancestors()
+        .skip(1)
+        .take(MAX_MANIFEST_DEPTH)
+        .find_map(|directory| version_in_manifest(&directory.join("package.json")))
+}
+
+/// How far above the resolved script the manifest may be (`dist/index.js`
+/// puts it two levels up).
+const MAX_MANIFEST_DEPTH: usize = 3;
+
+/// A manifest larger than this is not the tool's.
+const MAX_MANIFEST_BYTES: u64 = 256 * 1024;
+
+#[derive(serde::Deserialize)]
+struct Manifest {
+    name: Option<String>,
+    version: Option<String>,
+}
+
+fn version_in_manifest(path: &Path) -> Option<CliVersion> {
+    if std::fs::metadata(path).ok()?.len() > MAX_MANIFEST_BYTES {
+        return None;
+    }
+    let manifest: Manifest = serde_json::from_slice(&std::fs::read(path).ok()?).ok()?;
+    if manifest.name.as_deref() != Some(PACKAGE_NAME) {
+        return None;
+    }
+    let version = manifest.version?;
+    // Only a plain dotted number is accepted; the same parser as for
+    // `plaud --version` then decides whether it is a version at all.
+    if !version.chars().all(|c| c.is_ascii_digit() || c == '.') {
+        return None;
+    }
+    CliVersion::parse_version_output(&version)
 }
 
 #[cfg(test)]

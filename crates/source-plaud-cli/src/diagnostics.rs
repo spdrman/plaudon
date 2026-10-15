@@ -175,9 +175,18 @@ impl ConnectorDiagnostics {
         table: &CliCompatibilityTable,
     ) -> Self {
         let mut panel = Self::render(status, table);
-        let (headline, detail, next_action) = error_copy(&error, table);
-        headline.clone_into(&mut panel.headline);
-        detail.clone_into(&mut panel.detail);
+        // The two causes that are facts about this computer get the copy that
+        // names where the tool is; the rest are fixed sentences.
+        let (headline, detail, next_action) = match error {
+            SourceError::LocalOnlyMode => local_only_copy(status),
+            SourceError::CliRuntimeMissing => runtime_missing_copy(status),
+            _ => {
+                let (headline, detail, next_action) = error_copy(&error, table);
+                (headline.to_owned(), detail.to_owned(), next_action)
+            }
+        };
+        panel.headline = headline;
+        panel.detail = detail;
         panel.next_action = next_action;
         panel.last_error = Some(plaudon_domain::error::AppError::from(error).code());
         panel
@@ -200,7 +209,7 @@ fn copy_for(
 ) -> (String, String, NextAction) {
     match status.state {
         ConnectorState::Unconfigured => (
-            "PLAUD account not connected".to_owned(),
+            "PLAUD command line tool not found".to_owned(),
             "We could not find the official PLAUD command line tool on this computer. Install it \
              from PLAUD's official documentation, then connect again. You can import recordings \
              by hand at any time without it."
@@ -259,9 +268,9 @@ fn copy_for(
                 .to_owned(),
             NextAction::None,
         ),
-        ConnectorState::Error
-        | ConnectorState::LocalOnlyBlocked
-        | ConnectorState::RuntimeMissing => (
+        ConnectorState::LocalOnlyBlocked => local_only_copy(status),
+        ConnectorState::RuntimeMissing => runtime_missing_copy(status),
+        ConnectorState::Error => (
             "The PLAUD connector stopped".to_owned(),
             "The last attempt did not finish. Try again; if it keeps failing, import the files \
              by hand from a PLAUD export."
@@ -269,6 +278,48 @@ fn copy_for(
             NextAction::Retry,
         ),
     }
+}
+
+/// Where the tool was found, as the start of a sentence.
+fn found_where(status: &ConnectorStatus) -> String {
+    let place = status.program_directory.as_deref().map_or_else(
+        || "is installed on this computer".to_owned(),
+        |directory| format!("is installed in {directory}"),
+    );
+    let version = status
+        .detected_version
+        .as_deref()
+        .map(|version| format!(" (version {version})"))
+        .unwrap_or_default();
+    format!("The official PLAUD command line tool {place}{version}")
+}
+
+/// Local-only Mode switched the connector off (#304). Names itself, says that
+/// nothing left this computer, and leaves turning it on to the user.
+fn local_only_copy(status: &ConnectorStatus) -> (String, String, NextAction) {
+    (
+        "Switched off by Local-only Mode".to_owned(),
+        format!(
+            "{}. Local-only Mode is on, so we did not start it. Nothing was sent. To use the \
+             PLAUD connector, turn it on yourself in Privacy settings; we never turn Local-only \
+             Mode off for you.",
+            found_where(status)
+        ),
+        NextAction::ReviewLocalOnlyMode,
+    )
+}
+
+/// The tool is there but its interpreter is not (#304).
+fn runtime_missing_copy(status: &ConnectorStatus) -> (String, String, NextAction) {
+    (
+        "PLAUD CLI found but Node.js is missing".to_owned(),
+        format!(
+            "{}, but it needs Node.js to run and we could not find Node.js. Install Node.js \
+             (for example with Homebrew), then check again.",
+            found_where(status)
+        ),
+        NextAction::InstallCli,
+    )
 }
 
 fn incompatible_detail(status: &ConnectorStatus, table: &CliCompatibilityTable) -> String {
@@ -325,14 +376,25 @@ fn error_copy(
             "The browser sign-in did not finish. Start it again when you are ready.",
             NextAction::SignIn,
         ),
-        SourceError::SourceUnavailable
-        | SourceError::LocalOnlyMode
-        | SourceError::CliRuntimeMissing => (
+        SourceError::SourceUnavailable => (
             "PLAUD is not reachable right now",
-            "We could not complete the request. This is usually a temporary network problem. If \
-             Local-only Mode is on, the PLAUD connector is switched off on purpose and no \
-             request was made.",
+            "We could not complete the request. This is usually a temporary network problem. Try \
+             again in a moment.",
+            NextAction::Retry,
+        ),
+        // `for_error` renders these two from the status, which knows where the
+        // tool is; this fixed copy is the fallback.
+        SourceError::LocalOnlyMode => (
+            "Switched off by Local-only Mode",
+            "Local-only Mode is on, so the PLAUD connector is switched off and nothing was sent. \
+             Turn it on yourself in Privacy settings; we never turn Local-only Mode off for you.",
             NextAction::ReviewLocalOnlyMode,
+        ),
+        SourceError::CliRuntimeMissing => (
+            "PLAUD CLI found but Node.js is missing",
+            "The official PLAUD command line tool is installed, but it needs Node.js to run and \
+             we could not find Node.js. Install Node.js, then check again.",
+            NextAction::InstallCli,
         ),
         SourceError::RemoteRateLimited => (
             "PLAUD asked us to slow down",
@@ -524,10 +586,10 @@ mod tests {
     }
 
     #[test]
-    fn local_only_mode_is_named_when_the_source_is_unavailable() {
+    fn local_only_mode_is_named_when_it_switched_the_source_off() {
         let panel = ConnectorDiagnostics::for_error(
             &status(ConnectorState::Ready),
-            SourceError::SourceUnavailable,
+            SourceError::LocalOnlyMode,
             table(),
         );
         assert!(panel.detail.contains("Local-only Mode"));

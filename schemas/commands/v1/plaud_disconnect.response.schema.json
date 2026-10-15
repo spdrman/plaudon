@@ -27,7 +27,9 @@
         "ready",
         "expired_auth",
         "incompatible_version",
-        "error"
+        "error",
+        "local_only_blocked",
+        "runtime_missing"
       ]
     },
     "next_action": {

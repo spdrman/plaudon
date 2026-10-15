@@ -248,8 +248,16 @@ impl CliChildEnvironment {
     /// The environment for one launch of `program`.
     #[must_use]
     pub fn env_for(&self, program: &Path) -> BTreeMap<String, String> {
-        let _ = program;
-        self.base.clone()
+        let mut env = self.base.clone();
+        let path = cloud_cli_search_path(
+            program,
+            self.base.get("PATH").map(String::as_str),
+            &self.runtime_dirs,
+        );
+        if !path.is_empty() {
+            env.insert("PATH".to_owned(), path);
+        }
+        env
     }
 }
 
@@ -266,8 +274,33 @@ pub fn cloud_cli_search_path(
     ambient_path: Option<&str>,
     runtime_dirs: &[PathBuf],
 ) -> String {
-    let _ = (program, runtime_dirs);
-    ambient_path.unwrap_or_default().to_owned()
+    let mut entries: Vec<PathBuf> = Vec::new();
+    let mut push = |entry: PathBuf| {
+        if entry.is_absolute() && !entries.contains(&entry) {
+            entries.push(entry);
+        }
+    };
+    if let Some(directory) = program.parent() {
+        push(directory.to_path_buf());
+    }
+    if let Some(ambient) = ambient_path {
+        std::env::split_paths(ambient).for_each(&mut push);
+    }
+    runtime_dirs.iter().cloned().for_each(&mut push);
+    std::env::join_paths(&entries).map_or_else(
+        // An entry holding the separator itself cannot be joined; such an
+        // entry is unusable as a search directory anyway, so drop it.
+        |_| {
+            let usable: Vec<&PathBuf> = entries
+                .iter()
+                .filter(|entry| std::env::join_paths([entry]).is_ok())
+                .collect();
+            std::env::join_paths(usable)
+                .map(|joined| joined.to_string_lossy().into_owned())
+                .unwrap_or_default()
+        },
+        |joined| joined.to_string_lossy().into_owned(),
+    )
 }
 
 /// The only launcher for the network-capable cloud CLI.

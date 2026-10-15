@@ -126,6 +126,12 @@ pub fn classify(output: &CliOutput, command: &CliCommand) -> Option<SourceError>
         return None;
     }
     let haystack = output.stderr_excerpt.to_ascii_lowercase();
+    // `env` failing to find the interpreter is not the tool talking at all, so
+    // it goes before every rule about what the tool says (#304). Otherwise its
+    // "no such file" reads as a recording that is gone.
+    if is_runtime_missing(&haystack) {
+        return Some(SourceError::CliRuntimeMissing);
+    }
     // A code the release printed itself is more precise than a phrase shape.
     for (code, error) in CODE_RULES {
         if haystack.contains(code) {
@@ -138,6 +144,23 @@ pub fn classify(output: &CliOutput, command: &CliCommand) -> Option<SourceError>
         }
     }
     Some(classify_by_exit_code(output.exit_code, command))
+}
+
+/// Whether lowercased stderr is `env` reporting that `node` does not exist.
+///
+/// Matches the BSD spelling (`env: node: No such file or directory`) and the
+/// GNU ones, which quote the name with ASCII or typographic quotes.
+fn is_runtime_missing(haystack: &str) -> bool {
+    haystack.lines().any(|line| {
+        let Some((head, rest)) = line.trim().split_once(": ") else {
+            return false;
+        };
+        let Some((name, message)) = rest.split_once(": ") else {
+            return false;
+        };
+        let name = name.trim_matches(|c| matches!(c, '\'' | '"' | '\u{2018}' | '\u{2019}'));
+        head.ends_with("env") && name == "node" && message.starts_with("no such file or directory")
+    })
 }
 
 /// Fall back to the exit code when no phrase matched.

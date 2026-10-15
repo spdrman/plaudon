@@ -155,13 +155,16 @@ pub enum RunError {
 impl From<RunError> for SourceError {
     fn from(error: RunError) -> Self {
         match error {
-            // Local-only Mode is a user setting, not a vendor failure. It is
-            // reported as "the source is unavailable" and the diagnostics layer
-            // explains which setting to change.
-            RunError::Denied { .. }
-            | RunError::StartFailed
-            | RunError::InterpreterMissing
-            | RunError::Timeout => Self::SourceUnavailable,
+            // Local-only Mode is a user setting, not a vendor failure, and
+            // nothing was sent. Reporting it as "unavailable" made the panel
+            // blame the network (#304), so it keeps its own name.
+            RunError::Denied {
+                reason: DenyReason::LocalOnlyMode,
+            } => Self::LocalOnlyMode,
+            RunError::InterpreterMissing => Self::CliRuntimeMissing,
+            RunError::Denied { .. } | RunError::StartFailed | RunError::Timeout => {
+                Self::SourceUnavailable
+            }
             RunError::UnsafeArgument
             | RunError::OutputTooLarge { .. }
             | RunError::NonUtf8Output => Self::MalformedOutput,
@@ -244,7 +247,13 @@ impl CliRunner {
                 kind = ?error.kind(),
                 "the vendor cloud CLI could not be started"
             );
-            RunError::StartFailed
+            // `ENOENT` for a file that is there means the kernel could not
+            // find the interpreter its `#!` line names (#304).
+            if error.kind() == std::io::ErrorKind::NotFound && program.is_file() {
+                RunError::InterpreterMissing
+            } else {
+                RunError::StartFailed
+            }
         })?;
 
         let mut stdout_pipe = child.stdout.take().ok_or(RunError::StartFailed)?;

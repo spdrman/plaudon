@@ -266,7 +266,9 @@ impl LocalBackend {
         // version, or says the session expired); everywhere else the copy of
         // the failure that just happened says more than the state does. A
         // launch the policy denied changes no state at all, so the failure is
-        // the only record that Local-only Mode is why nothing happened.
+        // the only record that Local-only Mode is why nothing happened; the
+        // connector also records it as `LocalOnlyBlocked` when the denial
+        // happens during the version probe (#304).
         let diagnostics = match failure {
             Some(error)
                 if !matches!(
@@ -485,7 +487,10 @@ impl SourcesPort for LocalBackend {
         let handle = self.plaud_handle().await?;
         let needs_discovery = matches!(
             handle.connector.status().state,
-            ConnectorState::Unconfigured | ConnectorState::IncompatibleVersion
+            ConnectorState::Unconfigured
+                | ConnectorState::IncompatibleVersion
+                | ConnectorState::LocalOnlyBlocked
+                | ConnectorState::RuntimeMissing
         ) && !self.source_runtime.session().disconnected;
         if needs_discovery {
             // A read-only `version` launch; failures are recorded on the

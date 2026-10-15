@@ -178,16 +178,45 @@ impl PlaudCloudCliConnector {
 
         let origin = found.origin.label().to_owned();
         let program = found.program.clone();
-        self.lock().program = Some(found);
+        {
+            // Where the tool is, and the version written on disk next to it,
+            // are local facts. They are recorded before the launch so a
+            // refused or failed probe cannot hide them (#304). The parser is
+            // still only chosen from what the tool itself reports below.
+            let disk_version = crate::installed::read_installed_version(&program);
+            let validated = disk_version.is_some()
+                && matches!(
+                    self.table.verdict(disk_version.as_ref()),
+                    VersionVerdict::Validated(_)
+                );
+            let mut session = self.lock();
+            session.program = Some(found);
+            session.status.program_origin = Some(origin.clone());
+            session.status.program_directory =
+                program.parent().map(|dir| dir.display().to_string());
+            session.status.detected_version = disk_version.map(|v| v.as_str().to_owned());
+            session.status.version_validated = validated;
+        }
 
-        let output = self
+        let probe_failed = |error: SourceError| {
+            let event = match error {
+                SourceError::LocalOnlyMode => ConnectorEvent::LocalOnlyBlocked,
+                SourceError::CliRuntimeMissing => ConnectorEvent::RuntimeMissing,
+                _ => ConnectorEvent::ProbeFailed,
+            };
+            self.apply(event, intent.at_ms);
+            self.record_error(error, intent.at_ms)
+        };
+        let output = match self
             .runner
             .run(&program, &CliCommand::Version, RunLimits::PROBE, intent)
             .await
-            .map_err(SourceError::from)?;
+        {
+            Ok(output) => output,
+            Err(error) => return Err(probe_failed(SourceError::from(error))),
+        };
         if let Some(error) = classify(&output, &CliCommand::Version) {
-            self.apply(ConnectorEvent::EnumerationFailed, intent.at_ms);
-            return Err(self.record_error(error, intent.at_ms));
+            return Err(probe_failed(error));
         }
 
         let reported = CliVersion::parse_version_output(&output.stdout);
