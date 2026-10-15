@@ -990,12 +990,17 @@ mod tests {
             outcomes.contains(&ReconcileOutcome::Committed(healthy_intent.id)),
             "one stuck intent must not block the rest of startup: {outcomes:?}"
         );
-        let reported = outcomes
+        let reported: Vec<ImportIntentId> = outcomes
             .iter()
-            .filter(|outcome| matches!(outcome, ReconcileOutcome::Quarantined(id) | ReconcileOutcome::Deferred { intent_id: id, .. } if *id == stuck_intent.id))
-            .count();
+            .filter_map(|outcome| match outcome {
+                ReconcileOutcome::Quarantined(id)
+                | ReconcileOutcome::Deferred { intent_id: id, .. } => Some(*id),
+                _ => None,
+            })
+            .collect();
         assert_eq!(
-            reported, 1,
+            reported,
+            vec![stuck_intent.id],
             "the stuck intent must be reported exactly once, not silently dropped: {outcomes:?}"
         );
     }

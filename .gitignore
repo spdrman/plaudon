@@ -27,3 +27,6 @@ dist/
 # The Tauri/React frontend was removed at the egui cutover (ADR-0024); never commit its leftovers.
 node_modules/
 apps/desktop/
+
+# LLVM coverage profiles left behind by instrumented test runs
+*.profraw
