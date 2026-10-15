@@ -549,8 +549,11 @@ fn a_refused_labelling_command_is_reported_without_leaking_anything() {
 
     let text = announced(&harness);
     assert!(text.contains(&envelope.message), "{text}");
+    // Since #305 the panel reports a refused command through the shared
+    // error notice (so a missing speech model can offer install and import
+    // right there), and that notice writes the id as "Diagnostic id: <id>".
     assert!(
-        text.contains(&format!("Diagnostic id {}", envelope.diagnostic_id)),
+        text.contains(&format!("Diagnostic id: {}", envelope.diagnostic_id)),
         "{text}"
     );
     assert!(
