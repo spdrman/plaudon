@@ -136,6 +136,128 @@ fn a_build_without_a_radio_says_so_in_its_own_words() {
     assert!(!says(&harness, "Bluetooth access is not permitted"));
 }
 
+/* ------------------------------------------------ radio refusals (#301) */
+
+/// A radio state by its wire name, so these tests compile against a DTO that
+/// does not have the state yet and fail on the missing behaviour instead.
+fn issue_301_state(wire: &str) -> RadioState {
+    serde_json::from_value(serde_json::Value::String(wire.to_owned()))
+        .unwrap_or_else(|_| panic!("{wire} is not a radio state"))
+}
+
+/// The settings control this host offers. macOS has a Bluetooth row under
+/// Privacy & Security; Windows has its Bluetooth page; a Linux desktop has no
+/// settings link every environment honours, so it gets no control at all
+/// rather than one that silently does nothing.
+fn issue_301_settings_control() -> Option<&'static str> {
+    if cfg!(target_os = "macos") {
+        Some("Open System Settings → Privacy & Security → Bluetooth")
+    } else if cfg!(target_os = "windows") {
+        Some("Open Settings → Bluetooth & devices")
+    } else {
+        None
+    }
+}
+
+fn issue_301_refused(wire_state: &str, code: &str, message: &str) -> Harness<'static, DevicesApp> {
+    let mut app = DevicesApp::new();
+    let mut scan = fixtures::radio_refused(issue_301_state(wire_state), message);
+    scan.radio.code = Some(code.to_owned());
+    app.state.applied(DeviceOutcome::Scan(scan));
+    let mut harness = harness(app);
+    harness.run();
+    harness
+}
+
+/// Every refusal names its own cause, shows its reason code, never reads as an
+/// empty room, and offers the settings control where the host has one.
+fn issue_301_assert_refusal(wire_state: &str, code: &str, heading: &str) {
+    let message = format!("Radio message for {wire_state}.");
+    let mut harness = issue_301_refused(wire_state, code, &message);
+
+    assert!(says(&harness, heading), "{wire_state}: heading {heading:?} missing");
+    assert!(says(&harness, &message), "{wire_state}: the DTO message is shown");
+    assert!(
+        says(&harness, &format!("Reason code: {code}")),
+        "{wire_state}: the reason code is shown"
+    );
+    assert!(
+        !says(&harness, "This build cannot scan for Bluetooth devices"),
+        "{wire_state}: a real radio is not an unavailable build"
+    );
+    assert!(
+        !says(&harness, "No PLAUD device found"),
+        "{wire_state}: a refused radio is never 'no device found'"
+    );
+    assert!(says(
+        &harness,
+        "Not checked: the radio could not be used for this scan."
+    ));
+
+    if let Some(control) = issue_301_settings_control() {
+        harness.get_by_label(control).click();
+        harness.run();
+        let intents = format!("{:?}", harness.state().intents);
+        assert!(
+            intents.contains("OpenSystemSettings(BluetoothPrivacy)"),
+            "{wire_state}: the control asks the host to open the Bluetooth privacy pane, \
+             got {intents}"
+        );
+    }
+}
+
+#[test]
+fn issue_301_an_unanswered_permission_prompt_is_its_own_state() {
+    issue_301_assert_refusal(
+        "permission_not_determined",
+        "RADIO_PERMISSION_NOT_DETERMINED",
+        "Bluetooth access has not been granted yet",
+    );
+}
+
+#[test]
+fn issue_301_a_powered_off_adapter_is_its_own_state() {
+    issue_301_assert_refusal(
+        "powered_off",
+        "RADIO_POWERED_OFF",
+        "Bluetooth is turned off",
+    );
+}
+
+#[test]
+fn issue_301_a_missing_adapter_is_its_own_state() {
+    issue_301_assert_refusal(
+        "no_adapter",
+        "RADIO_NO_ADAPTER",
+        "No Bluetooth adapter is available",
+    );
+}
+
+#[test]
+fn issue_301_a_denied_radio_offers_the_settings_control_too() {
+    issue_301_assert_refusal(
+        "permission_denied",
+        "RADIO_PERMISSION_DENIED",
+        "Bluetooth access is not permitted",
+    );
+}
+
+#[test]
+fn issue_301_a_build_without_a_radio_offers_no_settings_control() {
+    let harness = issue_301_refused(
+        "unavailable_in_build",
+        "SOURCE_UNAVAILABLE",
+        "This build was compiled without a Bluetooth radio.",
+    );
+    // No setting can give a binary a radio it was not built with.
+    for control in [
+        "Open System Settings → Privacy & Security → Bluetooth",
+        "Open Settings → Bluetooth & devices",
+    ] {
+        assert!(!says(&harness, control), "{control} offered for a radio-less build");
+    }
+}
+
 #[test]
 fn a_scan_that_heard_nothing_offers_the_corrective_actions() {
     let mut app = DevicesApp::new();

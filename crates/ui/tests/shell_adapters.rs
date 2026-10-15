@@ -408,6 +408,49 @@ fn the_devices_screen_scans_only_when_the_user_asks_and_renders_the_answer() {
     assert!(says(&harness, "PLAUD NotePin"));
 }
 
+/// #301: the settings control on a refused radio reaches the host, which is
+/// the only layer allowed to spawn the System Settings opener.
+#[test]
+fn issue_301_the_bluetooth_settings_control_asks_the_host_to_open_the_pane() {
+    let (_dir, mut harness) = app(Box::new(DevicesShellScreen::new()), Route::Devices);
+    let opened: Arc<Mutex<Vec<String>>> = Arc::default();
+    let record = Arc::clone(&opened);
+    harness.state_mut().hooks.open_system_settings = Arc::new(move |pane| {
+        record.lock().expect("pane log").push(format!("{pane:?}"));
+        Ok(())
+    });
+    harness.run_steps(2);
+
+    let mut scan = fixtures::radio_refused(
+        serde_json::from_value(serde_json::Value::String(
+            "permission_not_determined".to_owned(),
+        ))
+        .expect("the not-determined radio state exists"),
+        "Bluetooth has not been answered yet.",
+    );
+    scan.radio.code = Some("RADIO_PERMISSION_NOT_DETERMINED".to_owned());
+    harness
+        .state_mut()
+        .answer(AppResponse::ListNearbyDevices(scan));
+    harness.run_steps(2);
+
+    let control = if cfg!(target_os = "macos") {
+        "Open System Settings → Privacy & Security → Bluetooth"
+    } else if cfg!(target_os = "windows") {
+        "Open Settings → Bluetooth & devices"
+    } else {
+        // No settings link on this host, so no control to click.
+        return;
+    };
+    click_button(&mut harness, control);
+    harness.run_steps(2);
+    assert_eq!(
+        *opened.lock().expect("pane log"),
+        vec!["BluetoothPrivacy".to_owned()],
+        "the host was asked to open the Bluetooth privacy pane exactly once"
+    );
+}
+
 /* ---------------------------------------------------------------- sources */
 
 #[test]

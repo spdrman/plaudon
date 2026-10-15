@@ -759,3 +759,92 @@ fn both_packaging_scripts_fail_closed_without_credentials() {
         "there is no notarization on Windows; the report must say so rather than claim success"
     );
 }
+
+// ------------------------------------------------- shipped radio (#301) ----
+//
+// The production radio sits behind the `hardware-scan` feature, which is off
+// by default so CI and every headless build carry no Bluetooth stack. That is
+// right for tests and wrong for the binaries people install: before #301 no
+// packaging script and no release job turned it on, so every released build
+// answered a scan with `SOURCE_UNAVAILABLE`.
+
+fn read_repo(relative: &str) -> String {
+    let path = repo_root().join(relative);
+    std::fs::read_to_string(&path).unwrap_or_else(|error| panic!("{}: {error}", path.display()))
+}
+
+/// The `PLAUDON_RELEASE_FEATURES` value of every job in the release workflow.
+fn release_feature_sets() -> Vec<String> {
+    read_repo(".github/workflows/release.yml")
+        .lines()
+        .filter_map(|line| line.trim().strip_prefix("PLAUDON_RELEASE_FEATURES:"))
+        .map(|value| value.trim().trim_matches('"').to_owned())
+        .collect()
+}
+
+fn names_feature(list: &str, feature: &str) -> bool {
+    list.split([',', ' ']).any(|item| item.trim() == feature)
+}
+
+#[test]
+fn issue_301_both_release_jobs_ship_the_real_radio() {
+    let sets = release_feature_sets();
+    assert_eq!(
+        sets.len(),
+        2,
+        "the macOS and the Windows release jobs each name their features: {sets:?}"
+    );
+    for set in &sets {
+        assert!(
+            names_feature(set, "hardware-scan"),
+            "a release job builds without `hardware-scan` ({set:?}), so the installed app \
+             cannot scan"
+        );
+        assert!(
+            names_feature(set, "local-whisper"),
+            "the release job lost `local-whisper` on the way: {set:?}"
+        );
+    }
+}
+
+#[test]
+fn issue_301_the_macos_packaging_script_always_builds_the_real_radio() {
+    let script = read_repo("scripts/package-macos-egui.sh");
+    assert!(
+        script.contains("hardware-scan"),
+        "scripts/package-macos-egui.sh must turn on `hardware-scan` itself, whatever \
+         `--features` it is handed: a bundle built without it cannot scan"
+    );
+}
+
+#[test]
+fn issue_301_the_windows_packaging_script_always_builds_the_real_radio() {
+    let script = read_repo("scripts/package-windows-egui.ps1");
+    assert!(
+        script.contains("hardware-scan"),
+        "scripts/package-windows-egui.ps1 must turn on `hardware-scan` itself, whatever \
+         `-Features` it is handed: an installer built without it cannot scan"
+    );
+}
+
+#[test]
+fn issue_301_default_and_test_builds_stay_free_of_a_bluetooth_stack() {
+    // The other half of the bargain: shipping the radio must not leak it into
+    // the default feature set, which is what every Linux and headless test
+    // build compiles (a `btleplug` on Linux needs dbus).
+    for manifest in [
+        "apps/plaudon-egui/Cargo.toml",
+        "crates/app/Cargo.toml",
+        "crates/plaud-ble/Cargo.toml",
+    ] {
+        let text = read_repo(manifest);
+        let default = text
+            .lines()
+            .find(|line| line.trim_start().starts_with("default ="))
+            .unwrap_or("");
+        assert!(
+            !default.contains("hardware-scan"),
+            "{manifest} turns `hardware-scan` on by default"
+        );
+    }
+}
