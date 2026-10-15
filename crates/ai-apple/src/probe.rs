@@ -601,9 +601,19 @@ pub fn probe_once(
 /// Translate a boundary failure into the bridge error vocabulary.
 fn ffi_error_to_bridge_error(error: &FfiError) -> BridgeError {
     match error {
+        // On a Mac the only road here is a build without the `apple-bridge`
+        // feature, so the detail names the build. Anywhere else there are no
+        // Apple frameworks to link, and the detail names the OS instead (#306).
         FfiError::NotLinked => BridgeError::new(
             BridgeErrorCode::PlatformUnsupported,
-            Some("bridge_not_linked".to_owned()),
+            Some(
+                if cfg!(target_os = "macos") {
+                    "bridge_not_linked"
+                } else {
+                    "not_macos"
+                }
+                .to_owned(),
+            ),
         ),
         FfiError::AbiMismatch { found, expected } => BridgeError::new(
             BridgeErrorCode::EngineFailure,
@@ -987,6 +997,35 @@ mod tests {
             caps.speech.availability_reason,
             AvailabilityReason::PlatformUnsupported { .. }
         ));
+    }
+
+    #[test]
+    fn issue_306_an_unlinked_bridge_names_the_build_on_macos_and_the_os_elsewhere() {
+        // On a Mac the only way to reach `NotLinked` is a build without the
+        // bridge; anywhere else the OS simply has no Apple frameworks. The
+        // two must not share one detail, or the sentence built from it has
+        // to be vague enough to be true in both, which is what #306 was.
+        let availability = probe_once(&crate::UnlinkedBridge, Some("en-US"), PROBE_BUDGET);
+        let expected = if cfg!(target_os = "macos") {
+            "bridge_not_linked"
+        } else {
+            "not_macos"
+        };
+        for reason in [
+            AppleCapabilities::from_availability(&availability, AssetDownloadConsent::Withheld)
+                .speech
+                .availability_reason,
+            AppleCapabilities::from_availability(&availability, AssetDownloadConsent::Withheld)
+                .text_model
+                .availability_reason,
+        ] {
+            assert_eq!(
+                reason,
+                AvailabilityReason::PlatformUnsupported {
+                    platform: expected.to_owned()
+                }
+            );
+        }
     }
 
     #[test]

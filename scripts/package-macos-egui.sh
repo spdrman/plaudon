@@ -23,6 +23,18 @@
 #
 #   scripts/package-macos-egui.sh [--out <dir>] [--evidence <dir>]
 #                                 [--features <cargo features>] [--skip-build]
+#                                 [--apple-bridge auto|require|off]
+#
+# --apple-bridge decides whether the Swift Apple bridge (native/apple-bridge)
+# is linked, which is what lets the bundle use Apple Speech and the Apple
+# on-device language model at all (#306):
+#   auto     (default) try scripts/build-apple-bridge.sh against the active
+#            SDK; link the bridge if it compiles, leave it out if it does not.
+#            The SDK is asked by compiling, not by comparing version numbers.
+#   require  same, but a bridge that does not compile fails the package.
+#   off      leave the bridge out on purpose.
+# Whichever way it goes, the signing report's `apple_bridge` and
+# `apple_bridge_detail` say so, and the claim is checked on the binary.
 #
 # Environment:
 #   PLAUDON_MACOS_IDENTITY     Developer ID Application identity, e.g. "Developer ID Application: … (TEAMID)"
@@ -41,15 +53,32 @@ OUT="$REPO_ROOT/dist/macos-egui"
 EVIDENCE=""
 FEATURES=""
 SKIP_BUILD=0
+APPLE_BRIDGE_MODE=auto
 while [ $# -gt 0 ]; do
   case "$1" in
     --out) OUT="$2"; shift 2 ;;
     --evidence) EVIDENCE="$2"; shift 2 ;;
     --features) FEATURES="$2"; shift 2 ;;
     --skip-build) SKIP_BUILD=1; shift ;;
+    --apple-bridge) APPLE_BRIDGE_MODE="$2"; shift 2 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
+
+case "$APPLE_BRIDGE_MODE" in
+  auto|require|off) ;;
+  *) echo "--apple-bridge takes auto, require or off, not '$APPLE_BRIDGE_MODE'" >&2; exit 2 ;;
+esac
+# Asking for the feature by hand is asking for the bridge.
+case ",$FEATURES," in
+  *,apple-bridge,*)
+    if [ "$APPLE_BRIDGE_MODE" = "off" ]; then
+      echo "--features apple-bridge contradicts --apple-bridge off" >&2; exit 2
+    fi
+    APPLE_BRIDGE_MODE=require
+    FEATURES="$(printf '%s' ",$FEATURES," | sed -e 's/,apple-bridge,/,/g' -e 's/^,//' -e 's/,$//')"
+    ;;
+esac
 
 if [ "$(uname -s)" != "Darwin" ]; then
   echo "reason=unsupported_platform: the macOS package builds on macOS only" >&2
@@ -60,6 +89,9 @@ for tool in iconutil plutil codesign /usr/libexec/PlistBuddy; do
 done
 
 mkdir -p "$OUT"
+# Absolute from here on: build-apple-bridge.sh changes directory before it
+# writes, so a relative --out would land the bridge library somewhere else.
+OUT="$(cd "$OUT" && pwd)"
 
 PACKAGING="$REPO_ROOT/apps/plaudon-egui/packaging"
 MACOS_DIR="$PACKAGING/macos"
@@ -76,6 +108,44 @@ export CXXFLAGS="${CXXFLAGS:--isystem $SDKROOT/usr/include/c++/v1}"
 export MACOSX_DEPLOYMENT_TARGET="$DEPLOYMENT_TARGET"
 JOBS="${CARGO_BUILD_JOBS:-2}"
 
+# ------------------------------------------------------- apple bridge ----
+# The released v0.1.0 bundle left the bridge out because nothing here could
+# put it in, and the Engines screen then blamed the user's Mac (#306).
+SDK_VERSION="$(xcrun --sdk macosx --show-sdk-version 2>/dev/null || echo unknown)"
+APPLE_BRIDGE="not_linked"
+APPLE_BRIDGE_DETAIL=""
+BRIDGE_LIB_DIR="$OUT/apple-bridge-lib"
+json_safe() { tr -d '"\\' | tr '\n\t' '  ' | cut -c1-300; }
+
+if [ "$SKIP_BUILD" = "1" ]; then
+  # The binary already exists; what it links is read off it further down.
+  APPLE_BRIDGE_DETAIL="--skip-build: decided by inspecting the reused binary"
+elif [ "$APPLE_BRIDGE_MODE" = "off" ]; then
+  APPLE_BRIDGE_DETAIL="--apple-bridge off: this build leaves the Apple bridge out on purpose"
+else
+  echo "==> asking the macOS $SDK_VERSION SDK to build the Apple bridge (--apple-bridge $APPLE_BRIDGE_MODE)"
+  rm -rf "$BRIDGE_LIB_DIR"
+  BRIDGE_LOG="$OUT/apple-bridge-build.log"
+  if PLAUDON_MACOS_DEPLOYMENT_TARGET="$DEPLOYMENT_TARGET" \
+       "$REPO_ROOT/scripts/build-apple-bridge.sh" "$BRIDGE_LIB_DIR" >"$BRIDGE_LOG" 2>&1; then
+    APPLE_BRIDGE="linked"
+    APPLE_BRIDGE_DETAIL="the macOS $SDK_VERSION SDK compiled native/apple-bridge, and it is linked"
+    FEATURES="${FEATURES:+$FEATURES,}apple-bridge"
+    # Link exactly the library that was just compiled rather than building
+    # it a second time inside cargo.
+    export PLAUDON_APPLE_BRIDGE_LIB_DIR="$BRIDGE_LIB_DIR"
+  else
+    FIRST_ERROR="$(grep -m1 'error:' "$BRIDGE_LOG" | json_safe || true)"
+    APPLE_BRIDGE_DETAIL="the macOS $SDK_VERSION SDK could not compile native/apple-bridge${FIRST_ERROR:+: $FIRST_ERROR}"
+    if [ "$APPLE_BRIDGE_MODE" = "require" ]; then
+      echo "reason=missing_tool: --apple-bridge require, but $APPLE_BRIDGE_DETAIL" >&2
+      tail -n 40 "$BRIDGE_LOG" >&2
+      exit 1
+    fi
+    echo "==> leaving the Apple bridge out: $APPLE_BRIDGE_DETAIL"
+  fi
+fi
+
 BUILD_ARGS=(build --release -j "$JOBS" -p plaudon-egui)
 [ -n "$FEATURES" ] && BUILD_ARGS+=(--features "$FEATURES")
 
@@ -91,6 +161,28 @@ if [ ! -x "$BINARY" ]; then
   echo "reason=missing_binary: $BINARY was not produced" >&2
   exit 1
 fi
+
+# A report line is a claim about a binary, so the binary is inspected. The
+# bridge's entry point is present exactly when it is linked, and an unlinked
+# build must carry nothing Apple at all.
+if nm "$BINARY" 2>/dev/null | grep -q plaudon_apple_probe_speech; then
+  if [ "$APPLE_BRIDGE" != "linked" ] && [ "$SKIP_BUILD" = "0" ]; then
+    echo "reason=missing_binary: the bridge was meant to be left out, but $BINARY contains it" >&2
+    exit 1
+  fi
+  APPLE_BRIDGE="linked"
+else
+  if [ "$APPLE_BRIDGE" = "linked" ]; then
+    echo "reason=missing_binary: the bridge was built, but $BINARY does not contain plaudon_apple_probe_speech" >&2
+    exit 1
+  fi
+  "$REPO_ROOT/scripts/check-no-apple-symbols.sh" "$BINARY" >/dev/null || {
+    echo "reason=missing_binary: the bridge is reported as not linked, but scripts/check-no-apple-symbols.sh found Apple symbols in $BINARY" >&2
+    exit 1
+  }
+fi
+rm -rf "$BRIDGE_LIB_DIR"
+echo "==> apple bridge: $APPLE_BRIDGE ($APPLE_BRIDGE_DETAIL)"
 
 # The user-local automation CLI ships alongside the app, not inside it
 # (EPIC M, spec 14.5): it is a separate, separately signed deliverable.
@@ -293,6 +385,9 @@ cat > "$REPORT" <<JSON
   "data_directory": "$DATA_DIR",
   "minimum_system_version": "$DEPLOYMENT_TARGET",
   "cargo_features": "${FEATURES:-none}",
+  "apple_bridge": "$APPLE_BRIDGE",
+  "apple_bridge_detail": "$APPLE_BRIDGE_DETAIL",
+  "macos_sdk_version": "$SDK_VERSION",
   "signature_status": "$SIGN_STATUS",
   "signature_detail": "$SIGN_DETAIL",
   "notarization_status": "$NOTARY_STATUS",
@@ -315,6 +410,7 @@ echo "sha256:   $APP_SHA"
 echo "data dir: $DATA_DIR"
 echo "signature: $SIGN_STATUS ($SIGN_DETAIL)"
 echo "notarization: $NOTARY_STATUS ($NOTARY_DETAIL)"
+echo "apple bridge: $APPLE_BRIDGE ($APPLE_BRIDGE_DETAIL)"
 
 if [ "$SIGN_STATUS" != "verified" ] || [ "$NOTARY_STATUS" != "verified" ]; then
   echo "reason=missing_credential: the artifact is built and verifiable but NOT publishable" >&2

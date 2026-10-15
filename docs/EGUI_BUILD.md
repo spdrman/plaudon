@@ -165,9 +165,17 @@ export SDKROOT=$(xcrun --show-sdk-path)
 export CXXFLAGS="-isystem $SDKROOT/usr/include/c++/v1"
 scripts/package-macos-egui.sh                       # dist/macos-egui/
 scripts/package-macos-egui.sh --evidence ci-artifacts/evidence
-scripts/package-macos-egui.sh --features apple-bridge
+scripts/package-macos-egui.sh --apple-bridge require  # fail unless the bridge links
+scripts/package-macos-egui.sh --apple-bridge off      # leave the bridge out on purpose
 scripts/package-macos-egui.sh --skip-build          # reuse target/release/plaudon-egui
 ```
+
+`--apple-bridge auto` is the default: the script runs `scripts/build-apple-bridge.sh` against the
+active SDK, adds the `apple-bridge` feature when it compiles and leaves it out when it does not.
+`--features apple-bridge` means `--apple-bridge require`. Either way the signing report carries
+`apple_bridge` (`linked` or `not_linked`) and `apple_bridge_detail`, and the claim is checked on the
+binary: the bridge entry point must be present when linked, and `scripts/check-no-apple-symbols.sh`
+must pass when not.
 
 There is no bundler in the egui build, so the script *is* the bundler. It lays out
 
@@ -411,12 +419,14 @@ release, merge back — with no external script beyond the two packaging scripts
 
 `workflow_dispatch` runs the two build jobs and stops: artifacts, no tag, no release, no merge.
 
-**The macOS bundle is built without `apple-bridge`, and that is a gap rather than a preference.**
-`native/apple-bridge` uses `SpeechTranscriber`, `AssetInventory` and `LanguageModelError`, so it
-compiles only against the macOS 27 SDK; no hosted runner image has one (macos-15 carries Xcode 16.4,
-macos-26 tops out at Xcode 26.6, and both were tried). Until an image ships Xcode 27 the released
-bundle reports the Apple engines as unavailable in this build, and `cargo_features` in the signing
-report says what was actually built.
+**The packager decides `apple-bridge`, not the workflow (#306).** The `macos` job passes
+`--apple-bridge auto`, which compiles `native/apple-bridge` against the runner's SDK and links it
+when that works. The bridge uses `SpeechTranscriber`, `AssetInventory` and `LanguageModelError`, so
+it needs the macOS 27 SDK; macos-15 carries Xcode 16.4 and macos-26 tops out at Xcode 26.6, so on
+today's hosted images the bridge is left out. When that happens the signing report records
+`apple_bridge: not_linked` with the compiler's first error in `apple_bridge_detail`, the job raises a
+warning, and the Engines screen says this copy was built without the Apple bridge instead of telling
+the user to update macOS. Once an image ships Xcode 27 the same job links the bridge with no edit.
 
 Signing is optional and fails open into honesty, never into a claim: with no credentials the
 packaging scripts exit 3, which this workflow accepts as "built, not publishable". The `publish`

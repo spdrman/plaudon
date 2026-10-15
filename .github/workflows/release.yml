@@ -113,15 +113,17 @@ jobs:
       # The local whisper engine is what makes a released bundle different
       # from a development one (docs/EGUI_BUILD.md).
       #
-      # `apple-bridge` is deliberately **not** here, and that is a gap rather
-      # than a preference: native/apple-bridge's Swift sources use
-      # `SpeechTranscriber`, `AssetInventory` and — under
-      # `#available(macOS 27.0, *)` — `LanguageModelError`, so the bridge only
-      # compiles against the macOS 27 SDK. No hosted runner image has one:
-      # macos-15 carries Xcode 16.4 and macos-26 tops out at Xcode 26.6, and
-      # both were tried. Until an image ships Xcode 27, a released bundle
-      # reports the Apple engines as unavailable in this build, and
-      # `cargo_features` in the signing report says exactly what was built.
+      # `apple-bridge` is not listed here because the packager decides it:
+      # `--apple-bridge auto` (below) compiles native/apple-bridge against
+      # the runner's SDK and links it when that works (#306). The Swift
+      # sources use `SpeechTranscriber`, `AssetInventory` and, under
+      # `#available(macOS 27.0, *)`, `LanguageModelError`, so the bridge
+      # needs the macOS 27 SDK; macos-15 carries Xcode 16.4 and macos-26
+      # tops out at Xcode 26.6. On those images the bridge is left out, the
+      # signing report's `apple_bridge` says `not_linked` with the compiler's
+      # reason, and the app tells the user the build lacks the bridge rather
+      # than telling them to update macOS. Once an image ships Xcode 27 the
+      # same job links it without an edit here.
       PLAUDON_RELEASE_FEATURES: local-whisper
     steps:
       - uses: actions/checkout@v4
@@ -218,6 +220,7 @@ jobs:
           set +e
           scripts/package-macos-egui.sh \
             --features "$PLAUDON_RELEASE_FEATURES" \
+            --apple-bridge auto \
             --evidence ci-artifacts/evidence
           status=$?
           set -e
@@ -228,6 +231,15 @@ jobs:
           test -f dist/macos-egui/Plaudon.app.zip
           test -f dist/macos-egui/macos-signing-report.json
           cat dist/macos-egui/macos-signing-report.json
+          report=dist/macos-egui/macos-signing-report.json
+          bridge=$(sed -n 's/.*"apple_bridge": "\([^"]*\)".*/\1/p' "$report")
+          detail=$(sed -n 's/.*"apple_bridge_detail": "\([^"]*\)".*/\1/p' "$report")
+          if [ "$bridge" = "linked" ]; then
+            echo "::notice title=Apple bridge linked::$detail"
+          else
+            echo "::warning title=Apple bridge not linked::$detail. This bundle cannot use Apple Speech or the Apple language model on any Mac, and says so on the Engines screen."
+          fi
+          echo "apple_bridge=$bridge" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Launch smoke test
         # The artifact, not the build tree: the zip is unpacked somewhere else

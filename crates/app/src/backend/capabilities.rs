@@ -173,10 +173,11 @@ pub(crate) fn apple_probe_cache() -> std::sync::Arc<ProbeCache> {
 
 /// The two Apple rows, derived from a runtime probe.
 ///
-/// On a build without the bridge — every Windows build, and a macOS build
-/// without the `apple-bridge` feature — the probe answers
-/// `platform_unsupported` without touching an Apple framework, and these
-/// rows say so with the same vocabulary a real refusal would use.
+/// On a build without the bridge (every Windows build, and a macOS build
+/// without the `apple-bridge` feature) the probe answers
+/// `platform_unsupported` without touching an Apple framework. The detail
+/// says which of the two it is, so a bridgeless Mac build blames the build
+/// and not the user's macOS (#306).
 fn apple_engine_entries() -> Vec<EngineInventoryEntry> {
     // Blocking, and bounded at 100 ms by `PROBE_BUDGET`; a cached read is
     // microseconds. Availability is a precondition of every engine decision,
@@ -461,6 +462,44 @@ mod tests {
                 reason.contains("whisper.cpp"),
                 "no alternative offered: {reason}"
             );
+        }
+    }
+
+    #[test]
+    fn issue_306_a_macos_build_without_the_bridge_says_the_build_lacks_it() {
+        // The Engines screen of the released bundle told the user to update
+        // macOS for something the build itself left out.
+        if !cfg!(target_os = "macos") || cfg!(feature = "apple-bridge") {
+            return;
+        }
+        for entry in apple_engine_entries() {
+            let reason = entry
+                .unavailable_reason
+                .expect("an unavailable row says why");
+            assert!(
+                reason.contains("built without the Apple bridge"),
+                "{}: {reason}",
+                entry.engine_id
+            );
+            assert!(
+                !reason.contains("Update macOS") && !reason.contains("not provided by this system"),
+                "{}: {reason}",
+                entry.engine_id
+            );
+        }
+    }
+
+    #[test]
+    fn issue_306_off_macos_the_rows_name_the_os_not_the_build() {
+        if cfg!(target_os = "macos") {
+            return;
+        }
+        for entry in apple_engine_entries() {
+            let reason = entry
+                .unavailable_reason
+                .expect("an unavailable row says why");
+            assert!(reason.contains("only on macOS"), "{reason}");
+            assert!(!reason.contains("Update macOS"), "{reason}");
         }
     }
 
