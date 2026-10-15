@@ -729,7 +729,10 @@ mod tests {
             "SECRET_EXCLUSION_FAILED",
             "INTERNAL_ERROR",
         ] {
-            assert!(codes.contains(&shipped), "{shipped} was dropped from the set");
+            assert!(
+                codes.contains(&shipped),
+                "{shipped} was dropped from the set"
+            );
         }
     }
 
