@@ -29,6 +29,21 @@
       "path": "**/fixtures/speaker-eval/harness-plan.json",
       "pattern": "credential_param",
       "reason": "The diarization harness plan's `session_id` is the name of a scripted synthetic session (`scripted-session-01`), matched because the generic credential-parameter pattern treats any `session_id` as a session token. There is no authentication anywhere in the speaker evaluation: it reads local fixtures only."
+    },
+    {
+      "path": "**/fixtures/speaker-eval/diarization-session-plans.json",
+      "pattern": "credential_param",
+      "reason": "The ADR-0400 condition-4 session timelines name each synthetic session (`librispeech-session-01`..`-03`), and the generic credential-parameter pattern treats any `session_id` as a session token. Same fact as the harness plan above: the speaker evaluation authenticates against nothing, it lays out local LibriSpeech clips from a fixed seed."
+    },
+    {
+      "path": "**/fixtures/speaker-eval/librispeech-plan.json",
+      "pattern": "credential_param",
+      "reason": "The LibriSpeech plan carries the same `session_id` names as the session timelines it shares a run with; see the entry above."
+    },
+    {
+      "path": "**/fixtures/speaker-eval/librispeech-plan.json",
+      "pattern": "device_token_hex",
+      "reason": "Each utterance's `media_sha256` is the content digest that pins the clip bytes the EER run reads — a content address of a file in the corpus, the same shape and the same non-secret as `**/fixtures/eval/corpus.yaml` above."
     }
   ]
 }
