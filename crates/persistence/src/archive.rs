@@ -213,21 +213,27 @@ impl MediaArchive {
     pub fn commit_staged(&self, staging_path: &Path, relative: &str) -> PersistenceResult<PathBuf> {
         self.assert_inside_staging(staging_path)?;
         let target = self.absolute(relative)?;
-        if let Some(parent) = target.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
+        self.create_shard_dir(&target)?;
         if let Err(error) = std::fs::rename(staging_path, &target) {
-            // `CrossesDevices` is the only rename failure we can meaningfully
-            // reclassify; everything else is a real I/O failure.
-            if error.kind() == std::io::ErrorKind::CrossesDevices {
-                return Err(PersistenceError::CrossVolumeCommit);
-            }
-            return Err(PersistenceError::from(error));
+            return Err(classify_rename_error(error));
         }
-        if let Some(parent) = target.parent() {
-            sync_directory(parent)?;
-        }
+        sync_directory(self.shard_dir(&target))?;
         Ok(target)
+    }
+
+    /// The directory an archive-relative target lives in.
+    ///
+    /// [`Self::absolute`] only returns paths with at least one normal
+    /// component under the root, so a target always has a parent; the root is
+    /// the correct answer for the one-component case rather than a branch no
+    /// input can take.
+    fn shard_dir<'a>(&'a self, target: &'a Path) -> &'a Path {
+        target.parent().unwrap_or(self.root.as_path())
+    }
+
+    fn create_shard_dir(&self, target: &Path) -> PersistenceResult<()> {
+        std::fs::create_dir_all(self.shard_dir(target))?;
+        Ok(())
     }
 
     /// Read a blob, verifying it against the identity it is recorded under.
@@ -277,9 +283,11 @@ impl MediaArchive {
             if path.extension().and_then(|e| e.to_str()) != Some("part") {
                 continue;
             }
-            let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
-                continue;
-            };
+            // A `*.part` entry always has a stem, and a name whose bytes are
+            // not UTF-8 cannot be one this application wrote: letting the
+            // parse below refuse it says so without a branch no input can
+            // take.
+            let stem = path.file_stem().unwrap_or_default().to_string_lossy();
             let Ok(intent) = stem.parse::<ImportIntentId>() else {
                 // Not a name this application produces: leave it alone.
                 continue;
@@ -312,9 +320,7 @@ impl MediaArchive {
             let source = self.absolute(relative)?;
             let (digest, length) = Self::digest_file(&source)?;
             let target = destination.absolute(relative)?;
-            if let Some(parent) = target.parent() {
-                std::fs::create_dir_all(parent)?;
-            }
+            destination.create_shard_dir(&target)?;
             std::fs::copy(&source, &target)?;
             let (copied_digest, copied_length) = Self::digest_file(&target)?;
             if copied_digest != digest || copied_length != length {
@@ -412,6 +418,21 @@ fn sync_directory(path: &Path) -> PersistenceResult<()> {
     Ok(())
 }
 
+/// Classify a failed rename out of the staging directory.
+///
+/// `CrossesDevices` is the only rename failure that can be meaningfully
+/// reclassified: it means staging and archive are not on one volume, so the
+/// atomic commit this archive promises is impossible and a copy that only
+/// looks atomic is not an acceptable substitute. Everything else is a real I/O
+/// failure and is reported as one. It is a free function so the classification
+/// can be tested with a real `EXDEV` error instead of a second volume.
+fn classify_rename_error(error: std::io::Error) -> PersistenceError {
+    if error.kind() == std::io::ErrorKind::CrossesDevices {
+        return PersistenceError::CrossVolumeCommit;
+    }
+    PersistenceError::from(error)
+}
+
 /// Free space available at `path`, creating it if needed.
 fn available_space(path: &Path) -> PersistenceResult<u64> {
     std::fs::create_dir_all(path)?;
@@ -429,11 +450,6 @@ fn available_space(path: &Path) -> PersistenceResult<u64> {
             let mut stat: libc::statvfs = std::mem::zeroed();
             (libc::statvfs(c_path.as_ptr(), &raw mut stat), stat)
         };
-        if rc != 0 {
-            // We cannot establish free space; claiming "full" would block a
-            // legitimate relocation, and the copy itself still fails loudly.
-            return Ok(u64::MAX);
-        }
         // `statvfs::f_bavail` is `fsblkcnt_t`, which is 32-bit on macOS and
         // 64-bit on Linux, so the widening cannot be written once: `u64::from`
         // is required on one and a no-op clippy rejects on the other. Both
@@ -443,7 +459,7 @@ fn available_space(path: &Path) -> PersistenceResult<u64> {
         let available = u64::from(stat.f_bavail);
         #[cfg(not(target_os = "macos"))]
         let available = stat.f_bavail;
-        Ok(available.saturating_mul(stat.f_frsize))
+        Ok(space_from_statvfs(rc, available, stat.f_frsize))
     }
     #[cfg(not(unix))]
     {
@@ -451,6 +467,20 @@ fn available_space(path: &Path) -> PersistenceResult<u64> {
         // the copy itself still fails loudly if the volume runs out.
         Ok(u64::MAX)
     }
+}
+
+/// Interpret a `statvfs` result.
+///
+/// A failed call is **not** "full": claiming full would block a legitimate
+/// relocation, and the copy itself still fails loudly if the volume really
+/// runs out. Split from the syscall so both outcomes can be tested on a
+/// machine where `statvfs` always succeeds.
+#[cfg(unix)]
+fn space_from_statvfs(rc: libc::c_int, blocks_available: u64, block_size: u64) -> u64 {
+    if rc != 0 {
+        return u64::MAX;
+    }
+    blocks_available.saturating_mul(block_size)
 }
 
 #[cfg(test)]
@@ -711,5 +741,47 @@ mod tests {
         archive.commit_staged(&staging, &relative).unwrap();
 
         assert_eq!(archive.list_blobs().unwrap(), vec![(relative, 7u64)]);
+    }
+
+    /// A commit across a volume boundary must be refused, not papered over
+    /// with a copy: the archive promises an atomic move (spec 13.3A). The
+    /// kernel error is injected directly because a second volume cannot be
+    /// mounted from a test.
+    #[test]
+    fn a_cross_volume_rename_is_refused_and_other_failures_keep_their_own_meaning() {
+        let exdev = std::io::Error::from_raw_os_error(libc::EXDEV);
+        assert_eq!(exdev.kind(), std::io::ErrorKind::CrossesDevices);
+        assert!(matches!(
+            classify_rename_error(exdev),
+            PersistenceError::CrossVolumeCommit
+        ));
+
+        // A full volume is not a cross-volume commit: it keeps the storage
+        // meaning the user is shown.
+        assert!(matches!(
+            classify_rename_error(std::io::Error::from_raw_os_error(libc::ENOSPC)),
+            PersistenceError::StorageFull
+        ));
+
+        for raw in [libc::EACCES, libc::ENOENT, libc::EISDIR] {
+            let error = classify_rename_error(std::io::Error::from_raw_os_error(raw));
+            assert!(
+                matches!(error, PersistenceError::Io(_)),
+                "errno {raw} must stay an I/O failure, got {error:?}"
+            );
+        }
+    }
+
+    /// A `statvfs` we could not make sense of must not be read as "full": that
+    /// would refuse a relocation the user can actually perform.
+    #[test]
+    fn unreadable_free_space_is_not_reported_as_a_full_volume() {
+        assert_eq!(space_from_statvfs(-1, 0, 0), u64::MAX);
+        assert_eq!(space_from_statvfs(1, 2, 4096), u64::MAX);
+        assert_eq!(space_from_statvfs(0, 0, 4096), 0);
+        assert_eq!(space_from_statvfs(0, 2048, 4096), 8_388_608);
+        // A multiplication that cannot be represented saturates instead of
+        // wrapping to a small number and reporting a full volume.
+        assert_eq!(space_from_statvfs(0, u64::MAX, 4096), u64::MAX);
     }
 }

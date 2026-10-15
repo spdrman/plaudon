@@ -73,8 +73,17 @@ echo "==> measuring branch coverage with $(cargo "+$TOOLCHAIN" --version)"
 
 # The Apple bridge links a Swift static library that is not built in a default
 # checkout, so it is excluded here exactly as it is in the test job.
+#
+# `--all-features` also turns on plaudon-ai-speaker's `onnx` feature, which
+# links a vendored ONNX Runtime through ORT_LIB_LOCATION (ADR-0081 §3). That
+# archive is 83 MB and is not in the repository, so a machine that has not
+# fetched it cannot link the crate and `ort-sys` fails the link with its own
+# "could not link to ONNX Runtime" message. The test and clippy checks already
+# exclude it (scripts/pre-commit.sh, `exclude_feature_tainted`); this run
+# excludes it for the same reason, and the crate keeps its own opt-in check.
 cargo "+$TOOLCHAIN" llvm-cov --workspace --all-features --branch \
   --exclude plaudon-ai-apple \
+  --exclude plaudon-ai-speaker \
   --json --output-path "$OUT"
 
 # A summary for the log; the gate reads the JSON.

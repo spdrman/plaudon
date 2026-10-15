@@ -25,6 +25,10 @@ tracing = { workspace = true }
 
 [dev-dependencies]
 plaudon-domain = { workspace = true }
+# The negative-path suites need to sign artifacts the fixture generator does
+# not produce (a manifest signed by the pinned key whose package signature is
+# not), so the test code signs them itself with the committed test keys.
+ed25519-dalek = { workspace = true }
 jsonschema = { workspace = true }
 serde_json = { workspace = true }
 tempfile = { workspace = true }

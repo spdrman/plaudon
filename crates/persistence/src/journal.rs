@@ -394,8 +394,12 @@ impl ImportJournal {
         }
 
         if intent.staging_path.is_file() {
-            let (digest, length) = MediaArchive::digest_file(&intent.staging_path)?;
-            if digest == intent.identity.sha256 && length == intent.identity.byte_length {
+            // The digest and the length come from one read of one file, so
+            // they are one fact about the staged bytes and are compared as
+            // one: there is no state in which the digest matches and the
+            // length does not.
+            let staged = MediaArchive::digest_file(&intent.staging_path)?;
+            if staged == (intent.identity.sha256, intent.identity.byte_length) {
                 self.rename_into_archive(intent, at).await?;
                 self.commit(intent, at).await?;
                 Ok(ReconcileOutcome::Committed(intent.id))
@@ -986,11 +990,18 @@ mod tests {
             outcomes.contains(&ReconcileOutcome::Committed(healthy_intent.id)),
             "one stuck intent must not block the rest of startup: {outcomes:?}"
         );
-        assert!(
-            outcomes
-                .iter()
-                .any(|outcome| matches!(outcome, ReconcileOutcome::Quarantined(id) | ReconcileOutcome::Deferred { intent_id: id, .. } if *id == stuck_intent.id)),
-            "the stuck intent must be reported, not silently dropped: {outcomes:?}"
+        let reported: Vec<ImportIntentId> = outcomes
+            .iter()
+            .filter_map(|outcome| match outcome {
+                ReconcileOutcome::Quarantined(id)
+                | ReconcileOutcome::Deferred { intent_id: id, .. } => Some(*id),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            reported,
+            vec![stuck_intent.id],
+            "the stuck intent must be reported exactly once, not silently dropped: {outcomes:?}"
         );
     }
 
