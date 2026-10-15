@@ -175,9 +175,18 @@ impl ConnectorDiagnostics {
         table: &CliCompatibilityTable,
     ) -> Self {
         let mut panel = Self::render(status, table);
-        let (headline, detail, next_action) = error_copy(&error, table);
-        headline.clone_into(&mut panel.headline);
-        detail.clone_into(&mut panel.detail);
+        // The two causes that are facts about this computer get the copy that
+        // names where the tool is; the rest are fixed sentences.
+        let (headline, detail, next_action) = match error {
+            SourceError::LocalOnlyMode => local_only_copy(status),
+            SourceError::CliRuntimeMissing => runtime_missing_copy(status),
+            _ => {
+                let (headline, detail, next_action) = error_copy(&error, table);
+                (headline.to_owned(), detail.to_owned(), next_action)
+            }
+        };
+        panel.headline = headline;
+        panel.detail = detail;
         panel.next_action = next_action;
         panel.last_error = Some(plaudon_domain::error::AppError::from(error).code());
         panel
@@ -200,7 +209,7 @@ fn copy_for(
 ) -> (String, String, NextAction) {
     match status.state {
         ConnectorState::Unconfigured => (
-            "PLAUD account not connected".to_owned(),
+            "PLAUD command line tool not found".to_owned(),
             "We could not find the official PLAUD command line tool on this computer. Install it \
              from PLAUD's official documentation, then connect again. You can import recordings \
              by hand at any time without it."
@@ -259,6 +268,8 @@ fn copy_for(
                 .to_owned(),
             NextAction::None,
         ),
+        ConnectorState::LocalOnlyBlocked => local_only_copy(status),
+        ConnectorState::RuntimeMissing => runtime_missing_copy(status),
         ConnectorState::Error => (
             "The PLAUD connector stopped".to_owned(),
             "The last attempt did not finish. Try again; if it keeps failing, import the files \
@@ -267,6 +278,48 @@ fn copy_for(
             NextAction::Retry,
         ),
     }
+}
+
+/// Where the tool was found, as the start of a sentence.
+fn found_where(status: &ConnectorStatus) -> String {
+    let place = status.program_directory.as_deref().map_or_else(
+        || "is installed on this computer".to_owned(),
+        |directory| format!("is installed in {directory}"),
+    );
+    let version = status
+        .detected_version
+        .as_deref()
+        .map(|version| format!(" (version {version})"))
+        .unwrap_or_default();
+    format!("The official PLAUD command line tool {place}{version}")
+}
+
+/// Local-only Mode switched the connector off (#304). Names itself, says that
+/// nothing left this computer, and leaves turning it on to the user.
+fn local_only_copy(status: &ConnectorStatus) -> (String, String, NextAction) {
+    (
+        "Switched off by Local-only Mode".to_owned(),
+        format!(
+            "{}. Local-only Mode is on, so we did not start it. Nothing was sent. To use the \
+             PLAUD connector, turn it on yourself in Privacy settings; we never turn Local-only \
+             Mode off for you.",
+            found_where(status)
+        ),
+        NextAction::ReviewLocalOnlyMode,
+    )
+}
+
+/// The tool is there but its interpreter is not (#304).
+fn runtime_missing_copy(status: &ConnectorStatus) -> (String, String, NextAction) {
+    (
+        "PLAUD CLI found but Node.js is missing".to_owned(),
+        format!(
+            "{}, but it needs Node.js to run and we could not find Node.js. Install Node.js \
+             (for example with Homebrew), then check again.",
+            found_where(status)
+        ),
+        NextAction::InstallCli,
+    )
 }
 
 fn incompatible_detail(status: &ConnectorStatus, table: &CliCompatibilityTable) -> String {
@@ -325,10 +378,23 @@ fn error_copy(
         ),
         SourceError::SourceUnavailable => (
             "PLAUD is not reachable right now",
-            "We could not complete the request. This is usually a temporary network problem. If \
-             Local-only Mode is on, the PLAUD connector is switched off on purpose and no \
-             request was made.",
+            "We could not complete the request. This is usually a temporary network problem. Try \
+             again in a moment.",
+            NextAction::Retry,
+        ),
+        // `for_error` renders these two from the status, which knows where the
+        // tool is; this fixed copy is the fallback.
+        SourceError::LocalOnlyMode => (
+            "Switched off by Local-only Mode",
+            "Local-only Mode is on, so the PLAUD connector is switched off and nothing was sent. \
+             Turn it on yourself in Privacy settings; we never turn Local-only Mode off for you.",
             NextAction::ReviewLocalOnlyMode,
+        ),
+        SourceError::CliRuntimeMissing => (
+            "PLAUD CLI found but Node.js is missing",
+            "The official PLAUD command line tool is installed, but it needs Node.js to run and \
+             we could not find Node.js. Install Node.js, then check again.",
+            NextAction::InstallCli,
         ),
         SourceError::RemoteRateLimited => (
             "PLAUD asked us to slow down",
@@ -388,7 +454,7 @@ mod tests {
         CliCompatibilityTable::committed()
     }
 
-    const ALL_STATES: [ConnectorState; 9] = [
+    const ALL_STATES: [ConnectorState; 11] = [
         ConnectorState::Unconfigured,
         ConnectorState::CliDetected,
         ConnectorState::AuthRequired,
@@ -398,9 +464,11 @@ mod tests {
         ConnectorState::ExpiredAuth,
         ConnectorState::IncompatibleVersion,
         ConnectorState::Error,
+        ConnectorState::LocalOnlyBlocked,
+        ConnectorState::RuntimeMissing,
     ];
 
-    const ALL_ERRORS: [SourceError; 12] = [
+    const ALL_ERRORS: [SourceError; 14] = [
         SourceError::CliMissing,
         SourceError::CliUnsupported,
         SourceError::AuthenticationRequired,
@@ -413,6 +481,8 @@ mod tests {
         SourceError::DownloadInterrupted,
         SourceError::IntegrityFailed,
         SourceError::Cancelled,
+        SourceError::LocalOnlyMode,
+        SourceError::CliRuntimeMissing,
     ];
 
     #[test]
@@ -516,14 +586,182 @@ mod tests {
     }
 
     #[test]
-    fn local_only_mode_is_named_when_the_source_is_unavailable() {
+    fn local_only_mode_is_named_when_it_switched_the_source_off() {
         let panel = ConnectorDiagnostics::for_error(
             &status(ConnectorState::Ready),
-            SourceError::SourceUnavailable,
+            SourceError::LocalOnlyMode,
             table(),
         );
         assert!(panel.detail.contains("Local-only Mode"));
         assert_eq!(panel.next_action, NextAction::ReviewLocalOnlyMode);
+    }
+
+    /// The tool as the reporter has it: Homebrew's npm, a tested release.
+    fn found_at_homebrew(state: ConnectorState) -> ConnectorStatus {
+        let mut status = status(state);
+        status.program_origin = Some(
+            crate::discovery::DiscoveryOrigin::WellKnownLocation
+                .label()
+                .to_owned(),
+        );
+        status.program_directory = Some("/opt/homebrew/bin".to_owned());
+        status.detected_version = Some("0.3.15".to_owned());
+        status.version_validated = true;
+        status
+    }
+
+    #[test]
+    fn issue_304_local_only_names_itself_the_location_and_the_version() {
+        let panel = ConnectorDiagnostics::render(
+            &found_at_homebrew(ConnectorState::LocalOnlyBlocked),
+            table(),
+        );
+        assert_eq!(panel.headline, "Switched off by Local-only Mode");
+        assert!(
+            panel.detail.contains("/opt/homebrew/bin"),
+            "{}",
+            panel.detail
+        );
+        assert!(panel.detail.contains("0.3.15"), "{}", panel.detail);
+        assert!(
+            panel.detail.contains("Nothing was sent"),
+            "{}",
+            panel.detail
+        );
+        assert!(
+            panel
+                .detail
+                .contains("never turn Local-only Mode off for you"),
+            "the way back on must be the user's own explicit act: {}",
+            panel.detail
+        );
+        assert!(
+            !panel.detail.contains("network problem"),
+            "{}",
+            panel.detail
+        );
+        assert_eq!(panel.next_action, NextAction::ReviewLocalOnlyMode);
+        assert_eq!(panel.compatibility, "tested");
+        assert!(panel.program_origin.is_some());
+    }
+
+    #[test]
+    fn issue_304_a_missing_runtime_says_node_is_missing_not_unreachable() {
+        let panel = ConnectorDiagnostics::render(
+            &found_at_homebrew(ConnectorState::RuntimeMissing),
+            table(),
+        );
+        assert_eq!(panel.headline, "PLAUD CLI found but Node.js is missing");
+        assert!(
+            panel.detail.contains("/opt/homebrew/bin"),
+            "{}",
+            panel.detail
+        );
+        assert!(panel.detail.contains("Node.js"), "{}", panel.detail);
+        assert!(!panel.detail.contains("not reachable"), "{}", panel.detail);
+        assert!(!panel.detail.contains("network"), "{}", panel.detail);
+        assert_eq!(panel.next_action, NextAction::InstallCli);
+    }
+
+    #[test]
+    fn issue_304_the_error_copy_for_each_new_cause_is_its_own() {
+        let local = ConnectorDiagnostics::for_error(
+            &status(ConnectorState::LocalOnlyBlocked),
+            SourceError::LocalOnlyMode,
+            table(),
+        );
+        assert_eq!(local.headline, "Switched off by Local-only Mode");
+        assert_eq!(local.next_action, NextAction::ReviewLocalOnlyMode);
+        assert!(!local.detail.contains("network problem"));
+
+        let runtime = ConnectorDiagnostics::for_error(
+            &status(ConnectorState::RuntimeMissing),
+            SourceError::CliRuntimeMissing,
+            table(),
+        );
+        assert_eq!(runtime.headline, "PLAUD CLI found but Node.js is missing");
+        assert_eq!(runtime.next_action, NextAction::InstallCli);
+    }
+
+    #[test]
+    fn issue_304_unreachable_no_longer_hedges_about_local_only_mode() {
+        let panel = ConnectorDiagnostics::for_error(
+            &status(ConnectorState::Error),
+            SourceError::SourceUnavailable,
+            table(),
+        );
+        assert_eq!(panel.headline, "PLAUD is not reachable right now");
+        assert!(
+            !panel.detail.contains("Local-only"),
+            "the user must not have to guess between two unrelated causes: {}",
+            panel.detail
+        );
+        assert_eq!(panel.next_action, NextAction::Retry);
+    }
+
+    #[test]
+    fn issue_304_every_expected_case_has_its_own_headline() {
+        let mut not_installed = status(ConnectorState::Unconfigured);
+        not_installed.last_error = Some(AppErrorCode::CliMissing);
+        let mut unsupported = found_at_homebrew(ConnectorState::IncompatibleVersion);
+        unsupported.detected_version = Some("9.9.9".to_owned());
+        unsupported.version_validated = false;
+        let cases = [
+            (
+                "not installed",
+                ConnectorDiagnostics::render(&not_installed, table()).headline,
+            ),
+            (
+                "unsupported version",
+                ConnectorDiagnostics::render(&unsupported, table()).headline,
+            ),
+            (
+                "not signed in",
+                ConnectorDiagnostics::render(
+                    &found_at_homebrew(ConnectorState::AuthRequired),
+                    table(),
+                )
+                .headline,
+            ),
+            (
+                "local-only",
+                ConnectorDiagnostics::render(
+                    &found_at_homebrew(ConnectorState::LocalOnlyBlocked),
+                    table(),
+                )
+                .headline,
+            ),
+            (
+                "node missing",
+                ConnectorDiagnostics::render(
+                    &found_at_homebrew(ConnectorState::RuntimeMissing),
+                    table(),
+                )
+                .headline,
+            ),
+            (
+                "unreachable",
+                ConnectorDiagnostics::for_error(
+                    &found_at_homebrew(ConnectorState::Error),
+                    SourceError::SourceUnavailable,
+                    table(),
+                )
+                .headline,
+            ),
+        ];
+        for (i, (name, headline)) in cases.iter().enumerate() {
+            for (other, other_headline) in &cases[i + 1..] {
+                assert_ne!(headline, other_headline, "{name} and {other} read the same");
+            }
+            if *name != "unreachable" {
+                assert!(!headline.contains("not reachable"), "{name}: {headline}");
+            }
+        }
+        assert!(
+            cases[0].1.contains("not found"),
+            "not installed must say so: {}",
+            cases[0].1
+        );
     }
 
     #[test]

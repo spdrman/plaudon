@@ -151,6 +151,13 @@ pub enum SourceError {
     /// The operation was cancelled.
     #[error("the operation was cancelled")]
     Cancelled,
+    /// Local-only Mode switched the source off; nothing was launched or sent.
+    #[error("local-only mode switched the source off")]
+    LocalOnlyMode,
+    /// The vendor tool is installed but the runtime it needs (for the PLAUD
+    /// CLI, Node.js) could not be found, so the tool cannot start.
+    #[error("the vendor command line tool is installed but its runtime is missing")]
+    CliRuntimeMissing,
 }
 
 impl From<SourceError> for AppError {
@@ -168,6 +175,12 @@ impl From<SourceError> for AppError {
             SourceError::DownloadInterrupted => AppErrorCode::DownloadInterrupted,
             SourceError::IntegrityFailed => AppErrorCode::IntegrityFailed,
             SourceError::Cancelled => AppErrorCode::Canceled,
+            SourceError::LocalOnlyMode => AppErrorCode::LocalOnlyMode,
+            // The fix is a setup step on this computer (install the runtime),
+            // which is what `CLI_MISSING` and its action already say. The
+            // closed code set stays unchanged; the diagnostics copy names the
+            // runtime.
+            SourceError::CliRuntimeMissing => AppErrorCode::CliMissing,
         };
         Self::new(code, error.to_string())
     }
@@ -250,6 +263,8 @@ mod tests {
             ),
             (SourceError::IntegrityFailed, AppErrorCode::IntegrityFailed),
             (SourceError::Cancelled, AppErrorCode::Canceled),
+            (SourceError::LocalOnlyMode, AppErrorCode::LocalOnlyMode),
+            (SourceError::CliRuntimeMissing, AppErrorCode::CliMissing),
         ];
         for (error, expected) in pairs {
             assert_eq!(AppError::from(error.clone()).code(), expected, "{error:?}");

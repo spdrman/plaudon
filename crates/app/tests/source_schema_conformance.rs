@@ -116,6 +116,30 @@ fn the_connector_snapshot_matches_its_schemas_for_every_next_action() {
 }
 
 #[test]
+fn issue_304_the_new_connector_states_match_the_published_schemas() {
+    for state in [
+        PlaudConnectorState::LocalOnlyBlocked,
+        PlaudConnectorState::RuntimeMissing,
+    ] {
+        let mut snapshot = snapshot(PlaudNextAction::ReviewLocalOnlyMode);
+        snapshot.status.state = state;
+        snapshot.diagnostics.state = state;
+        snapshot.status.last_error = Some(AppErrorCode::LocalOnlyMode);
+        snapshot.diagnostics.last_error = Some(AppErrorCode::LocalOnlyMode);
+        let value = to_value(&snapshot);
+        validate("plaud_probe.response", &value);
+        validate("plaud_connect.response", &value);
+        validate(
+            "plaud_disconnect.response",
+            &to_value(&PlaudDisconnectResponse {
+                disconnect: snapshot.disconnect.clone(),
+                snapshot,
+            }),
+        );
+    }
+}
+
+#[test]
 fn the_connector_requests_and_listing_match_their_schemas() {
     validate(
         "plaud_connect.request",

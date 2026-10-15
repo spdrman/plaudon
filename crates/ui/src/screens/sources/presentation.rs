@@ -31,6 +31,8 @@ pub const fn state_label(state: PlaudConnectorState) -> &'static str {
         PlaudConnectorState::ExpiredAuth => "Session expired",
         PlaudConnectorState::IncompatibleVersion => "Untested version",
         PlaudConnectorState::Error => "Stopped",
+        PlaudConnectorState::LocalOnlyBlocked => "Switched off by Local-only Mode",
+        PlaudConnectorState::RuntimeMissing => "Node.js missing",
     }
 }
 
@@ -38,7 +40,7 @@ pub const fn state_label(state: PlaudConnectorState) -> &'static str {
 #[must_use]
 pub const fn state_badge(state: PlaudConnectorState) -> Badge {
     match state {
-        PlaudConnectorState::Unconfigured => Badge {
+        PlaudConnectorState::Unconfigured | PlaudConnectorState::LocalOnlyBlocked => Badge {
             glyph: "•",
             tone: Tone::Neutral,
         },
@@ -56,7 +58,8 @@ pub const fn state_badge(state: PlaudConnectorState) -> Badge {
         },
         PlaudConnectorState::AuthRequired
         | PlaudConnectorState::ExpiredAuth
-        | PlaudConnectorState::IncompatibleVersion => Badge {
+        | PlaudConnectorState::IncompatibleVersion
+        | PlaudConnectorState::RuntimeMissing => Badge {
             glyph: "!",
             tone: Tone::Warning,
         },
@@ -145,6 +148,56 @@ pub fn next_action_control(action: &PlaudNextAction) -> Option<NextActionControl
             run: ControlRun::Connect,
         }),
     }
+}
+
+/// The control for `action`, worded for the state it is shown in.
+///
+/// In [`PlaudConnectorState::LocalOnlyBlocked`] the review control is the only
+/// way the connector comes on, so it says so (#304). It still only opens
+/// Privacy settings: the choice to leave Local-only Mode is the user's.
+#[must_use]
+pub fn next_action_control_in(
+    state: PlaudConnectorState,
+    action: &PlaudNextAction,
+) -> Option<NextActionControl> {
+    match (state, next_action_control(action)) {
+        (
+            PlaudConnectorState::LocalOnlyBlocked,
+            Some(NextActionControl::Action {
+                run: ControlRun::ReviewLocalOnlyMode,
+                ..
+            }),
+        ) => Some(NextActionControl::Action {
+            label: "Turn on the PLAUD connector\u{2026}",
+            run: ControlRun::ReviewLocalOnlyMode,
+        }),
+        (_, control) => control,
+    }
+}
+
+/// Whether the panel offers "Check again", which re-runs discovery and the
+/// version probe. Only for states a change on this computer can fix.
+#[must_use]
+pub const fn offers_check_again(state: PlaudConnectorState) -> bool {
+    matches!(
+        state,
+        PlaudConnectorState::Unconfigured
+            | PlaudConnectorState::IncompatibleVersion
+            | PlaudConnectorState::LocalOnlyBlocked
+            | PlaudConnectorState::RuntimeMissing
+    )
+}
+
+/// Whether there is anything to disconnect. A connector that never got past
+/// finding the tool has no session and no association to drop.
+#[must_use]
+pub const fn offers_disconnect(state: PlaudConnectorState) -> bool {
+    !matches!(
+        state,
+        PlaudConnectorState::Unconfigured
+            | PlaudConnectorState::LocalOnlyBlocked
+            | PlaudConnectorState::RuntimeMissing
+    )
 }
 
 /// Versions the diagnostics says would work, if it names any.
@@ -279,6 +332,8 @@ mod tests {
             PlaudConnectorState::ExpiredAuth,
             PlaudConnectorState::IncompatibleVersion,
             PlaudConnectorState::Error,
+            PlaudConnectorState::LocalOnlyBlocked,
+            PlaudConnectorState::RuntimeMissing,
         ];
         let mut labels: Vec<&str> = states.iter().copied().map(state_label).collect();
         labels.sort_unstable();

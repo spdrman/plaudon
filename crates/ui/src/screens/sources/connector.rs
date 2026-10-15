@@ -6,13 +6,13 @@
 //! text anywhere in the payload to forward.
 
 use egui::Ui;
-use plaudon_app::dto::{PlaudConnectorSnapshot, PlaudConnectorState};
+use plaudon_app::dto::PlaudConnectorSnapshot;
 
 use crate::screens::devices::badge::badge_inline;
 
 use super::presentation::{
-    compatibility_label, next_action_control, state_badge, state_label, usable_versions,
-    ControlRun, NextActionControl,
+    compatibility_label, next_action_control_in, offers_check_again, offers_disconnect,
+    state_badge, state_label, usable_versions, ControlRun, NextActionControl,
 };
 
 /// What the panel asked the screen to do.
@@ -82,7 +82,7 @@ pub fn connector_panel(
     }
 
     ui.horizontal(|ui| {
-        match next_action_control(&diagnostics.next_action) {
+        match next_action_control_in(diagnostics.state, &diagnostics.next_action) {
             Some(NextActionControl::Link { label, href })
                 if ui.add_enabled(!busy, egui::Button::new(label)).clicked() =>
             {
@@ -95,18 +95,16 @@ pub fn connector_panel(
             }
             Some(_) | None => {}
         }
-        if matches!(
-            diagnostics.state,
-            PlaudConnectorState::Unconfigured | PlaudConnectorState::IncompatibleVersion
-        ) && ui
-            .add_enabled(!busy, egui::Button::new("Check again"))
-            .clicked()
+        if offers_check_again(diagnostics.state)
+            && ui
+                .add_enabled(!busy, egui::Button::new("Check again"))
+                .clicked()
         {
             actions.push(ConnectorAction::Run(ControlRun::Retry));
         }
     });
 
-    if diagnostics.state != PlaudConnectorState::Unconfigured {
+    if offers_disconnect(diagnostics.state) {
         ui.separator();
         ui.label(snapshot.disconnect.body.clone());
         if ui

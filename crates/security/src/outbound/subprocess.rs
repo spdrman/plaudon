@@ -191,16 +191,139 @@ impl GatedCommand {
     }
 }
 
+/// Directories where the runtime the cloud CLI needs is commonly installed.
+///
+/// `@plaud-ai/cli` is a Node.js script (`#!/usr/bin/env node`). An app
+/// launched from Finder or the Dock inherits launchd's minimal `PATH`
+/// (`/usr/bin:/bin:/usr/sbin:/sbin`), where `env` cannot find `node` even
+/// though Homebrew or the official installer put it here (#304). This is a
+/// fixed allowlist of package-manager prefixes, never the output of a login
+/// shell: running the user's shell profile to learn a `PATH` would execute
+/// arbitrary user code before every launch.
+#[cfg(not(windows))]
+pub const CLOUD_CLI_RUNTIME_DIRS: &[&str] =
+    &["/opt/homebrew/bin", "/usr/local/bin", "/opt/local/bin"];
+/// Directories where the runtime the cloud CLI needs is commonly installed.
+///
+/// Empty on Windows: the tool there is a native `plaud.exe` and nothing is
+/// resolved through `PATH` on its behalf.
+#[cfg(windows)]
+pub const CLOUD_CLI_RUNTIME_DIRS: &[&str] = &[];
+
+/// The environment a cloud-CLI child is started with.
+///
+/// Production uses [`CliChildEnvironment::ambient`]: the scrubbed parent
+/// environment and [`CLOUD_CLI_RUNTIME_DIRS`]. Tests inject a minimal one to
+/// reproduce a Finder launch without touching the process environment.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CliChildEnvironment {
+    base: BTreeMap<String, String>,
+    runtime_dirs: Vec<PathBuf>,
+}
+
+impl CliChildEnvironment {
+    /// The scrubbed environment of this process and the fixed runtime dirs.
+    #[must_use]
+    pub fn ambient() -> Self {
+        Self::new(
+            scrubbed_env(),
+            CLOUD_CLI_RUNTIME_DIRS.iter().map(PathBuf::from).collect(),
+        )
+    }
+
+    /// An explicit base environment and runtime directory list. The base is
+    /// scrubbed exactly like the ambient one, so a test cannot smuggle a
+    /// secret into a child either.
+    #[must_use]
+    pub fn new(base: BTreeMap<String, String>, runtime_dirs: Vec<PathBuf>) -> Self {
+        Self {
+            base: base
+                .into_iter()
+                .filter(|(name, _)| !is_stripped_env(name))
+                .collect(),
+            runtime_dirs,
+        }
+    }
+
+    /// The environment for one launch of `program`.
+    #[must_use]
+    pub fn env_for(&self, program: &Path) -> BTreeMap<String, String> {
+        let mut env = self.base.clone();
+        let path = cloud_cli_search_path(
+            program,
+            self.base.get("PATH").map(String::as_str),
+            &self.runtime_dirs,
+        );
+        if !path.is_empty() {
+            env.insert("PATH".to_owned(), path);
+        }
+        env
+    }
+}
+
+/// The `PATH` a cloud-CLI child gets.
+///
+/// In order, without duplicates: the directory the tool itself was found in
+/// (npm puts `plaud` next to the `node` that installed it), the absolute
+/// entries of the ambient `PATH`, then [`CLOUD_CLI_RUNTIME_DIRS`]. Relative
+/// entries are dropped, because they resolve against a working directory we do
+/// not control.
+#[must_use]
+pub fn cloud_cli_search_path(
+    program: &Path,
+    ambient_path: Option<&str>,
+    runtime_dirs: &[PathBuf],
+) -> String {
+    let mut entries: Vec<PathBuf> = Vec::new();
+    let mut push = |entry: PathBuf| {
+        if entry.is_absolute() && !entries.contains(&entry) {
+            entries.push(entry);
+        }
+    };
+    if let Some(directory) = program.parent() {
+        push(directory.to_path_buf());
+    }
+    if let Some(ambient) = ambient_path {
+        std::env::split_paths(ambient).for_each(&mut push);
+    }
+    runtime_dirs.iter().cloned().for_each(&mut push);
+    std::env::join_paths(&entries).map_or_else(
+        // An entry holding the separator itself cannot be joined; such an
+        // entry is unusable as a search directory anyway, so drop it.
+        |_| {
+            let usable: Vec<&PathBuf> = entries
+                .iter()
+                .filter(|entry| std::env::join_paths([entry]).is_ok())
+                .collect();
+            std::env::join_paths(usable)
+                .map(|joined| joined.to_string_lossy().into_owned())
+                .unwrap_or_default()
+        },
+        |joined| joined.to_string_lossy().into_owned(),
+    )
+}
+
 /// The only launcher for the network-capable cloud CLI.
 #[derive(Debug, Clone)]
 pub struct GatedProcessLauncher {
     policy: Arc<OutboundPolicy>,
+    child_environment: Option<Arc<CliChildEnvironment>>,
 }
 
 impl GatedProcessLauncher {
     #[must_use]
     pub fn new(policy: Arc<OutboundPolicy>) -> Self {
-        Self { policy }
+        Self {
+            policy,
+            child_environment: None,
+        }
+    }
+
+    /// Start children with this environment instead of the ambient one.
+    #[must_use]
+    pub fn with_child_environment(mut self, environment: CliChildEnvironment) -> Self {
+        self.child_environment = Some(Arc::new(environment));
+        self
     }
 
     /// Prepare a launch of the discovered cloud CLI.
@@ -237,7 +360,10 @@ impl GatedProcessLauncher {
             ticket,
             program: discovered_program.to_path_buf(),
             args: rendered,
-            env: scrubbed_env(),
+            env: self.child_environment.as_ref().map_or_else(
+                || CliChildEnvironment::ambient().env_for(discovered_program),
+                |environment| environment.env_for(discovered_program),
+            ),
             timeout: Duration::from_secs(120),
             max_output_bytes: 8 * 1024 * 1024,
         })
@@ -450,6 +576,68 @@ mod tests {
             CliArg::Identifier(long).render().unwrap_err(),
             ArgError::TooLong
         );
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn issue_304_child_path_adds_the_tool_dir_and_the_runtime_allowlist() {
+        // A Finder launch: launchd's PATH, which holds no node.
+        let path = cloud_cli_search_path(
+            Path::new("/opt/homebrew/bin/plaud"),
+            Some("/usr/bin:/bin:/usr/sbin:/sbin"),
+            &[
+                PathBuf::from("/opt/homebrew/bin"),
+                PathBuf::from("/usr/local/bin"),
+            ],
+        );
+        assert_eq!(
+            path, "/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin",
+            "the tool's own directory first, the ambient PATH, then the allowlist, deduplicated"
+        );
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn issue_304_child_path_drops_relative_entries_and_survives_no_path() {
+        let path = cloud_cli_search_path(
+            Path::new("/Users/u/.npm-global/bin/plaud"),
+            Some(".:bin::/usr/bin"),
+            &[PathBuf::from("/usr/local/bin")],
+        );
+        assert_eq!(path, "/Users/u/.npm-global/bin:/usr/bin:/usr/local/bin");
+        let path = cloud_cli_search_path(Path::new("/usr/local/bin/plaud"), None, &[]);
+        assert_eq!(path, "/usr/local/bin");
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn issue_304_the_prepared_command_carries_the_widened_path_and_no_secret() {
+        let l = launcher(OutboundPolicy::network_permitted(NetworkGrant::new(
+            ApprovalSource::TestHarness,
+            0,
+            "privacy-v1",
+        )))
+        .with_child_environment(CliChildEnvironment::new(
+            BTreeMap::from([
+                ("PATH".to_owned(), "/usr/bin:/bin".to_owned()),
+                ("PLAUD_TOKEN".to_owned(), "nope".to_owned()),
+                ("HOME".to_owned(), "/Users/u".to_owned()),
+            ]),
+            vec![PathBuf::from("/opt/homebrew/bin")],
+        ));
+        let cmd = l
+            .prepare_cloud_cli(
+                Path::new("/usr/local/bin/plaud"),
+                &[CliArg::Literal("version")],
+                EgressPurpose::Diagnostic,
+            )
+            .unwrap();
+        assert_eq!(
+            cmd.env().get("PATH").map(String::as_str),
+            Some("/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin")
+        );
+        assert!(!cmd.env().contains_key("PLAUD_TOKEN"));
+        assert_eq!(cmd.env().get("HOME").map(String::as_str), Some("/Users/u"));
     }
 
     #[test]

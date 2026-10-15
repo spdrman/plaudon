@@ -215,6 +215,113 @@ fn local_only_mode_is_reviewed_in_settings_not_worked_around() {
 }
 
 #[test]
+fn issue_304_local_only_reads_switched_off_names_the_location_and_offers_an_explicit_way_on() {
+    let mut app = SourcesApp::new();
+    let mut snapshot = fixtures::connector(
+        PlaudConnectorState::LocalOnlyBlocked,
+        "Switched off by Local-only Mode",
+        "The official PLAUD command line tool is installed in /opt/homebrew/bin (version 0.3.15). Nothing was sent.",
+        PlaudNextAction::ReviewLocalOnlyMode,
+    );
+    snapshot.diagnostics.detected_version = Some("0.3.15".to_owned());
+    snapshot.diagnostics.program_origin = Some("standard installation directory".to_owned());
+    app.state.applied(SourceOutcome::Snapshot(snapshot));
+    let mut harness = harness(app);
+    harness.run();
+
+    assert!(says(&harness, "Switched off by Local-only Mode"));
+    assert!(says(&harness, "Tool version: 0.3.15"));
+    assert!(says(&harness, "Found in: standard installation directory"));
+    assert!(!says(&harness, "Found in: Not found"));
+    assert!(!says(&harness, "not reachable"));
+
+    harness
+        .get_by_label("Turn on the PLAUD connector\u{2026}")
+        .click();
+    harness.run();
+    assert_eq!(
+        harness.state().intents,
+        vec![SourceIntent::OpenPrivacySettings],
+        "the only way on is the user's own choice in Privacy settings; nothing is switched silently"
+    );
+}
+
+#[test]
+fn issue_304_node_missing_reads_as_its_own_state_and_can_be_checked_again() {
+    let mut app = SourcesApp::new();
+    app.state
+        .applied(SourceOutcome::Snapshot(fixtures::connector(
+            PlaudConnectorState::RuntimeMissing,
+            "PLAUD CLI found but Node.js is missing",
+            "The official PLAUD command line tool is installed in /opt/homebrew/bin, but Node.js could not be found.",
+            PlaudNextAction::InstallCli,
+        )));
+    let mut harness = harness(app);
+    harness.run();
+
+    assert!(says(&harness, "PLAUD CLI found but Node.js is missing"));
+    assert!(says(&harness, "Node.js missing"));
+    assert!(!says(&harness, "not reachable"));
+    harness.get_by_label("Check again").click();
+    harness.run();
+    assert!(harness.state().intents.contains(&SourceIntent::Probe));
+}
+
+/// The two panels #304 corrects, as committed baselines (compared on MARS
+/// only, see `plaudon_ui_testkit::visual`). The copy is the diagnostics
+/// layer's own wording for the reporter's machine.
+#[test]
+fn issue_304_visual_the_corrected_connector_panels() {
+    let cases = [
+        (
+            "issue_304_local_only_blocked",
+            PlaudConnectorState::LocalOnlyBlocked,
+            "Switched off by Local-only Mode",
+            "The official PLAUD command line tool is installed in /opt/homebrew/bin (version \
+             0.3.15). Local-only Mode is on, so we did not start it. Nothing was sent. To use the \
+             PLAUD connector, turn it on yourself in Privacy settings; we never turn Local-only \
+             Mode off for you.",
+            PlaudNextAction::ReviewLocalOnlyMode,
+        ),
+        (
+            "issue_304_runtime_missing",
+            PlaudConnectorState::RuntimeMissing,
+            "PLAUD CLI found but Node.js is missing",
+            "The official PLAUD command line tool is installed in /opt/homebrew/bin (version \
+             0.3.15), but it needs Node.js to run and we could not find Node.js. Install Node.js \
+             (for example with Homebrew), then check again.",
+            PlaudNextAction::InstallCli,
+        ),
+    ];
+    for (name, state, headline, detail, action) in cases {
+        let mut app = SourcesApp::new();
+        let mut snapshot = fixtures::connector(state, headline, detail, action);
+        snapshot.diagnostics.detected_version = Some("0.3.15".to_owned());
+        snapshot.diagnostics.program_origin = Some("standard installation directory".to_owned());
+        // The reporter's release is a tested one, and nothing has been listed.
+        snapshot.diagnostics.compatibility = plaudon_app::dto::PlaudCompatibility::Tested;
+        snapshot.diagnostics.warnings.clear();
+        snapshot.status.version_validated = true;
+        snapshot.status.listing_possibly_incomplete = false;
+        snapshot.status.scraping_warning = false;
+        app.state.applied(SourceOutcome::Snapshot(snapshot));
+        let mut harness = plaudon_ui_testkit::builder()
+            .with_size(egui::vec2(1000.0, 560.0))
+            .build_ui_state(
+                |ui, app: &mut SourcesApp| {
+                    let intents = sources_screen(ui, &mut app.state);
+                    app.intents.extend(intents);
+                },
+                app,
+            );
+        harness.run();
+        assert!(says(&harness, headline));
+        assert!(!says(&harness, "Found in: Not found"));
+        plaudon_ui_testkit::visual::assert_snapshot(&mut harness, name);
+    }
+}
+
+#[test]
 fn the_disconnect_wording_is_the_one_the_snapshot_carries() {
     let mut app = SourcesApp::new();
     app.state

@@ -806,13 +806,15 @@ async fn local_only_mode_never_launches_the_vendor_tool() {
         .connect(Some(&mock.discovered()), &intent())
         .await
         .unwrap_err();
-    assert_eq!(error, SourceError::SourceUnavailable);
+    // #304: the refusal keeps its own name instead of reading as an outage.
+    assert_eq!(error, SourceError::LocalOnlyMode);
     assert!(
         mock.invocations().is_empty(),
         "spec 22(15): Local-only Mode must never launch the PLAUD Cloud CLI"
     );
     let panel = connector.diagnostics();
-    assert!(matches!(panel.state, ConnectorState::Unconfigured));
+    assert!(matches!(panel.state, ConnectorState::LocalOnlyBlocked));
+    assert!(panel.program_origin.is_some(), "the tool was found on disk");
 }
 
 #[tokio::test]
