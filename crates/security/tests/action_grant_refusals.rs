@@ -62,13 +62,18 @@ fn a_catalogue_url_that_names_more_than_one_file_is_not_a_download_scope() {
 
     // The delivery domain is stored lowercased, as hosts are compared.
     let scope = ActionScope::model_download(&url(), Some("CDN.Example.ORG")).unwrap();
-    assert_eq!(scope.delivery_host_suffix.as_deref(), Some("cdn.example.org"));
+    assert_eq!(
+        scope.delivery_host_suffix.as_deref(),
+        Some("cdn.example.org")
+    );
 }
 
 #[test]
 fn the_approved_path_with_a_query_or_fragment_is_not_the_approved_file() {
     let grant = download(None);
-    grant.authorize_url(&url()).expect("the approved file itself");
+    grant
+        .authorize_url(&url())
+        .expect("the approved file itself");
     for refused in [format!("{}?token=1", url()), format!("{}#frag", url())] {
         let error = grant
             .authorize_url(&refused)
