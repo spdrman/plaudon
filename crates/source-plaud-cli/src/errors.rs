@@ -320,6 +320,58 @@ mod tests {
     }
 
     #[test]
+    fn issue_304_env_failing_to_find_node_is_a_missing_runtime_not_a_missing_recording() {
+        // The reporter's exact output from a Finder-launched app, plus the GNU
+        // coreutils spellings of the same failure.
+        for stderr in [
+            "env: node: No such file or directory",
+            "env: node: No such file or directory\n",
+            "/usr/bin/env: 'node': No such file or directory",
+            "/usr/bin/env: \u{2018}node\u{2019}: No such file or directory",
+        ] {
+            for command in [CliCommand::Version, CliCommand::files(), CliCommand::Login] {
+                assert_eq!(
+                    classify(&output(Some(127), stderr), &command),
+                    Some(SourceError::CliRuntimeMissing),
+                    "{stderr:?} for {command:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn issue_304_a_runtime_message_wins_even_without_exit_127() {
+        // Some shells report the same exec failure with 126 or 1; the message
+        // is what identifies it.
+        for code in [Some(1), Some(126), Some(127)] {
+            assert_eq!(
+                classify(
+                    &output(code, "env: node: No such file or directory"),
+                    &CliCommand::files()
+                ),
+                Some(SourceError::CliRuntimeMissing),
+                "{code:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn issue_304_a_recording_the_tool_cannot_find_is_still_asset_not_found() {
+        // The fix must not swallow the genuine "no such recording" cases.
+        for stderr in [
+            "\u{2717} [NOT_FOUND] File not found: rec_1",
+            "no such recording",
+            "Error: no such file rec_1 in your account",
+        ] {
+            assert_eq!(
+                classify(&output(Some(1), stderr), &CliCommand::files()),
+                Some(SourceError::AssetNotFound),
+                "{stderr:?}"
+            );
+        }
+    }
+
+    #[test]
     fn transient_and_user_action_sets_are_disjoint() {
         let all = [
             SourceError::CliMissing,
@@ -334,6 +386,8 @@ mod tests {
             SourceError::DownloadInterrupted,
             SourceError::IntegrityFailed,
             SourceError::Cancelled,
+            SourceError::LocalOnlyMode,
+            SourceError::CliRuntimeMissing,
         ];
         for error in all {
             assert!(

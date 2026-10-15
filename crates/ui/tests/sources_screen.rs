@@ -215,6 +215,59 @@ fn local_only_mode_is_reviewed_in_settings_not_worked_around() {
 }
 
 #[test]
+fn issue_304_local_only_reads_switched_off_names_the_location_and_offers_an_explicit_way_on() {
+    let mut app = SourcesApp::new();
+    let mut snapshot = fixtures::connector(
+        PlaudConnectorState::LocalOnlyBlocked,
+        "Switched off by Local-only Mode",
+        "The official PLAUD command line tool is installed in /opt/homebrew/bin (version 0.3.15). Nothing was sent.",
+        PlaudNextAction::ReviewLocalOnlyMode,
+    );
+    snapshot.diagnostics.detected_version = Some("0.3.15".to_owned());
+    snapshot.diagnostics.program_origin = Some("standard installation directory".to_owned());
+    app.state.applied(SourceOutcome::Snapshot(snapshot));
+    let mut harness = harness(app);
+    harness.run();
+
+    assert!(says(&harness, "Switched off by Local-only Mode"));
+    assert!(says(&harness, "Tool version: 0.3.15"));
+    assert!(says(&harness, "Found in: standard installation directory"));
+    assert!(!says(&harness, "Found in: Not found"));
+    assert!(!says(&harness, "not reachable"));
+
+    harness
+        .get_by_label("Turn on the PLAUD connector\u{2026}")
+        .click();
+    harness.run();
+    assert_eq!(
+        harness.state().intents,
+        vec![SourceIntent::OpenPrivacySettings],
+        "the only way on is the user's own choice in Privacy settings; nothing is switched silently"
+    );
+}
+
+#[test]
+fn issue_304_node_missing_reads_as_its_own_state_and_can_be_checked_again() {
+    let mut app = SourcesApp::new();
+    app.state
+        .applied(SourceOutcome::Snapshot(fixtures::connector(
+            PlaudConnectorState::RuntimeMissing,
+            "PLAUD CLI found but Node.js is missing",
+            "The official PLAUD command line tool is installed in /opt/homebrew/bin, but Node.js could not be found.",
+            PlaudNextAction::InstallCli,
+        )));
+    let mut harness = harness(app);
+    harness.run();
+
+    assert!(says(&harness, "PLAUD CLI found but Node.js is missing"));
+    assert!(says(&harness, "Node.js missing"));
+    assert!(!says(&harness, "not reachable"));
+    harness.get_by_label("Check again").click();
+    harness.run();
+    assert!(harness.state().intents.contains(&SourceIntent::Probe));
+}
+
+#[test]
 fn the_disconnect_wording_is_the_one_the_snapshot_carries() {
     let mut app = SourcesApp::new();
     app.state

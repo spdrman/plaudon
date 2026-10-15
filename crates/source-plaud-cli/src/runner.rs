@@ -132,6 +132,10 @@ pub enum RunError {
     /// The executable could not be started.
     #[error("the vendor tool could not be started")]
     StartFailed,
+    /// The executable exists, but the interpreter its `#!` line names could
+    /// not be found, so the kernel refused to start it (#304).
+    #[error("the vendor tool's interpreter could not be found")]
+    InterpreterMissing,
     /// The child exceeded its wall-clock budget and was killed.
     #[error("the vendor tool did not finish within its time budget")]
     Timeout,
@@ -154,9 +158,10 @@ impl From<RunError> for SourceError {
             // Local-only Mode is a user setting, not a vendor failure. It is
             // reported as "the source is unavailable" and the diagnostics layer
             // explains which setting to change.
-            RunError::Denied { .. } | RunError::StartFailed | RunError::Timeout => {
-                Self::SourceUnavailable
-            }
+            RunError::Denied { .. }
+            | RunError::StartFailed
+            | RunError::InterpreterMissing
+            | RunError::Timeout => Self::SourceUnavailable,
             RunError::UnsafeArgument
             | RunError::OutputTooLarge { .. }
             | RunError::NonUtf8Output => Self::MalformedOutput,
@@ -631,6 +636,127 @@ mod tests {
             .await
             .unwrap_err();
         assert_eq!(error, RunError::UnsafeArgument);
+    }
+
+    #[test]
+    fn issue_304_a_local_only_denial_is_not_reported_as_an_unreachable_service() {
+        assert_eq!(
+            SourceError::from(RunError::Denied {
+                reason: DenyReason::LocalOnlyMode
+            }),
+            SourceError::LocalOnlyMode
+        );
+        assert_ne!(
+            SourceError::from(RunError::Denied {
+                reason: DenyReason::DestinationNotAllowlisted
+            }),
+            SourceError::LocalOnlyMode,
+            "only Local-only Mode may be reported as Local-only Mode"
+        );
+        assert_eq!(
+            SourceError::from(RunError::InterpreterMissing),
+            SourceError::CliRuntimeMissing
+        );
+    }
+
+    /// A runner whose children see what a Finder-launched app sees: launchd's
+    /// minimal `PATH` and nothing else, plus `runtime_dirs` as the allowlist.
+    #[cfg(unix)]
+    fn finder_runner(runtime_dirs: Vec<PathBuf>) -> CliRunner {
+        use plaudon_security::outbound::subprocess::CliChildEnvironment;
+        use std::collections::BTreeMap;
+        let policy = OutboundPolicy::network_permitted(NetworkGrant::new(
+            ApprovalSource::TestHarness,
+            0,
+            "privacy-v1",
+        ));
+        let environment = CliChildEnvironment::new(
+            BTreeMap::from([("PATH".to_owned(), "/usr/bin:/bin".to_owned())]),
+            runtime_dirs,
+        );
+        CliRunner::new(
+            GatedProcessLauncher::new(Arc::new(policy)).with_child_environment(environment),
+            Arc::new(Redactor::new()),
+        )
+    }
+
+    /// A stand-in `node`: prints what it was asked to run.
+    #[cfg(unix)]
+    fn fake_node(dir: &Path) {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::create_dir_all(dir).expect("node dir");
+        let node = dir.join("node");
+        std::fs::write(&node, "#!/bin/sh\necho \"plaud 0.3.15\"\n").expect("write node");
+        std::fs::set_permissions(&node, std::fs::Permissions::from_mode(0o755)).expect("chmod");
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn issue_304_a_finder_path_still_finds_node_installed_next_to_the_tool() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        fake_node(dir.path());
+        let program = fake_cli(dir.path(), "#!/usr/bin/env node\n");
+        let output = finder_runner(Vec::new())
+            .run(&program, &CliCommand::Version, RunLimits::PROBE, &intent())
+            .await
+            .expect("ran");
+        assert!(
+            output.succeeded(),
+            "exit {:?}, stderr {:?}",
+            output.exit_code,
+            output.stderr_excerpt
+        );
+        assert_eq!(output.stdout.trim(), "plaud 0.3.15");
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn issue_304_a_finder_path_finds_node_in_an_allowlisted_directory() {
+        let tool = tempfile::tempdir().expect("tempdir");
+        let runtime = tempfile::tempdir().expect("tempdir");
+        fake_node(runtime.path());
+        let program = fake_cli(tool.path(), "#!/usr/bin/env node\n");
+        let output = finder_runner(vec![runtime.path().to_path_buf()])
+            .run(&program, &CliCommand::Version, RunLimits::PROBE, &intent())
+            .await
+            .expect("ran");
+        assert!(
+            output.succeeded(),
+            "exit {:?}, stderr {:?}",
+            output.exit_code,
+            output.stderr_excerpt
+        );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn issue_304_no_node_anywhere_is_classified_as_a_missing_runtime() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let program = fake_cli(dir.path(), "#!/usr/bin/env node\n");
+        let output = finder_runner(Vec::new())
+            .run(&program, &CliCommand::Version, RunLimits::PROBE, &intent())
+            .await
+            .expect("env itself starts; it is node that is missing");
+        assert_eq!(output.exit_code, Some(127));
+        assert_eq!(
+            crate::errors::classify(&output, &CliCommand::Version),
+            Some(SourceError::CliRuntimeMissing),
+            "stderr {:?}",
+            output.stderr_excerpt
+        );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn issue_304_an_absolute_interpreter_that_is_missing_is_a_missing_runtime() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let program = fake_cli(dir.path(), "#!/nonexistent-issue-304/bin/node\n");
+        let error = permitted_runner()
+            .run(&program, &CliCommand::Version, RunLimits::PROBE, &intent())
+            .await
+            .unwrap_err();
+        assert_eq!(error, RunError::InterpreterMissing);
+        assert_eq!(SourceError::from(error), SourceError::CliRuntimeMissing);
     }
 
     #[test]

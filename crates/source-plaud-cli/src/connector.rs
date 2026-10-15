@@ -548,6 +548,231 @@ mod tests {
         assert!(extract_url(&output("")).is_none());
     }
 
+    /// Issue #304: the connector against a tool laid out the way Homebrew's
+    /// npm installs it, under a chosen policy and child environment.
+    #[cfg(unix)]
+    mod issue_304 {
+        use super::super::*;
+        use crate::discovery::{DiscoveryOrigin, OsProbe};
+        use crate::download::{DownloadPolicy, UrlContract};
+        use crate::state::ConnectorState;
+        use crate::transport::ReqwestFetcher;
+        use plaudon_diagnostics::redact::Redactor;
+        use plaudon_security::outbound::subprocess::{CliChildEnvironment, GatedProcessLauncher};
+        use plaudon_security::outbound::{ApprovalSource, NetworkGrant, OutboundPolicy};
+        use std::collections::BTreeMap;
+        use std::path::Path;
+
+        fn permitted() -> OutboundPolicy {
+            OutboundPolicy::network_permitted(NetworkGrant::new(
+                ApprovalSource::TestHarness,
+                0,
+                "privacy-v1",
+            ))
+        }
+
+        /// What a Finder-launched app gives its children: launchd's `PATH`,
+        /// and an empty allowlist so a real node on this machine cannot help.
+        fn finder_environment(runtime_dirs: Vec<PathBuf>) -> CliChildEnvironment {
+            CliChildEnvironment::new(
+                BTreeMap::from([("PATH".to_owned(), "/usr/bin:/bin".to_owned())]),
+                runtime_dirs,
+            )
+        }
+
+        fn connector(
+            policy: OutboundPolicy,
+            environment: CliChildEnvironment,
+        ) -> PlaudCloudCliConnector {
+            let runner = CliRunner::new(
+                GatedProcessLauncher::new(Arc::new(policy)).with_child_environment(environment),
+                Arc::new(Redactor::new()),
+            );
+            let download = Arc::new(DownloadPolicy::with_hosts(&[]));
+            let fetcher = ReqwestFetcher::new(Arc::clone(&download)).expect("fetcher");
+            let pipeline = AcquisitionPipeline::new(
+                download,
+                Arc::new(fetcher),
+                UrlContract::plaud_cli_0_3_15(),
+            );
+            PlaudCloudCliConnector::new(
+                CliDiscovery::with_probe(Arc::new(OsProbe), BTreeMap::new()),
+                runner,
+                pipeline,
+                SourceAccountScope::new("test"),
+                0,
+            )
+        }
+
+        /// `bin/plaud -> ../lib/node_modules/@plaud-ai/cli/dist/index.js`,
+        /// with `script` as the tool and 0.3.15 in its `package.json`.
+        fn npm_install(root: &Path, script: &str) -> DiscoveredCli {
+            use std::os::unix::fs::PermissionsExt;
+            let package = root.join("lib/node_modules/@plaud-ai/cli");
+            std::fs::create_dir_all(package.join("dist")).expect("package dir");
+            std::fs::write(
+                package.join("package.json"),
+                r#"{ "name": "@plaud-ai/cli", "version": "0.3.15" }"#,
+            )
+            .expect("package.json");
+            let index = package.join("dist/index.js");
+            std::fs::write(&index, script).expect("index.js");
+            std::fs::set_permissions(&index, std::fs::Permissions::from_mode(0o755))
+                .expect("chmod");
+            let bin = root.join("bin");
+            std::fs::create_dir_all(&bin).expect("bin");
+            std::os::unix::fs::symlink(
+                "../lib/node_modules/@plaud-ai/cli/dist/index.js",
+                bin.join("plaud"),
+            )
+            .expect("symlink");
+            let bin = std::fs::canonicalize(&bin).expect("canonical bin");
+            DiscoveredCli {
+                program: bin.join("plaud"),
+                origin: DiscoveryOrigin::WellKnownLocation,
+                approval: None,
+            }
+        }
+
+        fn intent() -> UserInitiated {
+            UserInitiated::new("probe_plaud_cli", 1_700_000_000_000)
+        }
+
+        fn bin_dir(found: &DiscoveredCli) -> String {
+            found
+                .program
+                .parent()
+                .expect("parent")
+                .display()
+                .to_string()
+        }
+
+        #[tokio::test]
+        async fn issue_304_local_only_reports_switched_off_with_location_and_disk_version() {
+            let dir = tempfile::tempdir().expect("tempdir");
+            let found = npm_install(
+                dir.path(),
+                "#!/bin/sh\ntouch \"$(dirname \"$0\")/MUST-NOT-RUN\"\necho 'plaud 0.3.15'\n",
+            );
+            let connector = connector(OutboundPolicy::local_only(), finder_environment(Vec::new()));
+
+            let error = connector
+                .connect(Some(&found), &intent())
+                .await
+                .expect_err("Local-only Mode refuses the launch");
+            assert_eq!(error, SourceError::LocalOnlyMode);
+
+            let status = connector.status();
+            assert_eq!(status.state, ConnectorState::LocalOnlyBlocked);
+            assert_eq!(
+                status.program_origin.as_deref(),
+                Some(DiscoveryOrigin::WellKnownLocation.label()),
+                "the tool was found; the panel must not say otherwise"
+            );
+            assert_eq!(status.program_directory, Some(bin_dir(&found)));
+            assert_eq!(
+                status.detected_version.as_deref(),
+                Some("0.3.15"),
+                "the version on disk is not a network fact"
+            );
+            assert!(status.version_validated);
+
+            let panel = connector.diagnostics();
+            assert_eq!(panel.headline, "Switched off by Local-only Mode");
+            assert!(panel.detail.contains(&bin_dir(&found)), "{}", panel.detail);
+            assert_eq!(panel.compatibility, "tested");
+            assert_eq!(
+                panel.next_action,
+                crate::diagnostics::NextAction::ReviewLocalOnlyMode
+            );
+
+            assert!(
+                !dir.path()
+                    .join("lib/node_modules/@plaud-ai/cli/dist/MUST-NOT-RUN")
+                    .exists()
+                    && !found
+                        .program
+                        .parent()
+                        .expect("bin")
+                        .join("MUST-NOT-RUN")
+                        .exists(),
+                "Local-only Mode must never launch the tool"
+            );
+            // Nothing that can drive the tool was installed on the way.
+            assert!(matches!(
+                connector.enumerate(None, &intent()).await,
+                Err(SourceError::CliUnsupported | SourceError::LocalOnlyMode)
+            ));
+        }
+
+        #[tokio::test]
+        async fn issue_304_a_finder_launch_without_node_says_node_is_missing() {
+            let dir = tempfile::tempdir().expect("tempdir");
+            let found = npm_install(dir.path(), "#!/usr/bin/env node\nconsole.log('x')\n");
+            let connector = connector(permitted(), finder_environment(Vec::new()));
+
+            let error = connector
+                .connect(Some(&found), &intent())
+                .await
+                .expect_err("node cannot be found");
+            assert_eq!(error, SourceError::CliRuntimeMissing);
+
+            let status = connector.status();
+            assert_eq!(status.state, ConnectorState::RuntimeMissing);
+            assert!(status.program_origin.is_some());
+            assert_eq!(status.program_directory, Some(bin_dir(&found)));
+            assert_eq!(status.detected_version.as_deref(), Some("0.3.15"));
+
+            let panel = connector.diagnostics();
+            assert_eq!(panel.headline, "PLAUD CLI found but Node.js is missing");
+            assert!(!panel.headline.contains("not reachable"));
+        }
+
+        #[tokio::test]
+        async fn issue_304_a_finder_launch_with_node_beside_the_tool_connects() {
+            use std::os::unix::fs::PermissionsExt;
+            let dir = tempfile::tempdir().expect("tempdir");
+            let found = npm_install(dir.path(), "#!/usr/bin/env node\nconsole.log('x')\n");
+            let node = found.program.parent().expect("bin").join("node");
+            std::fs::write(&node, "#!/bin/sh\necho 'plaud 0.3.15'\n").expect("node");
+            std::fs::set_permissions(&node, std::fs::Permissions::from_mode(0o755)).expect("chmod");
+            let connector = connector(permitted(), finder_environment(Vec::new()));
+
+            let status = connector
+                .connect(Some(&found), &intent())
+                .await
+                .expect("node beside the tool is found without a login shell");
+            assert_eq!(status.state, ConnectorState::CliDetected);
+            assert_eq!(status.detected_version.as_deref(), Some("0.3.15"));
+            assert!(status.program_origin.is_some());
+        }
+
+        #[tokio::test]
+        async fn issue_304_a_failed_probe_still_records_where_the_tool_is() {
+            let dir = tempfile::tempdir().expect("tempdir");
+            let found = npm_install(
+                dir.path(),
+                "#!/bin/sh\necho 'network is unreachable' >&2\nexit 1\n",
+            );
+            let connector = connector(permitted(), finder_environment(Vec::new()));
+
+            let error = connector
+                .connect(Some(&found), &intent())
+                .await
+                .expect_err("the probe fails");
+            assert_eq!(error, SourceError::SourceUnavailable);
+            let status = connector.status();
+            assert_eq!(
+                status.state,
+                ConnectorState::Error,
+                "a located tool is not 'not connected'"
+            );
+            assert!(status.program_origin.is_some());
+            assert_eq!(status.program_directory, Some(bin_dir(&found)));
+            assert_eq!(status.detected_version.as_deref(), Some("0.3.15"));
+        }
+    }
+
     #[test]
     fn a_parsed_record_becomes_a_vendor_cloud_export_item() {
         let listing = ParsedListing {

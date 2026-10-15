@@ -31,6 +31,12 @@ pub enum ConnectorState {
     IncompatibleVersion,
     /// A failure that is not one of the specific states above.
     Error,
+    /// The tool was found, and Local-only Mode switched the connector off
+    /// before anything was launched (#304).
+    LocalOnlyBlocked,
+    /// The tool was found but the runtime it needs (Node.js) was not, so it
+    /// cannot start (#304).
+    RuntimeMissing,
 }
 
 /// Something that happened to the connector.
@@ -59,6 +65,12 @@ pub enum ConnectorEvent {
     EnumerationFailed,
     /// The user disconnected the connector.
     Disconnected,
+    /// The tool was found and Local-only Mode refused to launch it.
+    LocalOnlyBlocked,
+    /// The tool was found but its runtime could not be.
+    RuntimeMissing,
+    /// The tool was found but the version probe failed for another reason.
+    ProbeFailed,
 }
 
 impl ConnectorState {
@@ -74,9 +86,24 @@ impl ConnectorState {
             // connector to its initial state.
             (_, ConnectorEvent::Disconnected | ConnectorEvent::CliMissing) => Self::Unconfigured,
             (_, ConnectorEvent::CliVersionUnvalidated) => Self::IncompatibleVersion,
+            // Both are facts about this computer right now, so they hold
+            // whatever the connector believed before.
+            (_, ConnectorEvent::LocalOnlyBlocked) => Self::LocalOnlyBlocked,
+            (_, ConnectorEvent::RuntimeMissing) => Self::RuntimeMissing,
+            (
+                Self::Unconfigured
+                | Self::IncompatibleVersion
+                | Self::LocalOnlyBlocked
+                | Self::RuntimeMissing,
+                ConnectorEvent::ProbeFailed,
+            ) => Self::Error,
 
             (
-                Self::Unconfigured | Self::IncompatibleVersion | Self::Error,
+                Self::Unconfigured
+                | Self::IncompatibleVersion
+                | Self::Error
+                | Self::LocalOnlyBlocked
+                | Self::RuntimeMissing,
                 ConnectorEvent::CliFound,
             ) => Self::CliDetected,
 
@@ -125,7 +152,12 @@ impl ConnectorState {
     pub const fn needs_user_action(self) -> bool {
         matches!(
             self,
-            Self::Unconfigured | Self::AuthRequired | Self::ExpiredAuth | Self::IncompatibleVersion
+            Self::Unconfigured
+                | Self::AuthRequired
+                | Self::ExpiredAuth
+                | Self::IncompatibleVersion
+                | Self::LocalOnlyBlocked
+                | Self::RuntimeMissing
         )
     }
 
@@ -137,6 +169,8 @@ impl ConnectorState {
             Self::IncompatibleVersion => Some(SourceError::CliUnsupported),
             Self::AuthRequired | Self::ExpiredAuth => Some(SourceError::AuthenticationRequired),
             Self::Error => Some(SourceError::SourceUnavailable),
+            Self::LocalOnlyBlocked => Some(SourceError::LocalOnlyMode),
+            Self::RuntimeMissing => Some(SourceError::CliRuntimeMissing),
             Self::CliDetected | Self::Authenticated | Self::Enumerating | Self::Ready => None,
         }
     }
@@ -160,6 +194,12 @@ pub struct ConnectorStatus {
     pub version_validated: bool,
     /// Where the executable was found, as a stable label.
     pub program_origin: Option<String>,
+    /// The directory the executable was found in, for the diagnostics panel.
+    ///
+    /// A local path on this computer, shown to the user who owns it. Absent
+    /// from payloads written before #304, hence the default.
+    #[serde(default)]
+    pub program_directory: Option<String>,
     /// Last stable error, as a code only.
     pub last_error: Option<AppErrorCode>,
     /// Whether the last listing may be a partial view of the account.
@@ -186,6 +226,7 @@ impl ConnectorStatus {
             detected_version: None,
             version_validated: false,
             program_origin: None,
+            program_directory: None,
             last_error: None,
             listing_possibly_incomplete: false,
             scraping_warning: false,
@@ -205,6 +246,7 @@ impl ConnectorStatus {
             self.detected_version = None;
             self.version_validated = false;
             self.program_origin = None;
+            self.program_directory = None;
             self.listing_possibly_incomplete = false;
             self.scraping_warning = false;
         }
@@ -273,7 +315,7 @@ mod tests {
         }
     }
 
-    const ALL_STATES: [ConnectorState; 9] = [
+    const ALL_STATES: [ConnectorState; 11] = [
         ConnectorState::Unconfigured,
         ConnectorState::CliDetected,
         ConnectorState::AuthRequired,
@@ -283,9 +325,11 @@ mod tests {
         ConnectorState::ExpiredAuth,
         ConnectorState::IncompatibleVersion,
         ConnectorState::Error,
+        ConnectorState::LocalOnlyBlocked,
+        ConnectorState::RuntimeMissing,
     ];
 
-    const ALL_EVENTS: [ConnectorEvent; 11] = [
+    const ALL_EVENTS: [ConnectorEvent; 14] = [
         ConnectorEvent::CliFound,
         ConnectorEvent::CliVersionUnvalidated,
         ConnectorEvent::CliMissing,
@@ -297,6 +341,9 @@ mod tests {
         ConnectorEvent::EnumerationSucceeded,
         ConnectorEvent::EnumerationFailed,
         ConnectorEvent::Disconnected,
+        ConnectorEvent::LocalOnlyBlocked,
+        ConnectorEvent::RuntimeMissing,
+        ConnectorEvent::ProbeFailed,
     ];
 
     #[test]

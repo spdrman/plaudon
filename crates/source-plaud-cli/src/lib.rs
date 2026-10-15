@@ -38,6 +38,7 @@ pub mod diagnostics;
 pub mod discovery;
 pub mod download;
 pub mod errors;
+pub mod installed;
 pub mod invocation;
 pub mod parser;
 pub mod runner;

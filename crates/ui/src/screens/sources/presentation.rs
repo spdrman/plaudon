@@ -31,6 +31,8 @@ pub const fn state_label(state: PlaudConnectorState) -> &'static str {
         PlaudConnectorState::ExpiredAuth => "Session expired",
         PlaudConnectorState::IncompatibleVersion => "Untested version",
         PlaudConnectorState::Error => "Stopped",
+        PlaudConnectorState::LocalOnlyBlocked => "Switched off by Local-only Mode",
+        PlaudConnectorState::RuntimeMissing => "Node.js missing",
     }
 }
 
@@ -38,7 +40,7 @@ pub const fn state_label(state: PlaudConnectorState) -> &'static str {
 #[must_use]
 pub const fn state_badge(state: PlaudConnectorState) -> Badge {
     match state {
-        PlaudConnectorState::Unconfigured => Badge {
+        PlaudConnectorState::Unconfigured | PlaudConnectorState::LocalOnlyBlocked => Badge {
             glyph: "•",
             tone: Tone::Neutral,
         },
@@ -56,7 +58,8 @@ pub const fn state_badge(state: PlaudConnectorState) -> Badge {
         },
         PlaudConnectorState::AuthRequired
         | PlaudConnectorState::ExpiredAuth
-        | PlaudConnectorState::IncompatibleVersion => Badge {
+        | PlaudConnectorState::IncompatibleVersion
+        | PlaudConnectorState::RuntimeMissing => Badge {
             glyph: "!",
             tone: Tone::Warning,
         },
@@ -279,6 +282,8 @@ mod tests {
             PlaudConnectorState::ExpiredAuth,
             PlaudConnectorState::IncompatibleVersion,
             PlaudConnectorState::Error,
+            PlaudConnectorState::LocalOnlyBlocked,
+            PlaudConnectorState::RuntimeMissing,
         ];
         let mut labels: Vec<&str> = states.iter().copied().map(state_label).collect();
         labels.sort_unstable();

@@ -941,6 +941,76 @@ async fn local_only_mode_is_enforced_by_the_policy_and_never_launches_the_cli() 
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn issue_304_local_only_probe_names_the_cause_and_never_switches_local_only_off() {
+    let harness = Harness::new(Some(TESTED)).await;
+    harness.script_listing(None);
+    harness
+        .ports
+        .settings
+        .set_local_only_mode(true)
+        .await
+        .expect("local-only on");
+
+    let probe = harness.probe().await;
+    assert_eq!(probe.status.state, PlaudConnectorState::LocalOnlyBlocked);
+    assert_eq!(
+        probe.diagnostics.state,
+        PlaudConnectorState::LocalOnlyBlocked
+    );
+    assert_eq!(
+        probe.diagnostics.headline,
+        "Switched off by Local-only Mode"
+    );
+    assert!(
+        probe.status.program_origin.is_some() && probe.diagnostics.program_origin.is_some(),
+        "the tool was found on disk; the panel must not say 'Not found'"
+    );
+    assert!(
+        probe
+            .diagnostics
+            .detail
+            .contains(&harness.cli.path().display().to_string())
+            || probe.diagnostics.detail.contains(
+                &std::fs::canonicalize(harness.cli.path())
+                    .expect("canonical")
+                    .display()
+                    .to_string()
+            ),
+        "the detail names where the tool is: {}",
+        probe.diagnostics.detail
+    );
+    assert!(!probe.diagnostics.detail.contains("network problem"));
+    assert_eq!(
+        probe.diagnostics.next_action,
+        PlaudNextAction::ReviewLocalOnlyMode
+    );
+    assert_eq!(probe.status.last_error, Some(AppErrorCode::LocalOnlyMode));
+
+    let envelope = harness.connect().await.expect_err("connect is denied");
+    assert_envelope(
+        &envelope,
+        AppErrorCode::LocalOnlyMode,
+        Some(ErrorAction::ReviewLocalOnlyMode),
+    );
+
+    assert!(
+        harness.invocations().is_empty(),
+        "spec §22(15): Local-only Mode never launches the PLAUD Cloud CLI"
+    );
+    assert!(
+        harness
+            .ports
+            .settings
+            .preferences()
+            .await
+            .expect("preferences")
+            .local_only_mode,
+        "probing and connecting must never switch Local-only Mode off"
+    );
+    harness.assert_no_vendor_text_anywhere(&harness.probe().await);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn disconnect_wording_is_truthful_about_session_revocation() {
     // A release with no tested logout command: association only.
     let harness = Harness::new(Some(TESTED)).await;
